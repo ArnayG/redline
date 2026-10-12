@@ -2,7 +2,7 @@
    FORGE Atelier — js/race/hud.js
    CB.race.hud : broadcast-style heads-up display drawn on the race canvas.
 
-   Contract (RACE-SPEC.md, "Inter-module contracts"):
+   Contract (docs/RACE-SPEC.md, "Inter-module contracts"):
      CB.race.hud.create(canvas, geom, trackDef, opts {units:'kph'|'mph'})
        -> { draw(ctx, snap), setUnits(u), destroy() }
    draw() is called after renderer.render(); ctx is already in CSS-pixel

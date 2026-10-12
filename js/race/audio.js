@@ -1,6 +1,6 @@
 /* FORGE Atelier — Race Mode: procedural audio (CB.race.audio)
  *
- * Contract (RACE-SPEC.md "Inter-module contracts"):
+ * Contract (docs/RACE-SPEC.md "Inter-module contracts"):
  *   CB.race.audio.create() -> { start(), update(snap), setMuted(bool), destroy() }
  *   - handles snap.events itself
  *   - never throws when AudioContext is unavailable (Node, locked-down browsers)

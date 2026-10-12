@@ -16,7 +16,7 @@
          gameplay {extra CB.arcade.gameplay.create opts}, hooks (object | array), drive (see stunt-physics),
          playerAutopilot, countdown (true), startPosition (1-based | 'back'|'front'|'middle'), timeOfDay }
 
-   Hooks (ARCADE-SPEC.md § Stunt tracks): each optional — carCreated(car, api), preStep(car, input, dt, api) -> input?,
+   Hooks (docs/ARCADE-SPEC.md § Stunt tracks): each optional — carCreated(car, api), preStep(car, input, dt, api) -> input?,
    postStep(car, dt, api), onEvent(event, api), snapshot(car, api) -> object (snapshot car.hook), plus
    cfg.hooks[i].session(api) -> object merged into snapshot.hooks. `api` = session.hookApi.
 

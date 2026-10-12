@@ -1,8 +1,8 @@
 # Not needed on the deployed site (Vercel serves the repo root statically + api/*.js as functions)
 tests/
 tools/
-*-SPEC.md
-SPEC.md
+docs/
+.github/
 .DS_Store
 **/.DS_Store
 node_modules/

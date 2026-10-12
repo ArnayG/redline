@@ -2,7 +2,7 @@
    FORGE Atelier — js/race/gl/renderer3d.js
    CB.race.renderer3d : real-time 3D race renderer (cockpit / chase / TV / heli) assembling the CB.gl modules.
 
-   Contract (RACE3D-SPEC.md) — SAME interface as CB.race.renderer:
+   Contract (docs/RACE3D-SPEC.md) — SAME interface as CB.race.renderer:
      CB.race.renderer3d.isSupported() -> bool
      CB.race.renderer3d.create(canvas, geom, trackDef, opts {timeOfDay, weather, quality, camera, racingLine, autoQuality})
        -> { render(snap, alpha?), setCamera(mode), cycleCamera(), getCamera(), resize(), destroy(), setQuality(q),

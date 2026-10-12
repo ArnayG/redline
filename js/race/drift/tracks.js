@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/race/drift/tracks.js
-   CB.race.drift.tracks : drift-focused circuits (DRIFT-SPEC.md §4), registered into CB.race.tracks.
+   CB.race.drift.tracks : drift-focused circuits (docs/DRIFT-SPEC.md §4), registered into CB.race.tracks.
 
      CB.race.drift.tracks.list          -> [def]   ('kurogane-pass', 'dockyard-sliders', 'circle-lab')
      CB.race.drift.tracks.ids           -> ['kurogane-pass', ...]

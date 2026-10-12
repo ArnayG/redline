@@ -2,7 +2,7 @@
    FORGE Atelier — js/race/renderer.js
    CB.race.renderer : top-down Canvas 2D world renderer for Race Mode.
 
-   Contract (RACE-SPEC.md, "Inter-module contracts"):
+   Contract (docs/RACE-SPEC.md, "Inter-module contracts"):
      CB.race.renderer.create(canvas, geom, trackDef, opts {timeOfDay, weather, camera, racingLine, labels, maxDpr})
        -> { render(snap, alpha?), setCamera('chase'|'north'|'tv'), cycleCamera(), resize(), destroy(),
             reset(), setRacingLine(bool), setLabels(bool), getCamera(), setQuality(q), stats() }

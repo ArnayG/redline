@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/race/gl/scenery.js
-   CB.gl.scenery : trackside world for the 3D race renderer (RACE3D-SPEC.md).
+   CB.gl.scenery : trackside world for the 3D race renderer (docs/RACE3D-SPEC.md).
 
    API
      CB.gl.scenery.build(ctx, geom, trackDef, opts {quality, timeOfDay, weather, groundY}) -> {
@@ -492,7 +492,7 @@ CB.gl.scenery = (function () {
     for (i = 1; i < n - 1; i++) b0.idx.push(base, base + i, base + i + 1);
     this.sink.tris += n - 2;
   };
-  /** faceted mesh in the local frame (stylised low-poly, LOWPOLY-SPEC.md): P positions, Nn per-vertex hint
+  /** faceted mesh in the local frame (stylised low-poly, docs/LOWPOLY-SPEC.md): P positions, Nn per-vertex hint
       normals, C per-vertex colours, I triangle indices. Every triangle is emitted unwelded with its own face
       normal (wound outward, i.e. agreeing with the hint normals, since the standard shader flips back faces) and
       the averaged corner colour; colour ALPHA stays per vertex (wind-sway weight) so swaying facets never crack.

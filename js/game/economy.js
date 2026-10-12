@@ -247,7 +247,7 @@ CB.game.economy = (function () {
   }
 
   /* ==================================================================
-     UNLOCK TABLE — every catalog collection & id in SPEC.md / CB.data.
+     UNLOCK TABLE — every catalog collection & id in docs/SPEC.md / CB.data.
      Progression philosophy:
        L1      road-car basics: everything a sensible hatch / sedan / coupe needs
        L2-5    hot-hatch & sports-car upgrades (turbo, LSDs, AWD, sticky tyres)

@@ -17,7 +17,7 @@
                or > 8 s air, trigger a respawn.
      'respawn' short fade: teleport to the last checkpoint at a safe rolling speed, brief no-collide.
 
-   Drive model adapter (ARCADE-SPEC.md § Stunt tracks): the longitudinal / yaw response comes from a pluggable model
+   Drive model adapter (docs/ARCADE-SPEC.md § Stunt tracks): the longitudinal / yaw response comes from a pluggable model
      model.create(build, opts) -> driveState
      model.step(driveState, input {throttle, brake, steer (+1 left), handbrake, nitro}, ctx) -> {accel, yawRate,
         steerAngle?, rpm?, gear?, vTop?}

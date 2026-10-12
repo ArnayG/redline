@@ -2,7 +2,7 @@
    FORGE Atelier — js/race/gl/track-mesh.js
    CB.gl.track : 3D track + terrain geometry built from CB.race.tracks geometry.
 
-   API (RACE3D-SPEC.md)
+   API (docs/RACE3D-SPEC.md)
      CB.gl.track.build(ctx, geom, trackDef, opts?) -> {
         meshes: [{ mesh, material, castShadow, transparent, kind, bounds, model }],
         bounds: { min:[x,y,z], max:[x,y,z] },
@@ -326,7 +326,7 @@ CB.gl.track = (function () {
       kerb: mat('kerb', { color: WHITE, roughness: 0.45, clearcoat: 0.2 }),
       gravel: mat('gravel', { map: trackDef.gravel === false ? 'sand' : 'gravel', tint: C.sand, roughness: 0.97, wetness: 0.2 }),
       sand: mat('sand', { map: 'sand', tint: C.sand, roughness: 0.97, wetness: 0.2 }),
-      // stylised low-poly world (LOWPOLY-SPEC.md): grass / terrain are flat colour (no photo texture); the variation
+      // stylised low-poly world (docs/LOWPOLY-SPEC.md): grass / terrain are flat colour (no photo texture); the variation
       // comes from the vertex colour field (grassCol) and, for the terrain, faceted per-face shading
       grass: mat('grass', { map: null, tint: mulC(C.grass, 0.86), roughness: 0.95, wetness: 0.15 }),
       terrain: mat('terrain', { map: style.street ? 'concrete' : null, tint: style.street ? C.ground : mulC(C.grass, 0.86), roughness: 0.95,

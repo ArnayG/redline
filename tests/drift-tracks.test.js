@@ -1,4 +1,4 @@
-/* Node tests for js/race/drift/tracks.js (DRIFT-SPEC.md §4) — run standalone (`node tests/drift-tracks.test.js`)
+/* Node tests for js/race/drift/tracks.js (docs/DRIFT-SPEC.md §4) — run standalone (`node tests/drift-tracks.test.js`)
    or via tests/run.js. Checks registration into CB.race.tracks, catalog def shape, closed loops, no
    self-intersection (except the intentional Circle Lab figure-8 bridge, handled exactly like Ouroboros), drift
    widths 14-22 m, project() round-trips, themes / scenery, drift zones, and that the 3D track mesh

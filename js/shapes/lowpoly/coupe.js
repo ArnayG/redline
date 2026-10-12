@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/coupe.js
-   Hand-authored low-poly coupés (LOWPOLY-SPEC.md): BMW M4 (G82), Toyota GR Supra (A90), BMW M2 (G87),
+   Hand-authored low-poly coupés (docs/LOWPOLY-SPEC.md): BMW M4 (G82), Toyota GR Supra (A90), BMW M2 (G87),
    BMW M3 (E46), Aston Martin Vantage (2018), Alpine A110 (2017), Lotus Emira.
 
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

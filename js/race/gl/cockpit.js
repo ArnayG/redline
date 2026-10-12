@@ -4,7 +4,7 @@
 
    CB.gl.cockpit.build(ctx, build, opts?) -> cockpit
      ctx   CB.gl context ({gl, isWebGL2, ...}) or a raw WebGL(2)RenderingContext
-     build SPEC.md Build object (body, interior, tech, weight, exterior, transmission, engine)
+     build docs/SPEC.md Build object (body, interior, tech, weight, exterior, transmission, engine)
      opts  { eye: vec3 (carModel.cockpitEye, car-local), dims: carModel.dims, geom: track geometry (minimap / HUD nav),
              units: 'kph'|'mph', quality: 'low'|'medium'|'high'|'ultra', color: suit/team colour,
              gammaVertexColors: bool (default true -> vertex colours are linearised), mirrorFlipU: bool }
@@ -314,7 +314,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
   };
 
-  /* LOW-POLY style (LOWPOLY-SPEC.md): the interior is deliberately faceted like the cars — every round section,
+  /* LOW-POLY style (docs/LOWPOLY-SPEC.md): the interior is deliberately faceted like the cars — every round section,
      ring, ellipsoid and spline is built with roughly half the segments and the meshes are emitted FLAT shaded
      (unwelded, per-face normals, subtle per-face value jitter), in flat build.interior colours with no textures
      except the live gauge / screen canvases. */

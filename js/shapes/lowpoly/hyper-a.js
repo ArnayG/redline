@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/hyper-a.js
-   Hand-authored low-poly hypercars (LOWPOLY-SPEC.md): Ferrari SF90 Stradale, McLaren P1, Bugatti Chiron,
+   Hand-authored low-poly hypercars (docs/LOWPOLY-SPEC.md): Ferrari SF90 Stradale, McLaren P1, Bugatti Chiron,
    Koenigsegg Jesko, Porsche 918 Spyder.  Mid-engine, cab-forward: short low nose, windscreen base just behind
    the front wheels, roof peak behind mid-wheelbase, long engine deck between raised rear haunches.
 

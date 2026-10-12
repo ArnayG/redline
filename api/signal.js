@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — api/signal.js
-   WebRTC signalling relay for multiplayer (NET-SPEC.md). Vercel Node serverless function, zero npm deps.
+   WebRTC signalling relay for multiplayer (docs/NET-SPEC.md). Vercel Node serverless function, zero npm deps.
    Storage: Upstash Redis REST API via global fetch. Env (either naming works):
      UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN   (Upstash integration)
      KV_REST_API_URL        / KV_REST_API_TOKEN          (Vercel KV / Marketplace naming)

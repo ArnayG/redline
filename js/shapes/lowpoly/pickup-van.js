@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/pickup-van.js
-   Hand-authored low-poly pickups and vans (LOWPOLY-SPEC.md):
+   Hand-authored low-poly pickups and vans (docs/LOWPOLY-SPEC.md):
      toyota-tacoma-trdpro-2024, tesla-cybertruck, mercedes-sprinter-vs30, vw-id-buzz, ford-transit-hr.
 
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

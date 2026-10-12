@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/net/lobby.js
-   CB.net.lobby : the multiplayer lobby screen (NET-SPEC.md § Files, js/net/lobby.js).
+   CB.net.lobby : the multiplayer lobby screen (docs/NET-SPEC.md § Files, js/net/lobby.js).
 
    Route  #/multiplayer          create / join a room (connection method picker, your car, name)
           #/multiplayer/<CODE>   deep link: join room CODE straight away

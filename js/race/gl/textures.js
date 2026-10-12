@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/race/gl/textures.js
-   CB.gl.textures : procedural textures for the 3D race renderer (RACE3D-SPEC.md).
+   CB.gl.textures : procedural textures for the 3D race renderer (docs/RACE3D-SPEC.md).
 
    Every texture is generated at runtime (canvas 2D or pure-JS pixel buffers),
    uploaded as RGBA8, mipmapped (power-of-two sizes everywhere so WebGL1 can mip

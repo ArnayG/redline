@@ -2,7 +2,7 @@
    FORGE Atelier — js/game/endurance.js
    CB.game.endurance : tyre thermals & wear, fuel / battery energy, mass change,
    damage zones, brake temperature & fade, engine cooling, pit stops, pit-lane
-   geometry and race strategy.  Contract: GAME-SPEC.md § "Wear, fuel, damage, pits".
+   geometry and race strategy.  Contract: docs/GAME-SPEC.md § "Wear, fuel, damage, pits".
 
    Pure module (no DOM). Classic script in browsers, require()-able in Node.
    All per-car state is a plain JSON-serialisable object (no functions, no

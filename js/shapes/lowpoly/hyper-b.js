@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/hyper-b.js
-   Hand-authored low-poly mid-engine supercars (LOWPOLY-SPEC.md):
+   Hand-authored low-poly mid-engine supercars (docs/LOWPOLY-SPEC.md):
      Lamborghini Huracán EVO, Ferrari 296 GTB, Audi R8 V10 (gen 2 facelift), Chevrolet Corvette Stingray (C8),
      Ford GT (2nd gen, flying buttresses as real gaps).
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

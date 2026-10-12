@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/race/gl/gl-core.js
-   CB.gl : hand-written WebGL core for the 3D race renderer (RACE3D-SPEC.md). Zero dependencies.
+   CB.gl : hand-written WebGL core for the 3D race renderer (docs/RACE3D-SPEC.md). Zero dependencies.
 
    Contents
      * Math        CB.gl.mat4 / mat3 / vec3 / quat (column-major Float32Array, gl-matrix compatible signatures:

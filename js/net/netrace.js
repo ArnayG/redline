@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/net/netrace.js
-   CB.net.race : multiplayer race / drift-battle / free-roam sessions over CB.net.transport (NET-SPEC.md).
+   CB.net.race : multiplayer race / drift-battle / free-roam sessions over CB.net.transport (docs/NET-SPEC.md).
    Pure logic (no DOM). Classic <script> in browsers, require()-able in Node.
 
    Model (host authoritative, star topology):

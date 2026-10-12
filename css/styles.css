@@ -28,7 +28,7 @@
 :root {
   color-scheme: dark;
 
-  /* contract variables (SPEC.md) */
+  /* contract variables (docs/SPEC.md) */
   --bg: #0b0b0d;
   --bg-2: #111114;
   --panel: #141519;
@@ -3575,7 +3575,7 @@ html[data-atelier-mode="career-buy"] .qs-price .qs-value, html[data-atelier-mode
 }
 
 /* ==========================================================================
-   17  UNIFIED SHELL — one game, one UI (UNIFY-SPEC.md)
+   17  UNIFIED SHELL — one game, one UI (docs/UNIFY-SPEC.md)
    index.html is the single entry point: CB.router (js/router.js) renders the
    global nav bar (#gnav) and shows exactly one full-viewport layer
    (.cb-screen) inside #app-root. html.cb-routed is set by the router at boot;

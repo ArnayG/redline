@@ -54,7 +54,7 @@
   </div>
   <a class="skip-link" href="#app-root">Skip to content</a>
 
-  <!-- ONE game, one UI (UNIFY-SPEC.md): the global nav bar + one full-viewport layer per CB.router screen. -->
+  <!-- ONE game, one UI (docs/UNIFY-SPEC.md): the global nav bar + one full-viewport layer per CB.router screen. -->
   <header id="gnav" class="gnav" role="banner"><!-- rendered by js/router.js --></header>
 
   <div id="app-root">
@@ -191,7 +191,7 @@
     </div>
   </noscript>
 
-  <!-- Classic scripts, contract load order (SPEC.md #1-14). No modules, no CDN, works from file:// -->
+  <!-- Classic scripts, contract load order (docs/SPEC.md #1-14). No modules, no CDN, works from file:// -->
   <script src="js/util.js" charset="utf-8"></script>
   <!-- device class + automatic graphics tier + iOS audio unlock / storage guards (no dependencies) -->
   <script src="js/platform/device.js" charset="utf-8"></script>
@@ -211,7 +211,7 @@
   <script src="js/shapes/models/pack-usa.js" charset="utf-8"></script>
   <script src="js/shapes/models/pack-exotic.js" charset="utf-8"></script>
   <script src="js/shapes/models/pack-sport.js" charset="utf-8"></script>
-  <!-- Hand-authored low-poly car definitions (LOWPOLY-SPEC.md). They queue on CB.lowpoly._pending until
+  <!-- Hand-authored low-poly car definitions (docs/LOWPOLY-SPEC.md). They queue on CB.lowpoly._pending until
        js/race/gl/lowpoly.js loads; one tag per group file (after js/shapes/models/*). -->
   <script src="js/shapes/lowpoly/_examples.js" charset="utf-8"></script>
   <script src="js/shapes/lowpoly/coupe.js" charset="utf-8"></script>
@@ -238,7 +238,7 @@
   <script src="js/garage.js" charset="utf-8"></script>
   <script src="js/app.js" charset="utf-8"></script>
 
-  <!-- Race mode (RACE-SPEC.md): loaded after app.js; CB.app feature-detects CB.race.ui at boot (DOMContentLoaded). -->
+  <!-- Race mode (docs/RACE-SPEC.md): loaded after app.js; CB.app feature-detects CB.race.ui at boot (DOMContentLoaded). -->
   <script src="js/race/tracks.js" charset="utf-8"></script>
   <script src="js/race/tracks-extra.js" charset="utf-8"></script>
   <script src="js/race/vehicle.js" charset="utf-8"></script>
@@ -258,7 +258,7 @@
   <script src="js/race/gl/renderer3d.js" charset="utf-8"></script>
   <script src="js/race/hud.js" charset="utf-8"></script>
   <script src="js/race/audio.js" charset="utf-8"></script>
-  <!-- Drift mode + steering assist (DRIFT-SPEC.md): tune → assist → scoring → tracks → ai → arcade → camera → sfx → hud → session (same as drift.html). Optional: race-ui feature-detects CB.race.drift / CB.race.assist. -->
+  <!-- Drift mode + steering assist (docs/DRIFT-SPEC.md): tune → assist → scoring → tracks → ai → arcade → camera → sfx → hud → session (same as drift.html). Optional: race-ui feature-detects CB.race.drift / CB.race.assist. -->
   <script src="js/race/drift/tune.js" charset="utf-8"></script>
   <script src="js/race/drift/assist.js" charset="utf-8"></script>
   <script src="js/race/drift/scoring.js" charset="utf-8"></script>
@@ -269,9 +269,9 @@
   <script src="js/race/drift/sfx.js" charset="utf-8"></script>
   <script src="js/race/drift/hud.js" charset="utf-8"></script>
   <script src="js/race/drift/session.js" charset="utf-8"></script>
-  <!-- Arcade mode (ARCADE-SPEC.md): mode core; stunt tracks / gameplay extensions register into CB.arcade (feature-detected). -->
+  <!-- Arcade mode (docs/ARCADE-SPEC.md): mode core; stunt tracks / gameplay extensions register into CB.arcade (feature-detected). -->
   <script src="js/arcade/mode.js" charset="utf-8"></script>
-  <!-- Arcade STUNT tracks (ARCADE-SPEC.md § Stunt tracks): 3D track format → maps → track-space physics → AI → session → GL meshes → renderer. -->
+  <!-- Arcade STUNT tracks (docs/ARCADE-SPEC.md § Stunt tracks): 3D track format → maps → track-space physics → AI → session → GL meshes → renderer. -->
   <script src="js/arcade/stunt-track.js" charset="utf-8"></script>
   <script src="js/arcade/stunt-maps.js" charset="utf-8"></script>
   <script src="js/arcade/stunt-physics.js" charset="utf-8"></script>
@@ -279,7 +279,7 @@
   <script src="js/arcade/stunt-session.js" charset="utf-8"></script>
   <script src="js/race/gl/stunt-mesh.js" charset="utf-8"></script>
   <script src="js/race/gl/stunt-renderer.js" charset="utf-8"></script>
-  <!-- Arcade gameplay layer (ARCADE-SPEC.md § Gameplay layer): items → nitro → gameplay core → HUD → FX → SFX → layer (registers the 'gameplay' extension). -->
+  <!-- Arcade gameplay layer (docs/ARCADE-SPEC.md § Gameplay layer): items → nitro → gameplay core → HUD → FX → SFX → layer (registers the 'gameplay' extension). -->
   <script src="js/arcade/items.js" charset="utf-8"></script>
   <script src="js/arcade/nitro.js" charset="utf-8"></script>
   <script src="js/arcade/gameplay.js" charset="utf-8"></script>
@@ -289,7 +289,7 @@
   <script src="js/arcade/arcade-layer.js" charset="utf-8"></script>
   <script src="js/race/race-ui.js" charset="utf-8"></script>
 
-  <!-- Game systems (GAME-SPEC.md): profile → economy → career → endurance → replay → achievements → challenges → hub. -->
+  <!-- Game systems (docs/GAME-SPEC.md): profile → economy → career → endurance → replay → achievements → challenges → hub. -->
   <script src="js/game/profile.js" charset="utf-8"></script>
   <script src="js/game/economy.js" charset="utf-8"></script>
   <script src="js/game/career.js" charset="utf-8"></script>
@@ -299,7 +299,7 @@
   <script src="js/game/challenges.js" charset="utf-8"></script>
   <script src="js/game/hub.js" charset="utf-8"></script>
 
-  <!-- Multiplayer (NET-SPEC.md): signalling → WebRTC transport → net race sessions → lobby (#/multiplayer). After race-ui
+  <!-- Multiplayer (docs/NET-SPEC.md): signalling → WebRTC transport → net race sessions → lobby (#/multiplayer). After race-ui
        (the lobby hands sessions to CB.race.ui.openNet) and BEFORE the router (lobby.js registers #/multiplayer on cb:router-ready). -->
   <script src="js/net/signal.js" charset="utf-8"></script>
   <script src="js/net/relay.js" charset="utf-8"></script>
@@ -318,7 +318,7 @@
   <script src="js/input/phone-wheel.js" charset="utf-8"></script>
   <script src="js/input/input-ui.js" charset="utf-8"></script>
   <script src="js/input/wheel-page.js" charset="utf-8"></script>
-  <!-- The single entry point's router (UNIFY-SPEC.md): loads last, boots to #/menu on DOMContentLoaded. -->
+  <!-- The single entry point's router (docs/UNIFY-SPEC.md): loads last, boots to #/menu on DOMContentLoaded. -->
   <script src="js/router.js" charset="utf-8"></script>
 </body>
 </html>

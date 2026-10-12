@@ -1,19 +1,71 @@
 # Redline
 
-Redline is one game with one UI. You build a car in the Garage, then race it, drift it, and run a career. Everything runs from `index.html`. There are no dependencies and no build step.
+**Build a real car, then race it, drift it and fly it through stunt loops, all in the browser, with zero dependencies.**
 
-## Run it
+**Play it: https://squarejumper.com/RacingGame/**
+
+Redline is one game with one UI. You build a car in the Garage, then race it, drift it, take it into Arcade stunt tracks with nitro and items, run a career, or play online with friends. Everything runs from `index.html`: plain classic scripts, a hand-written WebGL renderer, no npm packages and no build step.
+
+| | |
+|---|---|
+| ![Title screen](docs/screenshots/01-title.jpg) | ![Garage with the live 3D low-poly car](docs/screenshots/02-garage.jpg) |
+| ![3D race, chase camera, full grid](docs/screenshots/03-race.jpg) | ![Drifting on Kurogane Pass](docs/screenshots/04-drift.jpg) |
+| ![Arcade: Loop Rush stunt track](docs/screenshots/05-arcade-loop.jpg) | ![Arcade: nitro and slipstream on Mega Drop](docs/screenshots/06-arcade-items.jpg) |
+| ![Multiplayer room set up for Arcade](docs/screenshots/07-multiplayer.jpg) | |
+
+## Highlights
+
+- **Garage**: 53 real manufacturer models (Porsche 911, GR Yaris, AE86, Ferrari SF90, F-150 Raptor, VW ID. Buzz …) drawn as low-poly renderings, with 12 tuning sections, live physics, pricing, a rules check and share links.
+- **Race**: 3D circuit racing on 10 tracks against an AI field (Grand Prix, Time Trial, Practice), with weather and time of day.
+- **Drift**: score attack, free run and tandem on dedicated drift venues, with steering assists from Off to Auto.
+- **Arcade**: arcade grip, nitro, Mario-Kart style item boxes (turbo, oil, shockwave, rockets, shield, magnet, ghost, lightning …) and coins, on 6 stunt tracks with loops, jumps, wall rides and corkscrews, plus every circuit.
+- **Arcade** (`#/arcade`): every car on a forgiving arcade grip model, with nitro (filled by drifting, drafting, jumps and near misses), item boxes and coins. Six stunt tracks (Loop Rush, Canyon Leap, Corkscrew Carnival, Neon Wall-Ride, Mega Drop, Crossover 8) plus all the circuits. Modes: Race and Time trial; AI from Rookie to Alien; speed classes Street, Pro and Mayhem.
+- **Career**: championships by tier, event formats from drag to endurance, credits, owned cars, upgrades, licences, challenges, achievements and replays.
+- **Multiplayer**: up to 8 players in Race, Drift battle, Free roam or Arcade, peer to peer over WebRTC, with a server relay fallback for networks that block it.
+- **Phone as a steering wheel**: scan a QR code and tilt your phone to steer the game on your computer.
+- **Mobile**: touch controls, tilt steering and an automatic graphics tier on phones and tablets.
+
+Car names and model designations are trademarks of their owners. Redline is a fan project and is not affiliated with or endorsed by any manufacturer. The cars contain no logo artwork: brands appear only as text badges.
+
+## Quick start
 
 ```
-python3 -m http.server 8080      # then open http://127.0.0.1:8080/index.html
-open index.html                  # or open the file directly (file:// works too)
-node tests/run.js                # full test suite (Node, no packages)
-node tests/run.js models         # only the test files whose name contains "models"
+git clone https://github.com/ArnayG/redline.git && cd redline
+open index.html                  # works straight from file:// (single player, invite-code multiplayer)
 node tools/dev-server.js         # static site + the /api/signal multiplayer backend (in memory) on http://127.0.0.1:8080
-node tools/build-zip.js          # dist/redline-cpanel.zip for GoDaddy / cPanel hosting (see "Deploy to GoDaddy / cPanel")
+python3 -m http.server 8080      # or any static server: http://127.0.0.1:8080/index.html
+node tests/run.js                # full test suite (Node only, no packages)
+node tests/run.js models         # only the test files whose name contains "models"
+node tools/build-zip.js          # dist/redline-cpanel.zip for GoDaddy / cPanel hosting
 ```
 
-## Features
+The tests and tools need only Node (CI runs Node 20). Nothing needs `npm install`.
+
+**Controls in short**: arrows / `WASD` drive, `Space` handbrake, `C` camera, `R` reset, `Esc` pause. In Arcade, `N` / `Shift` is nitro and `F` / `X` fires your item (hold `S` / `Down` to aim it backwards). Gamepads, touch controls and the phone wheel all work too. Details in *Controls* below.
+
+**Deploy**: upload the `node tools/build-zip.js` package to any Apache + PHP host (GoDaddy / cPanel; the live site runs this way), or import the repo into Vercel with an Upstash store for the signalling function. See *Deploy to GoDaddy / cPanel* and *Deploy to Vercel*.
+
+## Project structure
+
+```
+index.html            the whole game (one page; every screen is a route)
+hub.html race.html    redirect stubs so old links keep working (→ #/menu, #/race,
+race3d.html drift.html  #/race?quick=1, #/drift)
+css/styles.css        design tokens and every screen's styles
+js/                   classic scripts on window.CB (see Architecture)
+  shapes/             the 53 real car models + hand-authored low-poly definitions
+  race/  race/gl/     race engine, vehicle physics, AI, HUD and the WebGL renderer
+  race/drift/         drift scoring, assist, tunes, AI, camera
+  arcade/             Arcade mode, stunt tracks, items, nitro
+  game/               career, economy, challenges, achievements, replays, menu
+  net/  input/        multiplayer (signalling, WebRTC, relay, lobby) and phone wheel / tilt input
+api/signal.js|.php    signalling relay (Vercel function / PHP for cPanel)
+tools/                dev server and the cPanel zip builder
+tests/                Node test suite (tests/run.js)
+docs/                 design specs per subsystem and the README screenshots
+```
+
+## Features in detail
 
 - **53 real manufacturer models** across 10 body styles (coupe, sedan, hatchback, wagon, SUV, roadster, pickup, hypercar, shooting brake, van), from the Porsche 911 (992), GR Yaris and AE86 to the Ferrari SF90, Koenigsegg Jesko, F-150 Raptor and VW ID. Buzz. The model is stored in `build.body.model`. Every car is drawn as a clean, flat-shaded **low-poly rendering of the real car** (crisp planar facets and flat material colours; likeness comes from the silhouette, proportions, glasshouse and signature lamp and grille shapes). Player and AI cars use the same model, with a lighter LOD for distant cars. Cars without a hand-authored low-poly definition get an automatic low-poly version generated from their `js/shapes/` profile. Settings → Graphics can switch between low-poly and the detailed mesh.
 - **Garage (car builder)**: 12 sections (body/model, engine, transmission, drivetrain, suspension, brakes, wheels, aero, weight, exterior, interior, tech) with live physics (power, 0–100, top speed, lap time), pricing, finance, a legality and rules check with one-click fixes, a live 3D low-poly turntable of your car (the SVG view stays as the fallback and for thumbnails), undo/redo, saved builds, comparisons, spec sheets, share links (`#b=`) and a gallery of 22 presets. The default build is a 911 Carrera S (rear-engined 3.0 twin-turbo flat-six, about 440 hp, RWD, 8-speed dual-clutch). Each preset uses a real model whose layout matches its mechanicals.
@@ -31,6 +83,7 @@ node tools/build-zip.js          # dist/redline-cpanel.zip for GoDaddy / cPanel 
 | `#/garage` (`#/garage/<panel>`, `#b=` share links) | The Garage: the car builder (old `#/atelier` links redirect here) |
 | `#/race` | Race setup (track, mode, laps, field, weather, time of day, steering assist), then a 3D race |
 | `#/drift` | Drift setup (track, score attack / free run / tandem, duration, tune, assist), then a 3D drift run |
+| `#/arcade` | Arcade setup (stunt track or circuit, race / time trial, items, nitro, speed class, AI difficulty), then an Arcade race |
 | `#/multiplayer` (`#/multiplayer/<CODE>` joins room CODE) | Multiplayer lobby: create / join a room, ready up, race or drift with friends |
 | `#/career` | Championships, tiers, calendar, standings |
 | `#/challenges` | Launch, braking, top-speed and drift-school challenges |
@@ -40,7 +93,7 @@ node tools/build-zip.js          # dist/redline-cpanel.zip for GoDaddy / cPanel 
 
 **Rebrand note (FORGE → Redline).** The car builder was called the *Atelier* (`#/atelier`) and the saved-cars screen was the *Garage* (`#/garage`). The builder is now the **Garage** at `#/garage`, and the saved-cars screen is **My Cars** at `#/cars`. `#/atelier` and `#/atelier/<panel>` redirect to `#/garage...`, and old share links (`#b=…`, `#p=<panel>&b=…`) still open the builder. Old `#/garage` bookmarks now open the builder rather than the saved-cars screen. Old hub links (`hub.html#garage`, `#hub=garage`) still open My Cars. Internally the route ids stay `atelier` (builder) and `garage` (My Cars), and `CB.router.format()`/`parse()` map them to the URLs. localStorage keys keep their `forge.*` names, so existing saves, career, settings, achievements and replays load unchanged. Replay exports now start with `REDLINE-REPLAY:` (`.redlinereplay`), and `FORGE-REPLAY:` / `.forgereplay` files still import.
 
-`#/race` and `#/drift` take deep-link parameters: `?track=<id>`, `?mode=<id>`, `?assist=<level>`, `?tune=<id>` and `?quick=1` (start straight away). Developer pages: `lowpoly-preview.html` shows every low-poly car in a grid or as a single-car turntable (`?model=<id>&view=side|front|rear|top|34`, with a paint picker and a wireframe toggle), and `shapes-preview.html` shows the 2D silhouettes.
+`#/race`, `#/drift` and `#/arcade` take deep-link parameters: `?track=<id>`, `?mode=<id>`, `?assist=<level>`, `?tune=<id>` and `?quick=1` (start straight away). Developer pages: `lowpoly-preview.html` shows every low-poly car in a grid or as a single-car turntable (`?model=<id>&view=side|front|rear|top|34`, with a paint picker and a wireframe toggle), and `shapes-preview.html` shows the 2D silhouettes.
 
 The old pages are redirect stubs, so old links still work: `hub.html` → `#/menu`, `race.html` → `#/race`, `race3d.html` → `#/race?quick=1`, `drift.html` → `#/drift`.
 
@@ -48,7 +101,7 @@ The old pages are redirect stubs, so old links still work: `hub.html` → `#/men
 
 - **Free play** (Race, Drift, the Garage's *Drive it* button, or opening `#/race` / `#/drift` directly) uses the Garage's current build (`CB.state`). These sessions count towards your profile stats and achievements however you started them: from a button, a bookmark, a deep link or a page refresh. They pay no purse.
 - **Career** rounds and events use your **active career car** (the owned car selected in My Cars), not the Garage build. The career records its own results, credits and standings.
-- Buying or upgrading a car opens the Garage in career mode, with a live quote and part locks for your level. Confirming keeps the new car in the Garage (if your previous Garage build was unsaved, it is kept in Saved builds); Cancel restores your previous build. Your Atelier build can also be registered as the free entry car.
+- Buying or upgrading a car opens the Garage in career mode, with a live quote and part locks for your level. Confirming keeps the new car in the Garage (if your previous Garage build was unsaved, it is kept in Saved builds); Cancel restores your previous build. Your Garage build can also be registered as the free entry car.
 
 ## Multiplayer
 
@@ -91,6 +144,8 @@ In the room, each player sets a name and toggles **Ready**. The host picks the m
 | `Esc` / `P` | Pause (Resume, Restart, Back to Garage, Back to menu) |
 | `Enter` / `Space` | Start from the loading screen |
 
+**Arcade** adds `N` / `Shift` for nitro, `F` / `X` to use your item, and `S` / `Down` held while firing to aim it backwards (gamepad: B / RB nitro, X / LB item; touch and phone wheel: NITRO and ITEM buttons). With nitro on, `Shift` is nitro rather than shift up.
+
 You can also use a gamepad (standard mapping, analog), a phone as a tilt steering wheel (see *Phone steering wheel*), and on touch devices on-screen controls appear. Keys can be rebound in Settings → Controls.
 
 **Steering assist** (set on each setup screen and in Settings → Driving). Race and Drift each remember their own level: **Light** is the default for racing and **Heavy** for drifting. Saves from before the split that still had the old default (Heavy) get the new defaults; a level you picked yourself is kept for both.
@@ -126,7 +181,7 @@ Steer continuously by tilting a phone, like holding a real wheel. Steering is th
 
 Connection methods: **Online** uses the `/api/signal` backend (Vercel + Upstash, or `tools/dev-server.js`). The input then goes peer to peer over a WebRTC data channel at about 60 Hz. **Same device (test)** pairs two tabs of one browser through BroadcastChannel (`#/wheel/<CODE>?via=local`). **Invite code** needs no server: the phone opens `#/wheel/~<invite>` and shows an answer code, which you paste on the computer.
 
-**Server relay fallback.** Campus and hotel Wi-Fi (client isolation, UDP blocked; Stanford Wi-Fi is a typical case), some cellular NATs and corporate networks stop the direct WebRTC link from opening. If the data channel isn't open about 4.5 s after the phone joins, or ICE fails earlier, both ends switch to relaying through the signalling server (`api/signal.php` on cPanel, `api/signal` on Vercel and in `tools/dev-server.js`). Each screen says which path is in use: **Connected (direct)** or **Connected (via server)**. In relay mode, wheel input is coalesced so the newest state wins. Each request posts and polls in one round trip, and the server answers the moment mail arrives. That gives each side about 4–6 requests/s (bounded by the round-trip time) and about 150–350 ms latency, which is fine for a fallback. Because input then arrives in batches, the disconnect failsafe below is relaxed from 0.3 s to **1 s** in relay mode. The phone shows each stage (**Reaching server…**, **Waiting for computer…**, **Connecting…**, **Connecting via server…**, **Connected (…)**) and names the problem when something fails: server unreachable, blocked by the host's security (HTTP 403/406), code expired or computer not found, or the computer did not answer.
+**Server relay fallback.** Campus and hotel Wi-Fi (client isolation, UDP blocked), some cellular NATs and corporate networks stop the direct WebRTC link from opening. If the data channel isn't open about 4.5 s after the phone joins, or ICE fails earlier, both ends switch to relaying through the signalling server (`api/signal.php` on cPanel, `api/signal` on Vercel and in `tools/dev-server.js`). Each screen says which path is in use: **Connected (direct)** or **Connected (via server)**. In relay mode, wheel input is coalesced so the newest state wins. Each request posts and polls in one round trip, and the server answers the moment mail arrives. That gives each side about 4–6 requests/s (bounded by the round-trip time) and about 150–350 ms latency, which is fine for a fallback. Because input then arrives in batches, the disconnect failsafe below is relaxed from 0.3 s to **1 s** in relay mode. The phone shows each stage (**Reaching server…**, **Waiting for computer…**, **Connecting…**, **Connecting via server…**, **Connected (…)**) and names the problem when something fails: server unreachable, blocked by the host's security (HTTP 403/406), code expired or computer not found, or the computer did not answer.
 
 If the phone disconnects, or stops sending for more than 0.3 s (screen locked, app in the background, Wi-Fi drop), the car **centres its steering and lifts the throttle**. The race keeps running, and the keyboard or gamepad can take over at once. The phone reconnects by itself, and the pairing room stays open for it. The wheel feeds the same analog input as everything else, so it works in races, drift runs and multiplayer sessions. With **Heavy** and the lighter assists, a wheel steers in proportion to its angle. The assist still adds stability, counter-steer, edge guard and braking help, but it does not pick a line the way it does for the arrow keys. **Auto** still drives the line for you.
 
@@ -152,13 +207,13 @@ Every file is a classic script that attaches to `window.CB`. There are no ES mod
 | Game | `js/game/{profile,economy,career,endurance,replay,achievements,challenges,hub}.js` |
 | Shell | `js/router.js` (hash router, screen layers, global nav) |
 | Phone steering | `js/input/{analog,tilt,qr,phone-wheel,input-ui,wheel-page}.js` (see *Phone steering wheel*) |
-| Multiplayer | `js/net/signal.js` (signalling: online / invite code / same device), `js/net/transport.js` (WebRTC data channels), `js/net/netrace.js` (`CB.net.race` host-authoritative race / drift / free-roam sessions), `js/net/netarcade.js` (`CB.net.arcade` host-authoritative Arcade races: input replay, prediction + reconciliation, items; ARCADE-SPEC §6), `js/net/lobby.js` (`#/multiplayer`), `api/signal.js` (Vercel function), `tools/dev-server.js` (see `NET-SPEC.md`) |
+| Multiplayer | `js/net/signal.js` (signalling: online / invite code / same device), `js/net/transport.js` (WebRTC data channels), `js/net/netrace.js` (`CB.net.race` host-authoritative race / drift / free-roam sessions), `js/net/netarcade.js` (`CB.net.arcade` host-authoritative Arcade races: input replay, prediction + reconciliation, items; docs/ARCADE-SPEC.md §6), `js/net/lobby.js` (`#/multiplayer`), `api/signal.js` (Vercel function), `tools/dev-server.js` (see `docs/NET-SPEC.md`) |
 
 The data flow is simple. `CB.state` holds the build. The Garage recomputes one bundle per change (metrics, price, issues, legality). `CB.race.ui` mounts into `#/race` or `#/drift`, runs the session and reports results through its launcher's `onFinish` callback and a `cb:race-finished` event. The career, hub and challenges record the sessions they launch. `CB.app` records free sessions.
 
 `css/styles.css` defines the shared design tokens (`--bg --panel --line --text --accent …`), type, buttons, cards, tabs, modals, toasts and form controls, so every screen looks like the same product. A slim global nav (menu, Garage, Race, Drift, Multiplayer, Career, My Cars, profile/credits, settings) is shown on every screen except while driving.
 
-Specs: `SPEC.md` (configurator), `RACE-SPEC.md`, `RACE3D-SPEC.md`, `DRIFT-SPEC.md`, `GAME-SPEC.md`, `UNIFY-SPEC.md` (one-game shell), `NET-SPEC.md` (multiplayer), `LOWPOLY-SPEC.md` (low-poly real cars), `js/shapes/README.md`.
+Specs (the design contracts the code was written against; some details have since moved on, the code and tests are authoritative): [`docs/SPEC.md`](docs/SPEC.md) (configurator), [`docs/RACE-SPEC.md`](docs/RACE-SPEC.md), [`docs/RACE3D-SPEC.md`](docs/RACE3D-SPEC.md), [`docs/DRIFT-SPEC.md`](docs/DRIFT-SPEC.md), [`docs/ARCADE-SPEC.md`](docs/ARCADE-SPEC.md) (Arcade, stunt tracks, items, arcade multiplayer), [`docs/GAME-SPEC.md`](docs/GAME-SPEC.md), [`docs/UNIFY-SPEC.md`](docs/UNIFY-SPEC.md) (one-game shell), [`docs/NET-SPEC.md`](docs/NET-SPEC.md) (multiplayer), [`docs/LOWPOLY-SPEC.md`](docs/LOWPOLY-SPEC.md) (low-poly real cars), [`js/shapes/README.md`](js/shapes/README.md) (the car shape library).
 
 ## Tests
 
@@ -180,7 +235,7 @@ The site is static, plus one small serverless function (`api/signal.js`) that he
 
 Any Apache + PHP host works (GoDaddy cPanel shared hosting, Namecheap, Bluehost …). No Node, database or shell access is needed, and the game can live in any sub-folder because every path is relative. Online multiplayer and the phone wheel use `api/signal.php`, a PHP copy of the signalling relay that stores small files in `api/_data/`. The client tries `api/signal.php` first, then `api/signal`, so the same code also works on Vercel and with `tools/dev-server.js`.
 
-1. **Build the zip**: run `node tools/build-zip.js` (no npm needed). This writes `dist/redline-cpanel.zip`, with everything inside a single `redline/` folder: `index.html`, the redirect stubs, the dev preview pages, `css/`, `js/`, `api/signal.php`, `.htaccess` and `DEPLOY-CPANEL.txt`. Tests, tools, specs and Node-only files are left out. Each `<script>` / `<link>` URL gets `?v=<content hash>`, so a new upload is picked up straight away. Use `--folder <name>` to change the folder name.
+1. **Build the zip**: run `node tools/build-zip.js` (no npm needed). This writes `dist/redline-cpanel.zip`, with everything inside a single `redline/` folder: `index.html`, the redirect stubs, the dev preview pages, `css/`, `js/`, `api/signal.php`, `.htaccess` and `DEPLOY-CPANEL.txt`. Tests, tools, `docs/` and Node-only files are left out. Each `<script>` / `<link>` URL gets `?v=<content hash>`, so a new upload is picked up straight away. Use `--folder <name>` to change the folder name.
 2. **Upload**: in cPanel, open **File Manager → public_html → Upload** and pick `redline-cpanel.zip`.
 3. **Extract**: select the zip, click **Extract** and extract into `/public_html`. You get `public_html/redline/`. Then delete the zip. You can rename the folder (for example to `public_html/game/` for `https://yourdomain/game/`). To serve the game from the domain root, move the *contents* of `redline/` into `public_html/`.
 4. **Visit** `https://yourdomain/redline/`. To check online play, open `https://yourdomain/redline/api/signal.php`. It should show `{"ok":true,"backend":"php",…}`.

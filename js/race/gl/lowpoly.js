@@ -1,9 +1,9 @@
 /* ==========================================================================
    FORGE Atelier — js/race/gl/lowpoly.js
-   CB.lowpoly : deliberately faceted low-poly models of the real cars (LOWPOLY-SPEC.md).
+   CB.lowpoly : deliberately faceted low-poly models of the real cars (docs/LOWPOLY-SPEC.md).
 
    API
-     CB.lowpoly.register(id, def)        hand-authored definition (format: LOWPOLY-SPEC.md "Authoring format");
+     CB.lowpoly.register(id, def)        hand-authored definition (format: docs/LOWPOLY-SPEC.md "Authoring format");
                                          returns {ok, errors}. Files loaded before this script queue on
                                          CB.lowpoly._pending = [[id, def], ...] (drained on load).
      CB.lowpoly.has(id)                  true when a valid hand-authored definition exists

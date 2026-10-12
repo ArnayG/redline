@@ -2,7 +2,7 @@
    Redline — js/arcade/arcade-layer.js
    CB.arcade.layer : wires the Arcade GAMEPLAY LAYER (js/arcade/gameplay.js) into an arcade session.
 
-   Registers itself as the 'gameplay' extension of CB.arcade.mode (ARCADE-SPEC.md §3) when that module is present
+   Registers itself as the 'gameplay' extension of CB.arcade.mode (docs/ARCADE-SPEC.md §3) when that module is present
    (feature-detected; retried on DOMContentLoaded if mode.js loads later). Setup options it contributes:
      items (toggle) · itemFrequency low|normal|high|frantic · nitro (toggle) · speedClass street|pro|mayhem · coins (toggle)
    Time Trial (mode 'time-trial') automatically means: no item boxes, triple Turbo at the start, ghost from the engine.

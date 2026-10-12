@@ -2,7 +2,7 @@
    FORGE Atelier — js/game/challenges.js
    CB.game.challenges : skill challenges + Driving School licences (pure logic + canvas overlay).
 
-   Contract: GAME-SPEC.md § Challenges / Driving school.
+   Contract: docs/GAME-SPEC.md § Challenges / Driving school.
 
    Catalog
      list                     main challenges [{ id, name, desc, kind, trackDef, rules, scoreFn, medals, ... }]

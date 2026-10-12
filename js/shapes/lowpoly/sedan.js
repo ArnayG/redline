@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/sedan.js
-   Hand-authored low-poly sports sedans (LOWPOLY-SPEC.md): BMW M3 (G80), Mercedes-AMG C 63 (W206),
+   Hand-authored low-poly sports sedans (docs/LOWPOLY-SPEC.md): BMW M3 (G80), Mercedes-AMG C 63 (W206),
    Tesla Model S (2021 refresh), Subaru WRX STI (VA), Mitsubishi Lancer Evolution X.
 
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

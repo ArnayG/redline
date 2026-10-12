@@ -1,6 +1,6 @@
 /* FORGE Atelier — Achievements (CB.game.achievements)
  *
- * Contract: GAME-SPEC.md § Achievements.
+ * Contract: docs/GAME-SPEC.md § Achievements.
  *
  *   CB.game.achievements.list                 -> array of achievement defs (146), each
  *        { id, name, desc, icon (svg string), tier: 'bronze'|'silver'|'gold'|'platinum', xp, credits,

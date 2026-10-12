@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/wagon-brake.js
-   Hand-authored low-poly fast wagons and shooting brakes (LOWPOLY-SPEC.md):
+   Hand-authored low-poly fast wagons and shooting brakes (docs/LOWPOLY-SPEC.md):
      Audi RS 6 Avant (C8), Mercedes-AMG E 63 S Estate (S213), Volvo V60 Polestar Engineered,
      Porsche Taycan Cross Turismo, Ferrari GTC4Lusso, Mercedes-Benz CLS Shooting Brake (X218).
 

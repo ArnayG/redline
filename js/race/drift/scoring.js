@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/race/drift/scoring.js
-   CB.race.drift.scoring : drift scorer for Drift mode (DRIFT-SPEC.md §3). Pure, no DOM.
+   CB.race.drift.scoring : drift scorer for Drift mode (docs/DRIFT-SPEC.md §3). Pure, no DOM.
 
    API
      createScorer(geom, trackDef, opts) -> scorer

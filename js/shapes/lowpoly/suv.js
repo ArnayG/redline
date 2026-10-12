@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/suv.js
-   Hand-authored low-poly SUVs (LOWPOLY-SPEC.md): Porsche Cayenne (E3 facelift), Range Rover Sport (L461),
+   Hand-authored low-poly SUVs (docs/LOWPOLY-SPEC.md): Porsche Cayenne (E3 facelift), Range Rover Sport (L461),
    Lamborghini Urus, Jeep Wrangler Unlimited Rubicon (JL).
 
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

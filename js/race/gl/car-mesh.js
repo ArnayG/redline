@@ -1,8 +1,8 @@
 /* ==========================================================================
    FORGE Atelier — js/race/gl/car-mesh.js
-   CB.gl.car : procedural 3D car models generated from a SPEC.md Build object (the hero asset).
+   CB.gl.car : procedural 3D car models generated from a docs/SPEC.md Build object (the hero asset).
 
-   Contract (RACE3D-SPEC.md)
+   Contract (docs/RACE3D-SPEC.md)
      CB.gl.car.build(ctx, build, {number, color, accent, lod:'high'|'low', length_m?, width_m?, isPlayer?})
        -> carModel { parts: [{mesh, material, local: mat4, kind, castShadow, transparent}],
                      dims: {length, width, height, wheelbase, track, wheelRadius, rideHeight, ...},
@@ -4629,7 +4629,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   /** high-LOD real models stay under ~39k triangles: a model whose decals came out heavy is rebuilt once with a
       coarser loft (75 % of the stations) */
   var TRI_CAP_HIGH = 39000, TRI_CAP_HERO = 120000, HERO_LOFT = 6400;
-  /* ================================================================ low-poly delegation (LOWPOLY-SPEC.md) */
+  /* ================================================================ low-poly delegation (docs/LOWPOLY-SPEC.md) */
   // graphics.carStyle 'lowpoly' (default) builds the faceted CB.lowpoly model of the real car; 'detailed' (or no
   // CB.lowpoly / no CB.shapes model) keeps the detailed loft below. The low-poly model reuses this module's
   // resolve() + shapeSetup() so dims, cameras, suspension and pose() behave exactly like the detailed real model.

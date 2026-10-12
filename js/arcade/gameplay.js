@@ -15,7 +15,7 @@
               track { length, halfWidth(s)?, curvature(s)?, pose(s, lat)? }   (attachEngine fills this),
               layout 'auto' | [entity specs {type:'box'|'pad'|'ring'|'coin'|'can', s, lat, ...}] , extraEntities [] }
 
-     --- generic interface (any session type; ARCADE-SPEC.md § Gameplay hook interface) ---
+     --- generic interface (any session type; docs/ARCADE-SPEC.md § Gameplay hook interface) ---
        gp.step(dt, ctx)   ctx { t, phase 'grid'|'countdown'|'racing'|'finished', cars: [view] }
                           view { id, isPlayer, s, lap, dist, lat, speed, position, vTop?, halfW?, throttle, steer,
                                  airborne?, finished?, onTrack? }

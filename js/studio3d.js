@@ -1,7 +1,7 @@
 /* ==========================================================================
    FORGE Atelier — js/studio3d.js
    CB.studio3d : the Atelier studio as a live WebGL turntable of the SAME low-poly car the game drives
-   (LOWPOLY-SPEC.md "Studio"). CB.render (js/render.js) hands its viewer over to this module when WebGL is
+   (docs/LOWPOLY-SPEC.md "Studio"). CB.render (js/render.js) hands its viewer over to this module when WebGL is
    available and keeps the SVG renderer as fallback and for thumbnails / snapshots / the spec sheet.
 
    API

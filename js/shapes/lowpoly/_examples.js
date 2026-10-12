@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/_examples.js
-   Hand-authored low-poly exemplars (LOWPOLY-SPEC.md): Porsche 911 (992) and Ford F-150 Raptor (gen 3).
+   Hand-authored low-poly exemplars (docs/LOWPOLY-SPEC.md): Porsche 911 (992) and Ford F-150 Raptor (gen 3).
    They set the quality bar and show the authoring format; copy the patterns for the other cars.
 
    Coordinates: reference metres of the CB.shapes model (x forward, origin mid-wheelbase, y up from the ground,

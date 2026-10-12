@@ -3,7 +3,7 @@
    CB.race.tracks : track catalog + geometry builder (pure, no DOM).
 
    Catalog
-     CB.race.tracks.list            -> array of track definitions (see RACE-SPEC.md)
+     CB.race.tracks.list            -> array of track definitions (see docs/RACE-SPEC.md)
      CB.race.tracks.get(id)         -> definition | null
      CB.race.tracks.ids             -> ['forge-speedway', ...]
 

@@ -2,7 +2,7 @@
    Redline — js/net/netarcade.js
    CB.net.arcade : ARCADE MULTIPLAYER — host-authoritative arcade races (stunt tracks + circuits) with nitro and
    Mario-Kart style items over CB.net.transport (WebRTC, or any transport with the same Host / Client API, e.g. the
-   signalling relay). Pure logic (no DOM). Classic <script> in browsers, require()-able in Node. ARCADE-SPEC.md §6.
+   signalling relay). Pure logic (no DOM). Classic <script> in browsers, require()-able in Node. docs/ARCADE-SPEC.md §6.
 
    Model
      HOST  runs THE race: one CB.arcade.mode session with every car (host = player, remote players + AI fill as

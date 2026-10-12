@@ -2,7 +2,7 @@
    FORGE Atelier — js/render.js
    CB.render : the procedural SVG car visualiser.
 
-   Public API (SPEC.md "CB.render")
+   Public API (docs/SPEC.md "CB.render")
    --------------------------------
      CB.render.mount(containerEl)          create the live <svg> inside the container (idempotent)
      CB.render.update(build, metrics)      re-target the drawing; numeric geometry (wheelbase, ride
@@ -21,7 +21,7 @@
      CB.render.use3d(bool?)                get / set whether mount() may hand the live viewer to CB.studio3d
                                            (default on; off via ?studio=svg or localStorage cb.studio = 'svg')
 
-   3D studio hand-over (LOWPOLY-SPEC.md "Studio")
+   3D studio hand-over (docs/LOWPOLY-SPEC.md "Studio")
    ----------------------------------------------
      When CB.studio3d (js/studio3d.js) is loaded and WebGL works, mount() gives the live viewer to the WebGL
      turntable of the low-poly car; update / setView / toggleXray / toggleSpin are forwarded. The SVG renderer

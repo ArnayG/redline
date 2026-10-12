@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/hatch-roadster.js
-   Hand-authored low-poly hot hatches and roadsters (LOWPOLY-SPEC.md):
+   Hand-authored low-poly hot hatches and roadsters (docs/LOWPOLY-SPEC.md):
      VW Golf GTI (Mk8), Honda Civic Type R (FL5), Toyota GR Yaris, Toyota Sprinter Trueno (AE86),
      Mazda MX-5 (ND), BMW Z4 (G29), Porsche 718 Boxster (982).
 

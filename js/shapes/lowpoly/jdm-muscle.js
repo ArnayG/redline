@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/shapes/lowpoly/jdm-muscle.js
-   Hand-authored low-poly drift / muscle icons (LOWPOLY-SPEC.md):
+   Hand-authored low-poly drift / muscle icons (docs/LOWPOLY-SPEC.md):
      Nissan Silvia S15, Nissan Skyline GT-R R34, Mazda RX-7 FD3S, Nissan GT-R R35,
      Ford Mustang GT S650, Chevrolet Camaro ZL1 (2019), Dodge Challenger SRT Hellcat.
 

@@ -1,4 +1,4 @@
-/* Arcade mode (ARCADE-SPEC.md): arcade vehicle model, AI arcade laps on every circuit, determinism / replay meta,
+/* Arcade mode (docs/ARCADE-SPEC.md): arcade vehicle model, AI arcade laps on every circuit, determinism / replay meta,
    CB.arcade.mode core, race-ui arcade settings isolation, route / menu presence, Race & Drift unchanged. */
 'use strict';
 var assert = require('assert');

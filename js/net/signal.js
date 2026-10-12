@@ -1,6 +1,6 @@
 /* ==========================================================================
    FORGE Atelier — js/net/signal.js
-   CB.net.signal : client-side signalling backends for multiplayer (NET-SPEC.md). Zero dependencies, classic script,
+   CB.net.signal : client-side signalling backends for multiplayer (docs/NET-SPEC.md). Zero dependencies, classic script,
    also loadable in Node (require) for tests.
 
    Every backend returns a Signal object with the same interface:

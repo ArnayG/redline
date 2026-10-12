@@ -1,6 +1,6 @@
 /* ==========================================================================
    Redline — js/arcade/mode.js
-   CB.arcade.mode : the Arcade game mode core (ARCADE-SPEC.md §1-§4). Pure logic (no DOM), Node-loadable.
+   CB.arcade.mode : the Arcade game mode core (docs/ARCADE-SPEC.md §1-§4). Pure logic (no DOM), Node-loadable.
 
    Arcade is its own top-level mode (#/arcade), separate from Race and Drift: every car (player + AI) runs the
    arcade vehicle model (CB.race.vehicle with params.handling === 'arcade': no traction loss at all), on the

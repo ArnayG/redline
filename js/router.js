@@ -35,7 +35,7 @@
      atelier  -> #screen-atelier  (the configurator: #topbar / #layout / #bottomnav live in it)
      race     -> #screen-race     (CB.race.ui mounts #race-root into it via CB.router.on('race', ...))
      drift    -> #screen-drift
-     arcade   -> #screen-arcade    (CB.race.ui discipline 'arcade', ARCADE-SPEC.md)
+     arcade   -> #screen-arcade    (CB.race.ui discipline 'arcade', docs/ARCADE-SPEC.md)
      multiplayer -> #screen-multiplayer (CB.net.lobby renders into it; the sub path is the room code to join)
      hub      -> #screen-hub      (menu, career, challenges, garage, achievements, replays, profile, settings:
                                    one CB.game.hub instance; its screens are the router's screens)

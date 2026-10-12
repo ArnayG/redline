@@ -2,7 +2,7 @@
 /* ==========================================================================
    FORGE Atelier — api/signal.php
    WebRTC signalling relay for multiplayer and the phone wheel, for plain PHP hosting (GoDaddy / cPanel / any
-   Apache + PHP 7.4–8.x). Same JSON protocol as api/signal.js (NET-SPEC.md); no extensions, no database, no Composer.
+   Apache + PHP 7.4–8.x). Same JSON protocol as api/signal.js (docs/NET-SPEC.md); no extensions, no database, no Composer.
    Storage: small JSON files guarded by flock() in api/_data/ (created on first use, with its own .htaccess deny +
    index.html, and every file starts with "<?php exit; ?>" so it is never readable over HTTP even if .htaccess is
    ignored). Falls back to sys_get_temp_dir() when api/_data is not writable. Expired rooms / mailboxes / rate
