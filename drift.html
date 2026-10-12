@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Redline — Drift</title>
+  <!-- Redirect stub (UNIFY-SPEC.md): Redline is one game with one UI at index.html; drift mode lives at index.html#/drift
+       (mode select, every drift track, free / trial / tandem, assist + tune, drift HUD with 3D zone markers, drift chase
+       camera, results). The window.drift test hooks (start / step / setInput / state ...) are available there.
+       This file stays so old links keep working. -->
+  <meta http-equiv="refresh" content="0; url=index.html#/drift">
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+  (function () {
+    var target = 'index.html#/drift';
+    // old deep links: drift.html?mode=trial&track=kurogane-pass started the run straight away -> quick start;
+    // ?track= / ?assist= / ?tune= are forwarded as route params
+    var qs = new URLSearchParams(window.location.search || ''), out = [];
+    var mode = qs.get('mode');
+    if (mode === 'race') target = 'index.html#/race';
+    if (mode) out.push('quick=1');
+    if (mode && mode !== 'race' && mode !== 'drift') out.push('mode=' + encodeURIComponent(mode));
+    ['track', 'assist', 'tune'].forEach(function (k) { if (qs.get(k)) out.push(k + '=' + encodeURIComponent(qs.get(k))); });
+    if (out.length) target += '?' + out.join('&');
+    try { window.location.replace(target); } catch (e) { window.location.href = target; }
+  })();
+  </script>
+</head>
+<body>
+  <main class="noscript" style="display:grid;place-items:center;min-height:100vh;text-align:center;padding:32px">
+    <div>
+      <h1>Redline</h1>
+      <p class="cb-hint">Drift mode now lives inside the game. <a href="index.html#/drift">Continue to Redline</a>.</p>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Redline — 3D race</title>
+  <!-- Redirect stub (UNIFY-SPEC.md): Redline is one game with one UI at index.html. This file stays so old links keep working. -->
+  <meta http-equiv="refresh" content="0; url=index.html#/race?quick=1">
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+  (function () {
+    var target = 'index.html#/race?quick=1';
+    // the old 3D test bench went straight onto the track: quick start, forwarding ?track=, ?mode=, ?assist=
+    var q = (window.location.search || '').replace(/^\?/, '');
+    if (q) target += '&' + q;
+    try { window.location.replace(target); } catch (e) { window.location.href = target; }
+  })();
+  </script>
+</head>
+<body>
+  <main class="noscript" style="display:grid;place-items:center;min-height:100vh;text-align:center;padding:32px">
+    <div>
+      <h1>Redline</h1>
+      <p class="cb-hint">3D race now lives inside the game. <a href="index.html#/race?quick=1">Continue to Redline</a>.</p>
+    </div>
+  </main>
+</body>
+</html>

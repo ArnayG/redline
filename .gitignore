@@ -1,0 +1,9 @@
+.DS_Store
+dist/
+api/_data/
+.server.log
+node_modules/
+_audit_tmp/
+*-prof/
+lowpoly-preview-*.html
+index-studio-test.html

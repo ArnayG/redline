@@ -1,0 +1,15 @@
+{
+  "name": "Redline — Build it. Race it. Drift it.",
+  "short_name": "Redline",
+  "description": "Build a car in the Garage, then race it, drift it and run a career. Use your phone as a steering wheel.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

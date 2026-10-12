@@ -1,0 +1,15 @@
+# Not needed on the deployed site (Vercel serves the repo root statically + api/*.js as functions)
+tests/
+tools/
+*-SPEC.md
+SPEC.md
+.DS_Store
+**/.DS_Store
+node_modules/
+*.log
+.claude/
+# cPanel / PHP package only (Vercel rewrites /api/signal.php to the Node function instead)
+api/signal.php
+api/_data/
+.htaccess
+dist/

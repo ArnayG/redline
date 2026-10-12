@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Redline — build a car in the Garage to your exact specification (body, engine, gearbox, chassis, aero, paint and cabin, with live physics and pricing), then race it, drift it and run a career.">
+  <meta property="og:title" content="Redline — Build it. Race it. Drift it.">
+  <meta property="og:description" content="Build a car in the Garage, then race it, drift it and run a career. Plays in the browser, on desktop and phone.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Redline">
+  <meta name="application-name" content="Redline">
+  <meta name="apple-mobile-web-app-title" content="Redline">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0b0d">
+  <!-- iPhone has no Fullscreen API: "Add to Home Screen" launches standalone (no browser bars) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <title>Redline — Build it. Race it. Drift it.</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0b0d'/%3E%3Cpath d='M14 42a18 18 0 0 1 28.5-14.6' fill='none' stroke='%23c9a96e' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M46.4 31.4A18 18 0 0 1 50 42' fill='none' stroke='%23e0412f' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M32 42l13-9' stroke='%23ecebe6' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='42' r='4.5' fill='%23ecebe6'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Boot screen: painted as soon as the stylesheet arrives, while the ~90 classic scripts below download and run
+       (several seconds on a phone network). Self-contained styles; removed after DOMContentLoaded. -->
+  <div id="cb-boot" role="status" aria-live="polite" data-scripts="106">
+    <style>#cb-boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:#0b0b0d;color:#e9e6df;font:600 13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.04em;transition:opacity .35s ease;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}#cb-boot.is-done{opacity:0;pointer-events:none}#cb-boot .cbb{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(260px,70vw)}#cb-boot .cbb-bar{width:100%;height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}#cb-boot .cbb-bar i{display:block;height:100%;width:3%;background:#c9a96e;border-radius:2px;transition:width .2s ease}#cb-boot .cbb-t{opacity:.72;font-variant-numeric:tabular-nums}#cb-boot svg{opacity:.9}@media (prefers-reduced-motion:reduce){#cb-boot,#cb-boot .cbb-bar i{transition:none}}</style>
+    <div class="cbb">
+      <svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true"><path d="M8 44a24 24 0 0 1 40.4-17.6" fill="none" stroke="#c9a96e" stroke-width="5" stroke-linecap="round"/><path d="M51.4 30.3A24 24 0 0 1 56 44" fill="none" stroke="#e0412f" stroke-width="5" stroke-linecap="round"/><path d="M32 44l12-14" stroke="#e9e6df" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="44" r="4" fill="#e9e6df"/></svg>
+      <div class="cbb-bar"><i id="cb-boot-bar"></i></div>
+      <div class="cbb-t" id="cb-boot-text">Loading… 0%</div>
+    </div>
+    <script>
+    (function () {
+      var boot = document.getElementById('cb-boot'), bar = document.getElementById('cb-boot-bar'), txt = document.getElementById('cb-boot-text');
+      var total = +boot.getAttribute('data-scripts') || 90, n = 0, done = false;
+      function show() { if (done) return; var p = Math.min(97, Math.round(n / total * 100)); bar.style.width = Math.max(3, p) + '%'; txt.textContent = 'Loading… ' + p + '%'; }
+      function onLoad(e) { var t = e && e.target; if (t && t.tagName === 'SCRIPT' && t.src) { n++; show(); } }
+      document.addEventListener('load', onLoad, true);
+      document.addEventListener('error', function (e) { onLoad(e); }, true);
+      function finish() {
+        if (done) return; done = true;
+        document.removeEventListener('load', onLoad, true);
+        bar.style.width = '100%'; txt.textContent = 'Loading… 100%';
+        var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+        raf(function () { raf(function () { boot.className = 'is-done'; setTimeout(function () { if (boot.parentNode) boot.parentNode.removeChild(boot); }, 400); }); });
+      }
+      document.addEventListener('DOMContentLoaded', finish);
+      window.addEventListener('load', finish);
+    })();
+    </script>
+  </div>
+  <a class="skip-link" href="#app-root">Skip to content</a>
+
+  <!-- ONE game, one UI (UNIFY-SPEC.md): the global nav bar + one full-viewport layer per CB.router screen. -->
+  <header id="gnav" class="gnav" role="banner"><!-- rendered by js/router.js --></header>
+
+  <div id="app-root">
+  <!-- #/garage (route id "atelier") — the car builder -->
+  <section id="screen-atelier" class="cb-screen" data-route="atelier" aria-label="Garage" hidden>
+  <header id="topbar">
+    <div class="brand" aria-label="Redline Garage">
+      <svg class="brand-mark" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor" opacity=".12"/><path d="M14 42a18 18 0 0 1 28.5-14.6" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M46.4 31.4A18 18 0 0 1 50 42" fill="none" style="stroke:var(--race,#e0412f)" stroke-width="5" stroke-linecap="round"/><path d="M32 42l13-9" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="42" r="4.5" fill="currentColor"/></svg>
+      <span class="brand-name">RED<b>LINE</b></span><span class="brand-sub">Garage</span>
+    </div>
+    <button id="btn-menu" class="cb-btn ghost menu-btn" type="button" title="Main menu: career, races, my cars (M)" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Menu</span>
+    </button>
+
+    <div class="build-title">
+      <label for="build-name" class="visually-hidden">Build name</label>
+      <input id="build-name" type="text" maxlength="60" spellcheck="false" autocomplete="off" value="Untitled Build" title="Rename this build">
+      <span id="build-status" class="build-status" aria-live="polite"></span>
+    </div>
+
+    <div class="topbar-group" role="group" aria-label="History">
+      <button id="btn-undo" class="cb-btn ghost icon-btn" type="button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+      </button>
+      <button id="btn-redo" class="cb-btn ghost icon-btn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg>
+      </button>
+    </div>
+
+    <nav class="topbar-group topbar-actions" aria-label="Build actions">
+      <button id="btn-presets" class="cb-btn ghost" type="button" title="Start from an iconic preset">Presets</button>
+      <button id="btn-garage" class="cb-btn ghost" type="button" title="Saved builds (G)">Saved builds</button>
+      <button id="btn-compare" class="cb-btn ghost" type="button" title="Compare builds side by side">Compare</button>
+      <button id="btn-spec" class="cb-btn ghost" type="button" title="Printable specification sheet">Spec Sheet</button>
+      <button id="btn-hub" class="cb-btn ghost" type="button" title="Career hub: championships, owned cars, achievements (H)" hidden>Career</button>
+      <button id="btn-race" class="cb-btn race-btn drive-btn" type="button" title="Drive this build: Race (R) or Drift (D)" aria-haspopup="menu" hidden>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></svg>
+        <span>Drive it</span>
+      </button>
+      <button id="btn-share" class="cb-btn primary" type="button" title="Copy a shareable link">Share</button>
+      <button id="btn-theme" class="cb-btn ghost icon-btn" type="button" title="Toggle light / dark theme" aria-label="Toggle theme">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <div id="layout">
+    <nav id="sidenav" aria-label="Configuration sections">
+      <!-- generated by app.js from CB.panelList(), grouped Engineering / Chassis / Design -->
+    </nav>
+
+    <main id="stage">
+      <section id="viewer" aria-label="Car visualiser">
+        <div id="viewer-env" class="viewer-env" aria-hidden="true"></div>
+        <div id="car-mount" class="car-mount"></div>
+        <div class="viewer-controls" role="toolbar" aria-label="Viewer controls">
+          <div class="view-buttons" role="group" aria-label="Camera">
+            <button id="view-side" class="cb-btn ghost is-active" type="button" aria-pressed="true">Side</button>
+            <button id="view-front" class="cb-btn ghost" type="button" aria-pressed="false">Front</button>
+            <button id="view-rear" class="cb-btn ghost" type="button" aria-pressed="false">Rear</button>
+            <button id="view-top" class="cb-btn ghost" type="button" aria-pressed="false">Top</button>
+          </div>
+          <div class="view-toggles" role="group" aria-label="Overlays">
+            <button id="btn-xray" class="cb-btn ghost" type="button" aria-pressed="false" title="X-ray: drivetrain, weight distribution and centre of gravity">X-Ray</button>
+            <button id="btn-spin" class="cb-btn ghost" type="button" aria-pressed="false" title="Spin the wheels">Spin</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="perf-strip" role="region" aria-label="Quick stats">
+        <div class="qs"><span class="qs-label">Power</span><span class="qs-value"><span id="qs-hp">—</span><small>hp</small></span></div>
+        <div class="qs"><span class="qs-label">Torque</span><span class="qs-value"><span id="qs-torque">—</span><small>Nm</small></span></div>
+        <div class="qs"><span class="qs-label">0–60 mph</span><span class="qs-value"><span id="qs-060">—</span><small>s</small></span></div>
+        <div class="qs"><span class="qs-label">Top speed</span><span class="qs-value"><span id="qs-top">—</span><small>km/h</small></span></div>
+        <div class="qs"><span class="qs-label">Weight</span><span class="qs-value"><span id="qs-weight">—</span><small>kg</small></span></div>
+        <div class="qs qs-price"><span class="qs-label">Price</span><span class="qs-value"><span id="qs-price">—</span></span></div>
+      </div>
+
+      <div id="panel-host" tabindex="-1" aria-live="off">
+        <div class="boot-placeholder">Loading the Garage…</div>
+      </div>
+    </main>
+
+    <aside id="summary" aria-label="Build summary">
+      <div class="summary-head">
+        <div class="summary-total">
+          <span class="cb-label">Total as configured</span>
+          <span id="price-total" class="summary-price">—</span>
+          <span id="price-monthly" class="cb-hint"></span>
+        </div>
+        <span id="legality-badge" class="cb-badge" title="Street legality">—</span>
+      </div>
+
+      <div id="summary-tabs" class="cb-tabs" data-static="true">
+        <div class="cb-tab-list" role="tablist">
+          <button id="tab-perf" class="cb-tab is-active" role="tab" type="button" aria-selected="true" aria-controls="pane-perf" data-tab="perf">Performance</button>
+          <button id="tab-price" class="cb-tab" role="tab" type="button" aria-selected="false" aria-controls="pane-price" data-tab="price">Price</button>
+          <button id="tab-issues" class="cb-tab" role="tab" type="button" aria-selected="false" aria-controls="pane-issues" data-tab="issues">Issues <span id="issue-count" class="cb-tab-badge"></span></button>
+        </div>
+        <div class="cb-tab-panels">
+          <div id="pane-perf" class="cb-tab-panel" role="tabpanel" aria-labelledby="tab-perf">
+            <div class="cb-chart radar-wrap"><canvas id="radar" role="img" aria-label="Ratings radar"></canvas></div>
+            <div id="summary-perf"></div>
+          </div>
+          <div id="pane-price" class="cb-tab-panel" role="tabpanel" aria-labelledby="tab-price" hidden>
+            <div id="price-breakdown"></div>
+          </div>
+          <div id="pane-issues" class="cb-tab-panel" role="tabpanel" aria-labelledby="tab-issues" hidden>
+            <div id="issue-list"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <nav id="bottomnav" aria-label="Sections (mobile)"></nav>
+  </section>
+
+  <!-- #/race, #/drift — CB.race.ui mounts its setup → 3D session here (steering assist: Light for racing, Heavy for drifting by default) -->
+  <section id="screen-race" class="cb-screen" data-route="race" aria-label="Race" hidden></section>
+  <section id="screen-drift" class="cb-screen" data-route="drift" aria-label="Drift" hidden></section>
+  <section id="screen-arcade" class="cb-screen" data-route="arcade" aria-label="Arcade" hidden></section>
+  <!-- #/menu, #/career, #/challenges, #/cars, #/achievements, #/replays, #/profile, #/settings — CB.game.hub screens -->
+  <section id="screen-hub" class="cb-screen" data-route="hub" aria-label="Game" hidden></section>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+
+  <noscript>
+    <div class="noscript">
+      <h1>Redline needs JavaScript</h1>
+      <p>The configurator computes physics, pricing and validation live in your browser. Please enable JavaScript and reload. Nothing is sent to a server.</p>
+    </div>
+  </noscript>
+
+  <!-- Classic scripts, contract load order (SPEC.md #1-14). No modules, no CDN, works from file:// -->
+  <script src="js/util.js" charset="utf-8"></script>
+  <!-- device class + automatic graphics tier + iOS audio unlock / storage guards (no dependencies) -->
+  <script src="js/platform/device.js" charset="utf-8"></script>
+  <script src="js/data.js" charset="utf-8"></script>
+  <script src="js/shapes/core.js" charset="utf-8"></script>
+  <script src="js/shapes/models/coupe.js" charset="utf-8"></script>
+  <script src="js/shapes/models/sedan.js" charset="utf-8"></script>
+  <script src="js/shapes/models/hatchback.js" charset="utf-8"></script>
+  <script src="js/shapes/models/wagon.js" charset="utf-8"></script>
+  <script src="js/shapes/models/suv.js" charset="utf-8"></script>
+  <script src="js/shapes/models/roadster.js" charset="utf-8"></script>
+  <script src="js/shapes/models/pickup.js" charset="utf-8"></script>
+  <script src="js/shapes/models/hypercar.js" charset="utf-8"></script>
+  <script src="js/shapes/models/shooting-brake.js" charset="utf-8"></script>
+  <script src="js/shapes/models/van.js" charset="utf-8"></script>
+  <script src="js/shapes/models/pack-jdm.js" charset="utf-8"></script>
+  <script src="js/shapes/models/pack-usa.js" charset="utf-8"></script>
+  <script src="js/shapes/models/pack-exotic.js" charset="utf-8"></script>
+  <script src="js/shapes/models/pack-sport.js" charset="utf-8"></script>
+  <!-- Hand-authored low-poly car definitions (LOWPOLY-SPEC.md). They queue on CB.lowpoly._pending until
+       js/race/gl/lowpoly.js loads; one tag per group file (after js/shapes/models/*). -->
+  <script src="js/shapes/lowpoly/_examples.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/coupe.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/sedan.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/wagon-brake.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/hatch-roadster.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/suv.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/pickup-van.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/hyper-a.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/hyper-b.js" charset="utf-8"></script>
+  <script src="js/shapes/lowpoly/jdm-muscle.js" charset="utf-8"></script>
+  <!-- /low-poly definitions -->
+  <script src="js/state.js" charset="utf-8"></script>
+  <script src="js/physics.js" charset="utf-8"></script>
+  <script src="js/rules.js" charset="utf-8"></script>
+  <script src="js/pricing.js" charset="utf-8"></script>
+  <script src="js/ui-kit.js" charset="utf-8"></script>
+  <script src="js/render.js" charset="utf-8"></script>
+  <script src="js/studio3d.js" charset="utf-8"></script>
+  <script src="js/charts.js" charset="utf-8"></script>
+  <script src="js/panels-powertrain.js" charset="utf-8"></script>
+  <script src="js/panels-chassis.js" charset="utf-8"></script>
+  <script src="js/panels-style.js" charset="utf-8"></script>
+  <script src="js/garage.js" charset="utf-8"></script>
+  <script src="js/app.js" charset="utf-8"></script>
+
+  <!-- Race mode (RACE-SPEC.md): loaded after app.js; CB.app feature-detects CB.race.ui at boot (DOMContentLoaded). -->
+  <script src="js/race/tracks.js" charset="utf-8"></script>
+  <script src="js/race/tracks-extra.js" charset="utf-8"></script>
+  <script src="js/race/vehicle.js" charset="utf-8"></script>
+  <script src="js/race/ai.js" charset="utf-8"></script>
+  <script src="js/race/engine.js" charset="utf-8"></script>
+  <script src="js/race/renderer.js" charset="utf-8"></script>
+  <script src="js/race/gl/gl-core.js" charset="utf-8"></script>
+  <script src="js/race/gl/lowpoly.js" charset="utf-8"></script>
+  <script src="js/race/gl/textures.js" charset="utf-8"></script>
+  <script src="js/race/gl/envmap.js" charset="utf-8"></script>
+  <script src="js/race/gl/post.js" charset="utf-8"></script>
+  <script src="js/race/gl/track-mesh.js" charset="utf-8"></script>
+  <script src="js/race/gl/scenery.js" charset="utf-8"></script>
+  <script src="js/race/gl/car-mesh.js" charset="utf-8"></script>
+  <script src="js/race/gl/cockpit.js" charset="utf-8"></script>
+  <script src="js/race/gl/effects.js" charset="utf-8"></script>
+  <script src="js/race/gl/renderer3d.js" charset="utf-8"></script>
+  <script src="js/race/hud.js" charset="utf-8"></script>
+  <script src="js/race/audio.js" charset="utf-8"></script>
+  <!-- Drift mode + steering assist (DRIFT-SPEC.md): tune → assist → scoring → tracks → ai → arcade → camera → sfx → hud → session (same as drift.html). Optional: race-ui feature-detects CB.race.drift / CB.race.assist. -->
+  <script src="js/race/drift/tune.js" charset="utf-8"></script>
+  <script src="js/race/drift/assist.js" charset="utf-8"></script>
+  <script src="js/race/drift/scoring.js" charset="utf-8"></script>
+  <script src="js/race/drift/tracks.js" charset="utf-8"></script>
+  <script src="js/race/drift/ai.js" charset="utf-8"></script>
+  <script src="js/race/drift/arcade.js" charset="utf-8"></script>
+  <script src="js/race/drift/camera.js" charset="utf-8"></script>
+  <script src="js/race/drift/sfx.js" charset="utf-8"></script>
+  <script src="js/race/drift/hud.js" charset="utf-8"></script>
+  <script src="js/race/drift/session.js" charset="utf-8"></script>
+  <!-- Arcade mode (ARCADE-SPEC.md): mode core; stunt tracks / gameplay extensions register into CB.arcade (feature-detected). -->
+  <script src="js/arcade/mode.js" charset="utf-8"></script>
+  <!-- Arcade STUNT tracks (ARCADE-SPEC.md § Stunt tracks): 3D track format → maps → track-space physics → AI → session → GL meshes → renderer. -->
+  <script src="js/arcade/stunt-track.js" charset="utf-8"></script>
+  <script src="js/arcade/stunt-maps.js" charset="utf-8"></script>
+  <script src="js/arcade/stunt-physics.js" charset="utf-8"></script>
+  <script src="js/arcade/stunt-ai.js" charset="utf-8"></script>
+  <script src="js/arcade/stunt-session.js" charset="utf-8"></script>
+  <script src="js/race/gl/stunt-mesh.js" charset="utf-8"></script>
+  <script src="js/race/gl/stunt-renderer.js" charset="utf-8"></script>
+  <!-- Arcade gameplay layer (ARCADE-SPEC.md § Gameplay layer): items → nitro → gameplay core → HUD → FX → SFX → layer (registers the 'gameplay' extension). -->
+  <script src="js/arcade/items.js" charset="utf-8"></script>
+  <script src="js/arcade/nitro.js" charset="utf-8"></script>
+  <script src="js/arcade/gameplay.js" charset="utf-8"></script>
+  <script src="js/arcade/arcade-hud.js" charset="utf-8"></script>
+  <script src="js/race/gl/arcade-fx.js" charset="utf-8"></script>
+  <script src="js/arcade/arcade-sfx.js" charset="utf-8"></script>
+  <script src="js/arcade/arcade-layer.js" charset="utf-8"></script>
+  <script src="js/race/race-ui.js" charset="utf-8"></script>
+
+  <!-- Game systems (GAME-SPEC.md): profile → economy → career → endurance → replay → achievements → challenges → hub. -->
+  <script src="js/game/profile.js" charset="utf-8"></script>
+  <script src="js/game/economy.js" charset="utf-8"></script>
+  <script src="js/game/career.js" charset="utf-8"></script>
+  <script src="js/game/endurance.js" charset="utf-8"></script>
+  <script src="js/game/replay.js" charset="utf-8"></script>
+  <script src="js/game/achievements.js" charset="utf-8"></script>
+  <script src="js/game/challenges.js" charset="utf-8"></script>
+  <script src="js/game/hub.js" charset="utf-8"></script>
+
+  <!-- Multiplayer (NET-SPEC.md): signalling → WebRTC transport → net race sessions → lobby (#/multiplayer). After race-ui
+       (the lobby hands sessions to CB.race.ui.openNet) and BEFORE the router (lobby.js registers #/multiplayer on cb:router-ready). -->
+  <script src="js/net/signal.js" charset="utf-8"></script>
+  <script src="js/net/relay.js" charset="utf-8"></script>
+  <script src="js/net/transport.js" charset="utf-8"></script>
+  <script src="js/net/netrace.js" charset="utf-8"></script>
+  <script src="js/net/netarcade.js" charset="utf-8"></script>
+  <script src="js/net/lobby.js" charset="utf-8"></script>
+
+  <!-- Phone steering (README "Phone steering wheel"): analog input hub → tilt-to-steer → QR encoder → phone-as-wheel
+       protocol / pairing (uses CB.net.signal + transport) → UI (pairing screen, touch pedals) → the #/wheel/<CODE>
+       controller page (claims the page before the router boots). -->
+  <script src="js/input/analog.js" charset="utf-8"></script>
+  <script src="js/input/tilt.js" charset="utf-8"></script>
+  <script src="js/input/orient.js" charset="utf-8"></script>
+  <script src="js/input/qr.js" charset="utf-8"></script>
+  <script src="js/input/phone-wheel.js" charset="utf-8"></script>
+  <script src="js/input/input-ui.js" charset="utf-8"></script>
+  <script src="js/input/wheel-page.js" charset="utf-8"></script>
+  <!-- The single entry point's router (UNIFY-SPEC.md): loads last, boots to #/menu on DOMContentLoaded. -->
+  <script src="js/router.js" charset="utf-8"></script>
+</body>
+</html>

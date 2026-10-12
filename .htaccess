@@ -1,0 +1,93 @@
+# ==========================================================================
+#  Redline (FORGE) — Apache / cPanel config for this folder (works at the domain root or in any sub-folder, e.g. /redline/).
+#  Every block is wrapped in <IfModule>, so a host without a module just skips that block instead of failing.
+#  Ignored by Vercel and by tools/dev-server.js.
+# ==========================================================================
+
+DirectoryIndex index.html index.php
+AddDefaultCharset UTF-8
+
+# No directory listings (cPanel's own "Indexes" tool writes this exact line).
+Options -Indexes
+
+# ---------------------------------------------------------------- MIME types
+<IfModule mod_mime.c>
+  AddType text/javascript                 .js .mjs
+  AddType text/css                        .css
+  AddType application/json                .json .map
+  AddType image/svg+xml                   .svg
+  AddType application/wasm                .wasm
+  AddType application/manifest+json       .webmanifest
+  AddType text/plain                      .txt
+  AddCharset UTF-8 .html .js .mjs .css .json .map .svg .txt .webmanifest
+</IfModule>
+
+# ---------------------------------------------------------------- HTTPS + private paths
+# Phone tilt steering needs https:// (browsers only expose motion sensors on secure pages).
+# Loop-safe behind GoDaddy / CDN proxies: a request counts as secure if Apache sees HTTPS itself OR the proxy says so
+# (X-Forwarded-Proto / X-Forwarded-SSL / Cloudflare CF-Visitor). localhost is left alone for testing.
+# If the site has no SSL certificate yet, enable AutoSSL in cPanel first (or comment out the 6 "HTTPS" lines below).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # never serve the signalling data folder or dotfiles (defence in depth; api/_data has its own deny too)
+  RewriteRule (^|/)(_data|\.git|\.svn)(/|$) - [F,L,NC]
+
+  # HTTPS
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+  RewriteCond %{HTTP:X-Forwarded-SSL} !on [NC]
+  RewriteCond %{HTTP:CF-Visitor} !https [NC]
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$ [NC]
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=302,L]
+</IfModule>
+
+# Source / notes files are not part of the site.
+<FilesMatch "(^\.|\.(md|log|bak|sh|zip|sql|ini)$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------- compression
+<IfModule mod_deflate.c>
+  <IfModule mod_filter.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/x-javascript application/json image/svg+xml application/manifest+json application/wasm
+  </IfModule>
+</IfModule>
+
+# ---------------------------------------------------------------- caching
+# The build (tools/build-zip.js) stamps every <script src> / <link href> with ?v=<content hash>, so JS/CSS can be
+# cached for a week and a new upload is still picked up at once: the HTML is always revalidated and points at new ?v=.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault                          "access plus 1 hour"
+  ExpiresByType text/html                 "access plus 0 seconds"
+  ExpiresByType text/javascript           "access plus 7 days"
+  ExpiresByType application/javascript    "access plus 7 days"
+  ExpiresByType text/css                  "access plus 7 days"
+  ExpiresByType image/svg+xml             "access plus 7 days"
+  ExpiresByType application/json          "access plus 0 seconds"
+  # api/signal.php sends its own "Cache-Control: no-store"
+  <FilesMatch "\.php$">
+    ExpiresActive Off
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.html?$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(js|mjs|css|svg|wasm)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+
+  # ------------------------------------------------------------ security / sensor permissions
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "accelerometer=(self), gyroscope=(self), magnetometer=(self), fullscreen=(self), screen-wake-lock=(self)"
+</IfModule>

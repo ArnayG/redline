@@ -1,0 +1,53 @@
+Redline — deploy to GoDaddy / cPanel (Apache + PHP)
+====================================================
+Build: {{BUILD}}   ({{DATE}})
+
+1. cPanel -> File Manager -> open public_html.
+2. Upload redline-cpanel.zip, select it, click Extract (into /public_html). You get public_html/redline/.
+   Renaming the folder is fine (e.g. public_html/game/ -> https://yourdomain/game/). Every path is relative.
+   To put the game at the domain root instead, move the CONTENTS of redline/ into public_html/.
+3. Visit https://yourdomain/redline/   (the trailing slash matters; https://yourdomain/redline/index.html also works).
+4. Check online play: https://yourdomain/redline/api/signal.php should show {"ok":true,"backend":"php",...}.
+5. Delete the .zip from public_html when done.
+
+Requirements
+- SSL: cPanel -> SSL/TLS Status -> Run AutoSSL (free). Phone tilt steering needs https://. The .htaccess redirects
+  http -> https; if your site has no certificate yet, comment out the HTTPS lines in redline/.htaccess.
+- PHP 7.4 or newer: cPanel -> Select PHP Version (or MultiPHP Manager). No extensions beyond the defaults.
+- File Manager -> Settings -> "Show Hidden Files (dotfiles)" to see/edit .htaccess.
+
+What is in here
+- index.html (the whole game), hub.html / race.html / race3d.html / drift.html (old links -> index.html),
+  lowpoly-preview.html / shapes-preview.html (developer previews), css/, js/
+- api/signal.php: matchmaking relay for Online multiplayer and the phone wheel. It stores tiny JSON files in
+  redline/api/_data/ (created automatically, locked down with its own .htaccess). Race data itself goes browser to
+  browser (WebRTC); the server only passes the connection set-up messages.
+- .htaccess: HTTPS, MIME types, gzip, caching, sensor permissions, no directory listing.
+
+Updating
+- Upload the new zip and Extract it over the old folder, choosing to overwrite the existing files. Every script URL
+  carries ?v=<hash>, so browsers pick up the new code. If a page still looks old, hard-refresh it
+  (Ctrl+F5 / Cmd+Shift+R), and on the phone close and reopen the wheel tab.
+
+Troubleshoot
+- FIRST: open https://yourdomain/redline/api/signal.php in a browser. It must show
+  {"ok":true,"backend":"php",...,"relay":true}. If "relay":true is missing, the old signal.php is still there:
+  re-upload and extract over the folder.
+- Phone wheel stuck on "Waiting for computer..." / "Connecting...", or it says "Connected (via server)": the
+  network blocks direct browser-to-browser links (campus / hotel Wi-Fi, cellular NAT). The game relays through
+  api/signal.php automatically after about 4.5 s, with slightly higher latency. Nothing to configure.
+- 403 / 406 "Not Acceptable" on api/signal.php (the lobby says online is unavailable; the phone says "Blocked by the
+  web host's security"): ModSecurity blocked the request. Go to cPanel -> ModSecurity and turn it off for this
+  domain / folder, or ask GoDaddy support to whitelist the rule for /redline/api/signal.php. Invite code and Same
+  device modes keep working without the server.
+- GoDaddy Website Security (Sucuri firewall; response header "server: Sucuri/Cloudproxy"): if it ever blocks or
+  caches the pairing requests, allowlist the game's api path (for example /RacingGame/api/) in the GoDaddy
+  Website Security dashboard. All requests are POST with Cache-Control: no-store, and the relay keeps to about
+  6 requests/s per device.
+- {"ok":false,"code":"no-backend"} from api/signal.php (storage not writable): in File Manager -> Permissions
+  (chmod) set redline/api and redline/api/_data to 755. Files should be 644.
+- 500 Internal Server Error on every page: your host rejects a line in .htaccess. Rename it to htaccess.txt to
+  confirm, then remove the "Options -Indexes" line or the block that fails.
+- Still seeing an old version after uploading a new zip: hard-refresh (Ctrl+F5 / Cmd+Shift+R). HTML is always
+  revalidated and JS/CSS URLs carry ?v=<hash>, so this should be rare; on a CDN, purge its cache.
+- Phone wheel says motion sensors need HTTPS: open the computer page via https:// so the QR code is https too.

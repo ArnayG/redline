@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redline — low-poly car preview</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #15171b; color: #d9dde3; font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #ui { position: fixed; top: 10px; left: 10px; z-index: 3; background: rgba(16,18,22,.86); border: 1px solid #2c3038; border-radius: 8px; padding: 10px 12px; max-width: 360px; }
+  #ui h1 { font-size: 14px; margin: 0 0 6px; font-weight: 600; letter-spacing: .02em; }
+  #ui label { display: inline-flex; align-items: center; gap: 4px; margin: 3px 10px 3px 0; }
+  #ui select, #ui input[type=color] { background: #20232a; color: inherit; border: 1px solid #3a3f49; border-radius: 4px; }
+  #ui .meta { color: #9aa3ad; margin-top: 6px; white-space: pre-wrap; font-size: 12px; }
+  #ui .row { margin: 4px 0; }
+  #ui button { background: #262a32; color: inherit; border: 1px solid #3a3f49; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+  #labels { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+  #labels div { position: absolute; font-size: 11px; color: #c9ced6; text-shadow: 0 1px 2px #000; pointer-events: auto; cursor: pointer; }
+  #labels div b { color: #fff; font-weight: 600; }
+  #labels div i { font-style: normal; color: #7fd38a; }
+  #labels div i.auto { color: #d3b67f; }
+  #err { position: fixed; bottom: 10px; left: 10px; color: #ff8a80; z-index: 3; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="labels"></div>
+<div id="ui">
+  <h1>Redline low-poly preview</h1>
+  <div class="row">
+    <select id="model"><option value="">— grid: all models —</option></select>
+  </div>
+  <div class="row">
+    <label>paint <input type="color" id="paint" value="#b3121f"></label>
+    <label><input type="checkbox" id="wire"> wireframe</label>
+    <label><input type="checkbox" id="spin" checked> spin</label>
+  </div>
+  <div class="row">
+    <label>view <select id="view"><option>34</option><option>side</option><option>front</option><option>rear</option><option>r34</option><option>top</option><option>free</option></select></label>
+    <label>LOD <select id="lod"><option>high</option><option>low</option></select></label>
+    <label><input type="checkbox" id="auto"> force auto</label>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+<div id="err"></div>
+
+<script src="js/util.js" charset="utf-8"></script>
+<script src="js/data.js" charset="utf-8"></script>
+<script src="js/shapes/core.js" charset="utf-8"></script>
+<script src="js/shapes/models/coupe.js" charset="utf-8"></script>
+<script src="js/shapes/models/sedan.js" charset="utf-8"></script>
+<script src="js/shapes/models/hatchback.js" charset="utf-8"></script>
+<script src="js/shapes/models/wagon.js" charset="utf-8"></script>
+<script src="js/shapes/models/suv.js" charset="utf-8"></script>
+<script src="js/shapes/models/roadster.js" charset="utf-8"></script>
+<script src="js/shapes/models/pickup.js" charset="utf-8"></script>
+<script src="js/shapes/models/hypercar.js" charset="utf-8"></script>
+<script src="js/shapes/models/shooting-brake.js" charset="utf-8"></script>
+<script src="js/shapes/models/van.js" charset="utf-8"></script>
+<script src="js/shapes/models/pack-jdm.js" charset="utf-8"></script>
+<script src="js/shapes/models/pack-usa.js" charset="utf-8"></script>
+<script src="js/shapes/models/pack-exotic.js" charset="utf-8"></script>
+<script src="js/shapes/models/pack-sport.js" charset="utf-8"></script>
+<!-- hand-authored low-poly definitions (missing files are simply skipped) -->
+<script src="js/shapes/lowpoly/_examples.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/coupe.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/sedan.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/wagon-brake.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/hatch-roadster.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/suv.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/pickup-van.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/hyper-a.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/hyper-b.js" charset="utf-8"></script>
+<script src="js/shapes/lowpoly/jdm-muscle.js" charset="utf-8"></script>
+<script src="js/race/gl/gl-core.js" charset="utf-8"></script>
+<script src="js/race/gl/lowpoly.js" charset="utf-8"></script>
+<script>
+(function () {
+  'use strict';
+  var G = CB.gl, LP = CB.lowpoly, SH = CB.shapes, M4 = G.mat4;
+  var errEl = document.getElementById('err');
+  function fail(e) { errEl.textContent += String(e && e.stack || e) + '\n'; }
+  window.addEventListener('error', function (e) { fail(e.message + ' @ ' + e.filename + ':' + e.lineno); });
+  var Q = {};
+  location.search.slice(1).split('&').forEach(function (kv) { if (!kv) return; var p = kv.split('='); Q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); });
+  var canvas = document.getElementById('gl');
+  var ctx = G.createContext(canvas, { antialias: true, preserveDrawingBuffer: true });
+  if (!ctx) { fail('WebGL unavailable'); return; }
+  var gl = ctx.gl;
+  var ui = {
+    model: document.getElementById('model'), paint: document.getElementById('paint'), wire: document.getElementById('wire'),
+    spin: document.getElementById('spin'), view: document.getElementById('view'), lod: document.getElementById('lod'),
+    auto: document.getElementById('auto'), meta: document.getElementById('meta'), labels: document.getElementById('labels')
+  };
+  var models = SH.list();
+  models.forEach(function (m) {
+    var o = document.createElement('option');
+    o.value = m.id; o.textContent = m.make + ' ' + m.name + (LP.has(m.id) ? '  ✓' : '');
+    ui.model.appendChild(o);
+  });
+  ui.model.value = Q.model || '';
+  if (Q.paint) ui.paint.value = '#' + Q.paint.replace('#', '');
+  if (Q.wire === '1') ui.wire.checked = true;
+  if (Q.lod) ui.lod.value = Q.lod;
+  if (Q.auto === '1') ui.auto.checked = true;
+  if (Q.view) ui.view.value = Q.view;
+  var yawQ = Q.yaw != null && Q.yaw !== '' ? +Q.yaw : null, pitchQ = Q.pitch != null && Q.pitch !== '' ? +Q.pitch : null;
+  if (yawQ !== null || Q.spin === '0') ui.spin.checked = false;
+  if (yawQ !== null && !Q.view) ui.view.value = 'free';
+
+  function buildFor(id) {
+    var m = SH.models[id], b = CB.data.defaultBuild ? CB.data.defaultBuild() : { body: {} };
+    b.body = b.body || {}; b.body.style = m.style; b.body.model = id;
+    // real dimensions of the model (wheelbase, track, ride height, tyres)
+    var rb = SH.refBuild ? SH.refBuild(m) : null;
+    if (rb) Object.keys(rb).forEach(function (k) { if (rb[k] && typeof rb[k] === 'object') { b[k] = b[k] || {}; for (var q in rb[k]) b[k][q] = rb[k][q]; } });
+    b.exterior = b.exterior || {}; b.exterior.paint = ui.paint.value;
+    if (b.wheels && Q.wheel) b.wheels.design = Q.wheel;
+    if (b.wheels && !Q.wheel && LP.has(id)) delete b.wheels.design;      // authored OEM wheel style
+    if (Q.wing && b.aero) b.aero.wing = Q.wing;
+    if (Q.num) b.exterior.livery_number = Q.num;
+    return b;
+  }
+  var cache = {};
+  function meshFor(id) {
+    var key = id + '|' + ui.paint.value + '|' + ui.lod.value + '|' + ui.auto.checked;
+    if (cache[key]) return cache[key];
+    var t0 = performance.now(), r = LP.build(buildFor(id), { lod: ui.lod.value, forceAuto: ui.auto.checked });
+    var dt = performance.now() - t0;
+    if (!r) return null;
+    var items = [], wire = [];
+    r.parts.forEach(function (p) {
+      var mesh = G.createMesh(ctx, { positions: p.positions, normals: p.normals, colors: p.colors, colorSize: 4, uvs: p.uvs, indices: p.indices });
+      var mat = p.material, local = M4.create();
+      if (/^light-/.test(p.kind)) { var mm = {}; for (var k in mat) mm[k] = mat[k]; var e = p.kind === 'light-brake' ? [0.6, 0.01, 0.01] : p.lightKey === 'light-drl' ? [2.2, 2.3, 2.4] : [0.35, 0.35, 0.33]; mm.emissive = mm.uEmissive = e; mat = mm; }
+      if (p.attach === 'wheel' || p.attach === 'caliper') {
+        var W = p.wheel; M4.identity(local); local[12] = W.x; local[13] = W.y; local[14] = W.z - W.side * (W.inset || 0);
+      }
+      items.push({ mesh: mesh, material: mat, local: local, model: M4.create(), castShadow: true });
+      // wireframe edges
+      var I = p.indices, L = [];
+      for (var t = 0; t < I.length; t += 3) L.push(I[t], I[t + 1], I[t + 1], I[t + 2], I[t + 2], I[t]);
+      var cols = new Float32Array(p.positions.length / 3 * 4).fill(1);
+      wire.push({ mesh: G.createMesh(ctx, { positions: p.positions, colors: cols, colorSize: 4, indices: new Uint32Array(L), mode: 'lines' }, { computeNormals: false }),
+        material: { name: 'wire', unlit: true, baseColor: [0.9, 0.95, 1, 1], color: [0.9, 0.95, 1, 1], uBaseColor: [0.9, 0.95, 1, 1], emissive: [0, 0, 0] }, local: local, model: M4.create() });
+    });
+    // ground shadow + floor
+    var d = r.dims, L2 = d.length / 2 + 0.25, W2 = d.width / 2 + 0.2, sh = [], si = [], sc = [];
+    for (var k2 = 0; k2 < 24; k2++) { var a = k2 / 24 * Math.PI * 2; sh.push(Math.cos(a) * L2, 0.004, Math.sin(a) * W2); sc.push(0.01, 0.01, 0.012, 1); }
+    sh.push(0, 0.004, 0); sc.push(0.004, 0.004, 0.005, 1);
+    for (k2 = 0; k2 < 24; k2++) si.push(24, (k2 + 1) % 24, k2);
+    var shadow = { mesh: G.createMesh(ctx, { positions: new Float32Array(sh), colors: new Float32Array(sc), colorSize: 4, normals: new Float32Array(sh.length).map(function (v, i) { return i % 3 === 1 ? 1 : 0; }), indices: new Uint16Array(si) }),
+      material: { name: 'shadow', baseColor: [1, 1, 1, 1], color: [1, 1, 1, 1], uBaseColor: [1, 1, 1, 1], roughness: 1, uRoughness: 1, metallic: 0, emissive: [0, 0, 0] }, local: M4.create(), model: M4.create() };
+    return (cache[key] = { r: r, items: items, wire: wire, shadow: shadow, ms: dt });
+  }
+  var floor = null;
+  function floorItem() {
+    if (floor) return floor;
+    var g = G.geometry && G.geometry.plane ? G.geometry.plane(60, 60) : null;
+    var pos = new Float32Array([-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30]), nrm = new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]);
+    void g;
+    floor = { mesh: G.createMesh(ctx, { positions: pos, normals: nrm, indices: new Uint16Array([0, 2, 1, 0, 3, 2]) }),
+      material: { name: 'floor', baseColor: [0.035, 0.037, 0.04, 1], color: [0.035, 0.037, 0.04, 1], uBaseColor: [0.035, 0.037, 0.04, 1], roughness: 0.9, uRoughness: 0.9, metallic: 0, emissive: [0, 0, 0] }, model: M4.create() };
+    return floor;
+  }
+  var ENV = {
+    sunDir: [0.45, 0.8, 0.4], sunColor: [1.7, 1.62, 1.52], ambientSky: [0.42, 0.47, 0.56], ambientGround: [0.2, 0.19, 0.17],
+    envTop: [0.42, 0.55, 0.75], envHorizon: [0.85, 0.87, 0.9], envBottom: [0.2, 0.19, 0.18], fogDensity: 0.0, exposure: 1.0
+  };
+  var VIEWS = { front: [0, 6], side: [90, 4], rear: [180, 6], '34': [42, 14], r34: [138, 14], top: [90, 88] };
+  var cam = { yaw: yawQ !== null ? yawQ : 42, pitch: pitchQ !== null ? pitchQ : 14, dist: Q.dist ? +Q.dist : 0 };
+  function setView(v) { if (VIEWS[v]) { cam.yaw = VIEWS[v][0]; cam.pitch = VIEWS[v][1]; } }
+  if (ui.view.value !== 'free' && yawQ === null) setView(ui.view.value);
+  if (pitchQ !== null) cam.pitch = pitchQ;
+  ui.view.onchange = function () { setView(ui.view.value); ui.spin.checked = false; };
+  [ui.paint, ui.lod, ui.auto].forEach(function (el) { el.onchange = function () { cache = {}; }; });
+  ui.model.onchange = function () { var u = new URL(location.href); if (ui.model.value) u.searchParams.set('model', ui.model.value); else u.searchParams.delete('model'); location.href = u.toString(); };
+  var drag = null;
+  canvas.addEventListener('mousedown', function (e) { drag = [e.clientX, e.clientY]; ui.spin.checked = false; ui.view.value = 'free'; });
+  window.addEventListener('mouseup', function () { drag = null; });
+  window.addEventListener('mousemove', function (e) { if (!drag) return; cam.yaw += (e.clientX - drag[0]) * 0.4; cam.pitch = Math.max(-5, Math.min(89, cam.pitch + (e.clientY - drag[1]) * 0.3)); drag = [e.clientX, e.clientY]; });
+  canvas.addEventListener('wheel', function (e) { e.preventDefault(); cam.distK = (cam.distK || 1) * (e.deltaY > 0 ? 1.08 : 0.93); }, { passive: false });
+
+  function camera(vx, vy, vw, vh, d, yaw, pitch, fov) {
+    var y = yaw * Math.PI / 180, p = pitch * Math.PI / 180, R = Math.max(d.length, d.height * 2.2) * 0.62 / Math.tan(fov / 2) * (cam.distK || 1);
+    if (cam.dist) R = cam.dist;
+    var tgt = [0, d.height * 0.42, 0];
+    var eye = [tgt[0] + Math.cos(y) * Math.cos(p) * R, tgt[1] + Math.sin(p) * R, tgt[2] + Math.sin(y) * Math.cos(p) * R];
+    var view = M4.create(), proj = M4.create();
+    M4.lookAt(view, eye, tgt, Math.abs(pitch) > 85 ? [-1, 0, 0] : [0, 1, 0]);
+    M4.perspective(proj, fov, vw / vh, 0.1, 200);
+    return { view: view, proj: proj, position: eye };
+  }
+  function drawCar(ent, c, wire) {
+    var list = [floorItem(), ent.shadow];
+    ent.items.forEach(function (it) { M4.copy(it.model, it.local); list.push(it); });
+    G.drawList(ctx, list, c, ENV);
+    if (wire) { ent.wire.forEach(function (it) { M4.copy(it.model, it.local); }); gl.disable(gl.DEPTH_TEST); G.drawList(ctx, ent.wire, c, ENV); gl.enable(gl.DEPTH_TEST); }
+  }
+  var last = performance.now(), labelsBuilt = false;
+  function frame(now) {
+    var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    var dpr = Math.min(2, window.devicePixelRatio || 1), W = canvas.clientWidth, H = canvas.clientHeight;
+    if (ctx.resize) ctx.resize(W, H, dpr); else { canvas.width = W * dpr; canvas.height = H * dpr; }
+    var bw = gl.drawingBufferWidth, bh = gl.drawingBufferHeight;
+    gl.viewport(0, 0, bw, bh);
+    gl.clearColor(0.085, 0.09, 0.1, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (ui.spin.checked) cam.yaw += dt * 18;
+    try {
+      if (ui.model.value) {
+        var ent = meshFor(ui.model.value);
+        if (ent) {
+          drawCar(ent, camera(0, 0, bw, bh, ent.r.dims, cam.yaw, cam.pitch, 0.5), ui.wire.checked);
+          var r = ent.r, def = LP.get(ui.model.value), m = SH.models[ui.model.value];
+          ui.meta.textContent = m.make + ' ' + m.name + ' (' + (m.gen || m.years || '') + ')\n' + (r.auto ? 'AUTO low-poly (no hand-authored def)' : 'hand-authored def') +
+            '\ntriangles ' + r.stats.triangles + ' · parts ' + r.stats.parts + ' · build ' + ent.ms.toFixed(1) + ' ms' +
+            '\nL ' + r.dims.length.toFixed(3) + '  W ' + r.dims.width.toFixed(3) + '  H ' + r.dims.height.toFixed(3) + '  WB ' + r.dims.wheelbase.toFixed(3) +
+            '\nyaw ' + Math.round(((cam.yaw % 360) + 360) % 360) + '  pitch ' + Math.round(cam.pitch) +
+            (def && def.notes ? '\n\n' + def.notes : '');
+        }
+      } else {
+        var n = models.length, cols = Math.ceil(Math.sqrt(n * bw / bh)), rows = Math.ceil(n / cols), tw = Math.floor(bw / cols), th = Math.floor(bh / rows);
+        gl.enable(gl.SCISSOR_TEST);
+        models.forEach(function (m, i) {
+          var cx = (i % cols) * tw, cy = bh - (Math.floor(i / cols) + 1) * th;
+          var e = meshFor(m.id);
+          if (!e) return;
+          gl.viewport(cx, cy, tw, th); gl.scissor(cx, cy, tw, th);
+          drawCar(e, camera(cx, cy, tw, th, e.r.dims, cam.yaw, cam.pitch, 0.5), ui.wire.checked);
+        });
+        gl.disable(gl.SCISSOR_TEST);
+        gl.viewport(0, 0, bw, bh);
+        if (!labelsBuilt) {
+          labelsBuilt = true;
+          models.forEach(function (m, i) {
+            var el = document.createElement('div'), e = meshFor(m.id);
+            el.style.left = ((i % cols) * tw / dpr + 6) + 'px'; el.style.top = ((Math.floor(i / cols) + 1) * th / dpr - 18) + 'px';
+            el.innerHTML = '<b>' + m.make + ' ' + m.name + '</b> <i class="' + (e && e.r.auto ? 'auto' : '') + '">' + (e ? (e.r.auto ? 'auto ' : 'authored ') + e.r.stats.triangles : 'FAILED') + '</i>';
+            el.onclick = function () { ui.model.value = m.id; ui.model.onchange(); };
+            ui.labels.appendChild(el);
+          });
+          var authored = models.filter(function (m) { return LP.has(m.id); }).length;
+          ui.meta.textContent = models.length + ' models · ' + authored + ' hand-authored · ' + (models.length - authored) + ' auto';
+        }
+      }
+    } catch (e) { fail(e); return; }
+    requestAnimationFrame(frame);
+  }
+  window.__lp = { cam: cam, ctx: ctx, meshFor: meshFor };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

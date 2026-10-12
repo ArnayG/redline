@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Redline — Main menu</title>
+  <!-- Redirect stub (UNIFY-SPEC.md): Redline is one game with one UI at index.html. This file stays so old links keep working. -->
+  <meta http-equiv="refresh" content="0; url=index.html#/menu">
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+  (function () {
+    var target = 'index.html#/menu';
+    // legacy deep links pass through unchanged; js/router.js parse() maps every legacy form:
+    // hub.html#garage -> #garage -> #/cars (My Cars), hub.html#hub=garage -> #hub=garage -> #/cars, hub.html#/career -> #/career
+    var h = (window.location.hash || '').replace(/^#/, '');
+    if (h && h !== '/') target = 'index.html#' + h;
+    try { window.location.replace(target); } catch (e) { window.location.href = target; }
+  })();
+  </script>
+</head>
+<body>
+  <main class="noscript" style="display:grid;place-items:center;min-height:100vh;text-align:center;padding:32px">
+    <div>
+      <h1>Redline</h1>
+      <p class="cb-hint">Main menu now lives inside the game. <a href="index.html#/menu">Continue to Redline</a>.</p>
+    </div>
+  </main>
+</body>
+</html>
