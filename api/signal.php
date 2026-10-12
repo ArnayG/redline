@@ -21,12 +21,21 @@
                                                            the server-relay fallback (js/net/relay.js) used when WebRTC
                                                            cannot connect. Delivers posts first, then (unless nopoll)
                                                            drains the caller's mailbox, waiting up to min(wait, 5000) ms
-                                                           in 50 ms steps. Own rate bucket (relayPerIp), not 'ratePerIp'.
+                                                           (mailbox checked every 10 ms). Own rate bucket (relayPerIp).
+       + stream:1 -> 200 application/x-ndjson, one JSON object per line, flushed as mail arrives (streamed downlink):
+            {"ok":true,"stream":1,"max":ms,"st":ms} {"m":[msg…],"st":ms} {"hb":1,"st":ms} … {"end":1,"st":ms}
+          open for at most min(wait, streamMax); st = server clock (the client detects a buffering proxy from it).
+          + probe:1 (with nopoll) -> header, two heartbeats 300 ms apart, end; no mailbox is touched.
+     {action:'ice', room, token}                        -> {ok, iceServers:[{urls, username?, credential?}], ttl, provider}
+                                                           TURN/STUN servers from api/turn-config.php (not in git, not
+                                                           in the zip; see api/turn-config.example.php). Short-lived
+                                                           credentials are minted here (Cloudflare / Metered); API keys
+                                                           never leave the server. No config -> iceServers [].
    Errors: {ok:false, code, error}  codes: no-backend, bad-request, bad-action, too-large, not-found, full, auth,
            forbidden, rate-limited, room-closed, backend-error.
    Limits: room TTL 2 h (sliding on host activity), mailbox TTL 2 min, body ≤ 64 KB, ≤ 32 msgs per post,
            ≤ 256 queued msgs per mailbox, 8 players per room, per-IP rate limits. Same-origin only (no CORS headers).
-   Env (optional, for tests): FORGE_SIGNAL_DATA = storage directory.
+   Env (optional, for tests): FORGE_SIGNAL_DATA = storage directory, FORGE_TURN_CONFIG = TURN config file path.
    ========================================================================== */
 
 define('FG_VERSION', 'forge-signal/1');
@@ -45,10 +54,17 @@ $FG_LIMITS = array(
   'ratePerIp' => 600,     // requests / window / IP (signalling actions; relay has its own bucket)
   'createPerIp' => 12,
   'joinPerIp' => 40,
-  'relayPerIp' => 3000,   // relay requests / window / IP (≈ 8 players on one NAT at ~6 req/s each)
+  'relayPerIp' => 7200,   // relay requests / window / IP (phone + computer on one NAT at ≤ ~30 req/s each, or an
+                          // 8-player room behind one NAT at ~10–14 req/s each)
   'relayPosts' => 8,      // destinations per relay request
   'relayMsgs' => 64,      // messages per relay request (all destinations)
-  'relayStep' => 50       // ms between mailbox checks while a relay request waits
+  'relayStep' => 10,      // ms between mailbox checks while a relay request waits (a cheap stat(); the file is read
+                          // only once it exists)
+  'pollStep' => 25,       // ms between mailbox checks for the signalling 'poll' action (busy: during negotiation)
+  'streamMax' => 12000,   // ms a streamed relay downlink stays open (one PHP worker, like a long-poll)
+  'streamBeat' => 1000,   // ms between heartbeat lines on a stream (also detects a closed tab: the write fails)
+  'icePerIp' => 30,       // 'ice' (TURN credentials) requests / window / IP
+  'iceCache' => 3600      // s: minted TURN credentials are reused (at most half their lifetime)
 );
 
 /* ------------------------------------------------------------------ output */
@@ -300,12 +316,180 @@ function fg_pop($P, $room, $peer, $n) {
   return $r[0] && is_array($r[1]) ? $r[1] : array();
 }
 
+/** Wait until the mailbox has mail (cheap stat() every $step ms; read only once the file exists) or the deadline. */
+function fg_wait_pop($P, $room, $peer, $deadline, $step) {
+  $path = $P['box']($room, $peer);
+  $got = fg_pop($P, $room, $peer, 64);
+  while (!count($got)) {
+    $left = $deadline - fg_now_ms();
+    if ($left <= 0) break;
+    usleep((int) min($step, $left) * 1000);
+    if (connection_aborted()) exit;
+    clearstatcache(true, $path);
+    if (@is_file($path)) $got = fg_pop($P, $room, $peer, 64);
+  }
+  return $got;
+}
+
+/* ------------------------------------------------------------------ streamed relay downlink (NDJSON) */
+function fg_stream_begin($max) {
+  @ini_set('zlib.output_compression', '0');
+  @ini_set('output_buffering', '0');
+  @ini_set('implicit_flush', '1');
+  if (function_exists('apache_setenv')) { @apache_setenv('no-gzip', '1'); @apache_setenv('dont-vary', '1'); }
+  while (ob_get_level() > 0) { if (!@ob_end_flush()) break; }
+  if (!headers_sent()) {
+    http_response_code(200);
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+    header('Cache-Control: no-store, no-transform');
+    header('X-Accel-Buffering: no');   // nginx-style proxies: do not buffer this response
+    header('X-Content-Type-Options: nosniff');
+    header('X-Robots-Tag: noindex');
+  }
+  // the padding helps proxies / FastCGI layers that hold back the first few KB
+  fg_stream_line('{"ok":true,"stream":1,"max":' . (int) $max . ',"st":' . fg_now_ms() . '}' . str_repeat(' ', 2048));
+}
+function fg_stream_line($s) {
+  echo $s, "\n";
+  @flush();
+  if (connection_aborted()) exit;
+}
+function fg_stream_probe() {
+  fg_stream_begin(600);
+  usleep(300000); fg_stream_line('{"hb":1,"st":' . fg_now_ms() . '}');
+  usleep(300000); fg_stream_line('{"end":1,"st":' . fg_now_ms() . '}');
+  exit;
+}
+function fg_stream($P, $room, $peer, $max, $L) {
+  @set_time_limit((int) ceil($max / 1000) + 15);
+  fg_stream_begin($max);
+  $t0 = fg_now_ms(); $beat = $t0;
+  while (true) {
+    $now = fg_now_ms();
+    if ($now - $t0 >= $max) break;
+    $got = fg_wait_pop($P, $room, $peer, min($t0 + $max, $beat + $L['streamBeat']), $L['relayStep']);
+    $ok = array();
+    foreach ($got as $s) if (is_string($s) && $s !== '' && ($s[0] === '{')) $ok[] = $s;
+    if (count($ok)) fg_stream_line('{"m":[' . implode(',', $ok) . '],"st":' . fg_now_ms() . '}');
+    if (fg_now_ms() - $beat >= $L['streamBeat']) { $beat = fg_now_ms(); fg_stream_line('{"hb":1,"st":' . $beat . '}'); }
+  }
+  fg_stream_line('{"end":1,"st":' . fg_now_ms() . '}');
+  exit;
+}
+
+/* ------------------------------------------------------------------ TURN / ICE servers (api/turn-config.php) */
+function fg_turn_config() {
+  $f = getenv('FORGE_TURN_CONFIG');
+  if (!$f) $f = __DIR__ . '/turn-config.php';
+  if (!@is_file($f)) return null;
+  $c = @include $f;
+  return is_array($c) ? $c : null;
+}
+/** HTTP for the provider APIs: curl when available, else a stream context. -> [status, body] */
+function fg_http($method, $url, $headers, $body) {
+  if (function_exists('curl_init')) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_HTTPHEADER => $headers,
+      CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6, CURLOPT_FOLLOWLOCATION => false));
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    $out = curl_exec($ch);
+    $st = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if (PHP_VERSION_ID < 80000) curl_close($ch);   // a no-op (deprecated) since PHP 8
+    return array($st, $out === false ? '' : (string) $out);
+  }
+  $ctx = stream_context_create(array('http' => array('method' => $method, 'header' => implode("\r\n", $headers), 'content' => $body === null ? '' : $body,
+    'timeout' => 6, 'ignore_errors' => true, 'follow_location' => 0)));
+  $out = @file_get_contents($url, false, $ctx);
+  // (no curl: PHP < 8.4 cannot read the status here without a deprecated variable; the JSON shape is checked anyway)
+  $st = $out === false ? 0 : 200;
+  $hdrs = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : null;
+  if (is_array($hdrs) && count($hdrs) && preg_match('#^HTTP/\S+\s+(\d{3})#', (string) $hdrs[0], $mm)) $st = (int) $mm[1];
+  return array($st, $out === false ? '' : (string) $out);
+}
+/** Keep only {urls, username?, credential?}; drop port 53 (browsers block it); make sure TURN over TLS on 443 is offered. */
+function fg_ice_clean($list) {
+  $out = array(); $hasTls443 = false; $turnHost = null; $cred = null;
+  if (isset($list['urls'])) $list = array($list);
+  if (!is_array($list)) return $out;
+  foreach ($list as $s) {
+    if (!is_array($s) || !isset($s['urls'])) continue;
+    $urls = is_array($s['urls']) ? $s['urls'] : array($s['urls']);
+    $keep = array();
+    foreach ($urls as $u) {
+      if (!is_string($u) || !preg_match('#^(stun|stuns|turn|turns):#i', $u)) continue;
+      if (preg_match('#:53(\?|$)#', $u)) continue;
+      if (preg_match('#^turns:[^?]*:443#i', $u)) $hasTls443 = true;
+      if (preg_match('#^turn:([^:?]+)#i', $u, $mm)) $turnHost = $mm[1];
+      $keep[] = $u;
+    }
+    if (!count($keep)) continue;
+    $e = array('urls' => count($keep) === 1 ? $keep[0] : $keep);
+    if (isset($s['username']) && is_string($s['username'])) $e['username'] = $s['username'];
+    if (isset($s['credential']) && is_string($s['credential'])) $e['credential'] = $s['credential'];
+    if (isset($e['username']) && $cred === null) $cred = $e;
+    $out[] = $e;
+  }
+  // campus firewalls often allow only TCP 443 with TLS: add turns:<host>:443 when the provider listed plain TURN only
+  if (!$hasTls443 && $turnHost && $cred) $out[] = array('urls' => 'turns:' . $turnHost . ':443?transport=tcp', 'username' => $cred['username'], 'credential' => $cred['credential']);
+  return $out;
+}
+/** -> [iceServers, ttl, provider]. Never throws; provider errors are logged without secrets. */
+function fg_ice_servers($dir, $L) {
+  $c = fg_turn_config();
+  if (!$c) return array(array(), 3600, 'none');
+  $prov = isset($c['provider']) ? strtolower((string) $c['provider']) : 'none';
+  $static = isset($c['static']) && is_array($c['static']) ? fg_ice_clean($c['static']) : array();
+  if ($prov === 'static') return array($static, 86400, 'static');
+  if ($prov !== 'cloudflare' && $prov !== 'metered') return array($static, 86400, count($static) ? 'static' : 'none');
+  $cache = $dir . '/ice-cache.php';
+  $sig = substr(sha1($prov . '|' . fg_json(isset($c[$prov]) ? $c[$prov] : null)), 0, 16);   // config changed -> new credentials
+  $d = fg_read($cache);
+  if ($d && isset($d['sig'], $d['exp'], $d['list']) && $d['sig'] === $sig && $d['exp'] > time()) return array($d['list'], max(60, $d['exp'] - time()), $prov);
+  $list = array(); $ttl = 0;
+  if ($prov === 'cloudflare') {
+    $cf = isset($c['cloudflare']) && is_array($c['cloudflare']) ? $c['cloudflare'] : array();
+    $id = isset($cf['keyId']) ? preg_replace('/[^A-Za-z0-9_-]/', '', (string) $cf['keyId']) : '';
+    $tok = isset($cf['apiToken']) ? (string) $cf['apiToken'] : '';
+    $ttl = isset($cf['ttl']) ? max(600, min(172800, (int) $cf['ttl'])) : 86400;
+    $base = isset($cf['baseUrl']) ? rtrim((string) $cf['baseUrl'], '/') : 'https://rtc.live.cloudflare.com/v1';
+    if ($id !== '' && $tok !== '') {
+      $hd = array('Authorization: Bearer ' . $tok, 'Content-Type: application/json');
+      // generate-ice-servers lists every port (incl. turns:…:443); the older /generate is the fallback
+      $r = fg_http('POST', $base . '/turn/keys/' . $id . '/credentials/generate-ice-servers', $hd, fg_json(array('ttl' => $ttl)));
+      if ($r[0] === 404) $r = fg_http('POST', $base . '/turn/keys/' . $id . '/credentials/generate', $hd, fg_json(array('ttl' => $ttl)));
+      $j = json_decode($r[1], true);
+      if ($r[0] >= 200 && $r[0] < 300 && is_array($j) && isset($j['iceServers'])) $list = fg_ice_clean($j['iceServers']);
+      else @error_log('[redline signal] Cloudflare TURN credentials: HTTP ' . $r[0]);
+    }
+  } else {
+    $m = isset($c['metered']) && is_array($c['metered']) ? $c['metered'] : array();
+    $app = isset($m['app']) ? preg_replace('/[^A-Za-z0-9-]/', '', (string) $m['app']) : '';
+    $key = isset($m['apiKey']) ? (string) $m['apiKey'] : '';
+    $ttl = 86400;
+    $base = isset($m['baseUrl']) ? rtrim((string) $m['baseUrl'], '/') : ('https://' . $app . '.metered.live');
+    if ($app !== '' && $key !== '') {
+      $r = fg_http('GET', $base . '/api/v1/turn/credentials?apiKey=' . rawurlencode($key), array('Accept: application/json'), null);
+      $j = json_decode($r[1], true);
+      if ($r[0] >= 200 && $r[0] < 300 && is_array($j)) $list = fg_ice_clean($j);
+      else @error_log('[redline signal] Metered TURN credentials: HTTP ' . $r[0]);
+    }
+  }
+  if (!count($list)) {   // provider down / misconfigured: static fallback (if any); retry the provider in a minute
+    fg_update($cache, true, function ($x) use ($sig, $static) { return array(array('sig' => $sig, 'exp' => time() + 60, 'list' => $static), null); });
+    return array($static, 60, count($static) ? 'static' : 'none');
+  }
+  $life = min($L['iceCache'], (int) floor($ttl / 2));
+  fg_update($cache, true, function ($x) use ($sig, $life, $list) { return array(array('sig' => $sig, 'exp' => time() + $life, 'list' => $list), null); });
+  return array($list, $life, $prov);
+}
+
 function fg_prop($b, $k) { return is_object($b) && property_exists($b, $k) ? $b->$k : null; }
 
 function fg_main() {
   global $FG_LIMITS;
   $L = $FG_LIMITS;
   if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) session_write_close();
+  @ini_set('display_errors', '0');   // a PHP notice must never corrupt a JSON / NDJSON body
   @ignore_user_abort(true);  // finish writes even if the tab closes mid-request (close beacons, posts)
   @set_time_limit(25);
 
@@ -330,7 +514,7 @@ function fg_main() {
   }
   if (!is_object($body)) fg_fail(400, 'bad-request', 'JSON object expected');
   $action = fg_prop($body, 'action');
-  $known = array('status', 'create', 'join', 'post', 'poll', 'close', 'relay');
+  $known = array('status', 'create', 'join', 'post', 'poll', 'close', 'relay', 'ice');
   if (!is_string($action) || !in_array($action, $known, true)) fg_fail(400, 'bad-action', 'unknown action');
 
   $dd = fg_data_dir();
@@ -340,11 +524,12 @@ function fg_main() {
 
   if ($action === 'status') {
     fg_send(200, array('ok' => true, 'backend' => 'php', 'version' => FG_VERSION, 'storage' => $dd[1], 'php' => PHP_VERSION,
-      'relay' => true, 'limits' => array('maxPlayers' => $L['maxPlayers'], 'pollMaxWait' => $L['pollMaxWait'])));
+      'relay' => true, 'stream' => true, 'ice' => true, 'limits' => array('maxPlayers' => $L['maxPlayers'], 'pollMaxWait' => $L['pollMaxWait'])));
   }
 
   $ip = fg_client_ip();
   if ($action === 'relay') { if (!fg_rate_ok($P, $ip, 'relay', $L['relayPerIp'], $L)) fg_fail(429, 'rate-limited', 'slow down'); }
+  elseif ($action === 'ice') { if (!fg_rate_ok($P, $ip, 'ice', $L['icePerIp'], $L)) fg_fail(429, 'rate-limited', 'slow down'); }
   elseif (!fg_rate_ok($P, $ip, 'all', $L['ratePerIp'], $L)) fg_fail(429, 'rate-limited', 'slow down');
   fg_gc($dir, false);
 
@@ -433,16 +618,8 @@ function fg_main() {
         return array($d, null);
       });
     }
-    $steps = fg_prop($body, 'busy') ? array(100) : (fg_prop($body, 'idle') ? array(1000, 2000) : array(120, 200, 300, 500, 800, 1000));
-    $t0 = fg_now_ms();
-    $got = fg_pop($P, $room, $a['peer'], 64);
-    for ($i = 0; !count($got); $i++) {
-      $step = $steps[min($i, count($steps) - 1)];
-      if (fg_now_ms() - $t0 + $step > $wait) break;
-      usleep($step * 1000);
-      if (connection_aborted()) exit;
-      $got = fg_pop($P, $room, $a['peer'], 64);
-    }
+    $step = fg_prop($body, 'idle') && !fg_prop($body, 'busy') ? 200 : $L['pollStep'];
+    $got = fg_wait_pop($P, $room, $a['peer'], fg_now_ms() + $wait, $step);
     // messages are stored pre-encoded: splice them in verbatim so {} / [] / numbers survive exactly
     $ok = array();
     foreach ($got as $s) if (is_string($s) && $s !== '' && ($s[0] === '{')) $ok[] = $s;
@@ -485,19 +662,24 @@ function fg_main() {
         return array($d, null);
       });
     }
-    $got = array();
-    if (!fg_prop($body, 'nopoll')) {
-      $t0 = fg_now_ms(); $step = $L['relayStep'];
-      $got = fg_pop($P, $room, $a['peer'], 64);
-      while (!count($got) && fg_now_ms() - $t0 + $step <= $wait) {
-        usleep($step * 1000);
-        if (connection_aborted()) exit;
-        $got = fg_pop($P, $room, $a['peer'], 64);
-      }
+    if (fg_prop($body, 'stream')) {
+      if (fg_prop($body, 'probe')) fg_stream_probe();
+      if (!fg_prop($body, 'nopoll')) fg_stream($P, $room, $a['peer'], min($L['streamMax'], max(1000, (int) fg_prop($body, 'wait'))), $L);
     }
+    $got = array();
+    if (!fg_prop($body, 'nopoll')) $got = fg_wait_pop($P, $room, $a['peer'], fg_now_ms() + $wait, $L['relayStep']);
     $ok = array();
     foreach ($got as $s) if (is_string($s) && $s !== '' && ($s[0] === '{')) $ok[] = $s;
     fg_send_raw(200, '{"ok":true,"msgs":[' . implode(',', $ok) . ']' . (count($dropped) ? ',"dropped":' . fg_json($dropped) : '') . '}');
+  }
+
+  /* ---------------- ice (TURN servers for WebRTC; credentials minted here, API keys never sent) */
+  if ($action === 'ice') {
+    $a = fg_auth($P, $room, $token);
+    if ($a === null) fg_fail(410, 'room-closed', 'room closed');
+    if ($a === false) fg_fail(403, 'auth', 'bad token');
+    $r = fg_ice_servers($dir, $L);
+    fg_send(200, array('ok' => true, 'iceServers' => $r[0], 'ttl' => $r[1], 'provider' => $r[2]));
   }
 
   /* ---------------- close */

@@ -8,7 +8,7 @@
      node tools/build-zip.js --out /tmp/x.zip      -> custom output path
      node tools/build-zip.js --list                -> print the file list too
 
-   Contents: the pages, css/, js/, api/signal.php, .htaccess, manifest.webmanifest + icon.svg and DEPLOY-CPANEL.txt. Left out: tests/, tools/, specs,
+   Contents: the pages, css/, js/, api/signal.php (+ api/turn-config.example.php; never api/turn-config.php), .htaccess, manifest.webmanifest + icon.svg and DEPLOY-CPANEL.txt. Left out: tests/, tools/, specs,
    Node-only files (api/signal.js, vercel.json), scratch/audit files. Every local <script src> / <link href> in the
    shipped HTML gets ?v=<content hash> so browsers pick up a new upload straight away.
    Exports (for tests): build(opts) -> {out, bytes, files:[{name,size}], build}, readZip(buf), crc32(buf).
@@ -27,8 +27,9 @@ var EXTRA = [
   ['.htaccess', '.htaccess'],
   ['manifest.webmanifest', 'manifest.webmanifest'],
   ['icon.svg', 'icon.svg'],
-  ['api/signal.php', 'api/signal.php']
-];
+  ['api/signal.php', 'api/signal.php'],
+  ['api/turn-config.example.php', 'api/turn-config.example.php']   // template only: api/turn-config.php (the keys) is never packed,
+];                                                                    // so extracting a new zip over the folder keeps it
 var SKIP_FILE = /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.(md|log|map|bak|orig|tmp)$|(^|\/)_[^/]*-preview\.html$/i;
 
 /* ---------------------------------------------------------------- CRC32 */

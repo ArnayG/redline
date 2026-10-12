@@ -7,3 +7,7 @@ _audit_tmp/
 *-prof/
 lowpoly-preview-*.html
 index-studio-test.html
+
+# server-side TURN keys (copy of api/turn-config.example.php) — never commit
+api/turn-config.php
+api/_config.php

@@ -152,8 +152,9 @@ CB.input = CB.input || {};
     if (!S) return { cls: 'bad', text: 'Not paired' };
     var rx = S.rx, t = performance.now();
     if (S.error === 'signal-closed' && rx.state !== 'connected') return { cls: 'bad', text: 'Pairing room closed. Start again.' };
-    var md = rx.mode ? rx.mode() : null, how = md === 'relay' ? ' (via server)' : md ? ' (direct)' : '';
-    if (rx.state === 'connected' && rx.isFresh(t)) return { cls: 'ok', text: 'Connected' + how + (rx.phone && rx.phone.name ? ' · ' + rx.phone.name : '') + ' · ' + (rx.rtt() != null ? rx.rtt() + ' ms' : '— ms') + ' · ' + (rx.rate || 0) + ' Hz' };
+    var md = rx.mode ? rx.mode() : null, how = md === 'relay' ? ' (via server)' : md === 'turn' ? ' (via TURN)' : md ? ' (direct)' : '';
+    var delay = rx.delayText ? rx.delayText() : (rx.rtt() != null ? rx.rtt() + ' ms' : '— ms');
+    if (rx.state === 'connected' && rx.isFresh(t)) return { cls: 'ok', text: 'Connected' + how + (rx.phone && rx.phone.name ? ' · ' + rx.phone.name : '') + ' · ' + delay + ' · ' + (rx.rate || 0) + ' Hz' };
     if (rx.state === 'connected' || rx.state === 'stale') return { cls: 'bad', text: 'Phone signal lost: steering centred, throttle lifted. Reconnecting…' };
     return { cls: '', text: 'Waiting for your phone…' };
   }
@@ -297,7 +298,7 @@ CB.input = CB.input || {};
     lastState = key;
     chip.style.display = '';
     chip.innerHTML = '<span class="pw-dot ' + (key === 'live' ? 'ok' : key === 'lost' ? 'bad' : '') + '"></span>' + ICON.phone +
-      '<span>' + (key === 'live' ? 'Wheel' + (rx.mode && rx.mode() === 'relay' ? ' (via server)' : '') + ' · ' + (rx.rtt() != null ? rx.rtt() : '—') + ' ms' : key === 'lost' ? 'Wheel · signal lost' : 'Wheel · waiting (' + esc(S.via === 'manual' ? 'invite' : S.code) + ')') + '</span>';
+      '<span>' + (key === 'live' ? 'Wheel' + (rx.mode && rx.mode() === 'relay' ? ' (via server)' : rx.mode && rx.mode() === 'turn' ? ' (via TURN)' : '') + ' · ' + (rx.delayText ? rx.delayText() : (rx.rtt() != null ? rx.rtt() : '—') + ' ms') : key === 'lost' ? 'Wheel · signal lost' : 'Wheel · waiting (' + esc(S.via === 'manual' ? 'invite' : S.code) + ')') + '</span>';
     // telemetry for the phone's dash (~10 Hz)
     if (hub && fresh) rx.telemetry(hub.status(), t);
   }

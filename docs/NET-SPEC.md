@@ -7,8 +7,10 @@ env `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`; added via Vercel Marke
 classic scripts; the function uses only built-in `fetch` (no npm packages). Everything must degrade gracefully:
 - no API / no env vars → **Manual mode** (copy/paste invite + answer codes, works even from file://),
 - same machine → **Local mode** via `BroadcastChannel` (two tabs) for testing,
-- STUN: `stun:stun.l.google.com:19302`, `stun:stun.cloudflare.com:3478`. TURN optional via `window.FORGE_TURN` config (document that
-  some strict NATs need TURN; Metered/Cloudflare free tiers can be plugged in later).
+- STUN: `stun:stun.l.google.com:19302`, `stun:stun.cloudflare.com:3478`. TURN: from the signalling server's `ice` action
+  (`api/turn-config.php` on PHP, env vars on Vercel / dev server; short-lived Cloudflare / Metered credentials minted
+  server-side, API keys never sent) plus optional `window.REDLINE_TURN` / `window.FORGE_TURN`. Paths: direct → TURN → server
+  relay (`js/net/relay.js`: pipelined posts + held long-polls or one streamed response; see README *Server relay fallback*).
 
 ## Topology
 Star: the **host** (room creator) is authoritative for room/race state; up to 8 players. Each client has one RTCPeerConnection

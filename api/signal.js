@@ -18,6 +18,14 @@
      {action:'relay', room, token, posts?:[{to, msgs}], wait?, nopoll?} -> {ok, msgs, dropped?}
                                                         post + poll in ONE request (the server-relay fallback of
                                                         js/net/relay.js when WebRTC cannot connect); own rate bucket
+       + stream:1 -> NDJSON lines flushed as mail arrives ({ok,stream,max,st} {m:[…],st} {hb,st} {end,st}); + probe:1
+                     (with nopoll) -> header, two heartbeats 300 ms apart, end (no mailbox). Same as api/signal.php.
+     {action:'ice', room, token}                        -> {ok, iceServers, ttl, provider}   TURN servers from env:
+                                                        TURN_PROVIDER cloudflare|metered|static (default: whichever
+                                                        is set), CLOUDFLARE_TURN_KEY_ID + CLOUDFLARE_TURN_API_TOKEN,
+                                                        METERED_TURN_APP + METERED_TURN_API_KEY, TURN_URLS (comma
+                                                        separated) + TURN_USERNAME + TURN_CREDENTIAL. Credentials are
+                                                        minted server-side; API tokens never reach the client.
    Errors: {ok:false, code, error}  codes: no-backend, bad-request, bad-action, too-large, not-found, full, auth,
            forbidden, rate-limited, room-closed, backend-error.
    Limits: room TTL 2 h (sliding on host activity), mailbox TTL 2 min, body ≤ 64 KB, ≤ 32 msgs per post,
@@ -45,10 +53,15 @@ var LIMITS = {
   ratePerIp: 600,         // requests / window / IP (signalling actions; relay has its own bucket)
   createPerIp: 12,        // creates / window / IP
   joinPerIp: 40,          // joins / window / IP
-  relayPerIp: 3000,       // relay requests / window / IP (≈ 8 players behind one NAT at ~6 req/s each)
+  relayPerIp: 7200,       // relay requests / window / IP (phone + computer on one NAT at ≤ ~30 req/s each)
   relayPosts: 8,          // destinations per relay request
   relayMsgs: 64,          // messages per relay request (all destinations)
-  relayStep: 100          // ms between mailbox checks while a relay request waits (each check is one Redis call)
+  relayStep: 100,         // ms between mailbox checks while a relay request waits (each check is one Redis call)
+  memoryStep: 10,         // ms between checks with the in-memory store (tools/dev-server.js: checks are free)
+  streamMax: 8000,        // ms a streamed relay downlink stays open (Hobby functions die at 10 s)
+  streamBeat: 1000,       // ms between heartbeat lines on a stream
+  icePerIp: 30,           // 'ice' requests / window / IP
+  iceCache: 3600          // s: minted TURN credentials are reused (at most half their lifetime)
 };
 var PFX = 'fg:';
 
@@ -245,6 +258,30 @@ async function readBody(req, cap) {
 
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
+/** Keep only {urls, username?, credential?}; drop port 53 (browsers block it); add turns:<host>:443 if missing. */
+function cleanIce(list) {
+  if (list && !Array.isArray(list) && list.urls) list = [list];
+  if (!Array.isArray(list)) return [];
+  var out = [], tls443 = false, host = null, cred = null;
+  list.forEach(function (s) {
+    if (!s || typeof s !== 'object' || !s.urls) return;
+    var urls = (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(function (u) {
+      if (typeof u !== 'string' || !/^(stun|stuns|turn|turns):/i.test(u) || /:53(\?|$)/.test(u)) return false;
+      if (/^turns:[^?]*:443/i.test(u)) tls443 = true;
+      var m = /^turn:([^:?]+)/i.exec(u); if (m) host = m[1];
+      return true;
+    });
+    if (!urls.length) return;
+    var e = { urls: urls.length === 1 ? urls[0] : urls };
+    if (typeof s.username === 'string') e.username = s.username;
+    if (typeof s.credential === 'string') e.credential = s.credential;
+    if (e.username && !cred) cred = e;
+    out.push(e);
+  });
+  if (!tls443 && host && cred) out.push({ urls: 'turns:' + host + ':443?transport=tcp', username: cred.username, credential: cred.credential });
+  return out;
+}
+
 /* ------------------------------------------------------------------ handler */
 
 /**
@@ -302,9 +339,53 @@ function createHandler(opts) {
     await db.exec([cmd, ['LTRIM', key, -L.mailboxMax, -1], ['EXPIRE', key, L.mailboxTtl]]);
   }
 
+  /* ---- TURN / ICE servers (same rules as api/signal.php: minted server-side, cleaned, cached) */
+  var iceMemo = null;
+  function turnConfig() {
+    if (opts.turn !== undefined) return opts.turn;
+    var env = opts.env || process.env;
+    var c = { provider: String(env.TURN_PROVIDER || '').toLowerCase() };
+    if (env.CLOUDFLARE_TURN_KEY_ID && env.CLOUDFLARE_TURN_API_TOKEN) c.cloudflare = { keyId: env.CLOUDFLARE_TURN_KEY_ID, apiToken: env.CLOUDFLARE_TURN_API_TOKEN };
+    if (env.METERED_TURN_APP && env.METERED_TURN_API_KEY) c.metered = { app: env.METERED_TURN_APP, apiKey: env.METERED_TURN_API_KEY };
+    if (env.TURN_URLS) c.static = [{ urls: String(env.TURN_URLS).split(',').map(function (u) { return u.trim(); }).filter(Boolean), username: env.TURN_USERNAME || undefined, credential: env.TURN_CREDENTIAL || undefined }];
+    if (!c.provider) c.provider = c.cloudflare ? 'cloudflare' : c.metered ? 'metered' : c.static ? 'static' : 'none';
+    return c;
+  }
+  async function iceServers() {
+    var c = turnConfig();
+    if (!c || !c.provider || c.provider === 'none') return { list: c && c.static ? cleanIce(c.static) : [], ttl: 3600, provider: c && c.static ? 'static' : 'none' };
+    var stat = c.static ? cleanIce(c.static) : [];
+    if (c.provider !== 'cloudflare' && c.provider !== 'metered') return { list: stat, ttl: 86400, provider: stat.length ? 'static' : 'none' };
+    var sig = c.provider + '|' + JSON.stringify(c[c.provider] || null);
+    if (iceMemo && iceMemo.sig === sig && iceMemo.exp > now()) return { list: iceMemo.list, ttl: Math.max(60, Math.round((iceMemo.exp - now()) / 1000)), provider: iceMemo.provider };
+    var f = opts.fetch || globalThis.fetch, list = [], ttl = 86400;
+    try {
+      if (c.provider === 'cloudflare' && c.cloudflare && c.cloudflare.keyId && c.cloudflare.apiToken) {
+        var cf = c.cloudflare, base = String(cf.baseUrl || 'https://rtc.live.cloudflare.com/v1').replace(/\/+$/, '');
+        ttl = Math.max(600, Math.min(172800, Number(cf.ttl) || 86400));
+        var id = String(cf.keyId).replace(/[^A-Za-z0-9_-]/g, '');
+        var init = { method: 'POST', headers: { Authorization: 'Bearer ' + cf.apiToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: ttl }) };
+        var r = await f(base + '/turn/keys/' + id + '/credentials/generate-ice-servers', init);
+        if (r.status === 404) r = await f(base + '/turn/keys/' + id + '/credentials/generate', init);
+        if (r.status >= 200 && r.status < 300) { var j = await r.json(); if (j && j.iceServers) list = cleanIce(j.iceServers); }
+        else console.error('[signal] Cloudflare TURN credentials: HTTP ' + r.status);
+      } else if (c.provider === 'metered' && c.metered && c.metered.app && c.metered.apiKey) {
+        var m = c.metered, app = String(m.app).replace(/[^A-Za-z0-9-]/g, '');
+        var mb = String(m.baseUrl || ('https://' + app + '.metered.live')).replace(/\/+$/, '');
+        var r2 = await f(mb + '/api/v1/turn/credentials?apiKey=' + encodeURIComponent(m.apiKey), { headers: { Accept: 'application/json' } });
+        if (r2.status >= 200 && r2.status < 300) list = cleanIce(await r2.json());
+        else console.error('[signal] Metered TURN credentials: HTTP ' + r2.status);
+      }
+    } catch (e) { console.error('[signal] TURN credentials: request failed'); }
+    if (!list.length) { iceMemo = { sig: sig, exp: now() + 60000, list: stat, provider: stat.length ? 'static' : 'none' }; return { list: stat, ttl: 60, provider: iceMemo.provider }; }
+    var life = Math.min(L.iceCache, Math.floor(ttl / 2));
+    iceMemo = { sig: sig, exp: now() + life * 1000, list: list, provider: c.provider };
+    return { list: list, ttl: life, provider: c.provider };
+  }
+
   var actions = {
     status: async function (db) {
-      return { ok: true, backend: db.kind || 'upstash', version: VERSION, relay: true, limits: { maxPlayers: L.maxPlayers, pollMaxWait: L.pollMaxWait } };
+      return { ok: true, backend: db.kind || 'upstash', version: VERSION, relay: true, stream: true, ice: true, limits: { maxPlayers: L.maxPlayers, pollMaxWait: L.pollMaxWait } };
     },
 
     create: async function (db, body, ctx) {
@@ -400,21 +481,48 @@ function createHandler(opts) {
         if (to === a.peer || (!a.isHost && to !== 'host') || (to !== 'host' && !a.fields['p:' + to])) { dropped.push(to); continue; }
         await push(db, room, to, list.map(function (m) { return encMsg(a.peer, m); }));
       }
-      var msgs = [];
-      if (!body.nopoll) {
-        var key = K.box(room, a.peer), t0 = now();
-        var first = [['LPOP', key, 64]];
-        if (a.isHost) first.push(['EXPIRE', K.room(room), L.roomTtl]);
-        var r = (await db.exec(first))[0];
-        while (!(r && r.length) && now() - t0 + L.relayStep <= wait) {
-          await doSleep(L.relayStep);
+      var key = K.box(room, a.peer), step = db.kind === 'memory' ? L.memoryStep : L.relayStep;
+      if (a.isHost) await db.exec([['EXPIRE', K.room(room), L.roomTtl]]);
+      async function popWait(deadline) {
+        var r = (await db.exec([['LPOP', key, 64]]))[0];
+        while (!(r && r.length) && now() < deadline) {
+          await doSleep(Math.min(step, Math.max(1, deadline - now())));
           r = (await db.exec([['LPOP', key, 64]]))[0];
         }
-        (Array.isArray(r) ? r : r ? [r] : []).forEach(function (s) { try { msgs.push(JSON.parse(s)); } catch (e) { /* drop */ } });
+        var out = [];
+        (Array.isArray(r) ? r : r ? [r] : []).forEach(function (s) { try { out.push(JSON.parse(s)); } catch (e) { /* drop */ } });
+        return out;
       }
+      if (body.stream && (body.probe || !body.nopoll)) {
+        var probe = !!body.probe, max = probe ? 600 : Math.min(L.streamMax, Math.max(1000, Number(body.wait) || 0));
+        return { __stream: async function (res, alive) {
+          function line(o) { o.st = now(); res.write(JSON.stringify(o) + '\n'); }
+          res.write(JSON.stringify({ ok: true, stream: 1, max: max, st: now() }) + ' '.repeat(2048) + '\n');
+          if (probe) { await doSleep(300); line({ hb: 1 }); await doSleep(300); line({ end: 1 }); return; }
+          var t0 = now(), beat = t0;
+          while (alive() && now() - t0 < max) {
+            var got = await popWait(Math.min(t0 + max, beat + L.streamBeat));
+            if (!alive()) break;
+            if (got.length) line({ m: got });
+            if (now() - beat >= L.streamBeat) { beat = now(); line({ hb: 1 }); }
+          }
+          if (alive()) line({ end: 1 });
+        } };
+      }
+      var msgs = body.nopoll ? [] : await popWait(now() + wait);
       var out = { ok: true, msgs: msgs };
       if (dropped.length) out.dropped = dropped;
       return out;
+    },
+
+    ice: async function (db, body) {
+      var room = normRoom(body.room);
+      if (!room || typeof body.token !== 'string') return [400, 'bad-request'];
+      var a = await auth(db, room, body.token);
+      if (a === null) return [410, 'room-closed', 'room closed'];
+      if (a === false) return [403, 'auth', 'bad token'];
+      var r = await iceServers();
+      return { ok: true, iceServers: r.list, ttl: r.ttl, provider: r.provider };
     },
 
     close: async function (db, body) {
@@ -454,9 +562,23 @@ function createHandler(opts) {
       if (!db) return send(res, 200, { ok: false, code: 'no-backend', error: 'online signalling is not configured (set UPSTASH_REDIS_REST_URL / _TOKEN)' });
       var ctx = { ip: clientIp(req) };
       if (body.action === 'relay') { if (!(await rateLimit(db, ctx.ip, 'relay', L.relayPerIp))) return fail(res, 429, 'rate-limited', 'slow down'); }
+      else if (body.action === 'ice') { if (!(await rateLimit(db, ctx.ip, 'ice', L.icePerIp))) return fail(res, 429, 'rate-limited', 'slow down'); }
       else if (body.action !== 'status' && !(await rateLimit(db, ctx.ip, 'all', L.ratePerIp))) return fail(res, 429, 'rate-limited', 'slow down');
       var out = await fn(db, body, ctx);
       if (Array.isArray(out)) return fail(res, out[0], out[1], out[2]);
+      if (out && typeof out.__stream === 'function') {
+        var open = true;
+        if (req.on) req.on('close', function () { open = false; });
+        if (res.on) res.on('close', function () { open = false; });
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (res.flushHeaders) res.flushHeaders();
+        await out.__stream(res, function () { return open && !res.destroyed; });
+        return res.end();
+      }
       return send(res, 200, out);
     } catch (err) {
       try { console.error('[signal]', err && err.message); } catch (e) { /* ignore */ }
@@ -471,5 +593,6 @@ module.exports.createHandler = createHandler;
 module.exports.createMemoryRedis = createMemoryRedis;
 module.exports.upstashClient = upstashClient;
 module.exports.LIMITS = LIMITS;
+module.exports.cleanIce = cleanIce;
 module.exports.ALPHABET = ALPHABET;
 module.exports.VERSION = VERSION;

@@ -1367,6 +1367,7 @@ CB.race = CB.race || {};
     var parts = [ns.role === 'host' ? 'Host' : (isNum(ns.ping_ms) ? ns.ping_ms + ' ms' : '— ms'), plural(humans || 1, 'driver'), 'sync ' + q];
     if (ns.connected === false) { parts[0] = 'Reconnecting…'; q = 'poor'; }
     if (ns.via === 'relay') parts.push('via server');   // server-relay fallback (js/net/relay.js)
+    else if (ns.via === 'turn') parts.push('via TURN');
     return { text: parts.join(' · '), quality: q };
   }
   /** Same projection as CB.race.drift.hud (renderer3d getCameraState: sim (x, y) -> GL (x, h, -y)). */

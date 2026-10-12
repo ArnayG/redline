@@ -14,22 +14,29 @@
             skips a gap only after 1.5 s (a frame lost to a failed request is re-sent first)
      'fast' latest-state-wins: queued 'fast' payloads are coalesced per message type ({"t":"in"…} keeps only the newest
             wheel input, binary payloads keep the newest car-state packet), so slow hosting never builds a backlog
-   Request budget (shared-hosting / Sucuri friendly — at most ONE long-poll + ONE short post in flight per tab)
-     All links of one signal share one hub. With the vercel/PHP signal the hub replaces the signal's poll loop by an
-     'exchange' loop: each request is {action:'relay', posts:[{to, msgs}], wait} = post + poll in one round trip.
-       data queued -> wait 0 (returns at once with whatever mail is waiting), paced to >= minGap (150 ms) apart
-       nothing queued -> long-poll (longWait 4000 ms; the server answers as soon as mail arrives)
-       data queued while a long-poll is held -> one extra 'nopoll' post after 60 ms (rel) / 150 ms (fast only), paced
-       like the main loop (so a held poll never delays input by more than ~150 ms)
-     So a phone wheel costs each side ~4–6 requests/s (bounded by the round-trip time) with ~150–300 ms latency.
-     Old servers without the 'relay' action (bad-action) -> plain post + the normal poll loop. Other signals
-     (BroadcastChannel 'local') -> sig.send() per frame batch. Manual copy/paste codes cannot relay (no server).
+   Request scheduler (shared-hosting / firewall friendly: Sucuri / ModSecurity ban IPs that send too much, and a phone
+   and a computer on campus Wi-Fi share one IP). All links of one signal share one hub; with the vercel/PHP signal it
+   replaces the signal's poll loop. Every request is the 'relay' action (post + optional poll), nothing waits for the
+   previous round trip:
+     uplink    small posts, latest-state-wins, pipelined (<= upInFlight at once, >= upGap apart; 'rel' data and clock
+               pings sooner: relGap / relFlush)
+     downlink  downlinks > 0: that many long-polls stay open and are re-issued at once (the server answers within
+               ~10 ms of new mail), each carrying whatever is queued; or, when the server streams and nothing on the way
+               buffers it (probed once), ONE streamed response carries every message as it arrives
+               downlinks = 0: every post also collects our mail (wait 0); one long-poll is held only while idle
+     back-off  HTTP 429 or a firewall page (403/406/5xx HTML) doubles every gap (up to 8x) and pauses 1-8 s
+   Phone wheel: phone upGap 125 ms, downlinks 0 (~8 req/s); computer downlinks 2 (~4-8 req/s, driven by the phone).
+   One-way input delay ~ two network legs (phone -> server -> computer) + <= 10 ms: ~190 ms behind a ~170 ms RTT host,
+   was ~200-360 ms (+ the wait for the computer's next poll) with the old one-request-at-a-time loop.
+   Old servers: no streaming -> long-polls; no 'relay' action (bad-action) -> plain post + the normal poll loop.
+   Other signals (BroadcastChannel 'local') -> sig.send() per frame batch. Manual copy/paste codes cannot relay.
    Multiplayer: CB.net.transport.host(sig, {relay:true}) / connect(sig, {relay:true}) enables the same fallback for
-     a lobby (both ends must opt in; the guest asks with {t:'relay'}, the host answers {t:'relay-ok'}). An 8-player
-     room shares the host's single exchange loop (one request carries posts for every guest); each guest runs its own.
+     a lobby (both ends must opt in; the guest asks with {t:'relay'}, the host answers {t:'relay-ok'}). Defaults: each
+     side posts <= ~7/s (one host request carries posts for every guest) and collects its mail with them.
    Wire format (a normal signalling message): {t:'_r', e: link epoch, n: batch#, s: first rel seq, r:[payload…], f:[payload…]}
      payload: string, or {b:'<base64>'} for binary.
-     CB.net.relay.supported(signal) -> bool      CB.net.relay.hub(signal) -> Hub (debug: hub.stats, hub.mode)
+     CB.net.relay.supported(signal) -> bool      CB.net.relay.hub(signal) -> Hub (debug: hub.stats, hub.mode 'split'|'post',
+                                                 hub.stream, hub.inFlight())
      CB.net.relay.DEFAULTS
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
@@ -39,10 +46,23 @@ if (typeof window !== 'undefined') window.CB = CB;
   'use strict';
 
   var DEFAULTS = {
-    minGap: 150,        // ms between request starts (caps one tab at ~6.7 requests/s)
-    longWait: 4000,     // ms long-poll when there is nothing to send (PHP caps it at 5000)
-    relFlush: 60,       // ms before an extra post for queued 'rel' data while a long-poll is held
-    fastFlush: 150,     // ms before an extra post for queued 'fast'-only data while a long-poll is held
+    // Request budget: the host's firewall (Sucuri / ModSecurity) bans IPs that send too much, and a phone + computer
+    // on campus Wi-Fi share one IP. Defaults keep a multiplayer side at ~7 requests/s; the phone wheel uses
+    // upGap 125 (phone ~8/s) and downlinks 2 on the computer (~8/s, driven by the phone's posts).
+    upGap: 150,         // ms between posts (pipelined: a slow round trip never holds the next one back)
+    upInFlight: 2,      // posts in flight at once
+    relGap: 40,         // ms: queued 'rel' data may go out this soon after the previous post
+    downlinks: 0,       // long-polls held open; 0 = every post also collects our mail (one long-poll only when idle)
+    pollGap: 150,       // ms between long-poll starts (paces a host that many guests wake up)
+    idlePoll: 400,      // downlinks 0: hold a long-poll once nothing was posted for this long
+    fastFlush: 150,     // ms queued 'fast' data waits for a long-poll re-issue to carry it before it gets its own post
+    relFlush: 40,       // same for 'rel' data
+    upMulMax: 8,        // HTTP 429 / firewall 403: every gap doubles up to this factor, then recovers
+    longWait: 4000,     // ms long-poll (PHP caps it at 5000); answered as soon as mail arrives
+    stream: true,       // with downlinks > 0: try one streamed response instead of long-polls when the server offers it
+    streamWait: 12000,  // ms a streamed response stays open (the server caps it)
+    streamOverlap: 600, // ms: the next stream opens this long before the current one ends
+    minGap: 150,        // ms between posts in the old-server 'post' fallback
     gapSkip: 1500,      // ms a missing rel frame may hold up later ones
     relMax: 512,        // queued rel payloads per link
     batchBytes: 40000   // payload bytes per request (the server takes 64 KB bodies)
@@ -81,12 +101,15 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   /* ---------------------------------------------------------------- hub (one per signal) */
   function hub(sig, opts) {
-    if (sig._relayHub && !sig._relayHub.dead) return sig._relayHub;
+    if (sig._relayHub && !sig._relayHub.dead) { sig._relayHub.tune(opts); return sig._relayHub; }
     var o = Object.assign({}, DEFAULTS, opts || {});
-    var H = { links: {}, mode: typeof sig.exchange === 'function' ? 'exchange' : 'post', dead: false, opts: o,
-      stats: { requests: 0, extra: 0, errors: 0, sentFrames: 0, recvFrames: 0 } };
+    var H = { links: {}, mode: typeof sig.exchange === 'function' ? 'split' : 'post', dead: false, opts: o,
+      stream: typeof sig.stream === 'function' && o.stream ? 'unknown' : 'off',   // 'unknown' | 'probing' | 'on' | 'buffered' | 'unsupported' | 'off'
+      stats: { requests: 0, posts: 0, polls: 0, streams: 0, errors: 0, rateLimited: 0, sentFrames: 0, recvFrames: 0 } };
     sig._relayHub = H;
-    var running = false, inMain = false, mainLong = false, inExtra = false, extraTimer = null, wake = null, lastStart = 0, batchNo = 0;
+    var running = false, batchNo = 0, timer = null, timerAt = 0;
+    var up = { inFlight: 0, last: -1e9, holdUntil: 0, mul: 1, backoff: 0, since: 0 };
+    var down = { polls: 0, lastPoll: -1e9, streams: 0, streamErrors: 0, nextTimer: null };
 
     var offMsg = sig.onMessage(function (from, msg) {
       if (!msg || msg.t !== '_r') return;
@@ -95,12 +118,14 @@ if (typeof window !== 'undefined') window.CB = CB;
     });
     var offClosed = sig.on ? sig.on('closed', function (e) { killAll((e && e.reason) || 'signal-closed'); }) : null;
 
+    function linkCount() { return Object.keys(H.links).length; }
     function killAll(reason) {
       Object.keys(H.links).forEach(function (k) { var l = H.links[k]; delete H.links[k]; l._dead(reason); });
       stop();
     }
     function hasData() { return Object.keys(H.links).some(function (k) { return H.links[k]._pending(); }); }
-    function hasRel() { return Object.keys(H.links).some(function (k) { return H.links[k]._rel.length > 0; }); }
+    /** rel data, or a clock ping/pong (their timing feeds the RTT / clock-offset estimate: never hold them back) */
+    function hasRel() { return Object.keys(H.links).some(function (k) { return H.links[k]._urgent(); }); }
     /** take one frame per link with queued data -> [{to, msgs:[frame]}], plus a restore() for failed requests */
     function drain() {
       var posts = [], undo = [], budget = o.batchBytes;
@@ -113,82 +138,148 @@ if (typeof window !== 'undefined') window.CB = CB;
         posts.push({ to: l.to, msgs: [t.frame] });
         undo.push(function () { l._restore(t); });
       });
+      if (posts.length) up.since = 0;
       return { posts: posts, restore: function () { undo.forEach(function (f) { f(); }); } };
     }
+    function fatal(e) {
+      return sig.state === 'closed' || (e && (e.code === 'closed' || e.code === 'room-closed' || e.code === 'auth'));
+    }
+    /** HTTP 429 / a firewall page (Sucuri, ModSecurity: 403/406/5xx HTML): slow right down before the host bans the IP */
+    function throttled(e) { return e && (e.code === 'rate-limited' || e.code === 'blocked' || e.status === 429); }
+    function failed(e) {
+      H.stats.errors++; H.lastError = e;
+      if (e && e.code === 'bad-action') { switchToPost(); return true; }
+      if (fatal(e)) { killAll((e && e.code) || 'closed'); return true; }
+      if (throttled(e)) { H.stats.rateLimited++; up.mul = Math.min(o.upMulMax, up.mul * 2); }
+      up.backoff = Math.min(8000, up.backoff ? up.backoff * 2 : (throttled(e) ? 1000 : 300));
+      up.holdUntil = now() + up.backoff;
+      return false;
+    }
+    function succeeded() { up.backoff = 0; if (up.mul > 1) up.mul = Math.max(1, up.mul * 0.9); }
 
     function kick() {
+      if (H.dead) return;
       if (H.mode === 'post') { schedulePost(); return; }
-      if (!running) { start(); return; }
-      if (wake) { var w = wake; wake = null; w(); return; }
-      if (inMain && mainLong && !inExtra && !extraTimer) {
-        extraTimer = setTimeout(extraPost, hasRel() ? o.relFlush : o.fastFlush);
-      }
+      if (!up.since && hasData()) up.since = now();
+      if (!running) start();
+      pump();
     }
     H.kick = kick;
-
-    async function extraPost() {
-      extraTimer = null;
-      if (!running || !inMain || !mainLong || inExtra || !hasData()) return;
-      inExtra = true;
-      var d = drain();
-      if (d.posts.length) {
-        H.stats.extra++; H.stats.requests++;
-        try { await sig.exchange(d.posts, 0, { nopoll: true }); H.stats.sentFrames += d.posts.length; }
-        catch (e) { d.restore(); H.stats.errors++; }
-      }
-      inExtra = false;
-      if (!inMain && wake) { var w = wake; wake = null; w(); }
-      else if (inMain && mainLong && hasData() && !extraTimer) extraTimer = setTimeout(extraPost, o.minGap);
-    }
+    /** a later link may ask for more downlinks / a faster uplink (e.g. the phone-wheel host) */
+    H.tune = function (x) {
+      if (!x) return;
+      ['downlinks', 'upInFlight'].forEach(function (k) { if (x[k] > o[k]) o[k] = x[k]; });
+      ['upGap', 'pollGap', 'fastFlush', 'relFlush'].forEach(function (k) { if (x[k] >= 0 && x[k] < o[k]) o[k] = x[k]; });
+      if (running) pump();
+    };
 
     function start() {
       if (running || H.dead) return;
       running = true;
       if (sig.pausePolling) sig.pausePolling(true);
-      loop();
+      if (H.stream === 'unknown' && o.downlinks > 0) probeStream();
     }
     function stop() {
-      if (extraTimer) { clearTimeout(extraTimer); extraTimer = null; }
-      if (running) { running = false; if (wake) { var w = wake; wake = null; w(); } }
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (down.nextTimer) { clearTimeout(down.nextTimer); down.nextTimer = null; }
+      running = false;
       if (sig.pausePolling && sig.state !== 'closed') sig.pausePolling(false);
     }
+    function arm(ms) {
+      var at = now() + Math.max(0, ms);
+      if (timer && timerAt <= at) return;
+      if (timer) clearTimeout(timer);
+      timerAt = at;
+      timer = setTimeout(function () { timer = null; pump(); }, Math.max(0, ms));
+    }
 
-    async function loop() {
-      var backoff = 0;
-      while (running && !H.dead) {
-        if (!Object.keys(H.links).length) break;
-        var gap = lastStart + o.minGap - now();
-        if (gap > 0) await sleep(gap);
-        while (inExtra && running) await new Promise(function (r) { wake = r; setTimeout(r, 200); });
-        if (!running) break;
-        var d = drain();
-        var wait = d.posts.length ? 0 : o.longWait;
-        lastStart = now(); inMain = true; mainLong = wait > 0;
-        H.stats.requests++;
-        try {
-          await sig.exchange(d.posts, wait);
-          H.stats.sentFrames += d.posts.length;
-          backoff = 0;
-        } catch (e) {
-          d.restore(); H.stats.errors++;
-          inMain = false; mainLong = false;
-          if (e && e.code === 'bad-action') { // server predates the 'relay' action: post + normal polling
-            H.mode = 'post'; running = false;
-            if (sig.pausePolling) sig.pausePolling(false);
-            schedulePost();
-            return;
-          }
-          if (sig.state === 'closed' || (e && (e.code === 'closed' || e.code === 'room-closed' || e.code === 'auth'))) { killAll((e && e.code) || 'closed'); return; }
-          backoff = Math.min(4000, backoff ? backoff * 2 : 300);
-          H.lastError = e;
-          await sleep(backoff);
+    /*
+     * The request scheduler. Two kinds of request, both the 'relay' action:
+     *   long-poll  {posts: whatever is queued, wait: longWait}  held open by the server until mail arrives
+     *   post       {posts, wait: 0}  (+ nopoll when long-polls are held: they collect the mail)
+     * downlinks > 0 (e.g. the wheel's computer): that many long-polls stay open, each re-issued at once (>= pollGap
+     *   apart) carrying the queued data; data that would wait longer than fastFlush / relFlush goes in a post.
+     * downlinks = 0 (phone, multiplayer): every post also collects our mail (wait 0), pipelined at upGap; one
+     *   long-poll is held only while there is nothing to send.
+     * A server that streams (H.stream 'on') replaces the long-polls by one streamed response.
+     */
+    function pump() {
+      if (!running || H.dead || H.mode !== 'split') return;
+      if (!linkCount()) { stop(); return; }
+      var t = now(), mul = up.mul;
+      if (t < up.holdUntil) { arm(up.holdUntil - t); return; }
+      if (H.stream === 'on') { if (!down.streams) openStream(); }
+      else {
+        var want = o.downlinks > 0 ? o.downlinks : (up.inFlight || hasData() ? 0 : 1);
+        if (o.downlinks <= 0 && want && down.polls < want && t - up.last < o.idlePoll) { arm(up.last + o.idlePoll - t); want = 0; }
+        while (down.polls < want) {
+          var g = down.lastPoll + Math.max(15, o.pollGap * mul) - t;
+          if (g > 0) { arm(g); break; }
+          startPoll();
         }
-        inMain = false; mainLong = false;
-        if (extraTimer) { clearTimeout(extraTimer); extraTimer = null; }
-        reap();
       }
-      running = false;
-      if (!Object.keys(H.links).length) stop();
+      if (!hasData() || up.inFlight >= o.upInFlight) return;
+      var held = o.downlinks > 0 && (down.polls > 0 || down.streams > 0);
+      var urgent = hasRel(), due = up.last + (urgent ? o.relGap : o.upGap) * mul;
+      if (held) due = Math.max(due, (up.since || t) + (urgent ? o.relFlush : o.fastFlush) * mul);
+      if (due > t) { arm(due - t); return; }
+      startPost(held);
+    }
+    function startPoll() {
+      var d = drain();
+      down.polls++; down.lastPoll = now();
+      H.stats.requests++; H.stats.polls++;
+      sig.exchange(d.posts, o.longWait).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
+        function (e) { d.restore(); failed(e); }).then(function () { down.polls--; reap(); pump(); });
+    }
+    function startPost(nopoll) {
+      var d = drain();
+      if (!d.posts.length) return;
+      up.inFlight++; up.last = now();
+      H.stats.requests++; H.stats.posts++;
+      sig.exchange(d.posts, 0, nopoll ? { nopoll: true } : null).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
+        function (e) { d.restore(); failed(e); }).then(function () { up.inFlight--; reap(); pump(); });
+    }
+
+    /** one short probe: does a streamed response arrive piece by piece (not buffered by a proxy / the host)? */
+    function probeStream() {
+      H.stream = 'probing';
+      sig.stream({ probe: true }).then(function (r) {
+        if (H.stream !== 'probing') return;
+        H.stream = r.streamed ? (r.buffered ? 'buffered' : 'on') : 'unsupported';
+        H.streamProbe = r;
+        pump();
+      }, function () { if (H.stream === 'probing') H.stream = 'unsupported'; });
+    }
+    function openStream() {
+      if (!running || H.dead || H.stream !== 'on' || down.streams >= 2 || !linkCount()) return;
+      down.streams++;
+      H.stats.requests++; H.stats.streams++;
+      var opened = false;
+      function next() { if (!opened) { opened = true; openStream(); } }
+      sig.stream({ wait: o.streamWait, onHeader: function (h) {
+        // open the next stream shortly before this one ends, so the server always has a listener
+        var max = Number(h && h.max) || o.streamWait;
+        if (down.nextTimer) clearTimeout(down.nextTimer);
+        down.nextTimer = setTimeout(function () { down.nextTimer = null; next(); }, Math.max(500, max - o.streamOverlap));
+      } }).then(function (r) {
+        down.streams--; down.streamErrors = 0;
+        if (!r.streamed || r.buffered) { H.stream = r.streamed ? 'buffered' : 'unsupported'; pump(); return; }   // back to long-polls
+        next();
+      }, function (e) {
+        down.streams--;
+        if (failed(e) || !running) return;
+        if (++down.streamErrors >= 2) { H.stream = 'unsupported'; pump(); return; }
+        setTimeout(next, 300);
+      });
+    }
+
+    function switchToPost() {   // server predates the 'relay' action: post + the signal's normal poll loop
+      if (H.mode === 'post') return;
+      H.mode = 'post'; running = false;
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (sig.pausePolling) sig.pausePolling(false);
+      schedulePost();
     }
 
     /* 'post' mode: no combined action -> sig.send() frames; mail arrives through the signal's own poll loop */
@@ -221,7 +312,7 @@ if (typeof window !== 'undefined') window.CB = CB;
         var l = H.links[k];
         if (l.closed && (!l._pending() || now() - l.closedAt > 2000)) delete H.links[k];
       });
-      if (!Object.keys(H.links).length) { stop(); }
+      if (!linkCount()) { stop(); }
     }
 
     H.add = function (l) {
@@ -239,6 +330,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (sig._relayHub === H) sig._relayHub = null;
     };
     H._nextBatch = function () { return ++batchNo; };
+    /** requests currently open (debug / tests) */
+    H.inFlight = function () { return { posts: up.inFlight, polls: down.polls, streams: down.streams }; };
     return H;
   }
 
@@ -271,6 +364,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       H.remove(L);
     };
     L._pending = function () { return rel.length > 0 || fast.size > 0; };
+    L._urgent = function () { return rel.length > 0 || fast.has('_ping') || fast.has('_pong'); };
     /** build one frame within `budget` bytes; returns {frame, bytes, rel:[…], fast:[[k,p]…]} */
     L._take = function (budget) {
       var r = [], bytes = 0;

@@ -7,21 +7,29 @@
 
    Protocol 'forge-wheel/1' (JSON on both channels)
      phone -> desktop  rel  {t:'hello', v, name, sensor:'tilt'|'touch'}       {t:'btn', b:'shiftUp'|'shiftDown'|'pause'|'camera'|'reset'|'confirm'}
-                      fast {t:'in', q:seq, s:steer(-1..1, + = right), th, br (0..1), hb:0|1, a:wheel angle deg}   ~60 Hz
+                      fast {t:'in', q:seq, s:steer(-1..1, + = right), th, br (0..1), hb:0|1, a:wheel angle deg, ts}   ~60 Hz
+                           ts: the phone's clock (ms) when the input was sampled -> one-way latency on the desktop
      desktop -> phone rel  {t:'welcome', v, game}   {t:'status', driving, paused, screen, gear}   {t:'bye', reason}
                       fast {t:'hap', k:'kerb'|'hit'|'wall'|'offroad', i:0..1}  {t:'tel', spd (km/h), gear, rpm (0..1)}  ~10 Hz
                       {t:'arcade', on, nitro 0..1, nitroOn, item id|'?'|null, uses, nitroEnabled}  ~4 Hz in arcade sessions
+                      fast {t:'lat', ms}  ~1 Hz: the input delay the desktop measures (phone input -> applied), for the phone's status
      phone -> desktop  arcade buttons: {t:'btn', b:'nitroOn'|'nitroOff'|'item'|'itemBack'}  (hub.onEvent subscribers)
    Failsafe (desktop): no input packet for staleMs (300 ms) or the link drops -> the hub source reports centred steering,
    no throttle, no brake (the car coasts straight; assists keep it on the road). When the phone is gone for good the
    source goes inactive and the keyboard / gamepad take over. Reconnects resume automatically.
    Server relay (js/net/relay.js): when WebRTC cannot connect (campus Wi-Fi client isolation, UDP blocked, strict NAT)
-   both ends fall back to relaying through api/signal(.php) after ~4.5 s. Input then arrives in batches at ~4–6 Hz
-   (latest state wins), so the failsafe is relaxed to relayStaleMs (1000 ms) in relay mode. rx.mode() / S.mode():
-   'direct' | 'relay' | null.
+   both ends fall back to relaying through api/signal(.php) after ~4.5 s (later while ICE tries a configured TURN server).
+   The phone then posts input ~8 times/s (pipelined, latest state wins) and the desktop keeps two long-polls (or one
+   stream) open, so input arrives at ~8 Hz about two network legs after it left the phone; the failsafe is relaxed to relayStaleMs (1000 ms) in relay mode. rx.mode() / S.mode():
+   'direct' | 'turn' | 'relay' | null.
+   Latency: rx.latency() = median one-way input delay (ms) of recent packets: (desktop apply time − phone timestamp)
+   relative to the fastest recent packet, plus half the best ping round trip as the floor; null until measured. rx.latSamples: the last 240
+   {ts (phone clock), at (desktop clock)} pairs (tests compute true delay from both performance.timeOrigin values).
+   tx.latency(): the desktop's figure as reported to the phone (or null).
 
      var rx = wheel.createReceiver(host, {hub, now, staleMs, name})   desktop side (host: CB.net.transport host / loopback host)
        rx.state 'waiting'|'connected'|'stale'   rx.phone {id, name, rtt}   rx.read(now) (hub source)   rx.rate (Hz)
+       rx.latency() -> ms | null   rx.delayText() -> '~120 ms delay' | '— ms'
        rx.on('state'|'input'|'hello'|'btn', fn)   rx.send(type, obj, channel?)   rx.close()
      var tx = wheel.createSender(client, {now, rateHz:60, name, sensor})   phone side (client: transport client)
        tx.set({steer, throttle, brake, handbrake, angle})   tx.tick(now) (sends 'in' when due)   tx.press(button)
@@ -63,12 +71,13 @@ CB.input = CB.input || {};
     var rx = emitter({ state: 'waiting', phone: null, rate: 0, closed: false, lastIn: null });
     var cur = null;                         // the phone's Peer
     var inp = { steer: 0, throttle: 0, brake: 0, handbrake: false, angle: 0, q: -1, t: -1e9 };
-    var rateN = 0, rateT0 = 0, offs = [];
+    var rateN = 0, rateT0 = 0, offs = [], lats = [], rels = [], latSentAt = 0;
+    rx.latSamples = [];
     function setState(s) { if (rx.state !== s) { rx.state = s; rx.emit('state', s); } }
     function neutral() { inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.handbrake = false; }
     function adopt(peer) {
       if (cur && cur !== peer && cur.state !== 'closed') { try { cur.send('rel', { t: 'bye', reason: 'replaced' }); cur.close('replaced'); } catch (e) { /* ignore */ } }
-      cur = peer; inp.q = -1;
+      cur = peer; inp.q = -1; lats.length = 0; rels.length = 0;
       rx.phone = { id: peer.id, name: rx.phone && rx.phone.id === peer.id ? rx.phone.name : 'Phone', rtt: peer.rtt || 0 };
     }
     offs.push(host.on('peer', function (peer) { adopt(peer); setState('connected'); }));
@@ -91,6 +100,18 @@ CB.input = CB.input || {};
         inp.steer = clamp(num(+m.s, 0), -1, 1); inp.throttle = clamp(num(+m.th, 0), 0, 1); inp.brake = clamp(num(+m.br, 0), 0, 1);
         inp.handbrake = !!m.hb; inp.angle = num(+m.a, 0);
         rateN++; var t = inp.t; if (!rateT0) rateT0 = t; if (t - rateT0 >= 1000) { rx.rate = Math.round(rateN * 1000 / (t - rateT0)); rateN = 0; rateT0 = t; }
+        if (typeof m.ts === 'number' && isFinite(m.ts)) {
+          rx.latSamples.push({ ts: m.ts, at: t }); if (rx.latSamples.length > 240) rx.latSamples.shift();
+          // t - ts = true delay - clock offset: exact up to a constant. The fastest recent packet took about the
+          // one-way floor (half the best ping); the others took that plus what they waited longer. No symmetric-path
+          // guess is needed for the jitter part, so the server relay's uneven legs do not inflate the figure.
+          rels.push(t - m.ts); if (rels.length > 240) rels.shift();
+          if (peer.rttMin > 0 || peer.rtt > 0) {
+            var lo = Infinity; for (var ri = 0; ri < rels.length; ri++) if (rels[ri] < lo) lo = rels[ri];
+            lats.push(Math.max(0, (t - m.ts) - lo + (peer.rttMin || peer.rtt) / 2)); if (lats.length > 40) lats.shift();
+          }
+          if (t - latSentAt >= 1000 && lats.length >= 3) { latSentAt = t; peer.send('fast', { t: 'lat', ms: rx.latency() }); }
+        }
         if (rx.state !== 'connected') setState('connected');
         rx.lastIn = inp;
         rx.emit('input', inp);
@@ -118,6 +139,13 @@ CB.input = CB.input || {};
     rx.isFresh = function (t) { return !!cur && rx.state === 'connected' && num(t, now()) - inp.t <= staleLimit(); };
     rx.mode = function () { return cur && cur.state === 'open' ? (cur.mode || 'direct') : null; };
     rx.rtt = function () { return cur ? Math.round(cur.rtt || 0) : null; };
+    /** median one-way input delay of recent packets (ms), or null (old phone without timestamps / not measured yet) */
+    rx.latency = function () {
+      if (!cur || lats.length < 3) return null;
+      var a = lats.slice().sort(function (x, y) { return x - y; });
+      return Math.round(a[a.length >> 1]);
+    };
+    rx.delayText = function () { return delayText(rx.latency(), rx.rtt()); };
     rx.send = function (type, obj, ch) { if (!cur || cur.state !== 'open') return false; return cur.send(ch || 'rel', Object.assign({ t: type }, obj || {})); };
     var unreg = null, offHub = [];
     if (hub && hub.register) {
@@ -150,7 +178,7 @@ CB.input = CB.input || {};
     opts = opts || {};
     var now = opts.now || nowMs, period = 1000 / clamp(num(opts.rateHz, 60), 5, 120);
     var tx = emitter({ state: client.state || 'connecting', closed: false, sent: 0, welcome: null, status: null });
-    var v = { steer: 0, throttle: 0, brake: 0, handbrake: false, angle: 0 }, q = 0, lastT = -1e9;
+    var v = { steer: 0, throttle: 0, brake: 0, handbrake: false, angle: 0 }, q = 0, lastT = -1e9, lat = null;
     var offs = [];
     function hello() { client.send('rel', { t: 'hello', v: PROTO, name: opts.name || 'Phone', sensor: opts.sensor || 'tilt' }); }
     offs.push(client.on('state', function (s) { tx.state = s; tx.emit('state', s); if (s === 'open') hello(); }));
@@ -162,6 +190,7 @@ CB.input = CB.input || {};
       else if (m.t === 'hap') tx.emit('hap', { kind: m.k, intensity: num(m.i, 0.5) });
       else if (m.t === 'tel') tx.emit('tel', m);
       else if (m.t === 'arcade') tx.emit('arcade', m);   // arcade gameplay HUD for the phone (NITRO / ITEM buttons)
+      else if (m.t === 'lat') { lat = num(m.ms, null); tx.emit('lat', lat); }
       else if (m.t === 'bye') tx.emit('bye', m.reason || 'closed');
     }));
     if (client.state === 'open') hello();
@@ -174,7 +203,7 @@ CB.input = CB.input || {};
       if (o.angle != null) v.angle = num(+o.angle, 0);
     };
     tx.get = function () { return Object.assign({}, v); };
-    tx.packet = function () { return { t: 'in', q: q, s: r3(v.steer), th: r3(v.throttle), br: r3(v.brake), hb: v.handbrake ? 1 : 0, a: Math.round(v.angle * 10) / 10 }; };
+    tx.packet = function () { return { t: 'in', q: q, s: r3(v.steer), th: r3(v.throttle), br: r3(v.brake), hb: v.handbrake ? 1 : 0, a: Math.round(v.angle * 10) / 10, ts: Math.round(now() * 10) / 10 }; };
     /** Send the input when due (call every animation frame). Returns true when a packet went out. */
     tx.tick = function (t) {
       t = num(t, now());
@@ -186,6 +215,8 @@ CB.input = CB.input || {};
     };
     tx.press = function (b) { if (client.state === 'open') return client.send('rel', { t: 'btn', b: String(b) }); return false; };
     tx.rtt = function () { return Math.round(client.rtt || 0); };
+    tx.latency = function () { return client.state === 'open' ? lat : null; };
+    tx.delayText = function () { return delayText(tx.latency(), tx.rtt()); };
     tx.mode = function () { return client.state === 'open' ? (client.mode || 'direct') : null; };
     tx.close = function () {
       if (tx.closed) return;
@@ -194,6 +225,15 @@ CB.input = CB.input || {};
     };
     return tx;
   }
+
+  /** '~120 ms delay' from the measured one-way delay, else about half the round trip; '— ms' before anything is known */
+  function delayText(lat, rtt) {
+    if (lat != null) return '~' + Math.round(lat) + ' ms delay';
+    if (rtt) return '~' + Math.round(rtt / 2) + ' ms delay';
+    return '— ms';
+  }
+  /** connection path label: 'direct' | 'via TURN' | 'via server' */
+  function modeText(mode) { return mode === 'relay' ? 'via server' : mode === 'turn' ? 'via TURN' : 'direct'; }
 
   /* ================================================================ routes / URLs */
   function parseRoute(hash) {
@@ -241,7 +281,8 @@ CB.input = CB.input || {};
     return viaP.then(function (via) {
       var sig = signalFor(via);
       return sig.create().then(function (room) {
-        var host = (opts.transport || T).host(sig, { maxPeers: 2, graceMs: 30000, pingInterval: 500, relay: opts.relay !== false });
+        // relay fallback tuned for the wheel: two long-polls held open (or one stream) so input never waits for a re-poll
+        var host = (opts.transport || T).host(sig, { maxPeers: 2, graceMs: 30000, pingInterval: 500, relay: opts.relay !== false, relayOpts: { downlinks: 2, pollGap: 0, fastFlush: 150 } });
         var rx = createReceiver(host, { hub: CB.input.hub, name: 'Redline' });
         var S = emitter({ via: via, code: room.room, url: null, invite: null, state: 'waiting', rx: rx, host: host, signal: sig, closed: false, error: null });
         S.url = urlFor(room.room, via);
@@ -279,7 +320,7 @@ CB.input = CB.input || {};
   var api = emitter({
     PROTO: PROTO, LOCAL_CHANNEL: LOCAL_CHANNEL,
     createReceiver: createReceiver, createSender: createSender,
-    parseRoute: parseRoute, urlFor: urlFor, baseUrl: baseUrl, signalFor: signalFor, detectVia: detectVia,
+    parseRoute: parseRoute, urlFor: urlFor, delayText: delayText, modeText: modeText, baseUrl: baseUrl, signalFor: signalFor, detectVia: detectVia,
     pair: pair, session: function () { return active && !active.closed ? active : null }
   });
   CB.input.wheel = api;

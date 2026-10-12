@@ -18,7 +18,13 @@
    Server-relay extras (vercel only, caps.relay; used by js/net/relay.js when WebRTC cannot connect):
      sig.exchange(posts:[{to, msgs}], wait, {nopoll}) -> Promise<n received>   one 'relay' request = post + poll; the
                                   received messages are delivered through onMessage exactly like the poll loop's
-     sig.pausePolling(bool)       stop / restart the background poll loop (the relay's exchange loop replaces it)
+     sig.stream({wait, probe, onHeader}) -> Promise<{streamed, buffered, n, max}>   streamed downlink: one 'relay'
+                                  request whose NDJSON response carries many messages as they arrive; detects a
+                                  buffering proxy (lines written > 250 ms apart arriving together); old servers answer
+                                  plain JSON (streamed:false)
+     sig.pausePolling(bool)       stop / restart the background poll loop (the relay's loops replace it)
+     sig.ice() -> Promise<[RTCIceServer]>   TURN/STUN servers from the site's server-side config ('ice' action;
+                                  [] when none / old server). Used by CB.net.transport automatically.
    Errors (err.code): 'unreachable' (no response / network down / timeout), 'blocked' (HTTP 403/406/429/5xx with a
      non-JSON body: host firewall such as ModSecurity / Sucuri; err.status), 'no-backend', 'not-found', 'room-closed', …
    Manual-only extras (no server at all, works from file://):
@@ -321,6 +327,90 @@ if (typeof window !== 'undefined') window.CB = CB;
       var msgs = j.msgs || [];
       deliverAll(msgs);
       return msgs.length;
+    };
+    /**
+     * Streamed downlink: one 'relay' request whose response stays open and carries many messages (NDJSON lines,
+     * flushed as mail arrives). o: {wait, probe, onHeader(h)}. Resolves {streamed, buffered, n, max}:
+     *   streamed false  -> the server answered plain JSON (no streaming support; any mail in it was delivered)
+     *   buffered true   -> lines written far apart arrived together (a proxy / the host buffers the response):
+     *                      the caller should fall back to long-polls. A probe ({probe:true}) touches no mailbox.
+     */
+    sig.stream = async function (o) {
+      o = o || {};
+      if (!token || sig.state === 'closed') throw err('closed', 'signal closed');
+      if (!url) await call('status', {});
+      var body = { action: 'relay', room: sig.room, token: token, posts: [], stream: 1 };
+      if (o.probe) { body.probe = 1; body.nopoll = true; body.wait = 0; } else body.wait = Math.max(0, o.wait | 0);
+      var ctl = typeof AbortController === 'function' ? new AbortController() : null, tmo = null;
+      if (ctl) tmo = setTimeout(function () { ctl.abort(); }, (body.wait || 0) + 15000);
+      var r;
+      try {
+        r = await doFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin', signal: ctl ? ctl.signal : undefined });
+      } catch (e) { if (tmo) clearTimeout(tmo); throw err('unreachable', 'cannot reach the pairing server'); }
+      var ctype = String((r.headers && r.headers.get && r.headers.get('content-type')) || '');
+      var out = { streamed: false, buffered: false, n: 0, max: 0 };
+      try {
+        if (ctype.indexOf('ndjson') < 0 || !r.body || typeof r.body.getReader !== 'function') {
+          var j = null;
+          if (ctype.indexOf('ndjson') >= 0) { // no readable stream in this browser: parse it whole, treat as buffered
+            var lines0 = String(await r.text()).split('\n');
+            out.streamed = true; out.buffered = true;
+            lines0.forEach(function (ln) { try { var x = JSON.parse(ln); if (x && x.m) { out.n += x.m.length; deliverAll(x.m); } } catch (e) { /* skip */ } });
+            return out;
+          }
+          try { j = await r.json(); } catch (e) { throw httpErr(r.status); }
+          if (!j || !j.ok) throw err((j && j.code) || 'network', (j && j.error) || 'request failed');
+          var msgs = j.msgs || [];
+          out.n = msgs.length; deliverAll(msgs);
+          return out;
+        }
+        out.streamed = true;
+        var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', tHead = 0, tEnd = 0;
+        for (;;) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buf += dec.decode(chunk.value, { stream: true });
+          var nl = buf.lastIndexOf('\n');
+          if (nl < 0) continue;
+          var lines = buf.slice(0, nl).split('\n'); buf = buf.slice(nl + 1);
+          var lo = Infinity, hi = -Infinity;
+          for (var i = 0; i < lines.length; i++) {
+            var ln = lines[i].trim(); if (!ln) continue;
+            var x; try { x = JSON.parse(ln); } catch (e) { continue; }
+            if (typeof x.st === 'number') { if (x.st < lo) lo = x.st; if (x.st > hi) hi = x.st; }
+            if (x.ok === false) throw err(x.code || 'network', x.error || 'request failed');
+            if (x.stream) { tHead = Date.now(); out.max = Number(x.max) || 0; if (o.onHeader) { try { o.onHeader(x); } catch (e) { /* ignore */ } } }
+            if (x.m && x.m.length) { out.n += x.m.length; deliverAll(x.m); }
+            if (x.end) tEnd = Date.now();
+          }
+          // lines the server wrote > 250 ms apart arrived in one piece: something on the way buffers the stream
+          if (hi - lo > 250) { out.buffered = true; if (ctl) try { ctl.abort(); } catch (e) { /* ignore */ } break; }
+        }
+        if (o.probe && !out.buffered && !(tHead && tEnd && tEnd - tHead >= 250)) out.buffered = true;
+        if (sig.state === 'open' || sig.state === 'reconnecting') sig._setState('open');
+        return out;
+      } catch (e) {
+        if (out.buffered) return out;
+        if (e && e.name === 'AbortError') throw err('unreachable', 'the pairing server did not answer');
+        if (e && (e.code === 'room-closed' || e.code === 'auth')) { sig._closed(e.code === 'auth' ? 'kicked' : 'room-closed'); token = null; }
+        throw e && e.code ? e : err('unreachable', 'stream interrupted');
+      } finally { if (tmo) clearTimeout(tmo); }
+    };
+    var iceCache = null;
+    /**
+     * ICE servers from the site's own config (api/turn-config.php or the TURN env vars on Vercel / dev-server):
+     * -> Promise<[RTCIceServer]> ([] when none are configured, the server is old, or anything fails). Short-lived
+     * credentials are minted server-side; cached here until shortly before they expire.
+     */
+    sig.ice = function () {
+      if (iceCache && iceCache.exp > Date.now()) return Promise.resolve(iceCache.list);
+      if (!token || sig.state === 'closed') return Promise.resolve([]);
+      return call('ice', { room: sig.room, token: token }).then(function (j) {
+        var list = Array.isArray(j.iceServers) ? j.iceServers.filter(function (s) { return s && s.urls; }) : [];
+        var ttl = Math.max(60, Math.min(Number(j.ttl) || 3600, 86400));
+        iceCache = { list: list, exp: Date.now() + ttl * 500 };
+        return list;
+      }, function () { return []; });
     };
     /** The relay's exchange loop replaces the background poll loop while it runs. */
     sig.pausePolling = function (v) {

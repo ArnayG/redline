@@ -53,6 +53,22 @@ Options -Indexes
   </IfModule>
 </FilesMatch>
 
+# TURN keys (api/turn-config.php) are read by signal.php only; never served, even as plain text.
+<FilesMatch "^(turn-config|_config)(\.example)?\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# The relay streams NDJSON from api/signal.php: compressing it would buffer the stream.
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Request_URI "signal\.php$" no-gzip dont-vary
+</IfModule>
+
 # ---------------------------------------------------------------- compression
 <IfModule mod_deflate.c>
   <IfModule mod_filter.c>

@@ -214,7 +214,8 @@ CB.input = CB.input || {};
     var mySig = sig;
     sig.join(joinArg).then(function () {
       if (sig !== mySig) return;
-      client = NT.connect(sig, { reconnectAttempts: 6, pingInterval: 500, relay: true });
+      // relay fallback: input posted ~8 times/s, pipelined; each post also collects our mail (js/net/relay.js)
+      client = NT.connect(sig, { reconnectAttempts: 6, pingInterval: 500, relay: { after: 4500, upGap: 125, downlinks: 0 } });
       var STAGE = { waiting: 'Waiting for computer…', connecting: 'Connecting…', relay: 'Connecting via server…' };
       if (st.via !== 'manual') setConn('wait', STAGE.waiting);
       client.on('stage', function (sg) { if (STAGE[sg] && st.via !== 'manual' && st.conn !== 'ok') setConn('wait', STAGE[sg]); });
@@ -370,7 +371,7 @@ CB.input = CB.input || {};
     function k(n) { return root.querySelector('[data-k="' + n + '"]'); }
     var rtt = tx && st.conn === 'ok' ? tx.rtt() : null;
     var mode = tx && st.conn === 'ok' && tx.mode ? tx.mode() : null;
-    var txt = st.conn === 'ok' ? 'Connected (' + (mode === 'relay' ? 'via server' : 'direct') + ') · ' + (rtt ? rtt + ' ms' : '— ms') : (st.connText || '…');
+    var txt = st.conn === 'ok' ? 'Connected (' + Wh.modeText(mode) + ') · ' + tx.delayText() : (st.connText || '…');
     if (st.error && st.conn === 'ok') txt += ' · drag to steer';
     k('conn').textContent = txt;
     root.querySelector('.pwp-dot').className = 'pwp-dot ' + (st.conn === 'ok' ? 'ok' : st.conn === 'bad' ? 'bad' : '');

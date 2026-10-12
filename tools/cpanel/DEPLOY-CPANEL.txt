@@ -22,10 +22,31 @@ What is in here
 - api/signal.php: matchmaking relay for Online multiplayer and the phone wheel. It stores tiny JSON files in
   redline/api/_data/ (created automatically, locked down with its own .htaccess). Race data itself goes browser to
   browser (WebRTC); the server only passes the connection set-up messages.
-- .htaccess: HTTPS, MIME types, gzip, caching, sensor permissions, no directory listing.
+- api/turn-config.example.php: template for your TURN keys (see "Faster phone wheel on campus Wi-Fi" below).
+- .htaccess: HTTPS, MIME types, gzip, caching, sensor permissions, no directory listing, TURN keys never served.
+
+Faster phone wheel on campus Wi-Fi (TURN, optional, free)
+- Networks that block browser-to-browser links (campus / hotel Wi-Fi) fall back to relaying through signal.php:
+  "Connected (via server) · ~190 ms delay". A TURN server gets them a real connection: "via TURN", ~20-60 ms.
+- Quickest fix without any setup: connect the laptop to the phone's hotspot (same network -> direct, ~20-50 ms).
+- To set up TURN (5 minutes):
+  1. Get a free key, ONE of:
+     Cloudflare (first 1,000 GB/month free): dash.cloudflare.com -> Realtime -> TURN Server -> Create.
+       Copy the "Turn Token ID" and the "API Token".
+     Metered.ca (free plan): sign up at dashboard.metered.ca, create an app (its name is the part before
+       .metered.live), then copy the API key from Developers / TURN credentials.
+  2. cPanel -> File Manager -> public_html/RacingGame/api/ -> right-click turn-config.example.php -> Rename ->
+     turn-config.php. (A later zip just brings the example back next to it; your file is never touched.)
+  3. Right-click turn-config.php -> Edit. Set 'provider' => 'cloudflare' and paste keyId + apiToken
+     (or 'provider' => 'metered' with app + apiKey). Save.
+  4. Pair the phone on the blocking network: it should now say "Connected (via TURN)".
+- turn-config.php is not inside the zip, so extracting a new zip over the folder never overwrites it. The keys
+  stay on the server: signal.php mints short-lived credentials and browsers only see those. .htaccess blocks
+  the file from being downloaded.
 
 Updating
-- Upload the new zip and Extract it over the old folder, choosing to overwrite the existing files. Every script URL
+- Upload the new zip and Extract it over the old folder, choosing to overwrite the existing files. Your
+  api/turn-config.php (TURN keys) is kept: the zip only carries turn-config.example.php. Every script URL
   carries ?v=<hash>, so browsers pick up the new code. If a page still looks old, hard-refresh it
   (Ctrl+F5 / Cmd+Shift+R), and on the phone close and reopen the wheel tab.
 
@@ -35,15 +56,17 @@ Troubleshoot
   re-upload and extract over the folder.
 - Phone wheel stuck on "Waiting for computer..." / "Connecting...", or it says "Connected (via server)": the
   network blocks direct browser-to-browser links (campus / hotel Wi-Fi, cellular NAT). The game relays through
-  api/signal.php automatically after about 4.5 s, with slightly higher latency. Nothing to configure.
+  api/signal.php automatically after about 4.5 s (~190 ms delay behind GoDaddy's firewall). For ~20-60 ms add a
+  TURN key (above) or put the laptop on the phone's hotspot.
 - 403 / 406 "Not Acceptable" on api/signal.php (the lobby says online is unavailable; the phone says "Blocked by the
   web host's security"): ModSecurity blocked the request. Go to cPanel -> ModSecurity and turn it off for this
   domain / folder, or ask GoDaddy support to whitelist the rule for /redline/api/signal.php. Invite code and Same
   device modes keep working without the server.
 - GoDaddy Website Security (Sucuri firewall; response header "server: Sucuri/Cloudproxy"): if it ever blocks or
   caches the pairing requests, allowlist the game's api path (for example /RacingGame/api/) in the GoDaddy
-  Website Security dashboard. All requests are POST with Cache-Control: no-store, and the relay keeps to about
-  6 requests/s per device.
+  Website Security dashboard. All requests are POST with Cache-Control: no-store; a wheel pairing sends about
+  12-16 requests/s in total and backs off on any 403/429. Sucuri's flood protection can ban an IP for a while
+  if it sends far more (the site then times out for that network only).
 - {"ok":false,"code":"no-backend"} from api/signal.php (storage not writable): in File Manager -> Permissions
   (chmod) set redline/api and redline/api/_data to 755. Files should be 644.
 - 500 Internal Server Error on every page: your host rejects a line in .htaccess. Rename it to htaccess.txt to

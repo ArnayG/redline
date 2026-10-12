@@ -15,11 +15,17 @@
             {t:'relay-ok'}; traffic then goes through the signalling server. BOTH ends must pass relay:true.
             peer.mode 'direct' | 'relay' tells which one is in use.  client.stage: 'waiting' (join sent, no offer yet)
             | 'connecting' (offer received, ICE running) | 'relay' (switching to the server relay) | 'open'  ('stage' event)
+            relay object extras: {downlinks, upGap, upInFlight, turnAfter:9000 (ms before relaying while ICE runs with TURN)}
+            (js/net/relay.js DEFAULTS); host side: opts.relayOpts.
      ICE: STUN stun.l.google.com:19302 + stun.cloudflare.com:3478, plus window.REDLINE_TURN (or the older window.FORGE_TURN; object or array of
-          RTCIceServer, e.g. {urls:'turn:…', username, credential}). Strict/symmetric NATs need TURN.
+          RTCIceServer, e.g. {urls:'turn:…', username, credential}), plus the TURN servers the signalling server hands out
+          (signal.ice(): api/turn-config.php / TURN env vars; skipped with opts.iceServers or opts.serverIce:false).
+          Strict/symmetric NATs need TURN. ICE prefers direct paths, then TURN; the server relay is the last resort.
+          peer.mode 'direct' | 'turn' (the selected candidate pair goes through TURN) | 'relay'.
 
    Peer (a remote endpoint; Client *is* a Peer whose id is 'host'):
-     peer.id, peer.state ('connecting'|'open'|'reconnecting'|'closed'), peer.rtt (ms, smoothed), peer.clockOffset
+     peer.id, peer.state ('connecting'|'open'|'reconnecting'|'closed'), peer.rtt (ms, smoothed), peer.rttMin (best of the
+       last 10 pings), peer.clockOffset
        (remote clock − local clock, ms; best of recent pings), peer.stats {sentRel, sentFast, recvRel, recvFast, dropped}
      peer.send(channel, data) -> bool        channel 'rel' (ordered reliable) | 'fast' (unordered, maxRetransmits 0)
                                              data: JSON-able object  -> delivered as the same object
@@ -222,7 +228,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   function makePeer(id, clock, opts) {
     opts = opts || {};
     var peer = emitter({
-      id: id, state: 'connecting', mode: null, rtt: 0, clockOffset: 0, lastSeen: 0,
+      id: id, state: 'connecting', mode: null, rtt: 0, rttMin: 0, clockOffset: 0, lastSeen: 0,
       stats: { sentRel: 0, sentFast: 0, recvRel: 0, recvFast: 0, dropped: 0 }
     });
     var link = null, queue = [], samples = [], pingTimer = null, everOpened = false;
@@ -254,9 +260,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     peer.now = function () { return clock.now(); };
     peer.remoteNow = function () { return clock.now() + peer.clockOffset; };
+    var pingN = 0;
     function ping() {
       if (peer.state !== 'open') return;
       if (peer.lastSeen && clock.now() - peer.lastSeen > linkTimeout) { peer._linkLost('timeout'); return; }
+      if (link && link.mode === 'relay' && (pingN++ % 2)) return;   // over the server relay: half as often (request budget)
       raw('fast', JSON.stringify({ t: '_ping', a: clock.now() }));
     }
     peer._attach = function (l) {
@@ -305,6 +313,7 @@ if (typeof window !== 'undefined') window.CB = CB;
           var best = samples[0];
           for (var i = 1; i < samples.length; i++) if (samples[i].rtt < best.rtt) best = samples[i];
           peer.clockOffset = best.off;
+          peer.rttMin = best.rtt;
           peer.emit('rtt', peer.rtt);
         } else if (m.t === '_bye') peer.emit('bye', m.reason || 'left');
         return;
@@ -401,11 +410,47 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (turn) list = list.concat(Array.isArray(turn) ? turn : [turn]);
     return { iceServers: list, iceCandidatePoolSize: 0 };
   }
+  function hasTurn(list) {
+    return (list || []).some(function (s) { return [].concat(s && s.urls || []).some(function (u) { return /^turns?:/i.test(String(u)); }); });
+  }
+  /**
+   * -> Promise<RTCConfiguration>: the static list (opts / DEFAULT_ICE / window.REDLINE_TURN) plus the TURN servers the
+   * site's signalling server hands out (signal.ice(): api/turn-config.php or env). Never rejects; gives up after 3 s.
+   */
+  function iceConfigFor(signal, opts) {
+    var base = iceConfig(opts);
+    if (opts && (opts.iceServers || opts.serverIce === false)) return Promise.resolve(base);
+    if (!signal || typeof signal.ice !== 'function') return Promise.resolve(base);
+    return new Promise(function (resolve) {
+      var done = false, t = setTimeout(function () { if (!done) { done = true; resolve(base); } }, 3000);
+      Promise.resolve().then(function () { return signal.ice(); }).then(function (list) {
+        if (done) return; done = true; clearTimeout(t);
+        list = Array.isArray(list) ? list.filter(function (x) { return x && x.urls; }) : [];
+        resolve(list.length ? Object.assign({}, base, { iceServers: base.iceServers.concat(list) }) : base);
+      }, function () { if (!done) { done = true; clearTimeout(t); resolve(base); } });
+    });
+  }
+  /**
+   * Which path a connected RTCPeerConnection uses: 'turn' when the selected candidate pair goes through a TURN relay,
+   * else 'direct'. -> Promise<'direct'|'turn'|null>
+   */
+  function selectedPath(pc) {
+    if (!pc || typeof pc.getStats !== 'function') return Promise.resolve(null);
+    return pc.getStats().then(function (st) {
+      var byId = {}, pairId = null, pair = null;
+      st.forEach(function (r) { byId[r.id] = r; if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
+      pair = pairId ? byId[pairId] : null;
+      if (!pair) st.forEach(function (r) { if (!pair && r.type === 'candidate-pair' && r.state === 'succeeded' && (r.selected || r.nominated)) pair = r; });
+      if (!pair) return null;
+      var lc = byId[pair.localCandidateId], rc = byId[pair.remoteCandidateId];
+      return (lc && lc.candidateType === 'relay') || (rc && rc.candidateType === 'relay') ? 'turn' : 'direct';
+    }, function () { return null; });
+  }
   function relayLib() { return (CB.net && CB.net.relay) || null; }
   /** attach a server-relay link to `peer` (host side: to = peer id; client side: to = 'host') */
-  function attachRelay(signal, peer, to, epoch) {
+  function attachRelay(signal, peer, to, epoch, relayOpts) {
     var RL = relayLib();
-    var l = RL.link(signal, to, function (ch, p) { if (peer._hasLink(l)) peer._recv(ch, p); }, { epoch: epoch });
+    var l = RL.link(signal, to, function (ch, p) { if (peer._hasLink(l)) peer._recv(ch, p); }, Object.assign({}, relayOpts || {}, { epoch: epoch }));
     l.onDead = function (reason) { if (peer._hasLink(l)) peer._linkLost(reason || 'relay-failed'); };
     peer._attach(l);
     return l;
@@ -420,6 +465,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   function rtcLink(pc, peer, sid, sendSig, onDead) {
     var chans = {}, pending = [], remoteSet = false, dead = false, discTimer = null;
     var link = {
+      mode: 'direct',
       send: function (ch, payload) {
         var dc = chans[ch];
         if (!dc || dc.readyState !== 'open') return false;
@@ -446,7 +492,12 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (dc.readyState === 'open') check();
     }
     function check() {
-      if (!dead && chans.rel && chans.fast && chans.rel.readyState === 'open' && chans.fast.readyState === 'open') peer._attach(link);
+      if (!dead && chans.rel && chans.fast && chans.rel.readyState === 'open' && chans.fast.readyState === 'open' && !peer._hasLink(link)) {
+        peer._attach(link);
+        // direct or through a TURN relay? (checked again later: ICE may switch to a better pair)
+        var look = function () { selectedPath(pc).then(function (m) { if (m && !dead && peer._hasLink(link)) { link.mode = m; peer.mode = m; } }); };
+        look(); setTimeout(look, 2500);
+      }
     }
     pc.onicecandidate = function (ev) {
       if (dead) return;
@@ -481,13 +532,14 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   function host(signal, opts) {
     opts = opts || {};
-    var R = getRTC(opts), cfg = iceConfig(opts), clock = realClock();
+    var R = getRTC(opts), cfgP = iceConfigFor(signal, opts), clock = realClock();
     var H = makeHost(clock, opts);
     H.signal = signal;
     var conns = {}; // peerId -> rtc ctl
     function sendSig(id) { return function (m) { signal.send(id, m).catch(function () {}); }; }
 
     async function start(id, sid) {
+      var cfg = await cfgP;
       if (H.closed) return;
       if (H._full(id)) { sendSig(id)({ t: 'reject', reason: 'full' }); return; }
       if (conns[id] && conns[id].sid === sid && !conns[id].isDead()) return; // duplicate join retry
@@ -525,7 +577,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (!(peer.state === 'open' && peer.mode === 'relay' && peer._relayEpoch === e)) {
         if (conns[id]) { conns[id].close(); delete conns[id]; } // stop ICE: one path at a time
         peer._relayEpoch = e;
-        attachRelay(signal, peer, id, null);
+        attachRelay(signal, peer, id, null, opts.relayOpts);
       }
       sendSig(id)({ t: 'relay-ok', e: e });
     }
@@ -535,19 +587,25 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   function connect(signal, opts) {
     opts = opts || {};
-    var R = getRTC(opts), cfg = iceConfig(opts), clock = realClock();
+    var R = getRTC(opts), cfgP = iceConfigFor(signal, opts), clock = realClock(), turnOn = false;
+    cfgP.then(function (c) { turnOn = hasTurn(c.iceServers); });
     var C = makeClient(clock, opts, signal.peer);
     C.signal = signal;
     var ctl = null, wantSid = null, joinTimer = null, joinTries = 0, failTimer = null;
     var maxAttempts = opts.reconnectAttempts == null ? 3 : opts.reconnectAttempts;
     var relayOn = !!(opts.relay && relayLib() && relayLib().supported(signal) && !(signal.caps && signal.caps.codes));
-    var relayAfter = (opts.relay && opts.relay.after) || 4500, relayTimer = null, relayEpoch = null;
+    var relayAfter = (opts.relay && opts.relay.after) || 4500, relayTimer = null, relayEpoch = null, joinAt = 0;
+    // with TURN available, ICE over TURN/TLS may need a few more seconds before the server relay takes over
+    var turnAfter = (opts.relay && opts.relay.turnAfter) || 9000;
+    var relayOpts = opts.relay && typeof opts.relay === 'object' ? opts.relay : null;
     function sig(m) { return signal.send('host', m).catch(function () {}); }
     C.stage = 'waiting';
     function stage(s) { if (C.stage !== s) { C.stage = s; C.emit('stage', s); } }
-    function askRelay() {
+    function askRelay(iceDead) {
       clearTimeout(relayTimer);
       if (!relayOn || C.state === 'open' || C.state === 'closed') return;
+      var wait = joinAt + turnAfter - Date.now();
+      if (iceDead !== true && turnOn && !relayEpoch && ctl && !ctl.isDead() && wait > 0) { relayTimer = setTimeout(askRelay, wait); return; }
       if (!relayEpoch) relayEpoch = randId(8);
       stage('relay');
       sig({ t: 'relay', sid: wantSid, e: relayEpoch });
@@ -557,11 +615,11 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (!relayEpoch || msg.e !== relayEpoch || C.state === 'open' || C.state === 'closed') return;
       clearTimeout(relayTimer);
       if (ctl) { var c0 = ctl; ctl = null; c0.close(); }
-      attachRelay(signal, C, 'host', relayEpoch);
+      attachRelay(signal, C, 'host', relayEpoch, relayOpts);
     }
 
     function sendJoin() {
-      wantSid = randId(8); joinTries = 0; relayEpoch = null;
+      wantSid = randId(8); joinTries = 0; relayEpoch = null; joinAt = Date.now();
       stage('waiting');
       if (relayOn) { clearTimeout(relayTimer); relayTimer = setTimeout(askRelay, relayAfter); }
       (function again() {
@@ -576,6 +634,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       failTimer = setTimeout(function () { if (C.state !== 'open' && C.state !== 'closed') { C.emit('error', Object.assign(new Error('could not connect'), { code: 'timeout' })); C._close('timeout'); } }, opts.timeout || (signal.caps && signal.caps.codes ? 600000 : 30000)); // manual: humans copy/paste codes
     }
     async function onOffer(msg) {
+      var cfg = await cfgP;
       if (C.state === 'closed') return;
       if (relayEpoch) return; // already switching to / using the server relay
       if (ctl && msg.sid === ctl.sid) return; // duplicate
@@ -585,7 +644,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       var pc = new R(cfg);
       var my = ctl = rtcLink(pc, C, msg.sid, sig, function (reason, link) {
         if (C._hasLink(link)) C._linkLost(reason);
-        else if (relayOn && my === ctl && C.state !== 'open' && C.state !== 'closed') askRelay(); // ICE failed: relay now
+        else if (relayOn && my === ctl && C.state !== 'open' && C.state !== 'closed') askRelay(true); // ICE failed: relay now
         else if (C.state === 'connecting' && my === ctl && !(signal.caps && signal.caps.reconnect)) {
           // manual codes: ICE gave up before the host pasted our answer -> codes expired, make new ones
           C.emit('error', Object.assign(new Error('connection attempt expired'), { code: 'expired' }));
@@ -750,7 +809,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     PROTO: PROTO, DEFAULT_ICE: DEFAULT_ICE, PACK: PACK,
     host: host, connect: connect, loopback: loopback,
     packStates: packStates, unpackStates: unpackStates, packState: packState, unpackState: unpackState, isStates: isStates,
-    iceConfig: iceConfig,
+    iceConfig: iceConfig, iceConfigFor: iceConfigFor, selectedPath: selectedPath,
     _makePeer: makePeer, _scheduler: scheduler
   };
   CB.net = CB.net || {};
