@@ -857,7 +857,7 @@ CB.race = CB.race || {};
 
   /* ------------------------------------------------------ ARCADE handling
      params.handling === 'arcade' (fromBuild(build, metrics, { handling: 'arcade' }) or withHandling(p, 'arcade')):
-     a kinematic grip model for the Arcade game mode (ARCADE-SPEC.md). The tyres never let go: no wheelspin, no
+     a kinematic grip model for the Arcade game mode (docs/ARCADE-SPEC.md). The tyres never let go: no wheelspin, no
      lock-up, no under/oversteer, no spins. Steering asks for a path CURVATURE (speed-sensitive: full lock is the
      generous, stable cornering limit at every speed), the yaw rate follows it with a short lag and the body slip
      is pulled back to ~0, so the car goes where it is pointed. The engine / gearbox / turbo / aero drag still run,
@@ -1886,7 +1886,7 @@ CB.race = CB.race || {};
     latAccelAt: latAccelAt,
     brakeAccelAt: brakeAccelAt,
     capabilities: function (p) { return p.capabilities || computeCapabilities(p); },
-    // arcade handling (ARCADE-SPEC.md)
+    // arcade handling (docs/ARCADE-SPEC.md)
     withHandling: withHandling,
     isArcade: isArcade,
     arcadeResponse: arcadeResponse,

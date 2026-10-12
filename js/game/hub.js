@@ -2,7 +2,7 @@
    FORGE Atelier — js/game/hub.js
    CB.game.hub : full-screen main menu / career hub (#game-hub).
 
-   Contract: GAME-SPEC.md § Hub UI.
+   Contract: docs/GAME-SPEC.md § Hub UI.
 
    Public API
      CB.game.hub.open(opts?)        opts { screen, params, standalone, onClose() }  -> api
