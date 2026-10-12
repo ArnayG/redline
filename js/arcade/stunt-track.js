@@ -512,7 +512,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     /* ---- bounds / ground ---- */
     var mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
     for (i = 0; i < N; i++) for (var a3 = 0; a3 < 3; a3++) { var vv = P[i * 3 + a3]; if (vv < mn[a3]) mn[a3] = vv; if (vv > mx[a3]) mx[a3] = vv; }
-    var groundY = num(def.groundY, mn[1] - num(def.stilts, 6));
+    // ground plane below the LOWEST road edge (a 50° bowl's low edge sits hw·sin(bank) under its centre line)
+    var edgeMin = mn[1];
+    for (i = 0; i < N; i++) { var ey2 = P[i * 3 + 1] - Math.abs(Rt[i * 3 + 1]) * (Wd[i] / 2 + 0.4); if (ey2 < edgeMin) edgeMin = ey2; }
+    var groundY = num(def.groundY, edgeMin - num(def.stilts, 6));
 
     /* ---- spatial hash for project() ---- */
     var CELL = 12, hash = new Map();
@@ -615,8 +618,28 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           if (score < bestScore) { bestScore = score; best = { s: wrapS(k5 * dsU + along, L), lateral: lat2, height: hgt, index: k5, along: along, dist: Math.sqrt(score) }; }
         }
       }
+      // refine against the INTERPOLATED frame (the surface sample() / pose() / the mesh use): the per-sample planes are
+      // discontinuous at the outer lanes of banked / twisting sections (0.2–0.3 m steps at 6 m lateral), which let a
+      // landing car step from just above one plane to below the next without ever "crossing" the road
+      if (best) {
+        var sr = best.s, smr = null;
+        for (var it = 0; it < 2; it++) {
+          smr = trk.sample(sr, _pj);
+          _pj = smr;
+          var ex = p[0] - smr.pos[0], ey = p[1] - smr.pos[1], ez = p[2] - smr.pos[2];
+          var al = ex * smr.tangent[0] + ey * smr.tangent[1] + ez * smr.tangent[2];
+          if (Math.abs(al) < 1e-4) break;
+          sr = wrapS(sr + clamp(al, -dsU, dsU), L);
+        }
+        smr = trk.sample(sr, _pj); _pj = smr;
+        var fx = p[0] - smr.pos[0], fy = p[1] - smr.pos[1], fz = p[2] - smr.pos[2];
+        best.s = sr;
+        best.lateral = fx * smr.left[0] + fy * smr.left[1] + fz * smr.left[2];
+        best.height = fx * smr.up[0] + fy * smr.up[1] + fz * smr.up[2];
+      }
       return best;
     };
+    var _pj = null;
 
     /* ---- minimap / thumbnail / 2D geom ---- */
     var mm = [], step2 = Math.max(1, Math.round(4 / dsU));

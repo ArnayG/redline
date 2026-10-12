@@ -186,6 +186,17 @@ fallback handles pads / rings / cans / boxes and a nitro meter. Direct API: `ses
   the track below, pitch / roll stabilised to the landing surface. Re-attach on ANY surface crossed from above within
   −90…+420 m of the takeoff s; below the ground plane / > 8 s air → respawn (0.9 s fade, last checkpoint, rolling start,
   1.6 s no-collide). Stuck > 3 s or wrong way > 4 s also respawn; `input.requestReset` (R) respawns manually.
+* Human-proofing (regression: "fell through the road after a ramp"; `tools/stunt-sweep.js`, tests/arcade-stunt-sweep.test.js):
+  `project()` refines its hit against the INTERPOLATED frame (the per-sample planes stepped 0.1–0.2 m at the outer lanes
+  of banks / wall roll-ins, so a landing could step past the deck); landings are swept (previous point measured against
+  the same surface plane) with a capture margin of `HALF_W + 0.5` m beyond the road edge, plus a pop-up for a car that
+  slides in just under the deck (≤ 0.9 m, ≤ 1.8 m at a gap's landing lip). In the air every level follows the plan-view
+  heading of the road below ('off' 80 %), air steering is a bounded lateral nudge (3.5 m/s², ≤ 4.5 m/s), and the guard
+  rails extend into the air (no outward steering / outward drift damped past the usable width). Gap lips faster than
+  1.06 × the design speed launch on the flat ballistic root that hits the deck 6 m past the lip (same speed); hill
+  crests only release the car once its climb rate is < 9 m/s; loops / walls never shed a car above 35 km/h; the ground
+  plane sits under the lowest road EDGE and the fall check ignores a car with road right under it; after 2 falls in a
+  row the next jumps get one level more air / jump assist until a clean landing (`fallStreak`).
 * Drive model adapter — `model.create(build, opts) → state`, `model.step(state, input {throttle, brake, steer (+1 left)},
   ctx {dt, speed, bank, topMult, push, vTarget, throttleMult, latMax, slope}) → {accel, yawRate, steerAngle, rpm, gear, vTop}`,
   optional `model.steerFor(state, yawRate, speed, {bank}) → steer` (AI). Resolution order: `cfg.drive` object →
