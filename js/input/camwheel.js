@@ -21,13 +21,16 @@
    Marker core (pure): rgbToHsv, hueDist, buildLut(models), segment(rgba, w, h, lut), axisAngle, calibrate(rgba, w, h,
      boxes) -> {ok, models, mode:'same'|'two'|'one', style, expect, warnings}, createTracker(cal, {w, h}).process(rgba, t)
    Shared: createSteer(prefs) -> S.update(meas, t) / S.read(t) / S.recentre(); oneEuro, mapAngle, cutoffFor
-   Prefs (localStorage 'forge.camWheel.v1'): method 'hands'|'marker', maxAngle 90, deadzone 2, smoothing 0.3, lookahead,
+   Prefs (localStorage 'forge.camWheel.v1'): method 'hands'|'marker', handStyle 'two' (hands at 9 and 3) | 'top' (one
+     hand at the top of the wheel) | 'auto' (two if both visible, else one-hand top grip), wheelSize 1 (top grip radius
+     x 0.5..2), maxAngle 90, deadzone 2, smoothing 0.3, lookahead,
      deviceId, pip, pedals 'grip'|'auto'|'push'|'off', gestureNitro / gestureHandbrake / gestureItem (off), cpu,
-     handCal {two, labels}, pedalCal {open, grip, scale {a, b}, world}, style + cal (marker mode)
+     handCal {two, labels, top {x, y, L, q, side, roll0}}, pedalCal {open, grip, scale {a, b}, world}, style + cal (marker mode)
    Browser: secure() supported() listCameras() start({deviceId}) -> {ok, reason}  stop()  running()  enable() disable()
      ready()  calibrateNow(boxes?, style?) (immediate)  startCentre('centre'|'calibrate'|'auto') (3-2-1 countdown, again =
      cancel)  cancelCentre()  countdown()  recentre() (= startCentre('centre'))  recentreNow()  captureGrip()
      model() / loadModel()  stats()  on('frame'|'hands'|'state'|'prefs'|'autocentre'|'countdown', fn)
+     _feed(list, w, h, t) (Node tests: one detector result, as if from the camera)
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
 if (typeof window !== 'undefined') window.CB = CB;
@@ -38,8 +41,9 @@ CB.input = CB.input || {};
 
   var DEG = Math.PI / 180;
   var PREF_KEY = 'forge.camWheel.v1';
-  var DEFAULT_PREFS = { method: 'hands', maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, pedals: 'grip', gestureNitro: false, gestureHandbrake: false, gestureItem: false, cpu: false, handCal: null, pedalCal: null, cal: null };
+  var DEFAULT_PREFS = { method: 'hands', handStyle: 'two', wheelSize: 1, maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, pedals: 'grip', gestureNitro: false, gestureHandbrake: false, gestureItem: false, cpu: false, handCal: null, pedalCal: null, cal: null };
   var PEDAL_MODES = ['grip', 'auto', 'push', 'off'];
+  var HAND_STYLES = ['two', 'top', 'auto'];      // two hands at 9 and 3 | one hand at the top of the wheel | either
   var COUNT_MS = 3000, GRIP_MS = 2000;
   var LUT_BITS = 6, LUT_SIZE = 1 << (3 * LUT_BITS);
 
@@ -620,6 +624,8 @@ CB.input = CB.input || {};
     var hc = p.handCal && typeof p.handCal === 'object' ? p.handCal : null;
     return {
       method: p.method === 'marker' ? 'marker' : 'hands',
+      handStyle: HAND_STYLES.indexOf(p.handStyle) >= 0 ? p.handStyle : 'two',
+      wheelSize: clamp(num(+p.wheelSize, 1), 0.5, 2),
       maxAngle: clamp(num(+p.maxAngle, DEFAULT_PREFS.maxAngle), 20, 180),
       deadzone: clamp(num(+p.deadzone, DEFAULT_PREFS.deadzone), 0, 15),
       smoothing: clamp(num(+p.smoothing, DEFAULT_PREFS.smoothing), 0, 1),
@@ -632,10 +638,18 @@ CB.input = CB.input || {};
       gestureHandbrake: !!p.gestureHandbrake,
       gestureItem: !!p.gestureItem,
       cpu: !!p.cpu,
-      handCal: hc && isFinite(hc.two) ? { two: +hc.two, labels: hc.labels && typeof hc.labels === 'object' ? hc.labels : null } : null,
+      handCal: hc && (isFinite(hc.two) || normTop(hc.top)) ? { two: isFinite(hc.two) ? +hc.two : 0, labels: hc.labels && typeof hc.labels === 'object' ? hc.labels : null, top: normTop(hc.top) } : null,
       pedalCal: normPedalCal(p.pedalCal),
       cal: p.cal && p.cal.ok && Array.isArray(p.cal.models) ? p.cal : null
     };
+  }
+  /** the one-hand top-grip calibration: top point (x, y: 0..1 of the frame), palm length L and scale q (/ frame width),
+      which hand, its roll there */
+  function normTop(c) {
+    if (!c || typeof c !== 'object') return null;
+    var ok = [c.x, c.y, c.L, c.q].every(function (v) { return typeof v === 'number' && isFinite(v); }) && c.L > 0 && c.q > 0;
+    if (!ok || !c.roll0 || !isFinite(c.roll0.a) || !isFinite(c.roll0.b)) return null;
+    return { x: clamp(c.x, -0.5, 1.5), y: clamp(c.y, -0.5, 1.5), L: c.L, q: c.q, side: c.side === 'L' ? 'L' : c.side === 'R' ? 'R' : null, roll0: { a: +c.roll0.a, b: +c.roll0.b } };
   }
   function normPedalCal(c) {
     if (!c || typeof c !== 'object') return null;
@@ -693,7 +707,7 @@ CB.input = CB.input || {};
     rgbToHsv: rgbToHsv, hueDist: hueDist, buildLut: buildLut, segment: segment, unite: unite, axisAngle: axisAngle,
     calibrate: calibrate, defaultBoxes: defaultBoxes, createTracker: createTracker, createSteer: createSteer,
     mapAngle: mapAngle, oneEuro: oneEuro, cutoffFor: cutoffFor, skinLike: skinLike, wrapP: wrapP,
-    normPrefs: normPrefs, DEFAULT_PREFS: DEFAULT_PREFS, PREF_KEY: PREF_KEY, createCountdown: createCountdown, COUNT_MS: COUNT_MS, GRIP_MS: GRIP_MS, PEDAL_MODES: PEDAL_MODES,
+    normPrefs: normPrefs, normTop: normTop, HAND_STYLES: HAND_STYLES, DEFAULT_PREFS: DEFAULT_PREFS, PREF_KEY: PREF_KEY, createCountdown: createCountdown, COUNT_MS: COUNT_MS, GRIP_MS: GRIP_MS, PEDAL_MODES: PEDAL_MODES,
     prefs: loadPrefs(), on: on
   };
   api.setPrefs = function (p) {
@@ -701,6 +715,10 @@ CB.input = CB.input || {};
     api.prefs = normPrefs(Object.assign({}, api.prefs, p || {}));
     savePrefs(api.prefs);
     if (B.steer) B.steer.setPrefs(api.prefs);
+    if (B.solver) {
+      B.solver.wheelSize = api.prefs.wheelSize;
+      if (B.solver.style !== api.prefs.handStyle) { B.solver.style = api.prefs.handStyle; B.solver.reset(); }   // identify afresh
+    }
     if (old.method !== api.prefs.method && B.stream) { B.tracker = null; B.solver = null; B.steer = null; ensureTracker(); if (api.prefs.method === 'hands') loadModel(); }
     emit('prefs', api.prefs);
     return api.prefs;
@@ -857,7 +875,9 @@ CB.input = CB.input || {};
           var two = CW_wrap180(+hc.two || 0), lb = hc.labels;
           if (Math.abs(two) > 90) { two = CW_wrap180(two + 180); lb = lb && lb.a && lb.b ? { a: lb.b, b: lb.a } : lb; }
           B.solver.cal = { two: two, labels: lb };
+          if (hc.top) B.solver.topCal = JSON.parse(JSON.stringify(hc.top));
         }
+        B.solver.style = api.prefs.handStyle; B.solver.wheelSize = api.prefs.wheelSize;
       }
       if (!B.pedals && H.createPedals) { B.pedals = H.createPedals(); if (api.prefs.pedalCal) B.pedals.setCal(api.prefs.pedalCal); }
       if (!B.steer) { B.steer = createSteer(api.prefs); B.steer.centre = 0; }
@@ -919,13 +939,14 @@ CB.input = CB.input || {};
   function autoCentre(meas, t) {
     var A = B.autoCal;
     if (!A || !A.pending) return;
-    if (!meas || !meas.ok || meas.mode !== 'two') { B.steady.length = 0; return; }
+    var topStyle = api.prefs.handStyle === 'top';
+    if (!meas || !meas.ok || meas.mode !== (topStyle ? 'top' : 'two')) { B.steady.length = 0; return; }
     B.steady.push({ t: t, a: meas.angle });
     while (B.steady.length && t - B.steady[0].t > 1000) B.steady.shift();
     if (B.steady.length < 8 || t - B.steady[0].t < 900) return;
     var lo = Infinity, hi = -Infinity;
     B.steady.forEach(function (s) { lo = Math.min(lo, s.a); hi = Math.max(hi, s.a); });
-    var rel = (lo + hi) / 2 + (B.solver.cal ? B.solver.cal.two : 0);
+    var rel = (lo + hi) / 2 + (!topStyle && B.solver.cal ? B.solver.cal.two : 0);
     if (hi - lo < 1.5 && Math.abs(wrapP(rel, 360)) < 15 && !B.cd.active()) { A.pending = false; B.steady.length = 0; api.startCentre('auto'); }
   }
   /** a landmark result (worker or main thread) for the frame submitted with timestamp ts */
@@ -1050,13 +1071,13 @@ CB.input = CB.input || {};
       if (labels) B.solver.cal.labels = labels;
       var pc = null;
       if (B.pedals) { pc = B.pedals.calibrateNeutral(B.lastHands, { curl: !!(o && o.curl) }); }
-      api.setPrefs({ handCal: { two: B.solver.cal ? B.solver.cal.two : 0, labels: B.solver.cal && B.solver.cal.labels || null }, pedalCal: B.pedals ? pedalCalOf() : api.prefs.pedalCal });
+      api.setPrefs({ handCal: { two: B.solver.cal ? B.solver.cal.two : 0, labels: B.solver.cal && B.solver.cal.labels || null, top: B.solver.topCal || null }, pedalCal: B.pedals ? pedalCalOf() : api.prefs.pedalCal });
       var was = B.steer ? B.steer.read(nowMs()) : null;
       B.steer = createSteer(api.prefs); B.steer.centre = 0;
       if (was && !was.lost) B.steer.seed(was.steer, was.angleShown, nowMs());   // no snap at the re-centre
       if (B.autoCal) B.autoCal.pending = false;
       setState('tracking');
-      return { ok: true, mode: mode === 'two' ? 'hands2' : 'hands1', warnings: [], open: pc && pc.open };
+      return { ok: true, mode: mode === 'two' ? 'hands2' : mode === 'top' ? 'top' : 'hands1', side: mode === 'top' ? B.lastHands.side : null, warnings: [], open: pc && pc.open };
     }
     if (!B.lastRgba) return { ok: false, reason: 'noframe', warnings: [] };
     style = style || api.prefs.style;
@@ -1137,7 +1158,7 @@ CB.input = CB.input || {};
       resultLatency: med(B.resLat),
       latency: med(B.lats), pageLatency: med(B.pageLats),
       conf: B.steer ? B.steer.conf : 0, angle: B.steer ? B.steer.angle : 0, steer: r.steer, lost: !!r.lost,
-      hands: lh && lh.ok ? lh.pts.length : 0, handMode: lh && lh.ok ? lh.mode : null,
+      hands: lh && lh.ok ? lh.pts.length : 0, handMode: lh && lh.ok ? lh.mode : null, handSide: lh && lh.ok && lh.side || (B.solver && B.solver.topCal ? B.solver.topCal.side : null), handStyle: api.prefs.handStyle,
       w: B.w, h: B.h, camW: B.camW, camH: B.camH, camFps: B.camFps, path: B.path ? B.path.name : 'auto',
       calibrated: hands() ? true : !!api.prefs.cal, mode: hands() ? 'hands' : api.prefs.cal ? api.prefs.cal.mode : null,
       gestures: { nitro: !!B.gestOut.nitro },
@@ -1145,6 +1166,14 @@ CB.input = CB.input || {};
     };
   };
   api._b = B;
+  /** tests (Node): feed one detector result as if it came from the camera (list: [{lm, score, label}], t ms) */
+  api._feed = function (list, w, h, t) {
+    ensureTracker();
+    t = num(t, nowMs());
+    B.inflight[Math.round(t)] = { cap: null, shown: t, t: t, w: w, h: h, sent: nowMs() };
+    onHands(list, t, 0);
+    return B.lastHands;
+  };
   Object.defineProperty(api, 'video', { get: function () { return B.video; } });
   Object.defineProperty(api, 'canvas', { get: function () { return B.canvas; } });
   Object.defineProperty(api, 'tracker', { get: function () { return B.tracker; } });

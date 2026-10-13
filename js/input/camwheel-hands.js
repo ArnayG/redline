@@ -18,6 +18,11 @@
                 never on first sight at ~180 (see the consistency rules above createSolver).
      one hand   that hand's roll: the index-MCP -> pinky-MCP line and the wrist -> middle-MCP direction, each relative to
                 its neutral (calibrated, or taken when the other hand disappears), averaged.
+     top grip   S.style 'top' (or 'auto' with one hand in view): ONE hand grips the top of an imaginary wheel; the
+                angle is the palm centre's angle around the wheel centre (straight below the calibrated top point by
+                R = TOP_K x palm length x S.wheelSize), from 12 o'clock, plus a little of the hand's roll; depth
+                compensated by the hand's scale (see topStep). meas.side 'L' | 'R' (ch.handSide: chirality geometry),
+                meas.rim {cx, cy, r, gx, gy} (the rim and the grip point, image px, for the preview).
      switching  two <-> one hand never jumps: the new reading is chosen nearest the current angle and re-based onto
                 it (|offset| < 90, never a pi turn), and that offset then bleeds back to the source's own zero over
                 ~0.5 s (so a long one-hand stint cannot drift).
@@ -27,9 +32,11 @@
      ch.curl(lm, wl?) -> 0 (open palm) .. 1 (closed fist)     wl: world landmarks (metres) when the detector has them
      ch.handScale(lm, wl, W, H) -> {s, world}   palm-only apparent scale (push / pull = distance), tilt-robust with wl
      ch.createPedals() -> P   hands-only throttle / brake / handbrake ('grip' default | 'auto' | 'push' | 'off'), see below
+     ch.handSide(hand, W) -> 'L' | 'R'     ch.chirality(hand) -> -1..1 (+ = a right hand)
      ch.createSolver(opts?) -> S   S.update(hands, W, H, t) -> meas {ok, angle (deg, continuous), period: 360, conf,
                                    mode:'two'|'one'|null, fresh, pts, hands}   S.calibrate() (current pose = centre)
                                    S.state()   hands: [{lm, score, label}] straight from the detector
+                                   S.style 'two' (default) | 'top' | 'auto'   S.wheelSize (1)   S.topCal (persisted)
      ch.gestures(meas, prefs, t, st) -> {throttle, nitro}   (nitro push; the old fists-throttle; off unless enabled)
    Browser
      ch.load({preferGpu, worker}) -> Promise<{ok, delegate:'GPU'|'CPU', worker, reason?}>  (worker: js/input/camwheel-worker.js)
@@ -95,6 +102,30 @@ CB.input = CB.input || {};
     return { s: px / SEG.length, world: false };
   }
 
+  /* which hand is it, as the PLAYER sees it ('L' | 'R'), by geometry: the palm normal (index MCP x pinky MCP from the
+     wrist) against the side the fingers and thumb sit on (the palm side), in the CAMERA frame (unmirrored, as MediaPipe
+     sees it: x right, y down, z smaller = nearer). That is the hand's chirality, whatever its rotation or which side
+     faces the camera. Weak (a flat, open hand): MediaPipe's handedness label (on the unmirrored frame it names the
+     player's own hand, matching the geometry on the fixtures), then the side of the picture. */
+  var TOP_K = 2.5;      // one-hand top grip: wheel radius = TOP_K x palm length (wrist -> middle MCP) x wheelSize
+  function chirality(h) {
+    var L = h.wl && h.wl.length >= 21 ? h.wl : h.lm;
+    function sub(a, b) { return [a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)]; }
+    var u = sub(L[5], L[0]), v = sub(L[17], L[0]);
+    var n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    var m = [0, 0, 0], k = [0, 0, 0], j;
+    [8, 12, 16, 20, 4].forEach(function (i) { for (j = 0; j < 3; j++) m[j] += [L[i].x, L[i].y, L[i].z || 0][j] / 5; });
+    [5, 9, 13, 17].forEach(function (i) { for (j = 0; j < 3; j++) k[j] += [L[i].x, L[i].y, L[i].z || 0][j] / 4; });
+    var d = [m[0] - k[0], m[1] - k[1], m[2] - k[2]], nn = Math.hypot(n[0], n[1], n[2]), dn = Math.hypot(d[0], d[1], d[2]);
+    return nn > 0 && dn > 0 ? (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) / nn / dn : 0;
+  }
+  function handSide(h, W) {
+    var c = chirality(h);
+    if (Math.abs(c) >= 0.08) return c > 0 ? 'R' : 'L';
+    if (h.label === 'Right' || h.label === 'Left') return h.label === 'Right' ? 'R' : 'L';
+    return palm(h.lm, W || 1, 1).x < (W || 1) / 2 ? 'L' : 'R';
+  }
+
   /* ================================================================ solver: hands -> continuous wheel angle */
   /* Consistency rules (the wheel must never come back from a loss at ~180 deg):
      - identity (which hand is "a" = left at the wheel's straight-ahead pose) follows ANGLE continuity: between two
@@ -115,9 +146,11 @@ CB.input = CB.input || {};
   function createSolver(opts) {
     opts = opts || {};
     var rebaseMs = num(opts.rebaseMs, 500), graceMs = num(opts.graceMs, 300);
+    var rollMix = num(opts.rollMix, 0.25);
     var flipDeg = num(opts.flipDeg, 155), flipMs = num(opts.flipMs, 1500);
     var S = {
       mode: null, angle: 0, offset: 0, target: 0, lastT: null, tracks: null, cal: null,
+      style: opts.style || 'two', wheelSize: num(opts.wheelSize, 1), topCal: null, rim: null, qs: null, stillT: 0,
       neutral: {}, curls: [0, 0], sizes: [0, 0], baseSize: 0, flipT: 0,
       /** hands: [{lm, score}]  ->  meas */
       update: function (hands, W, H, t) {
@@ -141,6 +174,8 @@ CB.input = CB.input || {};
         var a = null, b = null, raw, mode, conf, prevMode = S.mode;
         // reference angle for choosing between readings: tracked -> the current angle; fresh -> straight ahead
         var tracked = prevMode !== null && !!T;
+        // one-hand top grip: style 'top' always (one hand chosen), 'auto' whenever exactly one hand is in view
+        if (S.style === 'top' || (S.style === 'auto' && cand.length === 1)) return topStep(cand, W, H, t, dt, fresh, T, prevMode, tracked);
         var ref = tracked ? (prevMode === 'two' && S._raw != null ? S._raw : S.angle) : 0;
         if (cand.length >= 2) {
           cand.sort(function (p, q) { return q.score - p.score; });
@@ -158,6 +193,7 @@ CB.input = CB.input || {};
           }
           conf = Math.min(a.score, b.score);
           S.size = (a.size + b.size) / 2;
+          S.lastTwo = { a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
         } else {
           var c = cand[0], key;
           if (T && T.a && T.b) key = dist(c, T.a) <= dist(c, T.b) ? 'a' : 'b';
@@ -220,15 +256,108 @@ CB.input = CB.input || {};
           S.cal.ctr = T.a && T.b ? { x: (T.a.x + T.b.x) / 2, y: (T.a.y + T.b.y) / 2 } : S.cal.ctr;
         }
         else if (S.mode === 'one') { var key = T.a ? 'a' : 'b', n = S.neutral[key]; if (n) { n.a += S.angle; n.b += S.angle; } }
+        else if (S.mode === 'top' && S._top) {
+          // one hand at 12 o'clock: the wheel's top point, its size (-> radius) and depth, its roll, which hand it is
+          var c = S._top.c, Wt = S._top.W, Ht = S._top.H;
+          S.topCal = { x: c.x / Wt, y: c.y / Ht, L: c.size / Wt, q: (S.qs || c.scale) / Wt, side: S._top.side, roll0: { a: c.roll.a, b: c.roll.b } };
+          S.rim = null;
+        }
         S.baseSize = S.size || S.baseSize;
         S._raw = null; S.offset = 0; S.angle = 0; S.flipT = 0;
         return true;
       },
-      reset: function () { S.tracks = null; S.mode = null; S._raw = null; S.offset = 0; S.angle = 0; S.seenT = null; S.flipT = 0; },
+      reset: function () { S.tracks = null; S.mode = null; S._raw = null; S.offset = 0; S.angle = 0; S.seenT = null; S.flipT = 0; S.rim = null; S.qs = null; S.stillT = 0; },
       state: function () { return { mode: S.mode, angle: S.angle, offset: S.offset, cal: S.cal, neutral: S.neutral }; }
     };
     function dist(c, p) { return Math.hypot(c.x - p.x, c.y - p.y); }
     function implaus(r) { return 0.25 * Math.max(0, Math.abs(wrap180(r)) - 90); }
+
+    /* ---- one-hand top grip ----------------------------------------------------------------------------------------
+       The hand grips an imaginary wheel's rim; the wheel centre is a fixed point (rim.cx, cy) and the steering angle is
+       the palm centre's angle around it, from 12 o'clock (clockwise as the player sees it = +), plus rollMix of the
+       hand's own roll (gripping the rim, the hand turns with it; this keeps a mostly-translating or a mostly-rolling
+       hand working). Depth: the hand's apparent scale (handScale) against the rim's reference scale maps the palm
+       position back to the reference depth (about the image centre), so pulling the hand back (= the brake) does not
+       steer. rim.kind 'top': from the calibration (or, never calibrated, the hand where it first appears): the top
+       point (tx, ty), centre straight below it by R = TOP_K x palm length x wheelSize. rim.kind 'rim' (style 'auto',
+       two hands -> one): the two-hand wheel itself (centre between the palms, radius half their span), so the hand
+       left on the rim carries on from the current angle. */
+    function topStep(cand, W, H, t, dt, fresh, T, prevMode, tracked) {
+      var c = pickTop(cand, T, W, H);
+      var q = c.scale > 0 ? c.scale : 1;
+      var entering = prevMode !== 'top' || !S.rim;
+      // which hand: a running vote of the per-frame geometry (one odd frame - a flipped detection - cannot flip it)
+      var ch = chirality(c.h), v = Math.abs(ch) >= 0.08 ? ch : c.h.label === 'Right' ? 0.1 : c.h.label === 'Left' ? -0.1 : 0;
+      S.sideAcc = entering || S.sideAcc == null ? v : clamp(S.sideAcc * 0.97 + v, -6, 6);
+      var side = S.sideAcc > 0 ? 'R' : S.sideAcc < 0 ? 'L' : handSide(c.h, W);
+      S.qs = entering || S.qs == null ? q : S.qs + (q - S.qs) * (1 - Math.exp(-dt / 0.08));
+      if (entering) S.rim = makeRim(c, W, H, prevMode, tracked, side);
+      var rim = S.rim, O = { x: W / 2, y: H / 2 };
+      rim.side = side;
+      var k0 = rim.q0 / S.qs, pr = { x: O.x + (c.x - O.x) * k0, y: O.y + (c.y - O.y) * k0 };
+      var geo = rimGeo(rim), rd = readRim(rim, geo, pr, c);
+      // first sight: a plausible reading near the top only (else the player moved: the wheel re-anchors under the hand)
+      if (entering && rim.kind === 'top' && !tracked && Math.abs(wrap180(rd.angle)) > 100) { rim.tx = pr.x; rim.ty = pr.y; rim.roll0 = { a: c.roll.a, b: c.roll.b }; rim.rollAng = 0; rim.off = 0; geo = rimGeo(rim); rd = readRim(rim, geo, pr, c); }
+      var raw = rd.angle, switched = prevMode !== 'top';
+      if (switched || S._raw == null) { var rf = prevMode ? S.angle : 0; raw = rf + wrap180(raw - rf); }
+      else raw = S._raw + wrap180(raw - S._raw);
+      // the centre follows the player slowly (leaning in the seat), only while the wheel is held straight and still
+      var vel = dt > 0 && S._raw != null && !switched ? Math.abs(raw - S._raw) / dt : 999;
+      S._raw = raw;
+      if (switched && prevMode !== null) S.offset = S.angle - raw;
+      S.mode = 'top'; S.flipT = 0;
+      if (S.offset !== 0 && dt > 0) { var kb = Math.exp(-dt / (rebaseMs / 1000 / 3)); S.offset *= kb; if (Math.abs(S.offset) < 0.05) S.offset = 0; }
+      S.angle = raw + S.offset;
+      if (rim.kind === 'top' && Math.abs(S.angle) < 4 && vel < 12) {
+        S.stillT += dt;
+        if (S.stillT > 1) { var kd = 1 - Math.exp(-dt / 4); rim.tx += (pr.x - rim.tx) * kd; rim.ty += (pr.y - rim.ty) * kd; }
+      } else S.stillT = 0;
+      var id = rim.side === 'L' ? 'a' : 'b';
+      S.tracks = { a: id === 'a' ? { x: c.x, y: c.y, t: t } : null, b: id === 'b' ? { x: c.x, y: c.y, t: t } : null, top: { x: c.x, y: c.y, t: t } };
+      S._top = { c: c, side: rim.side, W: W, H: H };
+      S.size = c.size;
+      S.curls = id === 'a' ? [c.curl, null] : [null, c.curl];
+      // the rim in the current image (for the preview): the reference-depth wheel scaled back to the hand's depth
+      var f = S.qs / rim.q0, ci = { x: O.x + (geo.cx - O.x) * f, y: O.y + (geo.cy - O.y) * f }, ri = geo.R * f, th = rd.pos * DEG;
+      return {
+        ok: true, angle: S.angle, period: 360, conf: c.score * 0.85, mode: 'top', fresh: fresh, side: rim.side,
+        pts: [{ id: id, x: c.x, y: c.y, size: c.size, scale: c.scale, world: c.world, curl: c.curl }],
+        rim: { cx: ci.x, cy: ci.y, r: ri, gx: ci.x + Math.sin(th) * ri, gy: ci.y - Math.cos(th) * ri, kind: rim.kind, side: rim.side },
+        hands: cand
+      };
+    }
+    function pickTop(cand, T, W, H) {
+      if (cand.length === 1) return cand[0];
+      if (T && T.top) { var best = null, bd = Infinity; cand.forEach(function (c) { var d = dist(c, T.top); if (d < bd) { bd = d; best = c; } }); return best; }
+      var want = S.topCal && S.topCal.side;
+      if (want) { var m = cand.filter(function (c) { return handSide(c.h, W) === want; }); if (m.length === 1) return m[0]; }
+      return cand.slice().sort(function (p, q) { return p.y - q.y; })[0];     // the higher hand (the one on top)
+    }
+    function makeRim(c, W, H, prevMode, tracked, side) {
+      if (prevMode === 'two' && tracked && S.lastTwo) {
+        var A = S.lastTwo.a, Bh = S.lastTwo.b, cx = (A.x + Bh.x) / 2, cy = (A.y + Bh.y) / 2, R = Math.max(10, Math.hypot(Bh.x - A.x, Bh.y - A.y) / 2);
+        var th = Math.atan2(c.x - cx, cy - c.y) / DEG;
+        return { kind: 'rim', cx: cx, cy: cy, R: R, q0: S.qs, off: S.angle - th, roll0: { a: c.roll.a, b: c.roll.b }, rollAng: S.angle, side: side };
+      }
+      var tc = S.topCal;
+      if (tc) return { kind: 'top', tx: tc.x * W, ty: tc.y * H, L: tc.L * W, q0: tc.q * W, off: 0, roll0: { a: tc.roll0.a, b: tc.roll0.b }, rollAng: 0, side: side };
+      // never calibrated: the hand is at the top where it first appears
+      return { kind: 'top', tx: c.x, ty: c.y, L: c.size, q0: S.qs, off: 0, roll0: { a: c.roll.a, b: c.roll.b }, rollAng: 0, side: side, guess: true };
+    }
+    function rimGeo(rim) {
+      if (rim.kind !== 'top') return { cx: rim.cx, cy: rim.cy, R: rim.R };
+      var R = Math.max(10, TOP_K * rim.L * clamp(num(S.wheelSize, 1), 0.3, 3));
+      return { cx: rim.tx, cy: rim.ty + R, R: R };
+    }
+    function readRim(rim, geo, pr, c) {
+      var pos = Math.atan2(pr.x - geo.cx, geo.cy - pr.y) / DEG, posR = pos + rim.off;
+      var da = wrap180(c.roll.a - rim.roll0.a), db = wrap180(c.roll.b - rim.roll0.b);
+      var dr = Math.abs(wrap180(da - db)) < 40 ? da + wrap180(db - da) / 2 : da;
+      var rollR = rim.rollAng + dr, d = wrap180(rollR - posR);
+      // the roll disagrees wildly (another hand, a flipped detection): re-base it on the position, it then adds nothing
+      if (Math.abs(d) > 60) { rim.roll0 = { a: c.roll.a, b: c.roll.b }; rim.rollAng = posR; d = 0; }
+      return { angle: posR + rollMix * d, pos: pos };
+    }
     // one hand's roll relative to the neutral of identity `key` (index->pinky line and wrist->middle MCP, averaged)
     function oneRaw(c, key) {
       var n = S.neutral[key];
@@ -441,6 +570,7 @@ CB.input = CB.input || {};
   var worker = null, busy = false, frameId = 0, resultFns = [], sentAt = 0;
   var api = {
     VENDOR: VENDOR, palm: palm, handRoll: handRoll, curl: curl, handScale: handScale, createSolver: createSolver, gestures: gestures,
+    handSide: handSide, chirality: chirality, TOP_K: TOP_K, STYLES: ['two', 'top', 'auto'],
     createPedals: createPedals, PEDALS: PED, PEDAL_MODES: ['grip', 'auto', 'push', 'off'],
     lastMs: 0, mode: null, loaded: function () { return !!(landmarker || (worker && delegate)); }, delegate: function () { return delegate; }
   };

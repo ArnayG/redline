@@ -6,10 +6,12 @@
    from the camera frame to the steering read by the game loop; the main thread's frame pacing stays smooth.
    Then the colour-marker fallback on a marker video, and the hands-only pedals (Grip to drive: fists = gas, the hands
    pulled back = brake) on a third video, and the hands leaving the frame and coming back (re-acquired consistently,
-   never upside down at -180, and the steering eases back in without a jump) on a fourth.
+   never upside down at -180, and the steering eases back in without a jump) on a fourth, and the one-hand top grip
+   (one hand steering along the rim of the wheel) on a fifth.
    Opt-in (spawns Chrome, wants a GPU): REDLINE_E2E=1 node tests/run.js camwheel-e2e
    Ports: dev server 9867, Chrome 9868 (REDLINE_E2E_CAM_PORT=<n> uses n, n+1); REDLINE_E2E_TMP=<dir> for the profile + video.
-   Chrome always runs --headless=new --mute-audio with a throw-away profile. */
+   Chrome always runs --headless=new --mute-audio with a throw-away profile. Each session cancels the automatic
+   3-2-1 centring before it calibrates (else that countdown could capture the neutral mid-script, e.g. while braking). */
 'use strict';
 var fs = require('fs');
 var os = require('os');
@@ -67,7 +69,7 @@ async function session(video, method, truth) {
     for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (method !== 'hands' || ms === 'ready' || ms === 'error') break; await sleep(100); }
     // hold level, calibrate (the video loops; its level hold is at the start of each loop)
     for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
-    var cal = JSON.parse(await b.eval("JSON.stringify(CB.input.camwheel.calibrateNow())"));
+    var cal = JSON.parse(await b.eval("(CB.input.camwheel.cancelCentre(), JSON.stringify(CB.input.camwheel.calibrateNow()))"));
     await b.eval("CB.input.camwheel.enable(); window.__rec.length=0; window.__app=[]; window.__raf=[]; (function f(t){ window.__raf.push(t); CB.input.hub.read(); var la=CB.input.camwheel._b.lastApplied; if(la&&la!==window.__la){ window.__la=la; window.__app.push(la); } requestAnimationFrame(f); })(0); 1");
     await sleep(12500);
     var rec = JSON.parse(await b.eval('JSON.stringify(window.__rec)')), app = JSON.parse(await b.eval('JSON.stringify(window.__app)'));
@@ -129,7 +131,7 @@ async function pedalSession(video, labels, fps, edges) {
       " return cw.start().then(function(r){ return r.ok; }); })()");
     for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
     for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
-    var cal = JSON.parse(await b.eval("JSON.stringify(CB.input.camwheel.calibrateNow())"));
+    var cal = JSON.parse(await b.eval("(CB.input.camwheel.cancelCentre(), JSON.stringify(CB.input.camwheel.calibrateNow()))"));
     await b.eval("CB.input.camwheel.enable(); window.__s.length=0; 1");
     await sleep(labels.length / fps * 1000 + 1500);
     var S = JSON.parse(await b.eval('JSON.stringify(window.__s)'));
@@ -193,7 +195,7 @@ t('camwheel e2e: hands leave the frame and come back without a -180 start or a j
         " return cw.start().then(function(r){ return r.ok; }); })()");
       for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
       for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
-      var cal = JSON.parse(await b.eval("JSON.stringify(CB.input.camwheel.calibrateNow())"));
+      var cal = JSON.parse(await b.eval("(CB.input.camwheel.cancelCentre(), JSON.stringify(CB.input.camwheel.calibrateNow()))"));
       assert.ok(cal.ok, 'calibrated ' + JSON.stringify(cal));
       await b.eval("CB.input.camwheel.enable(); window.__r.length=0; window.__rd=[]; (function f(){ var s=CB.input.hub.read(); var c=CB.input.camwheel._b.steer.read(performance.now()); window.__rd.push({i:window.__idx, s:c.steer}); requestAnimationFrame(f); })(); 1");
       await sleep(sec * 1000 + 1500);
@@ -219,5 +221,45 @@ t('camwheel e2e: hands leave the frame and come back without a -180 start or a j
     assert.equal(near180, 0, 'never upside down');
     assert.ok(bad.length <= ok * 0.03, 'settled after every return: ' + bad.slice(0, 12).join(' '));
     assert.ok(maxStep <= 0.3, 'steering never jumps: ' + maxStep);
+  } finally { cleanup(); }
+});
+
+// one-hand top grip: only the right hand, gripping the top of the wheel (the synthetic hub's 12 o'clock) and moving
+// along the rim; calibrated with the 3-2-1-free calibrateNow at the level hold, wheel size matched to the video's rim.
+function topTruth(tt) { var T = tt % 10; if (T < 1.5) return 0; if (T < 7.5) return 100 * Math.sin((T - 1.5) / 6 * Math.PI * 2); return 0; }
+t('camwheel e2e: one hand at the top of the wheel steers along the rim (MediaPipe, right hand detected)', async function () {
+  tmp = fs.mkdtempSync(path.join(process.env.REDLINE_E2E_TMP || os.tmpdir(), 'redline-camtop-'));
+  var srv = cp.spawn(process.execPath, [path.join(root, 'tools/dev-server.js'), '--port', String(PS)], { stdio: 'ignore', cwd: root });
+  procs.push(srv);
+  try {
+    await sleep(800);
+    var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 10, rad = 0.24;
+    var v = path.join(tmp, 'top.y4m');
+    var truth = HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return topTruth(tt) - 90; }, scene: { hide: 'left', radius: rad, cy: 0.75 } }).truth.map(function (a) { return a + 90; });
+    var b = await chrome(v), rec, cal, side;
+    try {
+      await b.goto('http://localhost:' + PS + '/index.html', 3000);
+      await b.eval("(function(){ var cw=CB.input.camwheel, dec=" + DECODE + "; cw.setPrefs({method:'hands', handStyle:'top', handCal:null, smoothing:0.3, pedals:'off'}); window.__at={}; window.__r=[];" +
+        " cw.on('frame', function(f){ window.__idx=dec(cw); window.__at[Math.round(f.t)]=window.__idx; });" +
+        " cw.on('hands', function(e){ var i=window.__at[Math.round(e.t)]; if(i==null) return; window.__r.push({i:i, ok:!!e.meas.ok, mode:e.meas.mode, a:cw._b.steer.angle, side:e.meas.side}); });" +
+        " return cw.start().then(function(r){ return r.ok; }); })()");
+      for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
+      for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
+      for (i = 0; i < 50; i++) { cal = JSON.parse(await b.eval("(CB.input.camwheel.cancelCentre(), JSON.stringify(CB.input.camwheel.calibrateNow()))")); if (cal.ok) break; await sleep(100); }
+      if (!cal.ok || !(await b.eval('!!CB.input.camwheel._b.solver.topCal'))) throw new Error('not calibrated: ' + JSON.stringify(cal) + ' ' + await b.eval('JSON.stringify(CB.input.camwheel.stats())'));
+      // the video's rim radius is rad x width: match the wheel size to it
+      await b.eval("(function(){ var cw=CB.input.camwheel, tc=cw._b.solver.topCal; cw.setPrefs({ wheelSize: Math.max(0.5, Math.min(2, " + rad + " / (CB.input.camhands.TOP_K * tc.L))) }); cw.enable(); window.__r.length=0; return 1; })()");
+      await sleep(sec * 1000 + 1500);
+      rec = JSON.parse(await b.eval('JSON.stringify(window.__r)'));
+    } finally { b.close(); }
+    var errs = [], lost = 0, sides = {};
+    rec.forEach(function (r) { if (r.i == null || r.i >= truth.length) return; if (!r.ok) { lost++; return; } sides[r.side] = (sides[r.side] || 0) + 1; errs.push(Math.abs(r.a - truth[r.i])); });
+    console.log('    top grip: ' + JSON.stringify({ cal: cal.mode + '/' + cal.side, results: rec.length, lost: lost, med: errs.length && +q(errs, 0.5).toFixed(2), p95: errs.length && +q(errs, 0.95).toFixed(2), sides: sides }));
+    assert.ok(cal.ok && cal.mode === 'top', 'calibrated: ' + JSON.stringify(cal));
+    assert.equal(cal.side, 'R', 'right hand detected');
+    assert.ok(errs.length > 150, 'results ' + errs.length);
+    assert.ok(lost < errs.length * 0.05, 'lost ' + lost);
+    assert.ok(q(errs, 0.5) < 6, 'median error ' + q(errs, 0.5));
+    assert.ok(q(errs, 0.95) < 18, 'p95 error ' + q(errs, 0.95));
   } finally { cleanup(); }
 });
