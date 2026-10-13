@@ -210,9 +210,19 @@ define('FG_DELETE', '__delete__');
  * $create: create the file if missing. Returns [true, result] or [false, null] if the file could not be opened.
  */
 function fg_update($path, $create, $fn) {
-  $fh = @fopen($path, $create ? 'c+' : 'r+');
-  if (!$fh) return array(false, null);
-  if (!@flock($fh, LOCK_EX)) { fclose($fh); return array(false, null); }
+  for ($try = 0; ; $try++) {
+    $fh = @fopen($path, $create ? 'c+' : 'r+');
+    if (!$fh) return array(false, null);
+    if (!@flock($fh, LOCK_EX)) { fclose($fh); return array(false, null); }
+    if (!$create || $try >= 20) break;
+    // While we waited for the lock, its holder may have deleted the file (FG_DELETE unlinks it): a write to that
+    // orphaned inode would be lost (e.g. a post racing a poll that just emptied the mailbox). Open the path again.
+    clearstatcache(true, $path);
+    $st = @stat($path); $fs = @fstat($fh);
+    if ($st && $fs && $st['ino'] === $fs['ino'] && $st['dev'] === $fs['dev']) break;
+    @flock($fh, LOCK_UN);
+    fclose($fh);
+  }
   $raw = stream_get_contents($fh);
   $out = $fn(fg_decode($raw));
   $nd = $out[0];
