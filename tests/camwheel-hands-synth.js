@@ -1,7 +1,7 @@
 /* Synthetic webcam video of two REAL hands (cut-outs of freely licensed photos: tests/fixtures/hands/README.md) gripping
    an imaginary steering wheel, for the bare-hands webcam wheel browser test (tests/camwheel-e2e.test.js).
    frame(o) -> RGBA (w x h, the PLAYER'S mirrored view unless o.camera): a cluttered room, a face, and both hands rotated
-   by the wheel angle around a hub (left hand = the sprite mirrored), with lighting gain, noise and optional motion blur.
+   by the wheel angle around a hub (left hand = the sprite mirrored; o.hide 'left' | 'right' | 'both' leaves it out), with lighting gain, noise and optional motion blur.
    writeY4m(file, o) -> {frames, truth[], fps} writes a 4:2:0 .y4m for Chrome's --use-file-for-fake-video-capture; the
    frame number is stamped as a barcode (camwheel-synth.stamp) so the page can match each frame to its true angle. */
 'use strict';
@@ -40,7 +40,7 @@ function frame(o) {
   for (var st = 0; st < steps; st++) {
     var a = (o.angle + (steps > 1 ? (st / (steps - 1) - 0.5) * o.blur : 0)) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
     [-1, 1].forEach(function (side) {
-      if (o.hide === (side < 0 ? 'left' : 'right')) return;
+      if (o.hide === 'both' || o.hide === (side < 0 ? 'left' : 'right')) return;
       hands.push({ side: side, cx: o.cx * W + side * o.radius * W * c, cy: o.cy * H + side * o.radius * W * s, c: c, s: s, wgt: 1 / steps });
     });
   }

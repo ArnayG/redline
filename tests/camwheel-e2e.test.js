@@ -5,7 +5,8 @@
    Reports and checks: angle error vs the truth per frame, jitter while held level, inference ms, fps, and the delay
    from the camera frame to the steering read by the game loop; the main thread's frame pacing stays smooth.
    Then the colour-marker fallback on a marker video, and the hands-only pedals (Grip to drive: fists = gas, the hands
-   pulled back = brake) on a third video.
+   pulled back = brake) on a third video, and the hands leaving the frame and coming back (re-acquired consistently,
+   never upside down at -180, and the steering eases back in without a jump) on a fourth.
    Opt-in (spawns Chrome, wants a GPU): REDLINE_E2E=1 node tests/run.js camwheel-e2e
    Ports: dev server 9867, Chrome 9868 (REDLINE_E2E_CAM_PORT=<n> uses n, n+1); REDLINE_E2E_TMP=<dir> for the profile + video.
    Chrome always runs --headless=new --mute-audio with a throw-away profile. */
@@ -161,5 +162,62 @@ t('camwheel e2e: grip to drive (fists = gas, pull back = brake) through MediaPip
     assert.ok(r.n > 200, 'samples ' + r.n);
     assert.ok(r.acc >= 0.95, 'accuracy ' + r.acc);
     r.resp.forEach(function (f) { assert.ok(f != null && f <= 3, 'switch within 3 frames: ' + r.resp); });
+  } finally { cleanup(); }
+});
+
+// hands leave the frame and come back (user report: "the steering wheel starts at -180"): both hands gone, one hand
+// gone, back at other angles. After each return the angle must be right within ~0.5 s, never near +-180, and the
+// steering the game reads (every rAF) must never jump.
+// [from s, to s, angle | [ramp from, ramp to], hidden]  (the angle only jumps while hands are out of view)
+var REACQ = [[0, 1.5, 0, null], [1.5, 3, [0, 40], null], [3, 4.5, 40, 'both'], [4.5, 6, -30, null], [6, 7, -30, 'right'],
+  [7, 8.5, [-30, 60], null], [8.5, 10, 60, 'both'], [10, 12, 15, null]];
+function reacqAt(tt) {
+  for (var k = 0; k < REACQ.length; k++) { var s = REACQ[k]; if (tt < s[1]) return { a: Array.isArray(s[2]) ? s[2][0] + (s[2][1] - s[2][0]) * (tt - s[0]) / (s[1] - s[0]) : s[2], hide: s[3], k: k }; }
+  return { a: 15, hide: null, k: REACQ.length - 1 };
+}
+t('camwheel e2e: hands leave the frame and come back without a -180 start or a jump', async function () {
+  tmp = fs.mkdtempSync(path.join(process.env.REDLINE_E2E_TMP || os.tmpdir(), 'redline-camreacq-'));
+  var srv = cp.spawn(process.execPath, [path.join(root, 'tools/dev-server.js'), '--port', String(PS)], { stdio: 'ignore', cwd: root });
+  procs.push(srv);
+  try {
+    await sleep(800);
+    var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 12;
+    var v = path.join(tmp, 'reacq.y4m');
+    HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return reacqAt(tt).a; }, per: function (i, tt) { return { hide: reacqAt(tt).hide }; } });
+    var b = await chrome(v), rec, reads;
+    try {
+      await b.goto('http://localhost:' + PS + '/index.html', 3000);
+      await b.eval("(function(){ var cw=CB.input.camwheel, dec=" + DECODE + "; cw.setPrefs({method:'hands', smoothing:0.3, pedals:'off'}); window.__at={}; window.__r=[];" +
+        " cw.on('frame', function(f){ window.__idx=dec(cw); window.__at[Math.round(f.t)]=window.__idx; });" +
+        " cw.on('hands', function(e){ var i=window.__at[Math.round(e.t)]; if(i==null) return; window.__r.push({i:i, ok:!!e.meas.ok, mode:e.meas.mode, a:cw._b.steer.angle, raw:e.meas.ok?e.meas.angle:null}); });" +
+        " return cw.start().then(function(r){ return r.ok; }); })()");
+      for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
+      for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
+      var cal = JSON.parse(await b.eval("JSON.stringify(CB.input.camwheel.calibrateNow())"));
+      assert.ok(cal.ok, 'calibrated ' + JSON.stringify(cal));
+      await b.eval("CB.input.camwheel.enable(); window.__r.length=0; window.__rd=[]; (function f(){ var s=CB.input.hub.read(); var c=CB.input.camwheel._b.steer.read(performance.now()); window.__rd.push({i:window.__idx, s:c.steer}); requestAnimationFrame(f); })(); 1");
+      await sleep(sec * 1000 + 1500);
+      rec = JSON.parse(await b.eval('JSON.stringify(window.__r)'));
+      reads = JSON.parse(await b.eval('JSON.stringify(window.__rd)'));
+    } finally { b.close(); }
+    var bad = [], late = [], near180 = 0, maxStep = 0, ok = 0;
+    rec.forEach(function (r) {
+      if (r.i == null || r.i >= fps * sec || !r.ok) return;
+      var tt = r.i / fps, z = reacqAt(tt), seg = REACQ[z.k];
+      if (Math.abs(Math.abs(r.raw) - 180) < 40) near180++;
+      if (seg[3] === 'both') return;
+      var since = tt - seg[0];
+      if (since < 0.5) { late.push(Math.abs(r.a - z.a)); return; }        // easing back in
+      if (Array.isArray(seg[2])) return;
+      ok++;
+      if (Math.abs(r.a - z.a) > 8) bad.push(r.i + ':' + r.a.toFixed(1) + '/' + z.a);
+    });
+    var worst = null;
+    reads.forEach(function (x, k) { if (k > 2) { var d = Math.abs(x.s - reads[k - 1].s); if (d > maxStep) { maxStep = d; worst = x.i; } } });
+    console.log('    reacquire: ' + JSON.stringify({ results: rec.length, checked: ok, wrong: bad.length, near180: near180, maxSteerStep: +maxStep.toFixed(3), atFrame: worst, reads: reads.length }));
+    assert.ok(ok > 60, 'checked ' + ok);
+    assert.equal(near180, 0, 'never upside down');
+    assert.ok(bad.length <= ok * 0.03, 'settled after every return: ' + bad.slice(0, 12).join(' '));
+    assert.ok(maxStep <= 0.3, 'steering never jumps: ' + maxStep);
   } finally { cleanup(); }
 });

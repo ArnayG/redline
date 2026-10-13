@@ -1,6 +1,6 @@
 /* Node tests for the bare-hands webcam wheel maths (js/input/camwheel-hands.js): palm centres / roll / curl, the
    two-hand line angle, crossing past 90 deg, one-hand roll, switching two <-> one hand without jumps, identity by
-   continuity and by the calibrated handedness labels, gestures, and the steer filter's lookahead. Uses real
+   continuity, re-identification by geometry after a loss, gestures, and the steer filter's lookahead. Uses real
    MediaPipe landmarks (tests/fixtures/hands/landmarks.json) and rigid rotations of them.
    Run: node tests/run.js camwheel-hands      (the MediaPipe browser test: REDLINE_E2E=1 node tests/run.js camwheel-e2e) */
 'use strict';
@@ -88,22 +88,27 @@ test('camhands: one hand steers by its roll; switching hands never jumps', funct
   assert.ok(Math.abs(back.angle + 40) < 0.1, 'settled ' + back.angle);
 });
 
-test('camhands: lost hands re-identified by calibrated handedness labels (even crossed)', function () {
+test('camhands: lost hands re-identified by geometry, never upside down on first sight (labels ignored)', function () {
   var S = CH.createSolver(), hs = level(), c = hub(hs), t = 0;
   S.update(hs, W, H, t); S.calibrate();
   var px0 = CH.palm(hs[0].lm, W, H).x, px1 = CH.palm(hs[1].lm, W, H).x;
   assert.notEqual(hs[0].label, hs[1].label, 'fixture: two different handedness labels');
   S.cal.labels = px0 < px1 ? { a: hs[0].label, b: hs[1].label } : { a: hs[1].label, b: hs[0].label };
   t += 33; S.update(rot(hs, 120, c.x, c.y), W, H, t);
-  // gone for 2 s, back crossed at 150 deg: the labels say which hand is which, so 150 (not -30)
+  // gone for 2 s, back crossed at 150 deg: on first sight the only plausible reading is the level twin, -30 (the
+  // handedness labels are not trusted: they flip with the back of the hand / rotations, and once gave -180 starts)
   t += 2000; S.update([], W, H, t);
   t += 33; var m = S.update(rot(hs, 150, c.x, c.y), W, H, t);
-  assert.ok(Math.abs(CW.wrapP(m.angle - 150, 360)) < 0.5, 'labels: ' + m.angle);
-  // without labels the leftmost hand is taken as the left one: -30 (the only guess possible)
+  assert.ok(Math.abs(CW.wrapP(m.angle + 30, 360)) < 0.5, 'labels: ' + m.angle);
+  assert.equal(m.fresh, true);
   var S2 = CH.createSolver(); t = 0; S2.update(hs, W, H, t); S2.calibrate();
   t += 2000; S2.update([], W, H, t); t += 33;
   var m2 = S2.update(rot(hs.map(function (h) { return { lm: h.lm, score: h.score, label: '' }; }), 150, c.x, c.y), W, H, t);
   assert.ok(Math.abs(CW.wrapP(m2.angle + 30, 360)) < 0.5, 'no labels: ' + m2.angle);
+  // back at 40 deg: 40 (not -140), whichever order the detector lists the hands in
+  t += 2000; S2.update([], W, H, t); t += 33;
+  var m3 = S2.update(rot(hs, 40, c.x, c.y).reverse(), W, H, t);
+  assert.ok(Math.abs(m3.angle - 40) < 0.5, 'reversed order: ' + m3.angle);
 });
 
 test('camhands: gestures are off by default; fists = throttle, push towards the camera = nitro', function () {

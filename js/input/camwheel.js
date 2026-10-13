@@ -14,7 +14,8 @@
      marker: drawImage MIRRORED into a ~160x120 canvas -> 18-bit RGB class table -> connected components + moments ->
              tracking (gated by position / size / spacing) -> createSteer
      createSteer: unwrap -> centre -> 1-euro filter -> lookahead (cancels the filter lag) -> dead zone + full lock ->
-             steer [-1, 1] (+1 = right); lost: hold 250 ms, then ease back to centre over 250 ms.
+             steer [-1, 1] (+1 = right); lost: hold 250 ms, then ease back to centre over 250 ms; re-acquired: ease
+             from the held / centring value to the new reading over 120 ms (no snap), relocking the unwrap.
    Angles are in the MIRRORED (player's) view: clockwise as the player sees it = positive = steer right.
 
    Marker core (pure): rgbToHsv, hueDist, buildLut(models), segment(rgba, w, h, lut), axisAngle, calibrate(rgba, w, h,
@@ -46,6 +47,7 @@ CB.input = CB.input || {};
   function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function nowMs() { return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(); }
+  function CW_wrap180(a) { return wrapP(a, 360); }
   function wrapP(a, p) { var h = p / 2; a = ((a + h) % p + p) % p - h; return a; }
 
   /* ================================================================ colour */
@@ -544,15 +546,24 @@ CB.input = CB.input || {};
   function createSteer(prefs) {
     var P = Object.assign({}, DEFAULT_PREFS, prefs || {});
     var f = oneEuro({ minCutoff: cutoffFor(P.smoothing), beta: EURO_BETA, dCutoff: EURO_DCUT });
-    var holdMs = num(P.holdMs, 250), centreMs = num(P.centreMs, 250), relockMs = num(P.relockMs, 1000);
+    var holdMs = num(P.holdMs, 250), centreMs = num(P.centreMs, 250), relockMs = num(P.relockMs, 1000), easeMs = num(P.easeMs, 120);
+    function ease(k) { return k * k * (3 - 2 * k); }
     var S = {
-      steer: 0, angle: 0, raw: null, centre: 0, lastOk: -1e9, conf: 0, unwrapped: null, frames: 0,
+      steer: 0, angle: 0, raw: null, centre: 0, lastOk: -1e9, conf: 0, unwrapped: null, frames: 0, blend: null,
       update: function (m, t) {
         t = num(t, nowMs());
         S.frames++;
         if (!m || !m.ok) { S.conf = 0; return S.read(t).steer; }
         var p = m.period || 180, u;
-        if (S.unwrapped === null || t - S.lastOk > relockMs) { u = S.centre + wrapP(m.angle - S.centre, p); f.reset(); S._fa = null; }
+        // re-acquired after a loss (the hold expired, or the solver identified the hands afresh): what the game sees
+        // eases from the held / centring value to the new reading over easeMs, never a snap
+        // (also after a few dropped frames: more than ~2.5 typical camera intervals without a reading)
+        var was = S.read(t), relock = S.unwrapped === null || t - S.lastOk > relockMs || !!m.fresh, gap = t - S.lastOk;
+        if (gap > 0 && gap < 200) S.dtAvg = S.dtAvg ? lerp(S.dtAvg, gap, 0.1) : gap;
+        var dropped = gap > Math.max(90, 2.5 * (S.dtAvg || 33));
+        if (S.everOk && (was.lost || m.fresh || S._seeded || dropped)) S.blend = { steer: was.steer, angle: was.angleShown, t0: t };
+        S.everOk = true; S._seeded = false;
+        if (relock) { u = S.centre + wrapP(m.angle - S.centre, p); f.reset(); S._fa = null; S._t = null; }
         else u = S.unwrapped + wrapP(m.angle - S.unwrapped, p);
         // a whole extra turn folds back (never stuck at full lock)
         var rel = u - S.centre;
@@ -569,22 +580,37 @@ CB.input = CB.input || {};
           if (P.lookahead !== false && P.smoothing > 0) { S.lead = clamp(S.vel * Math.min(f.lag || 0, dtf * 0.5), -4, 4); fa += S.lead; }
         } else { S.vel = 0; S.lead = 0; }
         S._t = t; S._fa = fa - (S.lead || 0);
-        S.angle = fa;
-        S.steer = mapAngle(fa, P);
+        S.target = fa; S.steerTarget = mapAngle(fa, P);
+        var bk = blendK(t);
+        S.angle = bk < 1 ? lerp(S.blend.angle, fa, bk) : fa;
+        S.steer = bk < 1 ? lerp(S.blend.steer, S.steerTarget, bk) : S.steerTarget;
         return S.steer;
       },
       /** steering for time t with the lost-tracking policy applied: hold, then ease back to centre */
       read: function (t) {
         t = num(t, nowMs());
         var age = t - S.lastOk;
-        if (age <= holdMs) return { steer: S.steer, held: age > 60, lost: false };
-        var k = clamp((age - holdMs) / centreMs, 0, 1);
-        return { steer: S.steer * (1 - k), held: true, lost: true };
+        if (age <= holdMs) {
+          var bk = blendK(t), st = bk < 1 ? lerp(S.blend.steer, S.steerTarget, bk) : S.steerTarget != null ? S.steerTarget : S.steer;
+          return { steer: st, held: age > 60, lost: false, angleShown: bk < 1 ? lerp(S.blend.angle, S.target, bk) : S.angle };
+        }
+        var k = clamp((age - holdMs) / centreMs, 0, 1), base = S.steer;
+        return { steer: base * (1 - k), held: true, lost: true, angleShown: S.angle * (1 - k) };
       },
-      recentre: function () { if (S.unwrapped !== null) { S.centre = S.unwrapped; S.raw = 0; S.angle = 0; S.steer = 0; f.reset(); } else S._wantCentre = true; },
+      recentre: function () { if (S.unwrapped !== null) { S.centre = S.unwrapped; S.raw = 0; S.angle = 0; S.steer = 0; S.target = 0; S.steerTarget = 0; S.blend = null; f.reset(); S._fa = null; S._t = null; } else S._wantCentre = true; },
+      /** a new steer stage taking over from an old one (re-centre): start from what the game saw, ease to the new reading */
+      seed: function (steer, angle, t) { S.steer = S.steerTarget = num(steer, 0); S.angle = S.target = num(angle, 0); S.lastOk = num(t, nowMs()); S.everOk = true; S._seeded = true; },
+      /** forget the tracking state (camera stopped / restarted): the next reading relocks and eases in */
+      reset: function () { S.unwrapped = null; S.lastOk = -1e9; S.everOk = S.everOk || S.frames > 0; S.blend = null; S.steer = 0; S.angle = 0; S.target = 0; S.steerTarget = 0; S._fa = null; S._t = null; f.reset(); },
       setPrefs: function (p) { P = Object.assign(P, p || {}); f.set({ minCutoff: cutoffFor(P.smoothing) }); },
       prefs: function () { return P; }
     };
+    function blendK(t) {
+      if (!S.blend) return 1;
+      var k = easeMs > 0 ? clamp((t - S.blend.t0) / easeMs, 0, 1) : 1;
+      if (k >= 1) { if (t >= S.lastOk) S.blend = null; return 1; }
+      return ease(k);
+    }
     return S;
   }
 
@@ -813,6 +839,8 @@ CB.input = CB.input || {};
     if (B.nitroOn) setNitro(false);
     if (B.cd.active()) api.cancelCentre();
     if (B.pedals) B.pedals.reset();
+    if (B.solver) B.solver.reset();                    // a restarted camera identifies the hands afresh
+    if (B.steer && B.steer.reset) B.steer.reset();     // ... and eases in from centre (no stale unwrap / held value)
     if (!keepState) setState('off');
   };
   api.running = function () { return !!B.stream; };
@@ -824,7 +852,12 @@ CB.input = CB.input || {};
       if (!B.solver) {
         B.solver = H.createSolver();
         var hc = api.prefs.handCal;
-        if (hc) B.solver.cal = { two: hc.two, labels: hc.labels };
+        if (hc) {
+          // straight ahead = hands roughly level: an old calibration stored > 90 deg is the hands swapped (normalise)
+          var two = CW_wrap180(+hc.two || 0), lb = hc.labels;
+          if (Math.abs(two) > 90) { two = CW_wrap180(two + 180); lb = lb && lb.a && lb.b ? { a: lb.b, b: lb.a } : lb; }
+          B.solver.cal = { two: two, labels: lb };
+        }
       }
       if (!B.pedals && H.createPedals) { B.pedals = H.createPedals(); if (api.prefs.pedalCal) B.pedals.setCal(api.prefs.pedalCal); }
       if (!B.steer) { B.steer = createSteer(api.prefs); B.steer.centre = 0; }
@@ -1008,7 +1041,7 @@ CB.input = CB.input || {};
       if (!B.solver || !B.lastHands || !B.lastHands.ok) return { ok: false, reason: 'nohands', warnings: [] };
       var mode = B.lastHands.mode;
       B.solver.calibrate();
-      // remember which MediaPipe handedness label the left / right hand had (re-identifies crossed hands later)
+      // remember which MediaPipe handedness label the left / right hand had (diagnostics only: identity is geometric)
       var labels = null;
       if (mode === 'two' && B.lastHands.hands.length === 2) {
         var hs = B.lastHands.hands.slice().sort(function (p, q) { return p.x - q.x; });
@@ -1018,7 +1051,9 @@ CB.input = CB.input || {};
       var pc = null;
       if (B.pedals) { pc = B.pedals.calibrateNeutral(B.lastHands, { curl: !!(o && o.curl) }); }
       api.setPrefs({ handCal: { two: B.solver.cal ? B.solver.cal.two : 0, labels: B.solver.cal && B.solver.cal.labels || null }, pedalCal: B.pedals ? pedalCalOf() : api.prefs.pedalCal });
+      var was = B.steer ? B.steer.read(nowMs()) : null;
       B.steer = createSteer(api.prefs); B.steer.centre = 0;
+      if (was && !was.lost) B.steer.seed(was.steer, was.angleShown, nowMs());   // no snap at the re-centre
       if (B.autoCal) B.autoCal.pending = false;
       setState('tracking');
       return { ok: true, mode: mode === 'two' ? 'hands2' : 'hands1', warnings: [], open: pc && pc.open };

@@ -12,12 +12,15 @@
 
    Steering
      two hands  angle of the line from the left palm centre to the right palm centre (palm centre = mean of the wrist and
-                the four MCPs), like gripping the wheel at 9 and 3. Which hand is "left" follows position continuity (not
+                the four MCPs), like gripping the wheel at 9 and 3. Which hand is "left" follows angle continuity (not
                 the handedness labels), so turning past 90 deg, where the hands cross over, keeps going (period 360).
+                Re-acquired after a loss (> graceMs): identified by plausibility (within +-90 deg of straight ahead),
+                never on first sight at ~180 (see the consistency rules above createSolver).
      one hand   that hand's roll: the index-MCP -> pinky-MCP line and the wrist -> middle-MCP direction, each relative to
                 its neutral (calibrated, or taken when the other hand disappears), averaged.
-     switching  two <-> one hand never jumps: the new source is re-based onto the current angle, and that offset then
-                bleeds back to the source's own zero over ~0.5 s (so a long one-hand stint cannot drift).
+     switching  two <-> one hand never jumps: the new reading is chosen nearest the current angle and re-based onto
+                it (|offset| < 90, never a pi turn), and that offset then bleeds back to the source's own zero over
+                ~0.5 s (so a long one-hand stint cannot drift).
 
      ch.palm(lm, W, H) -> {x, y, size}      size = wrist -> middle-MCP length (px), for push / distance gestures
      ch.handRoll(lm, W, H) -> {a: deg (index->pinky MCP line), b: deg (wrist -> middle MCP)}
@@ -25,7 +28,7 @@
      ch.handScale(lm, wl, W, H) -> {s, world}   palm-only apparent scale (push / pull = distance), tilt-robust with wl
      ch.createPedals() -> P   hands-only throttle / brake / handbrake ('grip' default | 'auto' | 'push' | 'off'), see below
      ch.createSolver(opts?) -> S   S.update(hands, W, H, t) -> meas {ok, angle (deg, continuous), period: 360, conf,
-                                   mode:'two'|'one'|null, pts, hands}   S.calibrate() (current pose = centre)
+                                   mode:'two'|'one'|null, fresh, pts, hands}   S.calibrate() (current pose = centre)
                                    S.state()   hands: [{lm, score, label}] straight from the detector
      ch.gestures(meas, prefs, t, st) -> {throttle, nitro}   (nitro push; the old fists-throttle; off unless enabled)
    Browser
@@ -93,77 +96,104 @@ CB.input = CB.input || {};
   }
 
   /* ================================================================ solver: hands -> continuous wheel angle */
+  /* Consistency rules (the wheel must never come back from a loss at ~180 deg):
+     - identity (which hand is "a" = left at the wheel's straight-ahead pose) follows ANGLE continuity: between two
+       tracked frames the wheel cannot turn ~180 deg, so of the two possible assignments the one nearest the previous
+       angle wins (this also survives the detector swapping its output order, and hands crossing past 90 deg).
+     - after a loss of both hands for more than graceMs (or a hand's own track older than graceMs) nothing stale is
+       trusted: tracks, the unwrap state and the re-base offset start afresh, and the hands are identified by
+       plausibility: two hands -> the assignment whose (calibrated) angle is within +-90 deg; one hand -> by position,
+       unless that hand's roll then reads > 90 deg off while the other identity reads within 90. So |angle| > 90 is
+       only ever reached by continuous motion from a tracked state, never on first sight. (MediaPipe's handedness labels
+       are not used for this: they are from the camera's point of view, flip for the back of a hand and for some
+       rotations; geometry is more reliable.)
+     - one <-> two hands: the new reading is chosen nearest the current angle and re-based onto it (|offset| < 90,
+       never a pi turn), and the offset bleeds back to the source's own zero over ~rebaseMs.
+     - safety net: two hands held near-level but reading > flipDeg (i.e. upside down) for flipMs -> the identity is
+       swapped and the angle bleeds smoothly back towards straight ahead (a stale swap can never get stuck at 180).
+     meas.fresh = true on the first frame after a fresh (re-)acquisition: the steer stage relocks and eases in. */
   function createSolver(opts) {
     opts = opts || {};
-    var rebaseMs = num(opts.rebaseMs, 500);
+    var rebaseMs = num(opts.rebaseMs, 500), graceMs = num(opts.graceMs, 300);
+    var flipDeg = num(opts.flipDeg, 155), flipMs = num(opts.flipMs, 1500);
     var S = {
       mode: null, angle: 0, offset: 0, target: 0, lastT: null, tracks: null, cal: null,
-      neutral: {}, curls: [0, 0], sizes: [0, 0], baseSize: 0,
+      neutral: {}, curls: [0, 0], sizes: [0, 0], baseSize: 0, flipT: 0,
       /** hands: [{lm, score}]  ->  meas */
       update: function (hands, W, H, t) {
         t = num(t, nowMs());
         var dt = S.lastT == null ? 0 : clamp((t - S.lastT) / 1000, 0, 0.5);
         S.lastT = t;
-        if (S.seenT != null && t - S.seenT > 1500) S.reset();   // long gone: identify the hands afresh (left = a)
         hands = (hands || []).filter(function (h) { return h && h.lm && h.lm.length >= 21; });
         var cand = hands.map(function (h) { var p = palm(h.lm, W, H), sc = handScale(h.lm, h.wl, W, H); return { h: h, x: p.x, y: p.y, size: p.size, scale: sc.s, world: sc.world, roll: handRoll(h.lm, W, H), curl: curl(h.lm, h.wl), score: num(h.score, 1) }; });
-        // identity by continuity: which candidate is the tracked "a" (left at the start) and "b"
-        var a = null, b = null, T = S.tracks;
+        if (!cand.length) return { ok: false, conf: 0, mode: null, pts: [], hands: [] };
+        // gone longer than the grace window: identify the hands afresh (calibration and learnt neutrals stay)
+        var fresh = S.seenT == null || t - S.seenT > graceMs;
+        if (fresh) S.reset();
+        S.seenT = t;
+        var T = S.tracks;
+        if (T) {                                         // a hand's own track expires after the grace window too
+          if (T.a && t - T.a.t > graceMs) T.a = null;
+          if (T.b && t - T.b.t > graceMs) T.b = null;
+          if (!T.a && !T.b) T = null;
+        }
+        var calTwo = S.cal ? num(S.cal.two, 0) : 0;
+        var a = null, b = null, raw, mode, conf, prevMode = S.mode;
+        // reference angle for choosing between readings: tracked -> the current angle; fresh -> straight ahead
+        var tracked = prevMode !== null && !!T;
+        var ref = tracked ? (prevMode === 'two' && S._raw != null ? S._raw : S.angle) : 0;
         if (cand.length >= 2) {
           cand.sort(function (p, q) { return q.score - p.score; });
           var c0 = cand[0], c1 = cand[1];
-          if (T && T.a && T.b) {
-            var keep = dist(c0, T.a) + dist(c1, T.b), swap = dist(c0, T.b) + dist(c1, T.a);
-            if (keep <= swap) { a = c0; b = c1; } else { a = c1; b = c0; }
-          } else if (T && (T.a || T.b)) {
-            var known = T.a || T.b, near = dist(c0, known) <= dist(c1, known) ? c0 : c1, other = near === c0 ? c1 : c0;
-            if (T.a) { a = near; b = other; } else { b = near; a = other; }
-          } else {
-            // fresh start: the handedness labels learnt at calibration tell the hands apart even when crossed;
-            // otherwise the hand further left (as the player sees it) is "a"
-            var L = S.cal && S.cal.labels, la = c0.h.label, lb = c1.h.label;
-            if (L && la && lb && la !== lb && (la === L.a || la === L.b) && (lb === L.a || lb === L.b) && Math.min(c0.score, c1.score) >= 0.7) {
-              if (la === L.a) { a = c0; b = c1; } else { a = c1; b = c0; }
-            } else if (c0.x <= c1.x) { a = c0; b = c1; } else { a = c1; b = c0; }
-          }
-        } else if (cand.length === 1) {
-          var c = cand[0];
-          if (T && T.a && T.b) { if (dist(c, T.a) <= dist(c, T.b)) a = c; else b = c; }
-          else if (T && T.a) a = c; else if (T && T.b) b = c;
-          else if (S.cal && S.cal.ctr) { if (c.x < S.cal.ctr.x) a = c; else b = c; }
-          else a = c;
-        }
-        S.tracks = { a: a ? { x: a.x, y: a.y } : (cand.length ? null : T && T.a), b: b ? { x: b.x, y: b.y } : (cand.length ? null : T && T.b) };
-        if (!cand.length) { S.tracks = T; return { ok: false, conf: 0, mode: null, pts: [], hands: [] }; }
-        S.seenT = t;
-        var raw, mode, conf;
-        if (a && b) {
+          var r0 = ang(c0, c1) - calTwo;                  // a = c0, b = c1; the swapped assignment reads r0 + 180
+          // (a near tie, e.g. a 90 deg change across a dropout, goes to the reading nearer straight ahead)
+          var d0 = Math.abs(wrap180(r0 - ref)) + implaus(r0), d1 = Math.abs(wrap180(r0 + 180 - ref)) + implaus(r0 + 180);
+          if (d0 <= d1) { a = c0; b = c1; raw = r0; } else { a = c1; b = c0; raw = r0 + 180; }
           mode = 'two';
-          raw = ang(a, b) - (S.cal ? S.cal.two : 0);
+          // safety net: near-level hands that read upside down for a while are a stale swap, not a 180 deg turn
+          if (Math.abs(wrap180(raw)) > flipDeg) S.flipT += dt * 1000; else S.flipT = 0;
+          if (S.flipT >= flipMs) {
+            var tmp = a; a = b; b = tmp; raw = wrap180(raw + 180); S.flipT = 0;
+            S.offset = S.angle - raw; S._raw = raw; S._flipped = true;
+          }
           conf = Math.min(a.score, b.score);
-          // remember each hand's roll at this angle: the neutral used if that hand is later alone
-          S.neutral.a = { a: a.roll.a - raw, b: a.roll.b - raw, learnt: true };
-          S.neutral.b = { a: b.roll.a - raw, b: b.roll.b - raw, learnt: true };
           S.size = (a.size + b.size) / 2;
         } else {
-          mode = 'one';
-          var one = a || b, key = a ? 'a' : 'b', n = S.neutral[key];
-          if (!n) n = S.neutral[key] = { a: one.roll.a - S.angle, b: one.roll.b - S.angle, learnt: false };
+          var c = cand[0], key;
+          if (T && T.a && T.b) key = dist(c, T.a) <= dist(c, T.b) ? 'a' : 'b';
+          else if (T && (T.a || T.b)) key = T.a ? 'a' : 'b';
+          else { var cx = S.cal && S.cal.ctr ? S.cal.ctr.x : W / 2; key = c.x < cx ? 'a' : 'b'; }
+          // plausibility: the identity whose roll reads nearest the reference (the wrong hand's neutral is ~180 off)
+          var rk = oneRaw(c, key), other = key === 'a' ? 'b' : 'a', ro = S.neutral[other] ? oneRaw(c, other) : null;
+          if (ro != null && Math.abs(wrap180(rk - ref)) > 90 && Math.abs(wrap180(ro - ref)) < Math.abs(wrap180(rk - ref))) { key = other; rk = ro; }
+          if (key === 'a') a = c; else b = c;
+          var n = S.neutral[key];
+          if (!n) n = S.neutral[key] = { a: c.roll.a - S.angle, b: c.roll.b - S.angle, learnt: false };
           S.guessed = !n.learnt;
-          var da = wrap180(one.roll.a - n.a), db = wrap180(one.roll.b - n.b);
-          // the two estimates agree for a rigid hand; a mean of both halves the noise
-          raw = Math.abs(wrap180(da - db)) < 40 ? da + wrap180(db - da) / 2 : da;
-          conf = one.score * 0.8;
-          S.size = one.size;
+          raw = oneRaw(c, key);
+          mode = 'one'; S.flipT = 0;
+          conf = c.score * 0.8;
+          S.size = c.size;
+        }
+        var nt = { a: T && T.a, b: T && T.b };
+        if (a) nt.a = { x: a.x, y: a.y, t: t };
+        if (b) nt.b = { x: b.x, y: b.y, t: t };
+        S.tracks = nt;
+        if (mode === 'two') {
+          // remember each hand's roll at this angle: the neutral used if that hand is later alone
+          var rr = wrap180(raw);
+          S.neutral.a = { a: a.roll.a - rr, b: a.roll.b - rr, learnt: true };
+          S.neutral.b = { a: b.roll.a - rr, b: b.roll.b - rr, learnt: true };
         }
         // continuity across the 360 wrap (within one source); a new source is unwrapped next to the current angle
-        var switched = mode !== S.mode;
-        if (switched || S._raw == null) { var ref = S.mode ? S.angle : 0; raw = ref + wrap180(raw - ref); }
+        var switched = mode !== prevMode;
+        if (S._flipped) S._flipped = false;
+        else if (switched || S._raw == null) { var rf = prevMode ? S.angle : 0; raw = rf + wrap180(raw - rf); }
         else raw = S._raw + wrap180(raw - S._raw);
         S._raw = raw;
-        // re-base: the new source starts exactly where the wheel is now (a small residual, never a whole turn)
-        // (one -> two after a one-hand start whose neutral was only a guess: the two-hand angle is absolute, take it)
-        if (switched && S.mode !== null) S.offset = mode === 'two' && S.guessed ? 0 : S.angle - raw;
+        // re-base: the new source starts exactly where the wheel is now (the readings were chosen nearest the
+        // current angle, so this is a small residual < 90 deg, never a half or whole turn)
+        if (switched && prevMode !== null) S.offset = S.angle - raw;
         if (mode === 'two') S.guessed = false;
         S.mode = mode;
         // the re-base offset bleeds back to zero (two hands: absolute angle; one hand: its neutral)
@@ -171,8 +201,8 @@ CB.input = CB.input || {};
         S.angle = raw + S.offset;
         S.curls = [a ? a.curl : null, b ? b.curl : null];
         return {
-          ok: true, angle: S.angle, period: 360, conf: conf, mode: mode,
-          pts: [a, b].map(function (c, i) { return c && { id: i ? 'b' : 'a', x: c.x, y: c.y, size: c.size, scale: c.scale, world: c.world, curl: c.curl }; }).filter(Boolean),
+          ok: true, angle: S.angle, period: 360, conf: conf, mode: mode, fresh: fresh,
+          pts: [a, b].map(function (cc, i) { return cc && { id: i ? 'b' : 'a', x: cc.x, y: cc.y, size: cc.size, scale: cc.scale, world: cc.world, curl: cc.curl }; }).filter(Boolean),
           hands: cand
         };
       },
@@ -181,16 +211,37 @@ CB.input = CB.input || {};
         var T = S.tracks;
         if (!T) return false;
         S.cal = S.cal || { two: 0 };
-        if (S.mode === 'two') { S.cal.two += S.angle; S.cal.ctr = T.a && T.b ? { x: (T.a.x + T.b.x) / 2, y: (T.a.y + T.b.y) / 2 } : S.cal.ctr; }
+        if (S.mode === 'two') {
+          var two = wrap180(num(S.cal.two, 0) + S.angle);
+          // straight ahead = hands roughly level: a calibration reading > 90 deg means the identity is swapped
+          if (Math.abs(two) > 90) { two = wrap180(two + 180); swapIds(); }
+          S.cal.two = two;
+          T = S.tracks;
+          S.cal.ctr = T.a && T.b ? { x: (T.a.x + T.b.x) / 2, y: (T.a.y + T.b.y) / 2 } : S.cal.ctr;
+        }
         else if (S.mode === 'one') { var key = T.a ? 'a' : 'b', n = S.neutral[key]; if (n) { n.a += S.angle; n.b += S.angle; } }
         S.baseSize = S.size || S.baseSize;
-        S._raw = null; S.offset = 0; S.angle = 0;
+        S._raw = null; S.offset = 0; S.angle = 0; S.flipT = 0;
         return true;
       },
-      reset: function () { S.tracks = null; S.mode = null; S._raw = null; S.offset = 0; S.angle = 0; S.seenT = null; },
+      reset: function () { S.tracks = null; S.mode = null; S._raw = null; S.offset = 0; S.angle = 0; S.seenT = null; S.flipT = 0; },
       state: function () { return { mode: S.mode, angle: S.angle, offset: S.offset, cal: S.cal, neutral: S.neutral }; }
     };
     function dist(c, p) { return Math.hypot(c.x - p.x, c.y - p.y); }
+    function implaus(r) { return 0.25 * Math.max(0, Math.abs(wrap180(r)) - 90); }
+    // one hand's roll relative to the neutral of identity `key` (index->pinky line and wrist->middle MCP, averaged)
+    function oneRaw(c, key) {
+      var n = S.neutral[key];
+      if (!n) return 0;
+      var da = wrap180(c.roll.a - n.a), db = wrap180(c.roll.b - n.b);
+      // the two estimates agree for a rigid hand; a mean of both halves the noise
+      return Math.abs(wrap180(da - db)) < 40 ? da + wrap180(db - da) / 2 : da;
+    }
+    function swapIds() {
+      var T = S.tracks; if (T) S.tracks = { a: T.b, b: T.a };
+      var na = S.neutral.a; S.neutral.a = S.neutral.b; S.neutral.b = na;
+      if (S.cal && S.cal.labels) S.cal.labels = { a: S.cal.labels.b, b: S.cal.labels.a };
+    }
     return S;
   }
 
