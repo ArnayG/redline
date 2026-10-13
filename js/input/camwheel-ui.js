@@ -1,0 +1,603 @@
+/* ==========================================================================
+   FORGE — js/input/camwheel-ui.js
+   CB.input.camUI : the browser UI for the webcam air wheel (js/input/camwheel.js + js/input/camwheel-hands.js).
+     camUI.open()     "Use webcam as wheel" dialog: mirrored live preview with the hand landmarks and a drawn virtual
+                      wheel, Calibrate (2-1, or Space; it also centres itself after ~1 s of steady, level hands),
+                      Centre (C), camera picker, full lock / dead zone / smoothing, live status (fps, inference ms,
+                      GPU / CPU, confidence, delay). Advanced: optional gestures (fists = throttle, push = nitro), CPU
+                      mode, and the colour-marker fallback (marker mode) with its calibration boxes and mask view.
+     camUI.close()    camUI.menuItems()  (pause menu)   camUI.detailHTML()  (steering-source picker)
+   Steering-source picker: registers itself as the 'webcam' source of CB.input.sources (js/input/sources.js) when that
+   module is loaded; otherwise it adds its own entries to CB.input.ui's pause menu / setup row / Settings rows.
+   While driving, a small picture-in-picture preview (toggleable) shows what the camera tracks and the wheel angle.
+   Frames are processed in this tab only: nothing is uploaded or recorded.
+   ========================================================================== */
+var CB = (globalThis.CB = globalThis.CB || {});
+if (typeof window !== 'undefined') window.CB = CB;
+CB.input = CB.input || {};
+
+(function () {
+  'use strict';
+  if (typeof document === 'undefined' || typeof window === 'undefined') { CB.input.camUI = CB.input.camUI || {}; return; }
+
+  function CW() { return CB.input.camwheel; }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function el(tag, cls, html) { var n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
+  function toast(t, k) { var u = CB.input.ui; if (u && u.toast) u.toast(t, k); }
+  function handsMode() { var cw = CW(); return !cw || cw.prefs.method !== 'marker'; }
+
+  var ICON = {
+    cam: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6.5" width="13" height="11" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>',
+    close: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+  var CSS = [
+    '.cw-ov{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:16px;background:rgba(5,5,7,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:var(--font,system-ui,sans-serif);color:var(--text,#ecebe6)}',
+    '.cw-card{position:relative;width:min(980px,100%);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;background:var(--panel,#141519);border:1px solid var(--line,#2b2c33);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}',
+    '.cw-left{padding:20px;border-right:1px solid var(--line,#2b2c33);background:rgba(0,0,0,.2);display:flex;flex-direction:column;gap:12px;min-width:0}',
+    '.cw-right{padding:22px 22px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}',
+    '.cw-view{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#000;display:grid;place-items:center}',
+    '.cw-view canvas{position:absolute;inset:0;width:100%;height:100%}',
+    '.cw-view .cw-msg{position:relative;z-index:2;padding:20px;text-align:center;font-size:13.5px;line-height:1.5;color:#ddd;max-width:420px}',
+    '.cw-count{position:absolute;inset:0;z-index:3;display:grid;place-items:center;font:800 96px/1 var(--font,system-ui);color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.6);pointer-events:none}',
+    '.cw-count:empty{display:none}',
+    '.cw-eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent,#c9a56b);font-weight:700}',
+    '.cw-h{margin:2px 0 0;font-size:23px;line-height:1.15;font-weight:700}',
+    '.cw-dim{color:var(--text-dim,#9b9890);font-size:12.5px;line-height:1.5}',
+    '.cw-steps{margin:0;padding-left:20px;display:grid;gap:5px;font-size:13px;line-height:1.45}',
+    '.cw-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+    '.cw-btn{appearance:none;display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line,#2b2c33);background:var(--panel-2,#1b1c21);color:var(--text,#ecebe6);font:600 13px var(--font,system-ui);cursor:pointer}',
+    '.cw-btn:hover{border-color:var(--accent,#c9a56b)} .cw-btn.primary{background:var(--accent,#c9a56b);color:var(--accent-ink,#17130b);border-color:transparent}',
+    '.cw-btn.ghost{background:transparent} .cw-btn[disabled]{opacity:.5;cursor:not-allowed}',
+    '.cw-btn kbd{font:600 10.5px var(--mono,ui-monospace,monospace);padding:1px 5px;border-radius:4px;border:1px solid currentColor;opacity:.7}',
+    '.cw-x{position:absolute;top:12px;right:12px;z-index:4}',
+    '.cw-seg{display:inline-flex;border:1px solid var(--line,#2b2c33);border-radius:10px;overflow:hidden;flex-wrap:wrap}',
+    '.cw-seg button{appearance:none;border:0;background:transparent;color:var(--text-dim,#9b9890);padding:8px 12px;font:600 12.5px var(--font,system-ui);cursor:pointer}',
+    '.cw-seg button.is-on{background:var(--accent-softer,rgba(201,165,107,.16));color:var(--text-strong,#fff)}',
+    '.cw-status{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line,#2b2c33);background:rgba(255,255,255,.025);font-size:13px;font-variant-numeric:tabular-nums;line-height:1.4}',
+    '.cw-dot{width:10px;height:10px;border-radius:50%;background:var(--warn,#e3a33a);box-shadow:0 0 0 4px rgba(227,163,58,.15);flex:none}',
+    '.cw-dot.ok{background:var(--good,#3fbf7f);box-shadow:0 0 0 4px rgba(63,191,127,.15)} .cw-dot.bad{background:var(--bad,#e5484d);box-shadow:0 0 0 4px rgba(229,72,77,.15)}',
+    '.cw-bar{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden}',
+    '.cw-bar::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3)}',
+    '.cw-bar i{position:absolute;top:0;bottom:0;left:50%;width:0;background:var(--accent,#c9a56b)}',
+    '.cw-range{display:grid;grid-template-columns:110px 1fr 52px;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim,#9b9890)} .cw-range b{color:var(--text,#ecebe6);font-variant-numeric:tabular-nums;text-align:right}',
+    '.cw-warn{padding:9px 12px;border-radius:10px;border:1px solid rgba(227,163,58,.35);background:rgba(227,163,58,.08);font-size:12.5px;line-height:1.45}',
+    '.cw-warn:empty{display:none} .cw-warn p{margin:0} .cw-warn p+p{margin-top:6px}',
+    '.cw-ok{border-color:rgba(63,191,127,.35);background:rgba(63,191,127,.08)}',
+    '.cw-priv{font-size:11.5px;color:var(--text-dim,#9b9890);line-height:1.45;display:flex;gap:8px;align-items:flex-start}',
+    '.cw-sel{min-height:34px;border-radius:8px;border:1px solid var(--line,#2b2c33);background:var(--bg-2,#111114);color:var(--text,#ecebe6);font:12.5px var(--font,system-ui);padding:0 8px;max-width:100%}',
+    '.cw-check{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text,#ecebe6)}',
+    '.cw-adv{border:1px solid var(--line,#2b2c33);border-radius:10px;padding:8px 12px} .cw-adv summary{cursor:pointer;font-size:12.5px;color:var(--text-dim,#9b9890);font-weight:600}',
+    '.cw-advb{display:grid;gap:8px;padding-top:10px}',
+    '@media (max-width:820px){.cw-card{grid-template-columns:1fr}.cw-left{border-right:0;border-bottom:1px solid var(--line,#2b2c33)}}',
+    /* picture-in-picture while driving */
+    '.cw-pip{position:fixed;left:16px;bottom:calc(30% + 8px);z-index:2147481000;width:176px;border-radius:10px;overflow:hidden;background:rgba(8,9,11,.7);border:1px solid rgba(255,255,255,.2);box-shadow:0 6px 20px rgba(0,0,0,.4);pointer-events:none;font:700 10.5px var(--font,system-ui,sans-serif);color:#fff}',
+    '.cw-pip canvas{display:block;width:100%;aspect-ratio:4/3}',
+    '.cw-pip .cw-pl{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 7px;letter-spacing:.06em;font-variant-numeric:tabular-nums}',
+    '.cw-pip.lost{border-color:var(--bad,#e5484d)} .cw-pip.lost .cw-pl{background:rgba(229,72,77,.35)}',
+    '.cw-pip button{pointer-events:auto;appearance:none;border:0;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;padding:0 2px;font:700 12px var(--font,system-ui)}'
+  ].join('\n');
+  function ensureCss() {
+    if (document.getElementById('cw-css')) return;
+    var s = document.createElement('style'); s.id = 'cw-css'; s.textContent = CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  var REASONS = {
+    insecure: 'The camera only works on secure pages. Open the game from its <b>https://</b> address (or <code>http://localhost</code> with <code>node tools/dev-server.js</code>). Plain http on the network cannot use the webcam.',
+    file: 'The webcam wheel cannot run from a file opened on disk (browsers block the camera and the hand-tracking model there). Open the game from its <b>https://</b> address, or run <code>node tools/dev-server.js</code> and open <code>http://localhost:8080</code>.',
+    unsupported: 'This browser has no camera API (getUserMedia). Try a current Chrome, Edge, Firefox or Safari.',
+    denied: 'Camera access was blocked. Allow the camera for this site (the camera icon in the address bar) and press <b>Start camera</b> again.',
+    notfound: 'No camera found. Plug in a webcam or pick another camera.',
+    busy: 'The camera is in use by another app (video call?) or could not start. Close that app and press <b>Start camera</b>.',
+    ended: 'The camera stopped (unplugged or taken by another app). Press <b>Start camera</b> to try again.',
+    error: 'The camera could not start. Press <b>Start camera</b> to try again.'
+  };
+  var MODEL_FAIL = {
+    file: REASONS.file,
+    nowasm: 'This browser cannot run WebAssembly, which hand tracking needs. Try a current Chrome, Edge, Firefox or Safari.',
+    load: 'Hand tracking could not load (vendor/mediapipe/ missing or blocked?). Reload the page to try again.',
+    missing: 'Hand tracking is not part of this build.'
+  };
+  var WARN = {
+    skin: 'This colour is close to skin, so hands, arms or your face can confuse the tracker. A blue, green or magenta object works better.',
+    dull: 'The colour is quite pale. A brighter, more colourful object tracks better.',
+    clutter: 'Something else of the same colour is in view (switch on <b>Show mask</b> to see it). Move it out of the picture or use another colour.',
+    round: 'This object looks round. For <b>One bar</b> hold something long and thin, or switch to <b>Two markers</b>.',
+    small: 'The markers look small. Move a little closer or use bigger markers.'
+  };
+  var FAIL = {
+    nohands: 'No hands in view. Hold both hands up in front of the camera, as if gripping a steering wheel, and try again.',
+    skin: 'Marker mode needs a coloured object: that looks like bare skin. (For bare hands, switch marker mode off.)',
+    dull: 'The colour in the box is too grey or pale to track. Hold a brightly coloured object inside the dashed box(es).',
+    nothing: 'No colourful object found in the box. Hold it inside the dashed box (or boxes), level, and try again.',
+    merged: 'The two markers touch. Hold them apart, like your hands on a wheel.',
+    noframe: 'No camera picture yet. Wait for the preview, then calibrate.'
+  };
+
+  /* ---------------------------------------------------------------- overlay drawing */
+  var BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
+  /** hands: landmark skeletons + a virtual steering wheel through the two palm centres, turned by the steering angle */
+  function drawHands(g, W, H, cw, opts) {
+    var B = cw._b, m = B.lastHands, st = B.steer;
+    var lost = !st || st.read(performance.now()).lost;
+    g.save();
+    var lw = Math.max(1.5, W / 320);
+    if (m && m.hands) {
+      m.hands.forEach(function (c) {
+        var lm = c.h.lm;
+        g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = lw;
+        g.beginPath();
+        BONES.forEach(function (b) { g.moveTo((1 - lm[b[0]].x) * W, lm[b[0]].y * H); g.lineTo((1 - lm[b[1]].x) * W, lm[b[1]].y * H); });
+        g.stroke();
+        g.fillStyle = '#c9a56b';
+        for (var i = 0; i < 21; i++) { g.beginPath(); g.arc((1 - lm[i].x) * W, lm[i].y * H, lw * 1.6, 0, Math.PI * 2); g.fill(); }
+      });
+    }
+    var vw = B.camW || W, sx = W / vw, sy = H / (B.camH || H);
+    if (m && m.ok && st) {
+      var col = lost ? '#e5484d' : m.mode === 'two' ? '#3fbf7f' : '#e3a33a';
+      var a = st.angle * Math.PI / 180, cx, cy, r;
+      if (m.mode === 'two' && m.pts.length === 2) {
+        cx = (m.pts[0].x + m.pts[1].x) / 2 * sx; cy = (m.pts[0].y + m.pts[1].y) / 2 * sy;
+        r = Math.hypot((m.pts[1].x - m.pts[0].x) * sx, (m.pts[1].y - m.pts[0].y) * sy) / 2;
+      } else {
+        var p = m.pts[0]; r = Math.max(W * 0.12, p.size * sx * 1.6);
+        // one hand on the rim at 9 or 3 o'clock: the hub is beside it
+        var side = B.solver && B.solver.tracks && B.solver.tracks.a ? 1 : -1;
+        cx = p.x * sx + side * Math.cos(a) * r; cy = p.y * sy + side * Math.sin(a) * r;
+      }
+      g.strokeStyle = col; g.lineWidth = Math.max(3, W / 110); g.globalAlpha = 0.9;
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+      // spokes: 9-3 bar + the bottom spoke, turned with the wheel; a marker at the top
+      g.lineWidth = Math.max(2, W / 200);
+      g.beginPath(); g.moveTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r); g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+      g.moveTo(cx, cy); g.lineTo(cx - Math.sin(a) * r, cy + Math.cos(a) * r); g.stroke();
+      g.fillStyle = col; g.beginPath(); g.arc(cx + Math.sin(a) * r, cy - Math.cos(a) * r, Math.max(4, W / 90), 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(cx, cy, Math.max(4, W / 80), 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1;
+      if (opts.label !== false) {
+        g.font = '700 ' + Math.round(H * (opts.small ? 0.11 : 0.055)) + 'px system-ui,sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff';
+        g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 4;
+        g.fillText((st.angle >= 0 ? '+' : '') + Math.round(st.angle) + '°', cx, cy - Math.max(16, r * 0.25));
+      }
+    }
+    g.restore();
+  }
+  /** marker mode: mask, calibration boxes, tracked blobs */
+  function drawMarkers(g, W, H, cw, opts) {
+    var B = cw._b, T = B.tracker, sx = W / (B.w || 1), sy = H / (B.h || 1);
+    if (opts.mask && T && T.clusters && T.clusters.work) {
+      var cls = T.clusters.work.cls, n = B.w * B.h;
+      if (!opts._mimg || opts._mimg.width !== B.w || opts._mimg.height !== B.h) { opts._mc = document.createElement('canvas'); opts._mc.width = B.w; opts._mc.height = B.h; opts._mimg = opts._mc.getContext('2d').createImageData(B.w, B.h); }
+      var d = opts._mimg.data;
+      for (var i = 0; i < n; i++) { var c = cls[i], j = i * 4; d[j] = c & 2 ? 60 : c ? 255 : 0; d[j + 1] = c & 2 ? 200 : c ? 40 : 0; d[j + 2] = c & 2 ? 255 : c ? 230 : 0; d[j + 3] = c ? 200 : 110; }
+      opts._mc.getContext('2d').putImageData(opts._mimg, 0, 0);
+      g.imageSmoothingEnabled = false; g.drawImage(opts._mc, 0, 0, W, H); g.imageSmoothingEnabled = true;
+    }
+    if (opts.boxes) {
+      g.save(); g.setLineDash([8, 6]); g.lineWidth = 2.5; g.strokeStyle = 'rgba(255,255,255,.9)';
+      opts.boxes.forEach(function (b) { g.strokeRect(b.x * W, b.y * H, b.w * W, b.h * H); });
+      g.setLineDash([]); g.fillStyle = 'rgba(255,255,255,.92)'; g.font = '600 ' + Math.round(H * 0.04) + 'px system-ui,sans-serif'; g.textAlign = 'center';
+      if (opts.boxes.length === 2) { g.fillText('left marker', (opts.boxes[0].x + opts.boxes[0].w / 2) * W, opts.boxes[0].y * H - 8); g.fillText('right marker', (opts.boxes[1].x + opts.boxes[1].w / 2) * W, opts.boxes[1].y * H - 8); }
+      else g.fillText('hold the bar level in the box', 0.5 * W, opts.boxes[0].y * H - 8);
+      g.restore();
+    }
+    var m = T && T.last;
+    if (m && m.pts && m.pts.length) {
+      g.save(); g.lineWidth = Math.max(2, W / 160);
+      var col = m.ok ? (m.partial ? '#e3a33a' : '#3fbf7f') : '#e5484d';
+      g.strokeStyle = col; g.fillStyle = col;
+      m.pts.forEach(function (p) { var r = Math.max(6, Math.sqrt(p.n / Math.PI) * sx); g.beginPath(); g.arc(p.x * sx, p.y * sy, r, 0, Math.PI * 2); g.stroke(); });
+      if (m.ok) {
+        var c2 = m.centre || m.pts[0], a = (B.steer ? B.steer.unwrapped : m.angle) * Math.PI / 180, L = (m.pts.length > 1 ? Math.hypot(m.pts[1].x - m.pts[0].x, m.pts[1].y - m.pts[0].y) / 2 : (m.len || 30) / 2) * sx;
+        if (m.pts.length === 2) { g.beginPath(); g.moveTo(m.pts[0].x * sx, m.pts[0].y * sy); g.lineTo(m.pts[1].x * sx, m.pts[1].y * sy); g.stroke(); }
+        else { g.beginPath(); g.moveTo(c2.x * sx - Math.cos(a) * L, c2.y * sy - Math.sin(a) * L); g.lineTo(c2.x * sx + Math.cos(a) * L, c2.y * sy + Math.sin(a) * L); g.stroke(); }
+        g.beginPath(); g.arc(c2.x * sx, c2.y * sy, Math.max(3, W / 120), 0, Math.PI * 2); g.fill();
+        if (opts.label !== false && B.steer) {
+          g.font = '700 ' + Math.round(H * (opts.small ? 0.11 : 0.05)) + 'px system-ui,sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff';
+          g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 4;
+          g.fillText((B.steer.angle >= 0 ? '+' : '') + Math.round(B.steer.angle) + '°', c2.x * sx, c2.y * sy - Math.max(14, H * 0.06));
+        }
+      }
+      g.restore();
+    }
+  }
+  function drawOverlay(g, W, H, cw, opts) { if (cw.prefs.method === 'marker') drawMarkers(g, W, H, cw, opts); else drawHands(g, W, H, cw, opts); }
+  /** the camera picture, mirrored (the player's view) */
+  function drawVideo(g, W, H, vid) { g.save(); g.setTransform(-1, 0, 0, 1, W, 0); g.drawImage(vid, 0, 0, W, H); g.restore(); }
+
+  /* ---------------------------------------------------------------- dialog */
+  var dlg = null;
+  function close() {
+    if (!dlg) return;
+    var d = dlg; dlg = null;
+    if (d.offs) d.offs.forEach(function (f) { try { f(); } catch (e) { /* ignore */ } });
+    if (d.raf) cancelAnimationFrame(d.raf);
+    if (d.countT) clearInterval(d.countT);
+    window.removeEventListener('keydown', d.key, true);
+    if (d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
+    var cw = CW();
+    if (cw && !cw.enabled()) cw.stop();                  // never switched on: camera off again
+    refreshPicker();
+    pipSync();
+  }
+  function delayText(st) { return st.latency != null ? ' · delay ~' + Math.round(st.latency) + ' ms' : st.pageLatency != null ? ' · delay ~' + Math.round(st.pageLatency) + ' ms' : ''; }
+  function statusLine(cw) {
+    var st = cw.stats(), s = st.state, hm = st.method === 'hands';
+    if (s === 'off') return { cls: '', text: 'Camera off' };
+    if (s === 'starting') return { cls: '', text: 'Starting the camera… allow camera access if your browser asks.' };
+    if (s === 'error') return { cls: 'bad', text: 'Camera not available' };
+    if (hm) {
+      var M = cw.model();
+      if (M.state === 'loading' || M.state === 'idle') return { cls: '', text: 'Loading hand tracking (about 19 MB, only the first time)…' };
+      if (M.state === 'error') return { cls: 'bad', text: 'Hand tracking could not load' };
+      var info = (st.fps || 0) + ' fps · ' + (st.inferMs != null ? st.inferMs.toFixed(1) : '—') + ' ms (' + (st.delegate === 'GPU' ? 'GPU' : 'CPU') + ')' + delayText(st);
+      if (st.lost) return { cls: 'bad', text: (st.hands ? 'Hold both hands up like a wheel' : 'No hands in view: hold them up in front of the camera') + ' · ' + info };
+      return { cls: 'ok', text: (st.handMode === 'two' ? 'Two hands' : 'One hand') + ' · ' + Math.round(st.conf * 100) + '% · ' + info };
+    }
+    var inf = (st.fps || 0) + ' fps · ' + (st.procMs != null ? st.procMs.toFixed(1) : '—') + ' ms/frame' + delayText(st);
+    if (!st.calibrated || s === 'calibrate') return { cls: '', text: 'Marker mode: not calibrated yet · ' + inf };
+    if (st.lost) return { cls: 'bad', text: 'Lost: show the marker(s) to the camera · ' + inf };
+    return { cls: 'ok', text: 'Tracking markers · ' + Math.round(st.conf * 100) + '% · ' + inf };
+  }
+  function open() {
+    var cw = CW();
+    if (!cw) return null;
+    ensureCss();
+    if (dlg) close();
+    var P = cw.prefs;
+    var ov = el('div', 'cw-ov'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Use webcam as wheel');
+    var card = el('div', 'cw-card'), left = el('div', 'cw-left'), right = el('div', 'cw-right');
+    var view = el('div', 'cw-view'), cv = el('canvas'), msg = el('div', 'cw-msg', 'Starting the camera…'), count = el('div', 'cw-count', '');
+    cv.width = 640; cv.height = 480;
+    view.appendChild(cv); view.appendChild(msg); view.appendChild(count);
+    left.appendChild(view);
+    var meter = el('div', '', '<div class="cw-range"><span>Steering</span><div class="cw-bar"><i></i></div><b data-k="ang">—</b></div>');
+    left.appendChild(meter);
+    var tools = el('div', 'cw-row');
+    tools.innerHTML = '<button class="cw-btn primary" type="button" data-k="cal">Calibrate <kbd>Space</kbd></button>' +
+      '<button class="cw-btn" type="button" data-k="ctr">Centre <kbd>C</kbd></button>' +
+      '<label class="cw-check" data-marker><input type="checkbox" data-k="mask"> Show mask</label>';
+    left.appendChild(tools);
+    left.appendChild(el('div', 'cw-priv', ICON.cam + '<span>Your video stays on this computer: frames are analysed in this tab and are never uploaded, saved or shared. The camera turns off when you switch the webcam wheel off or leave the page.</span>'));
+    var head = el('div', '');
+    var steps = el('div', '');
+    function renderText() {
+      var hm = handsMode();
+      head.innerHTML = '<div class="cw-eyebrow">Webcam air wheel</div><h2 class="cw-h">' + (hm ? 'Steer with your hands' : 'Marker mode') + '</h2>';
+      steps.innerHTML = hm ?
+        '<ol class="cw-steps"><li>Sit back so the camera sees your face and both hands.</li>' +
+        '<li>Hold your hands up as if gripping a steering wheel at <b>9 and 3 o\'clock</b>. Keep them still for a second: the wheel centres itself (or press <b>Calibrate</b>).</li>' +
+        '<li>Turn the imaginary wheel to steer. One hand works too: tilt it like a wheel. Throttle and brake stay on the keyboard or gamepad.</li></ol>' +
+        '<div class="cw-dim">Hands not found? Show your open palms to the camera for a moment, then close them into the grip. Even light from the front helps.</div>' :
+        '<ol class="cw-steps"><li>Hold a brightly coloured marker in each hand (or one coloured bar).</li>' +
+        '<li>Hold them level inside the dashed box(es) and press <b>Calibrate</b> (3-2-1).</li>' +
+        '<li>Turn them like a steering wheel. <b>Centre</b> sets straight ahead.</li></ol>';
+      Array.prototype.forEach.call(card.querySelectorAll('[data-marker]'), function (n) { n.style.display = hm ? 'none' : ''; });
+    }
+    var seg = el('div', 'cw-seg'); seg.setAttribute('data-marker', '');
+    [['pair', 'Two markers'], ['bar', 'One bar']].forEach(function (s) {
+      var b = el('button', P.style === s[0] ? 'is-on' : '', esc(s[1])); b.type = 'button'; b.setAttribute('data-style', s[0]);
+      seg.appendChild(b);
+    });
+    var camRow = el('div', 'cw-row'); camRow.style.display = 'none';
+    camRow.innerHTML = '<span class="cw-dim">Camera</span><select class="cw-sel" data-k="dev"></select>';
+    var startRow = el('div', 'cw-row'); startRow.style.display = 'none';
+    startRow.innerHTML = '<button class="cw-btn primary" type="button" data-k="start">' + ICON.cam + ' Start camera</button>';
+    var warn = el('div', 'cw-warn');
+    var status = el('div', 'cw-status', '<span class="cw-dot"></span><span>Starting…</span>');
+    var tune = el('div', '');
+    tune.style.cssText = 'display:grid;gap:8px';
+    tune.innerHTML = '<label class="cw-range"><span>Full lock at</span><input type="range" min="20" max="180" step="5" value="' + P.maxAngle + '" data-p="maxAngle"><b>' + P.maxAngle + '°</b></label>' +
+      '<label class="cw-range"><span>Dead zone</span><input type="range" min="0" max="10" step="0.5" value="' + P.deadzone + '" data-p="deadzone"><b>' + P.deadzone + '°</b></label>' +
+      '<label class="cw-range"><span>Smoothing</span><input type="range" min="0" max="1" step="0.05" value="' + P.smoothing + '" data-p="smoothing"><b>' + Math.round(P.smoothing * 100) + '%</b></label>' +
+      '<label class="cw-check"><input type="checkbox" data-k="pip"' + (P.pip ? ' checked' : '') + '> Show the camera preview while driving</label>';
+    var adv = el('details', 'cw-adv');
+    adv.innerHTML = '<summary>Advanced</summary><div class="cw-advb">' +
+      '<label class="cw-check"><input type="checkbox" data-g="gestureThrottle"' + (P.gestureThrottle ? ' checked' : '') + '> Gesture throttle: both fists closed = accelerate, open hands = coast</label>' +
+      '<label class="cw-check"><input type="checkbox" data-g="gestureNitro"' + (P.gestureNitro ? ' checked' : '') + '> Gesture nitro (Arcade): push your hands quickly towards the camera</label>' +
+      '<label class="cw-check"><input type="checkbox" data-g="lookahead"' + (P.lookahead ? ' checked' : '') + '> Lookahead (cancels the smoothing delay while turning)</label>' +
+      '<label class="cw-check"><input type="checkbox" data-g="cpu"' + (P.cpu ? ' checked' : '') + '> Run hand tracking on the CPU (if the GPU misbehaves; slower)</label>' +
+      '<label class="cw-check"><input type="checkbox" data-k="marker"' + (P.method === 'marker' ? ' checked' : '') + '> Marker mode: track coloured objects instead of hands (for very dim rooms or old computers)</label>' +
+      '</div>';
+    var btns = el('div', 'cw-row');
+    btns.innerHTML = '<button class="cw-btn primary" type="button" data-k="done">Done</button><button class="cw-btn ghost" type="button" data-k="off">Turn webcam wheel off</button>';
+    var x = el('button', 'cw-btn ghost cw-x', ICON.close); x.type = 'button'; x.setAttribute('aria-label', 'Close');
+    right.appendChild(head); right.appendChild(steps); right.appendChild(seg); right.appendChild(camRow); right.appendChild(startRow);
+    right.appendChild(status); right.appendChild(warn); right.appendChild(tune); right.appendChild(adv); right.appendChild(btns);
+    card.appendChild(left); card.appendChild(right); card.appendChild(x); ov.appendChild(card);
+    document.body.appendChild(ov);
+    var D = dlg = { ov: ov, offs: [], raf: 0, mask: false, counting: false, result: null, key: null };
+    var g = cv.getContext('2d');
+    renderText();
+
+    function boxesNow() { return cw.defaultBoxes(cw.prefs.style); }
+    function showWarn(html, ok) { warn.className = 'cw-warn' + (ok ? ' cw-ok' : ''); warn.innerHTML = html || ''; }
+    function intro() {
+      if (handsMode()) showWarn('');
+      else if (!cw.prefs.cal || cw.prefs.cal.style !== cw.prefs.style) showWarn('Hold your marker' + (cw.prefs.style === 'bar' ? '' : 's') + ' in the dashed box' + (cw.prefs.style === 'bar' ? '' : 'es') + ' and press <b>Calibrate</b>.');
+    }
+    function start(devId) {
+      startRow.style.display = 'none';
+      msg.style.display = ''; msg.innerHTML = 'Starting the camera…';
+      return cw.start(devId ? { deviceId: devId } : {}).then(function (r) {
+        if (dlg !== D) return r;
+        if (!r.ok) {
+          msg.innerHTML = REASONS[r.reason] || REASONS.error;
+          if (r.reason !== 'insecure' && r.reason !== 'unsupported' && r.reason !== 'file') startRow.style.display = '';
+          return r;
+        }
+        msg.style.display = 'none';
+        if (cw.ready()) cw.enable();
+        intro();
+        fillCams();
+        return r;
+      });
+    }
+    function fillCams() {
+      cw.listCameras().then(function (list) {
+        if (dlg !== D) return;
+        var sel = camRow.querySelector('select');
+        camRow.style.display = list.length > 1 ? '' : 'none';
+        var cur = cw._b.devId || cw.prefs.deviceId;
+        sel.innerHTML = list.map(function (c) { return '<option value="' + esc(c.deviceId) + '"' + (c.deviceId === cur ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('');
+      });
+    }
+    function calibrate() {
+      if (D.counting) return;
+      if (!cw.running()) { start(); return; }
+      var hm = handsMode();
+      D.counting = true;
+      var n = hm ? 2 : 3;
+      count.textContent = n;
+      showWarn(hm ? 'Hold your hands still, level, as if gripping the wheel at 9 and 3…' : 'Hold still: ' + (cw.prefs.style === 'bar' ? 'the bar level inside the box' : 'one coloured marker in each box, level') + '…');
+      D.countT = setInterval(function () {
+        n--;
+        if (n > 0) { count.textContent = n; return; }
+        clearInterval(D.countT); D.countT = 0; count.textContent = ''; D.counting = false;
+        var r = hm ? cw.calibrateNow() : cw.calibrateNow(boxesNow(), cw.prefs.style);
+        D.result = r;
+        if (!r.ok) { showWarn('<p>' + (FAIL[r.reason] || FAIL.nothing) + '</p>'); return; }
+        cw.enable();
+        if (hm) { showWarn('<p><b>Centred.</b> ' + (r.mode === 'hands2' ? 'Turn your hands like a wheel to steer.' : 'One hand: tilt it like a wheel. Two hands track better.') + '</p>', true); refreshPicker(); return; }
+        var ws = (r.warnings || []).map(function (k) { return WARN[k] ? '<p>' + WARN[k] + '</p>' : ''; }).join('');
+        var how = r.mode === 'two' ? 'two colours (full 360° turns)' : r.mode === 'same' ? 'two markers of the same colour' : 'one bar';
+        showWarn('<p><b>Calibrated:</b> ' + how + '.</p>' + ws, !ws);
+        refreshPicker();
+      }, 800);
+    }
+    D.offs.push(cw.on('autocentre', function () { if (dlg === D && !D.counting) showWarn('<p><b>Centred automatically.</b> Turn your hands like a wheel to steer; press <b>Calibrate</b> any time to re-centre.</p>', true); }));
+    seg.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-style]'); if (!b) return;
+      cw.setPrefs({ style: b.getAttribute('data-style') });
+      Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle('is-on', c === b); });
+      intro();
+    });
+    tools.querySelector('[data-k="cal"]').addEventListener('click', calibrate);
+    tools.querySelector('[data-k="ctr"]').addEventListener('click', function () { cw.recentre(); toast('Webcam wheel centred'); });
+    tools.querySelector('[data-k="mask"]').addEventListener('change', function (e) { D.mask = !!e.target.checked; });
+    startRow.querySelector('[data-k="start"]').addEventListener('click', function () { start(); });
+    camRow.querySelector('select').addEventListener('change', function (e) { var id = e.target.value; cw.setPrefs({ deviceId: id }); cw.stop(true); start(id); });
+    tune.addEventListener('input', function (e) {
+      var k = e.target.getAttribute('data-p'); if (!k) return;
+      var v = +e.target.value, o = {}; o[k] = v; cw.setPrefs(o);
+      e.target.nextSibling.textContent = k === 'smoothing' ? Math.round(v * 100) + '%' : v + '°';
+    });
+    tune.querySelector('[data-k="pip"]').addEventListener('change', function (e) { cw.setPrefs({ pip: !!e.target.checked }); });
+    adv.addEventListener('change', function (e) {
+      var k = e.target.getAttribute('data-g');
+      if (k) {
+        var o = {}; o[k] = !!e.target.checked; cw.setPrefs(o);
+        if (k === 'cpu') toast('Takes effect after a page reload');
+        return;
+      }
+      if (e.target.getAttribute('data-k') === 'marker') {
+        cw.setPrefs({ method: e.target.checked ? 'marker' : 'hands' });
+        renderText(); intro();
+        if (cw.running() && cw.ready()) cw.enable();
+      }
+    });
+    btns.querySelector('[data-k="done"]').addEventListener('click', function () {
+      if (cw.ready() && cw.running()) { cw.enable(); selectSource(); toast(handsMode() ? 'Webcam wheel on: turn your hands like a steering wheel' : 'Webcam wheel on (marker mode)', 'ok'); }
+      close();
+    });
+    btns.querySelector('[data-k="off"]').addEventListener('click', function () { cw.disable(); deselectSource(); close(); toast('Webcam wheel off (camera stopped)'); });
+    x.addEventListener('click', close);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    D.key = function (e) {
+      var tag = e.target && e.target.tagName;
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if ((e.code === 'Space' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'SELECT' && tag !== 'SUMMARY') { e.preventDefault(); calibrate(); }
+      else if ((e.key === 'c' || e.key === 'C') && tag !== 'INPUT') { cw.recentre(); }
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', D.key, true);
+
+    // live preview: the camera picture (mirrored) + landmarks / virtual wheel (or marker boxes), once per camera frame
+    D.offs.push(cw.on('frame', function () {
+      if (dlg !== D) return;
+      var vid = cw.video;
+      if (vid && vid.videoWidth) {
+        var vw = vid.videoWidth, vh = vid.videoHeight, W = cv.width, H = Math.round(W * vh / vw);
+        if (cv.height !== H) cv.height = H;
+        view.style.aspectRatio = vw + '/' + vh;
+        drawVideo(g, W, H, vid);
+        var showBoxes = !handsMode() && (!cw.prefs.cal || D.counting || cw.prefs.cal.style !== cw.prefs.style);
+        drawOverlay(g, W, H, cw, { boxes: showBoxes ? boxesNow() : null, mask: D.mask });
+      }
+    }));
+    function tick() {
+      if (dlg !== D) return;
+      var st = statusLine(cw);
+      status.innerHTML = '<span class="cw-dot ' + st.cls + '"></span><span>' + esc(st.text) + '</span>';
+      var M = cw.model();
+      if (handsMode() && M.state === 'error' && msg.getAttribute('data-m') !== 'err') { msg.style.display = ''; msg.innerHTML = MODEL_FAIL[M.reason] || MODEL_FAIL.load; msg.setAttribute('data-m', 'err'); }
+      if (handsMode() && M.state === 'ready' && M.delegate === 'CPU' && !D.cpuNote) { D.cpuNote = true; showWarn('Hand tracking runs on the CPU here (no usable GPU): expect about 10–20 fps, a little more delay. Closing other heavy tabs helps; marker mode (Advanced) is lighter.'); }
+      // read the hub source like the game does (also measures the delay to "applied")
+      var H = CB.input.hub, s = cw.stats();
+      if (H && cw.enabled()) { try { H.read(); } catch (e) { /* ignore */ } }
+      var bar = meter.querySelector('i'), v = clamp(s.steer || 0, -1, 1);
+      bar.style.left = (v < 0 ? 50 + 50 * v : 50) + '%'; bar.style.width = (50 * Math.abs(v)) + '%';
+      meter.querySelector('[data-k="ang"]').textContent = s.calibrated && cw.running() && !s.lost ? (s.angle >= 0 ? '+' : '') + Math.round(s.angle) + '°' : '—';
+      D.raf = requestAnimationFrame(tick);
+    }
+    D.raf = requestAnimationFrame(tick);
+    intro();
+    if (!cw.secure()) { msg.innerHTML = location.protocol === 'file:' ? REASONS.file : REASONS.insecure; }
+    else if (!cw.supported()) { msg.innerHTML = REASONS.unsupported; }
+    else start();
+    return ov;
+  }
+
+  /* ---------------------------------------------------------------- steering-source picker integration */
+  function SRC() { return CB.input.sources; }
+  function selectSource() { var S = SRC(); if (S && S.selected && S.selected() !== 'webcam' && S.setPrefs) { S.setPrefs({ source: 'webcam' }); refreshPicker(); } }
+  function deselectSource() { var S = SRC(); if (S && S.selected && S.selected() === 'webcam' && S.setPrefs) { S.setPrefs({ source: 'default' }); refreshPicker(); } }
+  function refreshPicker() { var S = SRC(); if (S && S.refresh) { try { S.refresh(); } catch (e) { /* ignore */ } } }
+  function srcStatus() {
+    var cw = CW(); if (!cw) return null;
+    if (!cw.running()) return { cls: '', text: 'Camera off. Press Start webcam.' };
+    var st = statusLine(cw), s = cw.stats();
+    if (st.cls === 'ok') st.text = (s.method === 'hands' ? (s.handMode === 'two' ? 'Two hands' : 'One hand') : 'Markers') + ' · ' + (s.angle >= 0 ? '+' : '') + Math.round(s.angle) + '° · ' + s.fps + ' fps';
+    return st;
+  }
+  function detailHTML() {
+    var cw = CW(); if (!cw) return '';
+    var on = cw.running() && cw.enabled();
+    return '<div class="ss-row"><button class="gh-btn small" type="button" data-cw-act="open">Webcam setup</button>' +
+      '<button class="gh-btn small" type="button" data-cw-act="' + (on ? 'stop' : 'start') + '">' + (on ? 'Stop camera' : 'Start webcam') + '</button>' +
+      (on ? '<button class="gh-btn small" type="button" data-cw-act="centre">Centre</button>' : '') + '</div>' +
+      '<div class="ss-row"><span>Full lock at</span><input type="range" min="20" max="180" step="5" value="' + cw.prefs.maxAngle + '" data-cw-pref="maxAngle"><b>' + cw.prefs.maxAngle + '°</b></div>' +
+      '<div class="ss-row"><span>Smoothing</span><input type="range" min="0" max="1" step="0.05" value="' + cw.prefs.smoothing + '" data-cw-pref="smoothing"><b>' + Math.round(cw.prefs.smoothing * 100) + '%</b></div>' +
+      '<div class="ss-row"><small>Hold your hands up as if gripping a steering wheel and turn it. Needs HTTPS. Video never leaves this computer.</small></div>';
+  }
+  function startQuick() {
+    var cw = CW(); if (!cw) return Promise.resolve({ ok: false });
+    if (!cw.ready()) { open(); return Promise.resolve({ ok: true }); }
+    return cw.start().then(function (r) {
+      if (r.ok) { cw.enable(); selectSource(); toast('Webcam wheel on: hold your hands up like a steering wheel', 'ok'); }
+      else open();
+      refreshPicker();
+      return r;
+    });
+  }
+  function menuItems() {
+    var cw = CW(); if (!cw) return [];
+    var on = cw.running() && cw.enabled(), items = [{ label: on ? 'Webcam wheel · on' : 'Use webcam as wheel', icon: 'steer', fn: open }];
+    if (on) items.push({ label: 'Re-centre webcam wheel', icon: 'steer', fn: function () { cw.recentre(); toast('Webcam wheel centred'); } });
+    return items;
+  }
+  function defineSource() {
+    var S = SRC();
+    if (!S || !S.define || defineSource.done === S) return;
+    defineSource.done = S;
+    S.define('webcam', {
+      name: 'Webcam air wheel', short: 'Webcam',
+      hint: 'Hold your hands up in front of the webcam as if gripping a steering wheel, and turn it. Steering only: throttle and brake stay on the keyboard or gamepad.',
+      available: function () {
+        var cw = CW();
+        if (!cw) return { ok: false, reason: 'Not loaded' };
+        if (!cw.secure()) return { ok: false, reason: location.protocol === 'file:' ? 'Needs the https:// site (not a file)' : 'Needs HTTPS (or localhost)' };
+        if (!cw.supported()) return { ok: false, reason: 'No camera API in this browser' };
+        return { ok: true };
+      },
+      enable: function () { return CW().running() ? (CW().enable(), { ok: true }) : (open(), { ok: true }); },
+      disable: function () { var cw = CW(); if (cw) cw.disable(); },
+      isOn: function () { var cw = CW(); return !!(cw && cw.running()); },
+      detailHTML: detailHTML,
+      menuItems: menuItems,
+      status: srcStatus
+    });
+  }
+  /* fallback when the shared picker is not loaded: add our entries to CB.input.ui's pause menu / setup row / Settings */
+  function patchUi() {
+    var u = CB.input.ui;
+    if (!u || u._cwPatched || SRC()) return;
+    u._cwPatched = true;
+    var mi = u.menuItems, sr = u.setupRow, sh = u.settingsHTML;
+    if (typeof mi === 'function') u.menuItems = function () { return (mi.apply(u, arguments) || []).concat(menuItems()); };
+    if (typeof sr === 'function') u.setupRow = function () {
+      var box = sr.apply(u, arguments);
+      try {
+        ensureCss();
+        var b = el('button', 'pw-btn', ICON.cam + '<span>Use webcam as wheel</span>'); b.type = 'button';
+        b.addEventListener('click', open);
+        var row = box && box.querySelector('.pw-row'); if (row) row.appendChild(b);
+      } catch (e) { /* ignore */ }
+      return box;
+    };
+    if (typeof sh === 'function') u.settingsHTML = function () {
+      return (sh.apply(u, arguments) || '') + '<h2 class="gh-h2">Webcam air wheel</h2><div class="gh-row"><div class="lbl"><b>Use webcam as wheel</b><small>Hold your hands up like a steering wheel in front of the webcam (needs HTTPS; video stays on this computer)</small></div><button class="gh-btn" type="button" data-cw-act="open">' + ICON.cam + ' Set up webcam</button></div>';
+    };
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('[data-cw-act]');
+    if (!a) return;
+    e.preventDefault();
+    var act = a.getAttribute('data-cw-act'), cw = CW();
+    if (!cw) return;
+    if (act === 'open') open();
+    else if (act === 'start') startQuick();
+    else if (act === 'stop') { cw.disable(); refreshPicker(); }
+    else if (act === 'centre') { cw.recentre(); toast('Webcam wheel centred'); }
+  });
+  document.addEventListener('input', function (e) {
+    var k = e.target && e.target.getAttribute && e.target.getAttribute('data-cw-pref');
+    if (!k || !CW()) return;
+    var v = +e.target.value, o = {}; o[k] = v; CW().setPrefs(o);
+    var b = e.target.nextSibling; if (b) b.textContent = k === 'smoothing' ? Math.round(v * 100) + '%' : v + '°';
+  });
+
+  /* ---------------------------------------------------------------- picture-in-picture while driving */
+  var pip = null, driving = false, lostSince = 0, lostToast = false;
+  function pipWanted() { var cw = CW(); return !!(cw && driving && cw.enabled() && cw.running() && cw.prefs.pip && !dlg); }
+  function pipSync() {
+    if (!pipWanted()) { if (pip) pip.style.display = 'none'; return; }
+    ensureCss();
+    if (!pip) {
+      pip = el('div', 'cw-pip', '<canvas width="192" height="144"></canvas><div class="cw-pl"><span data-k="t">WEBCAM</span><button type="button" title="Hide the camera preview (webcam setup turns it back on)" aria-label="Hide camera preview">×</button></div>');
+      pip.querySelector('button').addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); CW().setPrefs({ pip: false }); pipSync(); toast('Camera preview hidden (turn it back on in the webcam setup)'); });
+      document.body.appendChild(pip);
+      pip._g = pip.querySelector('canvas').getContext('2d');
+    }
+    pip.style.display = '';
+  }
+  function pipFrame(f) {
+    if (!pip || pip.style.display === 'none') return;
+    var c = pip._g.canvas, cw = CW(), vid = cw.video;
+    if (!vid || !vid.videoWidth) return;
+    var W = 192, H = Math.round(W * vid.videoHeight / vid.videoWidth);
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; c.style.aspectRatio = W + '/' + H; }
+    drawVideo(pip._g, W, H, vid);
+    drawOverlay(pip._g, W, H, cw, { small: true });
+    var r = cw._b.steer ? cw._b.steer.read(performance.now()) : { lost: true };
+    pip.classList.toggle('lost', !!r.lost);
+    var t = pip.querySelector('[data-k="t"]'), txt = r.lost ? (cw.prefs.method === 'marker' ? 'LOST · SHOW MARKERS' : 'LOST · SHOW HANDS') : 'WEBCAM · ' + (cw._b.steer.angle >= 0 ? '+' : '') + Math.round(cw._b.steer.angle) + '°';
+    if (t.textContent !== txt) t.textContent = txt;
+  }
+  function onFrame(f) {
+    var cw = CW();
+    if (pip && pip.style.display !== 'none') pipFrame(f);
+    // lost while driving for > 1 s: one toast per episode
+    if (driving && cw.enabled()) {
+      var lost = cw._b.steer && cw._b.steer.read(performance.now()).lost;
+      if (lost) { if (!lostSince) lostSince = performance.now(); if (!lostToast && performance.now() - lostSince > 1000) { lostToast = true; toast(cw.prefs.method === 'marker' ? 'Webcam wheel lost your markers: steering centred.' : 'Webcam wheel cannot see your hands: steering centred. Hold them up in view of the camera.', 'bad'); } }
+      else { if (lostToast) toast('Webcam wheel tracking again', 'ok'); lostSince = 0; lostToast = false; }
+    }
+  }
+  document.addEventListener('cb:driving', function (e) { driving = !!(e && e.detail && e.detail.driving); lostSince = 0; lostToast = false; pipSync(); });
+
+  function boot(late) {
+    var cw = CW(); if (!cw) return;
+    if (!boot.done) { boot.done = true; cw.on('frame', onFrame); cw.on('prefs', pipSync); cw.on('state', function () { pipSync(); }); }
+    defineSource();
+    if (CB.input.ui && !CB.input.ui.openCamWheel) CB.input.ui.openCamWheel = open;
+    if (late) patchUi();                 // only once every script has loaded: the shared picker may come after us
+  }
+  boot(document.readyState !== 'loading');
+  document.addEventListener('DOMContentLoaded', function () { boot(true); });
+  window.addEventListener('load', function () { boot(true); });
+
+  CB.input.camUI = { open: open, close: close, menuItems: menuItems, detailHTML: detailHTML, start: startQuick, _drawOverlay: drawOverlay, isOpen: function () { return !!dlg; } };
+})();

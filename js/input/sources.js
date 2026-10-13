@@ -114,7 +114,7 @@ CB.input = CB.input || {};
   // webcam: a thin adapter over js/input/camwheel.js (that module may define('webcam', ...) itself to replace this)
   S.define('webcam', {
     name: 'Webcam air wheel', short: 'Webcam',
-    hint: 'Turn a coloured object in front of the webcam like a wheel.',
+    hint: 'Hold your hands up like a steering wheel in front of the webcam and turn.',
     available: function () {
       var cw = CB.input.camwheel;
       if (!cw) return { ok: false, reason: 'Not loaded' };

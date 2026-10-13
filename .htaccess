@@ -17,6 +17,7 @@ Options -Indexes
   AddType application/json                .json .map
   AddType image/svg+xml                   .svg
   AddType application/wasm                .wasm
+  AddType application/octet-stream        .task
   AddType application/manifest+json       .webmanifest
   AddType text/plain                      .txt
   AddCharset UTF-8 .html .js .mjs .css .json .map .svg .txt .webmanifest
@@ -88,6 +89,9 @@ Options -Indexes
   ExpiresByType text/css                  "access plus 7 days"
   ExpiresByType image/svg+xml             "access plus 7 days"
   ExpiresByType application/json          "access plus 0 seconds"
+  # vendor/ (webcam hand tracking: MediaPipe wasm + model) lives under a versioned folder: cache it for a year
+  ExpiresByType application/wasm          "access plus 1 year"
+  ExpiresByType application/octet-stream  "access plus 1 year"
   # api/signal.php sends its own "Cache-Control: no-store"
   <FilesMatch "\.php$">
     ExpiresActive Off
@@ -98,12 +102,16 @@ Options -Indexes
   <FilesMatch "\.html?$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
-  <FilesMatch "\.(js|mjs|css|svg|wasm)$">
+  <FilesMatch "\.(js|mjs|css|svg)$">
     Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+  # vendor/mediapipe/tasks-vision-<version>/: the path changes with the version, so these never go stale
+  <FilesMatch "\.(wasm|task)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
 
   # ------------------------------------------------------------ security / sensor permissions
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "accelerometer=(self), gyroscope=(self), magnetometer=(self), fullscreen=(self), screen-wake-lock=(self)"
+  Header always set Permissions-Policy "accelerometer=(self), gyroscope=(self), magnetometer=(self), fullscreen=(self), screen-wake-lock=(self), camera=(self)"
 </IfModule>

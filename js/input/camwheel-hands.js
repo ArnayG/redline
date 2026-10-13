@@ -1,0 +1,316 @@
+/* ==========================================================================
+   FORGE — js/input/camwheel-hands.js
+   CB.input.camhands : bare-hands steering for the webcam air wheel. The player holds an IMAGINARY steering wheel in front
+   of the webcam; MediaPipe Hand Landmarker (vendored, Apache-2.0: vendor/mediapipe/tasks-vision-0.10.35/, loaded only
+   when the webcam wheel is switched on) finds 21 landmarks per hand, and this module turns them into a wheel angle.
+   Pure landmark maths (Node-tested with fixture landmark arrays) + the lazy loader / detector.
+
+   Landmarks: MediaPipe normalised image coordinates of the CAMERA frame (x 0..1 left -> right as the camera sees it,
+   y 0..1 down). Everything here converts to the PLAYER'S (mirrored) view in pixels: X = (1 - x) * W, Y = y * H, so
+   turning the imaginary wheel clockwise (as the player sees it) gives a positive angle = steer right.
+     0 wrist, 5 index MCP, 9 middle MCP, 13 ring MCP, 17 pinky MCP; tips 8 12 16 20; PIPs 6 10 14 18.
+
+   Steering
+     two hands  angle of the line from the left palm centre to the right palm centre (palm centre = mean of the wrist and
+                the four MCPs), like gripping the wheel at 9 and 3. Which hand is "left" follows position continuity (not
+                the handedness labels), so turning past 90 deg, where the hands cross over, keeps going (period 360).
+     one hand   that hand's roll: the index-MCP -> pinky-MCP line and the wrist -> middle-MCP direction, each relative to
+                its neutral (calibrated, or taken when the other hand disappears), averaged.
+     switching  two <-> one hand never jumps: the new source is re-based onto the current angle, and that offset then
+                bleeds back to the source's own zero over ~0.5 s (so a long one-hand stint cannot drift).
+
+     ch.palm(lm, W, H) -> {x, y, size}      size = wrist -> middle-MCP length (px), for push / distance gestures
+     ch.handRoll(lm, W, H) -> {a: deg (index->pinky MCP line), b: deg (wrist -> middle MCP)}
+     ch.curl(lm) -> 0 (open palm) .. 1 (closed fist)
+     ch.createSolver(opts?) -> S   S.update(hands, W, H, t) -> meas {ok, angle (deg, continuous), period: 360, conf,
+                                   mode:'two'|'one'|null, pts, hands}   S.calibrate() (current pose = centre)
+                                   S.state()   hands: [{lm, score, label}] straight from the detector
+     ch.gestures(meas, prefs, t, st) -> {throttle, nitro}   (both off unless enabled in prefs)
+   Browser
+     ch.load({preferGpu, worker}) -> Promise<{ok, delegate:'GPU'|'CPU', worker, reason?}>  (worker: js/input/camwheel-worker.js)
+     ch.submit(video, tMs) -> taken?   ch.onResult(fn(hands, tMs, inferMs)) -> off   ch.detect(video, tMs) (main thread, sync)
+     ch.loaded()  ch.delegate()  ch.mode ('worker'|'main')  ch.lastMs (inference ms)  ch.VENDOR (base path)
+   ========================================================================== */
+var CB = (globalThis.CB = globalThis.CB || {});
+if (typeof window !== 'undefined') window.CB = CB;
+CB.input = CB.input || {};
+
+(function () {
+  'use strict';
+
+  var DEG = Math.PI / 180;
+  var VENDOR = 'vendor/mediapipe/tasks-vision-0.10.35/';
+  var PALM = [0, 5, 9, 13, 17];
+
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function wrap180(a) { return ((a + 180) % 360 + 360) % 360 - 180; }
+  function nowMs() { return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(); }
+  function P(lm, i, W, H) { var p = lm[i]; return { x: (1 - p.x) * W, y: p.y * H }; }
+  function ang(a, b) { return Math.atan2(b.y - a.y, b.x - a.x) / DEG; }
+
+  /* ================================================================ landmark maths */
+  function palm(lm, W, H) {
+    var x = 0, y = 0;
+    for (var i = 0; i < PALM.length; i++) { var p = P(lm, PALM[i], W, H); x += p.x; y += p.y; }
+    var w = P(lm, 0, W, H), m = P(lm, 9, W, H);
+    return { x: x / PALM.length, y: y / PALM.length, size: Math.hypot(m.x - w.x, m.y - w.y) };
+  }
+  function handRoll(lm, W, H) {
+    return { a: ang(P(lm, 5, W, H), P(lm, 17, W, H)), b: ang(P(lm, 0, W, H), P(lm, 9, W, H)) };
+  }
+  /** finger curl: tips folded back towards the wrist. 0 = open palm, 1 = closed fist (scale-free, 3D) */
+  function curl(lm) {
+    function d(i, j) { var a = lm[i], b = lm[j]; return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
+    var ref = d(0, 9) || 1e-6, s = 0;
+    [[8, 5], [12, 9], [16, 13], [20, 17]].forEach(function (f) {
+      // open finger: tip far beyond its MCP (~0.75 x palm length); folded: tip back near the MCP / palm
+      var r = d(f[0], 0) / ref, m = d(f[1], 0) / ref;
+      s += clamp((m + 0.75 - r) / 0.75, 0, 1);
+    });
+    return s / 4;
+  }
+
+  /* ================================================================ solver: hands -> continuous wheel angle */
+  function createSolver(opts) {
+    opts = opts || {};
+    var rebaseMs = num(opts.rebaseMs, 500);
+    var S = {
+      mode: null, angle: 0, offset: 0, target: 0, lastT: null, tracks: null, cal: null,
+      neutral: {}, curls: [0, 0], sizes: [0, 0], baseSize: 0,
+      /** hands: [{lm, score}]  ->  meas */
+      update: function (hands, W, H, t) {
+        t = num(t, nowMs());
+        var dt = S.lastT == null ? 0 : clamp((t - S.lastT) / 1000, 0, 0.5);
+        S.lastT = t;
+        if (S.seenT != null && t - S.seenT > 1500) S.reset();   // long gone: identify the hands afresh (left = a)
+        hands = (hands || []).filter(function (h) { return h && h.lm && h.lm.length >= 21; });
+        var cand = hands.map(function (h) { var p = palm(h.lm, W, H); return { h: h, x: p.x, y: p.y, size: p.size, roll: handRoll(h.lm, W, H), curl: curl(h.lm), score: num(h.score, 1) }; });
+        // identity by continuity: which candidate is the tracked "a" (left at the start) and "b"
+        var a = null, b = null, T = S.tracks;
+        if (cand.length >= 2) {
+          cand.sort(function (p, q) { return q.score - p.score; });
+          var c0 = cand[0], c1 = cand[1];
+          if (T && T.a && T.b) {
+            var keep = dist(c0, T.a) + dist(c1, T.b), swap = dist(c0, T.b) + dist(c1, T.a);
+            if (keep <= swap) { a = c0; b = c1; } else { a = c1; b = c0; }
+          } else if (T && (T.a || T.b)) {
+            var known = T.a || T.b, near = dist(c0, known) <= dist(c1, known) ? c0 : c1, other = near === c0 ? c1 : c0;
+            if (T.a) { a = near; b = other; } else { b = near; a = other; }
+          } else {
+            // fresh start: the handedness labels learnt at calibration tell the hands apart even when crossed;
+            // otherwise the hand further left (as the player sees it) is "a"
+            var L = S.cal && S.cal.labels, la = c0.h.label, lb = c1.h.label;
+            if (L && la && lb && la !== lb && (la === L.a || la === L.b) && (lb === L.a || lb === L.b) && Math.min(c0.score, c1.score) >= 0.7) {
+              if (la === L.a) { a = c0; b = c1; } else { a = c1; b = c0; }
+            } else if (c0.x <= c1.x) { a = c0; b = c1; } else { a = c1; b = c0; }
+          }
+        } else if (cand.length === 1) {
+          var c = cand[0];
+          if (T && T.a && T.b) { if (dist(c, T.a) <= dist(c, T.b)) a = c; else b = c; }
+          else if (T && T.a) a = c; else if (T && T.b) b = c;
+          else if (S.cal && S.cal.ctr) { if (c.x < S.cal.ctr.x) a = c; else b = c; }
+          else a = c;
+        }
+        S.tracks = { a: a ? { x: a.x, y: a.y } : (cand.length ? null : T && T.a), b: b ? { x: b.x, y: b.y } : (cand.length ? null : T && T.b) };
+        if (!cand.length) { S.tracks = T; return { ok: false, conf: 0, mode: null, pts: [], hands: [] }; }
+        S.seenT = t;
+        var raw, mode, conf;
+        if (a && b) {
+          mode = 'two';
+          raw = ang(a, b) - (S.cal ? S.cal.two : 0);
+          conf = Math.min(a.score, b.score);
+          // remember each hand's roll at this angle: the neutral used if that hand is later alone
+          S.neutral.a = { a: a.roll.a - raw, b: a.roll.b - raw, learnt: true };
+          S.neutral.b = { a: b.roll.a - raw, b: b.roll.b - raw, learnt: true };
+          S.size = (a.size + b.size) / 2;
+        } else {
+          mode = 'one';
+          var one = a || b, key = a ? 'a' : 'b', n = S.neutral[key];
+          if (!n) n = S.neutral[key] = { a: one.roll.a - S.angle, b: one.roll.b - S.angle, learnt: false };
+          S.guessed = !n.learnt;
+          var da = wrap180(one.roll.a - n.a), db = wrap180(one.roll.b - n.b);
+          // the two estimates agree for a rigid hand; a mean of both halves the noise
+          raw = Math.abs(wrap180(da - db)) < 40 ? da + wrap180(db - da) / 2 : da;
+          conf = one.score * 0.8;
+          S.size = one.size;
+        }
+        // continuity across the 360 wrap (within one source); a new source is unwrapped next to the current angle
+        var switched = mode !== S.mode;
+        if (switched || S._raw == null) { var ref = S.mode ? S.angle : 0; raw = ref + wrap180(raw - ref); }
+        else raw = S._raw + wrap180(raw - S._raw);
+        S._raw = raw;
+        // re-base: the new source starts exactly where the wheel is now (a small residual, never a whole turn)
+        // (one -> two after a one-hand start whose neutral was only a guess: the two-hand angle is absolute, take it)
+        if (switched && S.mode !== null) S.offset = mode === 'two' && S.guessed ? 0 : S.angle - raw;
+        if (mode === 'two') S.guessed = false;
+        S.mode = mode;
+        // the re-base offset bleeds back to zero (two hands: absolute angle; one hand: its neutral)
+        if (S.offset !== 0 && dt > 0) { var k = Math.exp(-dt / (rebaseMs / 1000 / 3)); S.offset *= k; if (Math.abs(S.offset) < 0.05) S.offset = 0; }
+        S.angle = raw + S.offset;
+        S.curls = [a ? a.curl : null, b ? b.curl : null];
+        return {
+          ok: true, angle: S.angle, period: 360, conf: conf, mode: mode,
+          pts: [a, b].filter(Boolean).map(function (c) { return { x: c.x, y: c.y, size: c.size, curl: c.curl }; }),
+          hands: cand
+        };
+      },
+      /** the current pose is straight ahead (two hands: the line between them; one hand: its roll) */
+      calibrate: function () {
+        var T = S.tracks;
+        if (!T) return false;
+        S.cal = S.cal || { two: 0 };
+        if (S.mode === 'two') { S.cal.two += S.angle; S.cal.ctr = T.a && T.b ? { x: (T.a.x + T.b.x) / 2, y: (T.a.y + T.b.y) / 2 } : S.cal.ctr; }
+        else if (S.mode === 'one') { var key = T.a ? 'a' : 'b', n = S.neutral[key]; if (n) { n.a += S.angle; n.b += S.angle; } }
+        S.baseSize = S.size || S.baseSize;
+        S._raw = null; S.offset = 0; S.angle = 0;
+        return true;
+      },
+      reset: function () { S.tracks = null; S.mode = null; S._raw = null; S.offset = 0; S.angle = 0; S.seenT = null; },
+      state: function () { return { mode: S.mode, angle: S.angle, offset: S.offset, cal: S.cal, neutral: S.neutral }; }
+    };
+    function dist(c, p) { return Math.hypot(c.x - p.x, c.y - p.y); }
+    return S;
+  }
+
+  /* ================================================================ optional gestures (off by default) */
+  /**
+   * prefs.gestureThrottle: both fists closed -> full throttle, open palms -> coast (0).
+   * prefs.gestureNitro: a quick push towards the camera (hands >= 18 % bigger than ~0.4 s ago) -> nitro for 1 s.
+   * st: persistent state object owned by the caller.
+   */
+  function gestures(meas, prefs, t, st) {
+    var out = { throttle: null, nitro: false };
+    if (!meas || !meas.ok) { st.hist = []; return out; }
+    prefs = prefs || {};
+    if (prefs.gestureThrottle) {
+      var cs = meas.pts.map(function (p) { return p.curl; }).filter(function (c) { return c != null; });
+      var fist = cs.length && cs.every(function (c) { return c > 0.62; });
+      var open = cs.length && cs.every(function (c) { return c < 0.38; });
+      if (fist) st.thr = 1; else if (open) st.thr = 0;           // in between: keep (hysteresis)
+      out.throttle = st.thr || 0;
+    }
+    if (prefs.gestureNitro) {
+      var size = meas.pts.reduce(function (s, p) { return s + p.size; }, 0) / Math.max(1, meas.pts.length);
+      st.hist = (st.hist || []).filter(function (h) { return t - h.t <= 450; });
+      var old = st.hist.length ? st.hist[0] : null;
+      if (old && t - old.t >= 150 && size > old.s * 1.18 && !(st.nitroUntil > t)) st.nitroUntil = t + 1000;
+      st.hist.push({ t: t, s: size });
+      out.nitro = st.nitroUntil > t;
+    }
+    return out;
+  }
+
+  /* ================================================================ browser: lazy MediaPipe loader + detector */
+  /* Preferred: a Web Worker (js/input/camwheel-worker.js) runs the landmarker off the main thread; each camera frame goes
+     over as a transferred ImageBitmap and only the 2 x 21 landmarks come back, so inference never stalls the game.
+     Fallback (no Worker / OffscreenCanvas / createImageBitmap, or the worker fails): the landmarker on the main thread. */
+  var lib = null, landmarker = null, delegate = null, loading = null, lastTs = -1;
+  var worker = null, busy = false, frameId = 0, resultFns = [], sentAt = 0;
+  var api = {
+    VENDOR: VENDOR, palm: palm, handRoll: handRoll, curl: curl, createSolver: createSolver, gestures: gestures,
+    lastMs: 0, mode: null, loaded: function () { return !!(landmarker || (worker && delegate)); }, delegate: function () { return delegate; }
+  };
+  function base() {
+    var b = typeof document !== 'undefined' && document.baseURI ? document.baseURI : (typeof location !== 'undefined' ? location.href : '');
+    return new URL(VENDOR, b).href;
+  }
+  api.base = base;
+  function emitResult(hands, ts, ms) { api.lastMs = ms; resultFns.slice().forEach(function (fn) { try { fn(hands, ts, ms); } catch (e) { if (typeof console !== 'undefined') console.error('[camhands]', e); } }); }
+  /** onResult(fn(hands, tsMs, inferMs)) -> off   every detection result, in submit order */
+  api.onResult = function (fn) { resultFns.push(fn); return function () { var i = resultFns.indexOf(fn); if (i >= 0) resultFns.splice(i, 1); }; };
+  function canWorker() {
+    return typeof Worker === 'function' && typeof OffscreenCanvas === 'function' && typeof createImageBitmap === 'function';
+  }
+  function loadWorker(b, gpu) {
+    return new Promise(function (res, rej) {
+      var w;
+      try { w = new Worker(new URL('js/input/camwheel-worker.js?v=' + encodeURIComponent(VENDOR), document.baseURI).href); } catch (e) { rej(e); return; }
+      var to = setTimeout(function () { rej(new Error('worker timeout')); try { w.terminate(); } catch (x) { /* ignore */ } }, 30000);
+      w.onmessage = function (e) {
+        var m = e.data || {};
+        if (m.t === 'ready') { clearTimeout(to); worker = w; delegate = m.delegate; api.mode = 'worker'; res({ ok: true, delegate: m.delegate, worker: true }); }
+        else if (m.t === 'error') { clearTimeout(to); try { w.terminate(); } catch (x) { /* ignore */ } rej(new Error(m.error)); }
+        else if (m.t === 'res') { busy = false; emitResult(m.hands, m.ts, m.ms); }
+      };
+      w.onerror = function (e) { clearTimeout(to); rej(new Error(e && e.message || 'worker error')); };
+      w.postMessage({ t: 'init', base: b, gpu: gpu, det: api.det, pres: api.pres });
+    });
+  }
+  function loadMain(b, gpu) {
+    return import(b + 'vision_bundle.mjs').then(function (mod) {
+      lib = mod;
+      var files = { wasmLoaderPath: b + 'wasm/vision_wasm_internal.js', wasmBinaryPath: b + 'wasm/vision_wasm_internal.wasm' };
+      function make(dg) {
+        return lib.HandLandmarker.createFromOptions(files, {
+          baseOptions: { modelAssetPath: b + 'hand_landmarker.task', delegate: dg },
+          runningMode: 'VIDEO', numHands: 2,
+          minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5
+        }).then(function (h) { landmarker = h; delegate = dg; api.mode = 'main'; return { ok: true, delegate: dg, worker: false }; });
+      }
+      return (gpu === false ? Promise.reject(new Error('cpu')) : make('GPU')).catch(function () { return make('CPU'); }).then(function (r) {
+        try { var c = document.createElement('canvas'); c.width = 256; c.height = 192; var g = c.getContext('2d'); g.fillStyle = '#777'; g.fillRect(0, 0, 256, 192); detectSync(c, nowMs()); } catch (e) { /* warm-up only */ }
+        return r;
+      });
+    });
+  }
+  /** load the vendored MediaPipe bundle + model (once): worker first, then the main thread; GPU first, then CPU */
+  api.load = function (o) {
+    o = o || {};
+    if (api.loaded()) return Promise.resolve({ ok: true, delegate: delegate, worker: !!worker });
+    if (loading) return loading;
+    if (typeof window === 'undefined') return Promise.resolve({ ok: false, reason: 'unsupported' });
+    if (location.protocol === 'file:') return Promise.resolve({ ok: false, reason: 'file' });
+    if (typeof WebAssembly !== 'object') return Promise.resolve({ ok: false, reason: 'nowasm' });
+    var b = base(), gpu = o.preferGpu !== false;
+    var first = o.worker !== false && canWorker() ? loadWorker(b, gpu).catch(function (e) { api.workerError = String(e && e.message || e); return loadMain(b, gpu); }) : loadMain(b, gpu);
+    loading = first.catch(function (e) {
+      loading = null;
+      return { ok: false, reason: 'load', error: String(e && e.message || e) };
+    });
+    return loading;
+  };
+  function detectSync(src, tMs) {
+    var ts = Math.max(lastTs + 1, Math.round(num(tMs, nowMs())));   // VIDEO mode needs strictly increasing timestamps
+    lastTs = ts;
+    var t0 = nowMs(), r;
+    try { r = landmarker.detectForVideo(src, ts); } catch (e) { api.lastError = String(e && e.message || e); return []; }
+    api.lastMs = nowMs() - t0;
+    var out = [];
+    for (var i = 0; r && r.landmarks && i < r.landmarks.length; i++) {
+      var hd = r.handedness && r.handedness[i] && r.handedness[i][0];
+      out.push({ lm: r.landmarks[i], score: hd ? hd.score : 1, label: hd ? hd.categoryName : '' });
+    }
+    return out;
+  }
+  /** main-thread detection (sync) -> [{lm, score, label}] | null */
+  api.detect = function (src, tMs) { return landmarker ? detectSync(src, tMs) : null; };
+  /**
+   * submit(video, tMs) -> true if taken. Worker: the frame is copied to an ImageBitmap and inferred off-thread (a frame
+   * arriving while the previous one is still being inferred is skipped: newest wins, no queue = no added delay).
+   * Main thread: inferred right away. Results arrive through onResult.
+   */
+  api.submit = function (src, tMs) {
+    if (worker) {
+      if (busy && nowMs() - sentAt < 500) return false;
+      busy = true; sentAt = nowMs();
+      var id = ++frameId;
+      createImageBitmap(src).then(function (bmp) {
+        try { worker.postMessage({ t: 'frame', id: id, ts: tMs, bmp: bmp }, [bmp]); } catch (e) { busy = false; try { bmp.close(); } catch (x) { /* ignore */ } }
+      }, function () { busy = false; });
+      return true;
+    }
+    if (!landmarker) return false;
+    emitResult(detectSync(src, tMs), tMs, api.lastMs);
+    return true;
+  };
+  api.close = function () {
+    try { if (landmarker) landmarker.close(); } catch (e) { /* ignore */ }
+    try { if (worker) worker.terminate(); } catch (e) { /* ignore */ }
+    landmarker = null; worker = null; loading = null; delegate = null; busy = false; api.mode = null;
+  };
+
+  CB.input.camhands = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})();

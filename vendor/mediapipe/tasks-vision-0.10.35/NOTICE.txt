@@ -1,0 +1,26 @@
+MediaPipe Tasks Vision 0.10.35 + Hand Landmarker model (float16, version 1)
+===========================================================================
+Used by the webcam air wheel (js/input/camwheel-hands.js) to find the player's hands in the webcam picture.
+Loaded only when the player switches the webcam wheel on; everything runs in the browser (WebAssembly + WebGL),
+no frame ever leaves the device.
+
+Licence: Apache License 2.0 (see LICENSE in this folder). Copyright The MediaPipe Authors (Google LLC).
+Project: https://github.com/google-ai-edge/mediapipe   https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker
+
+Files, where they came from, and their SHA-256:
+  vision_bundle.mjs              npm @mediapipe/tasks-vision@0.10.35, package/vision_bundle.mjs
+      55d7ab624fbb70dcc5adc4ae6d7ea9cfcb569139d3dbfbf2b1deafcb966bc0fe
+  wasm/vision_wasm_internal.js   npm @mediapipe/tasks-vision@0.10.35, package/wasm/vision_wasm_internal.js
+      e7fd9858e8e8f221d9b96eddc11f8e077f263e0b7bbd79d3cbe882b134274f8c
+  wasm/vision_wasm_internal.wasm npm @mediapipe/tasks-vision@0.10.35, package/wasm/vision_wasm_internal.wasm
+      6a5c64584c2ab61c763b6e204afbdbc7ce1caf7f5216187322bca8df94f646bc
+  hand_landmarker.task           https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+      fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1   (7,819,105 bytes; matches the bucket's md5 FTGEMOo4UWcP6ZFBFqnPrQ==)
+  LICENSE                        https://www.apache.org/licenses/LICENSE-2.0.txt
+
+npm tarball: https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-0.10.35.tgz
+  integrity sha512-HOvadwVRE6JC+45nyYhmnywnr5h/J8KZvOeUNVOG9q/0875pZgItznFB9bRTvLc264YSJqiZ1NsIpCStJw/egg== (verified)
+The package has no install scripts; nothing was run. The files are unmodified. Only the SIMD wasm build is shipped
+(every current browser supports WebAssembly SIMD); the no-SIMD and module variants and the source maps are left out.
+To update: download a newer tarball + model, verify, put them in vendor/mediapipe/tasks-vision-<version>/ and change
+VENDOR in js/input/camwheel-hands.js.
