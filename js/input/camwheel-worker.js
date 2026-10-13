@@ -4,7 +4,7 @@
    so the ~5-20 ms of inference per camera frame never stalls the game's frames. Classic worker (importScripts works for
    the wasm loader); the vendored bundle is pulled in with import().
      in : {t:'init', base, gpu}   {t:'frame', id, ts, bmp: ImageBitmap (transferred)}
-     out: {t:'ready', delegate}   {t:'error', error}   {t:'res', id, ts, ms, hands: [{lm: [{x, y, z}] x 21, score, label}]}
+     out: {t:'ready', delegate}   {t:'error', error}   {t:'res', id, ts, ms, hands: [{lm: [{x, y, z}] x 21, wl (world landmarks, metres) | null, score, label}]}
    Frames never leave the device: this worker only talks to the page that started it.
    ========================================================================== */
 'use strict';
@@ -33,7 +33,8 @@ self.onmessage = function (e) {
       var r = hl ? hl.detectForVideo(m.bmp, ts) : null;
       for (var i = 0; r && r.landmarks && i < r.landmarks.length; i++) {
         var hd = r.handedness && r.handedness[i] && r.handedness[i][0];
-        out.push({ lm: r.landmarks[i].map(function (p) { return { x: p.x, y: p.y, z: p.z }; }), score: hd ? hd.score : 1, label: hd ? hd.categoryName : '' });
+        var w = r.worldLandmarks && r.worldLandmarks[i];
+        out.push({ lm: r.landmarks[i].map(function (p) { return { x: p.x, y: p.y, z: p.z }; }), wl: w ? w.map(function (p) { return { x: p.x, y: p.y, z: p.z }; }) : null, score: hd ? hd.score : 1, label: hd ? hd.categoryName : '' });
       }
     } catch (x) { out = []; }
     try { m.bmp.close(); } catch (x) { /* ignore */ }

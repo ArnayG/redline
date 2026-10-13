@@ -21,11 +21,13 @@
 
      ch.palm(lm, W, H) -> {x, y, size}      size = wrist -> middle-MCP length (px), for push / distance gestures
      ch.handRoll(lm, W, H) -> {a: deg (index->pinky MCP line), b: deg (wrist -> middle MCP)}
-     ch.curl(lm) -> 0 (open palm) .. 1 (closed fist)
+     ch.curl(lm, wl?) -> 0 (open palm) .. 1 (closed fist)     wl: world landmarks (metres) when the detector has them
+     ch.handScale(lm, wl, W, H) -> {s, world}   palm-only apparent scale (push / pull = distance), tilt-robust with wl
+     ch.createPedals() -> P   hands-only throttle / brake / handbrake ('grip' default | 'auto' | 'push' | 'off'), see below
      ch.createSolver(opts?) -> S   S.update(hands, W, H, t) -> meas {ok, angle (deg, continuous), period: 360, conf,
                                    mode:'two'|'one'|null, pts, hands}   S.calibrate() (current pose = centre)
                                    S.state()   hands: [{lm, score, label}] straight from the detector
-     ch.gestures(meas, prefs, t, st) -> {throttle, nitro}   (both off unless enabled in prefs)
+     ch.gestures(meas, prefs, t, st) -> {throttle, nitro}   (nitro push; the old fists-throttle; off unless enabled)
    Browser
      ch.load({preferGpu, worker}) -> Promise<{ok, delegate:'GPU'|'CPU', worker, reason?}>  (worker: js/input/camwheel-worker.js)
      ch.submit(video, tMs) -> taken?   ch.onResult(fn(hands, tMs, inferMs)) -> off   ch.detect(video, tMs) (main thread, sync)
@@ -60,9 +62,11 @@ CB.input = CB.input || {};
   function handRoll(lm, W, H) {
     return { a: ang(P(lm, 5, W, H), P(lm, 17, W, H)), b: ang(P(lm, 0, W, H), P(lm, 9, W, H)) };
   }
-  /** finger curl: tips folded back towards the wrist. 0 = open palm, 1 = closed fist (scale-free, 3D) */
-  function curl(lm) {
-    function d(i, j) { var a = lm[i], b = lm[j]; return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
+  /** finger curl: tips folded back towards the wrist. 0 = open palm, 1 = closed fist (scale-free, 3D). wl: MediaPipe
+      world landmarks (metres, hand-centred) when the detector gives them: a true 3D hand, so the camera angle matters less */
+  function curl(lm, wl) {
+    var L = wl && wl.length >= 21 ? wl : lm;
+    function d(i, j) { var a = L[i], b = L[j]; return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
     var ref = d(0, 9) || 1e-6, s = 0;
     [[8, 5], [12, 9], [16, 13], [20, 17]].forEach(function (f) {
       // open finger: tip far beyond its MCP (~0.75 x palm length); folded: tip back near the MCP / palm
@@ -70,6 +74,22 @@ CB.input = CB.input || {};
       s += clamp((m + 0.75 - r) / 0.75, 0, 1);
     });
     return s / 4;
+  }
+  /* apparent hand scale (for push / pull = distance from the camera). Palm segments only (wrist + the four MCPs), which
+     do not move when the fingers curl. With world landmarks: image px per metre of the same segments seen in the
+     camera's x-y plane (weak perspective), which cancels the hand tilting; without: their mean length in px. */
+  var SEG = [[0, 5], [0, 9], [0, 13], [0, 17], [5, 9], [9, 13], [13, 17], [5, 17]];
+  function handScale(lm, wl, W, H) {
+    var px = 0, i;
+    for (i = 0; i < SEG.length; i++) { var a = lm[SEG[i][0]], b = lm[SEG[i][1]]; px += Math.hypot((a.x - b.x) * W, (a.y - b.y) * H); }
+    if (wl && wl.length >= 21) {
+      var w2 = 0, w3 = 0;
+      for (i = 0; i < SEG.length; i++) { var p = wl[SEG[i][0]], q = wl[SEG[i][1]]; w2 += Math.hypot(p.x - q.x, p.y - q.y); w3 += Math.hypot(p.x - q.x, p.y - q.y, (p.z || 0) - (q.z || 0)); }
+      // nearly edge-on (the x-y projection collapses): the ratio is unreliable, use the palm's true size instead
+      if (w2 > 0.45 * w3 && w2 > 1e-4) return { s: px / w2 / 1000, world: true };
+      if (w3 > 1e-4) return { s: px / w3 / 1000, world: true };
+    }
+    return { s: px / SEG.length, world: false };
   }
 
   /* ================================================================ solver: hands -> continuous wheel angle */
@@ -86,7 +106,7 @@ CB.input = CB.input || {};
         S.lastT = t;
         if (S.seenT != null && t - S.seenT > 1500) S.reset();   // long gone: identify the hands afresh (left = a)
         hands = (hands || []).filter(function (h) { return h && h.lm && h.lm.length >= 21; });
-        var cand = hands.map(function (h) { var p = palm(h.lm, W, H); return { h: h, x: p.x, y: p.y, size: p.size, roll: handRoll(h.lm, W, H), curl: curl(h.lm), score: num(h.score, 1) }; });
+        var cand = hands.map(function (h) { var p = palm(h.lm, W, H), sc = handScale(h.lm, h.wl, W, H); return { h: h, x: p.x, y: p.y, size: p.size, scale: sc.s, world: sc.world, roll: handRoll(h.lm, W, H), curl: curl(h.lm, h.wl), score: num(h.score, 1) }; });
         // identity by continuity: which candidate is the tracked "a" (left at the start) and "b"
         var a = null, b = null, T = S.tracks;
         if (cand.length >= 2) {
@@ -152,7 +172,7 @@ CB.input = CB.input || {};
         S.curls = [a ? a.curl : null, b ? b.curl : null];
         return {
           ok: true, angle: S.angle, period: 360, conf: conf, mode: mode,
-          pts: [a, b].filter(Boolean).map(function (c) { return { x: c.x, y: c.y, size: c.size, curl: c.curl }; }),
+          pts: [a, b].map(function (c, i) { return c && { id: i ? 'b' : 'a', x: c.x, y: c.y, size: c.size, scale: c.scale, world: c.world, curl: c.curl }; }).filter(Boolean),
           hands: cand
         };
       },
@@ -202,6 +222,166 @@ CB.input = CB.input || {};
     return out;
   }
 
+  /* ================================================================ hands-only pedals (throttle / brake / handbrake) */
+  /*
+   * createPedals(opts?) -> P   P.update(meas, t, prefs) -> out   P.read(t) -> out (lost-hands policy applied)
+   *   out {throttle 0..1, brake 0..1, handbrake, item (one-shot), gas (normalised grip 0..1+), pull (scale / neutral),
+   *        state:'gas'|'coast'|'brake'|'lost'|'off', ok}
+   *   P.calibrateNeutral(meas, {curl}) (open hands at 9 and 3: hand scale per hand, + the open curl)
+   *   P.calibrateGrip(meas) (a firm grip: the full-grip curl)   P.cal / P.setCal(c)
+   * prefs.pedals:
+   *   'grip' (default)  closed hands = gas, proportional to how tightly they close (finger curl, normalised between the
+   *                     calibrated open and full-grip samples); relaxed / open hands = coast; pull both hands back
+   *                     towards you (hands >= 14 % smaller than at the neutral pose) = brake, proportional, and it
+   *                     overrides the gas. Held at a standstill the brake reverses (the engine's own rule, as for keys).
+   *   'auto'            gas on its own; open your hands (or pull back) = brake
+   *   'push'            push both hands towards the screen (>= 10 % bigger) = gas, pull back = brake
+   *   'off'             pedals stay on the keyboard / gamepad
+   * Each signal: a short exponential smoothing (45-60 ms, about one camera frame at 30 fps) + hysteresis bands, so a
+   * value near a threshold never flickers. Lost hands: the last output is held 150 ms (one dropped frame changes
+   * nothing), then throttle 0, and after 0.5 s a light brake (0.3). Never stuck on gas: read(t) applies this even if no
+   * new camera result arrives at all.
+   * prefs.gestureHandbrake: a quick downward yank of both hands = handbrake for 0.4 s.  prefs.gestureItem: a quick
+   * upward flick of both hands = use item (Arcade). (Steering turns move the two hands in opposite directions, so their
+   * mean height, in palm sizes, only moves when both go the same way.)
+   */
+  var PED = {
+    open: 0.3, grip: 0.92, tauCurl: 0.045, tauScale: 0.045,
+    gasOn: 0.38, gasOff: 0.22, gasFull: 0.8, openOn: 0.2, openOff: 0.4,
+    pullOn: 0.86, pullOff: 0.9, pullFull: 0.72, pushOn: 1.1, pushOff: 1.06, pushFull: 1.3,
+    holdMs: 150, lostBrakeMs: 500, lostBrake: 0.3, yank: 5.5, yankMs: 400
+  };
+  function createPedals(opts) {
+    var C = Object.assign({}, PED, opts || {});
+    var P = {
+      C: C, cal: { open: C.open, grip: C.grip, scale: {}, world: null },
+      out: { throttle: 0, brake: 0, handbrake: false, item: false, gas: 0, pull: 1, state: 'off', ok: false },
+      cs: null, rs: null, gasOn: false, brakeOn: false, openOn: false, lastT: null, lastOkT: null, closeT: 0, hist: [], hbUntil: 0, yankT: -1e9, last: null,
+      setCal: function (c) {
+        if (!c || typeof c !== 'object') return;
+        if (isFinite(c.open)) P.cal.open = clamp(+c.open, 0, 0.8);
+        if (isFinite(c.grip)) P.cal.grip = clamp(+c.grip, P.cal.open + 0.15, 1);
+        if (c.scale && typeof c.scale === 'object') { P.cal.scale = {}; ['a', 'b'].forEach(function (k) { if (isFinite(c.scale[k]) && c.scale[k] > 0) P.cal.scale[k] = +c.scale[k]; }); P.cal.world = c.world == null ? null : !!c.world; }
+      },
+      /** the current pose is the neutral one (open grip at 9 and 3): hand scale per hand, and (o.curl) the open curl */
+      calibrateNeutral: function (meas, o) {
+        meas = meas || P.last;
+        if (!meas || !meas.ok || !meas.pts || !meas.pts.length) return { ok: false };
+        var sc = {};
+        meas.pts.forEach(function (p) { if (p.id && p.scale > 0) sc[p.id] = p.scale; });
+        if (meas.pts.length === 1 && meas.pts[0].scale > 0) { var k = meas.pts[0].id === 'b' ? 'a' : 'b'; sc[k] = P.cal.scale[k] > 0 && P.cal.world === !!meas.pts[0].world ? P.cal.scale[k] : meas.pts[0].scale; }
+        P.cal.scale = sc; P.cal.world = !!meas.pts[0].world;
+        var c = meanCurl(meas), took = false;
+        if (o && o.curl && c != null && c < Math.min(0.6, P.cal.grip - 0.2)) { P.cal.open = c; took = true; }
+        P.rs = null; P.brakeOn = false;
+        return { ok: true, open: took ? c : null };
+      },
+      /** a firm grip: the full-grip curl (must be clearly more closed than the open sample) */
+      calibrateGrip: function (meas) {
+        meas = meas || P.last;
+        var c = meanCurl(meas);
+        if (c == null) return { ok: false, reason: 'nohands' };
+        if (c < P.cal.open + 0.2) return { ok: false, reason: 'open', curl: c };
+        P.cal.grip = clamp(c, P.cal.open + 0.2, 1); P.cs = null;
+        return { ok: true, grip: P.cal.grip };
+      },
+      update: function (meas, t, prefs) {
+        t = num(t, nowMs()); prefs = prefs || {};
+        var mode = prefs.pedals || 'grip';
+        if (!meas || !meas.ok || !meas.pts || !meas.pts.length) { P.hist.length = 0; return P.read(t, mode); }
+        P.last = meas;
+        var gap = P.lastOkT == null ? Infinity : t - P.lastOkT;
+        var dt = P.lastT == null || gap > C.holdMs ? 0 : clamp((t - P.lastT) / 1000, 0, 0.25);
+        P.lastT = t; P.lastOkT = t;
+        if (gap > C.holdMs) { P.cs = null; P.rs = null; P.gasOn = false; P.brakeOn = false; P.openOn = false; }
+        var o = P.out = { throttle: 0, brake: 0, handbrake: false, item: false, gas: 0, pull: 1, state: 'coast', ok: true };
+        if (mode === 'off') { o.state = 'off'; yanks(meas, t, prefs, o); return o; }
+        // grip: curl normalised between the open and the full-grip samples, smoothed
+        var c = meanCurl(meas), n = c == null ? 0 : (c - P.cal.open) / Math.max(0.15, P.cal.grip - P.cal.open);
+        n = clamp(n, -0.5, 1.5);
+        P.cs = P.cs == null || dt === 0 ? n : P.cs + (n - P.cs) * (1 - Math.exp(-dt / C.tauCurl));
+        o.gas = P.cs;
+        // distance: scale against each hand's neutral scale (only when the neutral was taken the same way)
+        var rs = ratio(meas);
+        if (rs != null) { P.rs = P.rs == null || dt === 0 ? rs : P.rs + (rs - P.rs) * (1 - Math.exp(-dt / C.tauScale)); }
+        else P.rs = null;
+        var r = P.rs;
+        o.pull = r == null ? 1 : r;
+        // pull back = brake (all modes)
+        if (r != null) { if (!P.brakeOn && r < C.pullOn) P.brakeOn = true; else if (P.brakeOn && r > C.pullOff) P.brakeOn = false; }
+        else P.brakeOn = false;
+        var brk = P.brakeOn ? clamp((C.pullOff - r) / (C.pullOff - C.pullFull), 0.35, 1) : 0;
+        var thr = 0;
+        if (mode === 'auto') {
+          if (!P.openOn && P.cs < C.openOn) P.openOn = true; else if (P.openOn && P.cs > C.openOff) P.openOn = false;
+          if (P.openOn) brk = Math.max(brk, clamp((C.openOff - P.cs) / (C.openOff - C.openOn + 0.1), 0.5, 1));
+          thr = 1;
+        } else if (mode === 'push') {
+          if (r != null) { if (!P.gasOn && r > C.pushOn) P.gasOn = true; else if (P.gasOn && r < C.pushOff) P.gasOn = false; } else P.gasOn = false;
+          thr = P.gasOn ? clamp((r - C.pushOff) / (C.pushFull - C.pushOff), 0.2, 1) : 0;
+        } else {
+          if (!P.gasOn && P.cs > C.gasOn) P.gasOn = true; else if (P.gasOn && P.cs < C.gasOff) P.gasOn = false;
+          thr = P.gasOn ? clamp((P.cs - C.gasOff) / (C.gasFull - C.gasOff), 0.15, 1) : 0;
+        }
+        if (brk > 0) thr = 0;                                  // the brake always wins
+        o.throttle = thr; o.brake = brk;
+        o.state = brk > 0 ? 'brake' : thr > 0 ? 'gas' : 'coast';
+        adapt(meas, r, dt, mode);
+        yanks(meas, t, prefs, o);
+        return o;
+      },
+      /** the output for time t: held 150 ms after the last hands, then no gas; a light brake after 0.5 s */
+      read: function (t, mode) {
+        t = num(t, nowMs());
+        var age = P.lastOkT == null ? Infinity : t - P.lastOkT;
+        if (P.out.ok && age <= C.holdMs) { var h = Object.assign({}, P.out); if (t > P.hbUntil) h.handbrake = false; return h; }
+        P.gasOn = false; P.openOn = false;
+        var off = (mode || '') === 'off';
+        return { throttle: 0, brake: !off && P.lastOkT != null && age > C.lostBrakeMs ? C.lostBrake : 0, handbrake: false, item: false, gas: 0, pull: 1, state: P.lastOkT == null ? 'off' : 'lost', ok: false };
+      },
+      reset: function () { P.cs = P.rs = null; P.gasOn = P.brakeOn = P.openOn = false; P.lastT = P.lastOkT = null; P.out = { throttle: 0, brake: 0, handbrake: false, item: false, gas: 0, pull: 1, state: 'off', ok: false }; P.hist.length = 0; }
+    };
+    function meanCurl(meas) {
+      if (!meas || !meas.ok || !meas.pts) return null;
+      var cs = meas.pts.map(function (p) { return p.curl; }).filter(function (c) { return c != null && isFinite(c); });
+      return cs.length ? cs.reduce(function (a, c) { return a + c; }, 0) / cs.length : null;
+    }
+    function ratio(meas) {
+      var s = 0, n = 0, sc = P.cal.scale;
+      meas.pts.forEach(function (p) {
+        var b = sc[p.id || 'a'];
+        if (b > 0 && p.scale > 0 && (P.cal.world == null || !!p.world === P.cal.world)) { s += p.scale / b; n++; }
+      });
+      return n ? s / n : null;
+    }
+    // the neutral scale follows slow changes (leaning in the seat): only while coasting / driving near neutral, never
+    // while braking; a sustained move closer re-bases faster (otherwise pulling back to the old spot would brake)
+    function adapt(meas, r, dt, mode) {
+      if (r == null || dt <= 0 || P.brakeOn) { P.closeT = 0; return; }
+      var tau = 0;
+      if (mode === 'push') { if (r > 0.96 && r < 1.04) tau = 20; }
+      else if (r > 0.93 && r < 1.1) tau = 15;
+      else if (r >= 1.15) { P.closeT += dt; if (P.closeT > 3) tau = 2; }
+      if (r < 1.15) P.closeT = 0;
+      if (!tau) return;
+      var k = 1 - Math.exp(-dt / tau);
+      meas.pts.forEach(function (p) { var b = P.cal.scale[p.id || 'a']; if (b > 0 && p.scale > 0) P.cal.scale[p.id || 'a'] = b + (p.scale - b) * k; });
+    }
+    function yanks(meas, t, prefs, o) {
+      if (t <= P.hbUntil) o.handbrake = true;
+      if (!(prefs.gestureHandbrake || prefs.gestureItem) || meas.mode !== 'two' || meas.pts.length < 2) { P.hist.length = 0; return; }
+      var size = (meas.pts[0].size + meas.pts[1].size) / 2 || 1, y = (meas.pts[0].y + meas.pts[1].y) / 2 / size;
+      P.hist.push({ t: t, y: y });
+      while (P.hist.length && t - P.hist[0].t > 200) P.hist.shift();
+      var h0 = P.hist[0];
+      if (!h0 || t - h0.t < 90 || t - P.yankT < 700) return;
+      var vy = (y - h0.y) / ((t - h0.t) / 1000);            // palm sizes per second, + = down
+      if (vy > C.yank && prefs.gestureHandbrake) { P.hbUntil = t + C.yankMs; P.yankT = t; o.handbrake = true; P.hist.length = 0; }
+      else if (vy < -C.yank && prefs.gestureItem) { o.item = true; P.yankT = t; P.hist.length = 0; }
+    }
+    return P;
+  }
+
   /* ================================================================ browser: lazy MediaPipe loader + detector */
   /* Preferred: a Web Worker (js/input/camwheel-worker.js) runs the landmarker off the main thread; each camera frame goes
      over as a transferred ImageBitmap and only the 2 x 21 landmarks come back, so inference never stalls the game.
@@ -209,7 +389,8 @@ CB.input = CB.input || {};
   var lib = null, landmarker = null, delegate = null, loading = null, lastTs = -1;
   var worker = null, busy = false, frameId = 0, resultFns = [], sentAt = 0;
   var api = {
-    VENDOR: VENDOR, palm: palm, handRoll: handRoll, curl: curl, createSolver: createSolver, gestures: gestures,
+    VENDOR: VENDOR, palm: palm, handRoll: handRoll, curl: curl, handScale: handScale, createSolver: createSolver, gestures: gestures,
+    createPedals: createPedals, PEDALS: PED, PEDAL_MODES: ['grip', 'auto', 'push', 'off'],
     lastMs: 0, mode: null, loaded: function () { return !!(landmarker || (worker && delegate)); }, delegate: function () { return delegate; }
   };
   function base() {
@@ -280,7 +461,7 @@ CB.input = CB.input || {};
     var out = [];
     for (var i = 0; r && r.landmarks && i < r.landmarks.length; i++) {
       var hd = r.handedness && r.handedness[i] && r.handedness[i][0];
-      out.push({ lm: r.landmarks[i], score: hd ? hd.score : 1, label: hd ? hd.categoryName : '' });
+      out.push({ lm: r.landmarks[i], wl: r.worldLandmarks && r.worldLandmarks[i] || null, score: hd ? hd.score : 1, label: hd ? hd.categoryName : '' });
     }
     return out;
   }

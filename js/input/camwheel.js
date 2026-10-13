@@ -5,7 +5,8 @@
    vendor/mediapipe/, run in a worker: js/input/camwheel-worker.js). Fallback method 'marker' (Settings: Advanced ->
    marker mode): pure-JS colour tracking of one or two coloured objects (no ML, ~2 ms/frame). Frames never leave the device.
    This file: the camera, the per-frame pipeline, the shared angle -> steer stage, the 'camwheel' hub source (steering
-   only, unless the optional gesture throttle is on), and the colour-marker core (Node-tested with synthetic frames).
+   + hands-only pedals: prefs.pedals 'grip' (default: close hands = gas, relax = coast, pull back = brake) | 'auto' |
+   'push' | 'off', see camhands.createPedals), the 3-2-1 re-centre countdown, and the colour-marker core (Node-tested).
 
    Pipeline: getUserMedia (640x360 ideal for hands, 640x480 for markers, 60 fps if offered) -> requestVideoFrameCallback
      hands : frame -> ImageBitmap -> worker (GPU, CPU fallback) -> 21 landmarks x 2 -> camhands solver (two-hand line,
@@ -20,10 +21,12 @@
      boxes) -> {ok, models, mode:'same'|'two'|'one', style, expect, warnings}, createTracker(cal, {w, h}).process(rgba, t)
    Shared: createSteer(prefs) -> S.update(meas, t) / S.read(t) / S.recentre(); oneEuro, mapAngle, cutoffFor
    Prefs (localStorage 'forge.camWheel.v1'): method 'hands'|'marker', maxAngle 90, deadzone 2, smoothing 0.3, lookahead,
-     deviceId, pip, gestureThrottle / gestureNitro (off), cpu, handCal {two, labels}, style + cal (marker mode)
+     deviceId, pip, pedals 'grip'|'auto'|'push'|'off', gestureNitro / gestureHandbrake / gestureItem (off), cpu,
+     handCal {two, labels}, pedalCal {open, grip, scale {a, b}, world}, style + cal (marker mode)
    Browser: secure() supported() listCameras() start({deviceId}) -> {ok, reason}  stop()  running()  enable() disable()
-     ready()  calibrateNow(boxes?, style?)  recentre()  model() / loadModel()  stats()  on('frame'|'hands'|'state'|
-     'prefs'|'autocentre', fn)
+     ready()  calibrateNow(boxes?, style?) (immediate)  startCentre('centre'|'calibrate'|'auto') (3-2-1 countdown, again =
+     cancel)  cancelCentre()  countdown()  recentre() (= startCentre('centre'))  recentreNow()  captureGrip()
+     model() / loadModel()  stats()  on('frame'|'hands'|'state'|'prefs'|'autocentre'|'countdown', fn)
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
 if (typeof window !== 'undefined') window.CB = CB;
@@ -34,7 +37,9 @@ CB.input = CB.input || {};
 
   var DEG = Math.PI / 180;
   var PREF_KEY = 'forge.camWheel.v1';
-  var DEFAULT_PREFS = { method: 'hands', maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, gestureThrottle: false, gestureNitro: false, cpu: false, handCal: null, cal: null };
+  var DEFAULT_PREFS = { method: 'hands', maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, pedals: 'grip', gestureNitro: false, gestureHandbrake: false, gestureItem: false, cpu: false, handCal: null, pedalCal: null, cal: null };
+  var PEDAL_MODES = ['grip', 'auto', 'push', 'off'];
+  var COUNT_MS = 3000, GRIP_MS = 2000;
   var LUT_BITS = 6, LUT_SIZE = 1 << (3 * LUT_BITS);
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -596,12 +601,55 @@ CB.input = CB.input || {};
       style: p.style === 'bar' ? 'bar' : 'pair',
       deviceId: typeof p.deviceId === 'string' ? p.deviceId.slice(0, 200) : '',
       pip: p.pip !== false,
-      gestureThrottle: !!p.gestureThrottle,
+      pedals: PEDAL_MODES.indexOf(p.pedals) >= 0 ? p.pedals : 'grip',
       gestureNitro: !!p.gestureNitro,
+      gestureHandbrake: !!p.gestureHandbrake,
+      gestureItem: !!p.gestureItem,
       cpu: !!p.cpu,
       handCal: hc && isFinite(hc.two) ? { two: +hc.two, labels: hc.labels && typeof hc.labels === 'object' ? hc.labels : null } : null,
+      pedalCal: normPedalCal(p.pedalCal),
       cal: p.cal && p.cal.ok && Array.isArray(p.cal.models) ? p.cal : null
     };
+  }
+  function normPedalCal(c) {
+    if (!c || typeof c !== 'object') return null;
+    var o = { open: clamp(num(+c.open, 0.3), 0, 0.8), grip: clamp(num(+c.grip, 0.92), 0.2, 1), scale: {}, world: c.world == null ? null : !!c.world };
+    if (o.grip < o.open + 0.15) o.grip = Math.min(1, o.open + 0.15);
+    if (c.scale && typeof c.scale === 'object') ['a', 'b'].forEach(function (k) { var v = +c.scale[k]; if (isFinite(v) && v > 0) o.scale[k] = v; });
+    return o;
+  }
+  /* ================================================================ re-centre countdown (pure)
+     Every re-centre (buttons, Space / C, pause menu, the PiP chip, the first auto-centre) counts 3-2-1 first and captures
+     the neutral pose at the end; the old calibration keeps steering until then. The same call again (or Esc) cancels.
+       cd = createCountdown()   cd.start(t, phases, kind) / cd.toggle(...) (running: cancels -> {state:'cancelled'})
+       cd.cancel()   cd.step(t) -> null (idle) | {state:'count', phase, left (whole seconds, 3 2 1), frac 0..1, kind}
+                                 | {state:'capture', phase, next, kind} (once, when a phase ends; the next one starts)
+       phases: [{id:'neutral', ms:3000}] (+ {id:'grip', ms:2000} for a full calibration) */
+  function createCountdown() {
+    var C = {
+      phase: null, phases: [], i: 0, t0: 0, endsAt: 0, kind: null,
+      active: function () { return !!C.phase; },
+      start: function (t, phases, kind) {
+        C.phases = phases && phases.length ? phases : [{ id: 'neutral', ms: COUNT_MS }];
+        C.i = 0; C.kind = kind || 'centre'; begin(t);
+        return C.step(t);
+      },
+      toggle: function (t, phases, kind) { if (C.phase) { C.cancel(); return { state: 'cancelled', kind: C.kind }; } return C.start(t, phases, kind); },
+      cancel: function () { var was = !!C.phase; C.phase = null; return was; },
+      step: function (t) {
+        if (!C.phase) return null;
+        if (t < C.endsAt) {
+          var ms = C.endsAt - C.t0;
+          return { state: 'count', phase: C.phase, left: Math.max(1, Math.ceil((C.endsAt - t) / 1000 - 1e-9)), frac: clamp((t - C.t0) / ms, 0, 1), kind: C.kind, endsAt: C.endsAt };
+        }
+        var fired = C.phase;
+        C.i++;
+        if (C.i < C.phases.length) begin(t); else C.phase = null;
+        return { state: 'capture', phase: fired, next: C.phase, kind: C.kind };
+      }
+    };
+    function begin(t) { var p = C.phases[C.i]; C.phase = p.id; C.t0 = t; C.endsAt = t + num(p.ms, COUNT_MS); }
+    return C;
   }
   function loadPrefs() {
     try { var s = globalThis.localStorage && globalThis.localStorage.getItem(PREF_KEY); if (s) return normPrefs(JSON.parse(s)); } catch (e) { /* ignore */ }
@@ -619,7 +667,7 @@ CB.input = CB.input || {};
     rgbToHsv: rgbToHsv, hueDist: hueDist, buildLut: buildLut, segment: segment, unite: unite, axisAngle: axisAngle,
     calibrate: calibrate, defaultBoxes: defaultBoxes, createTracker: createTracker, createSteer: createSteer,
     mapAngle: mapAngle, oneEuro: oneEuro, cutoffFor: cutoffFor, skinLike: skinLike, wrapP: wrapP,
-    normPrefs: normPrefs, DEFAULT_PREFS: DEFAULT_PREFS, PREF_KEY: PREF_KEY,
+    normPrefs: normPrefs, DEFAULT_PREFS: DEFAULT_PREFS, PREF_KEY: PREF_KEY, createCountdown: createCountdown, COUNT_MS: COUNT_MS, GRIP_MS: GRIP_MS, PEDAL_MODES: PEDAL_MODES,
     prefs: loadPrefs(), on: on
   };
   api.setPrefs = function (p) {
@@ -638,7 +686,8 @@ CB.input = CB.input || {};
     tracker: null, solver: null, steer: null, cal: null, enabled: false, unreg: null,
     vfcId: 0, rafId: 0, lastVT: -1, frameN: 0, fpsT0: 0, fpsN: 0, fps: 0, procMs: 0, procs: [], infer: [],
     lats: [], pageLats: [], pend: null, lastRgba: null, camW: 0, camH: 0, camFps: 0, startTok: 0,
-    gest: {}, gestOut: { throttle: null, nitro: false }, nitroOn: false, autoCal: null, steady: [], inflight: {}, resLat: []
+    gest: {}, gestOut: { throttle: null, nitro: false }, nitroOn: false, autoCal: null, steady: [], inflight: {}, resLat: [],
+    pedals: null, pedOut: null, cd: createCountdown(), cdTimer: 0, lastHandsT: -1e9
   };
   function setState(s, reason) { if (B.state !== s || B.reason !== (reason || null)) { B.state = s; B.reason = reason || null; emit('state', { state: s, reason: B.reason }); } }
   function secure() {
@@ -762,6 +811,8 @@ CB.input = CB.input || {};
     if (B.video) { try { B.video.pause(); B.video.srcObject = null; } catch (e) { /* ignore */ } if (B.video.parentNode) B.video.parentNode.removeChild(B.video); }
     B.lastRgba = null; B.fps = 0; B.lastVT = -1;
     if (B.nitroOn) setNitro(false);
+    if (B.cd.active()) api.cancelCentre();
+    if (B.pedals) B.pedals.reset();
     if (!keepState) setState('off');
   };
   api.running = function () { return !!B.stream; };
@@ -775,6 +826,7 @@ CB.input = CB.input || {};
         var hc = api.prefs.handCal;
         if (hc) B.solver.cal = { two: hc.two, labels: hc.labels };
       }
+      if (!B.pedals && H.createPedals) { B.pedals = H.createPedals(); if (api.prefs.pedalCal) B.pedals.setCal(api.prefs.pedalCal); }
       if (!B.steer) { B.steer = createSteer(api.prefs); B.steer.centre = 0; }
       return;
     }
@@ -841,7 +893,7 @@ CB.input = CB.input || {};
     var lo = Infinity, hi = -Infinity;
     B.steady.forEach(function (s) { lo = Math.min(lo, s.a); hi = Math.max(hi, s.a); });
     var rel = (lo + hi) / 2 + (B.solver.cal ? B.solver.cal.two : 0);
-    if (hi - lo < 1.5 && Math.abs(wrapP(rel, 360)) < 15) { A.pending = false; api.calibrateNow(); emit('autocentre', { angle: rel }); }
+    if (hi - lo < 1.5 && Math.abs(wrapP(rel, 360)) < 15 && !B.cd.active()) { A.pending = false; B.steady.length = 0; api.startCentre('auto'); }
   }
   /** a landmark result (worker or main thread) for the frame submitted with timestamp ts */
   function onHands(list, ts, ms) {
@@ -854,8 +906,15 @@ CB.input = CB.input || {};
     B.lastHands = meas;
     autoCentre(meas, F.t);
     B.steer.update(meas, F.t);
-    B.gestOut = CB.input.camhands.gestures(meas, api.prefs, F.t, B.gest);
-    if (api.prefs.gestureNitro) setNitro(!!B.gestOut.nitro); else if (B.nitroOn) setNitro(false);
+    if (meas.ok) B.lastHandsT = nowMs();
+    var nitroOk = api.prefs.gestureNitro && api.prefs.pedals !== 'push';   // push / pull pedals: a push is the gas
+    B.gestOut = CB.input.camhands.gestures(meas, nitroOk ? api.prefs : { gestureNitro: false }, F.t, B.gest);
+    if (nitroOk) setNitro(!!B.gestOut.nitro); else if (B.nitroOn) setNitro(false);
+    if (B.pedals) {
+      B.pedOut = B.pedals.update(meas, F.t, api.prefs);
+      if (B.pedOut.item && B.enabled) { var Hb = CB.input.hub; if (Hb && Hb.pushEvent) Hb.pushEvent('item', 'camwheel'); }
+    }
+    if (B.cd.active()) cdStep();
     if (B.state === 'tracking' || B.state === 'lost') setState(B.steer.read(nowMs()).lost === false ? 'tracking' : 'lost');
     var done = nowMs();
     B.resN = (B.resN || 0) + 1;
@@ -920,8 +979,8 @@ CB.input = CB.input || {};
           B.pageLats.push(now - p.shown); if (B.pageLats.length > 120) B.pageLats.shift();
           B.lastApplied = { id: p.id, at: now, cap: p.cap, shown: p.shown, done: p.done, mediaTime: p.mediaTime };
         }
-        var thr = hands() && api.prefs.gestureThrottle && !r.lost ? (B.gestOut.throttle || 0) : 0;
-        return { active: true, stale: r.lost, steer: r.steer, throttle: thr, brake: 0, handbrake: false };
+        var pd = hands() && B.pedals && api.prefs.pedals !== 'off' ? B.pedals.read(nowMs(), api.prefs.pedals) : null;
+        return { active: true, stale: r.lost, steer: r.steer, throttle: pd ? pd.throttle : 0, brake: pd ? pd.brake : 0, handbrake: !!(pd && pd.handbrake) };
       }
     };
   }
@@ -943,7 +1002,7 @@ CB.input = CB.input || {};
   };
   api.enabled = function () { return B.enabled; };
   /** hands: the current pose is straight ahead.  marker: sample the colours in the boxes (boxes / style optional). */
-  api.calibrateNow = function (boxes, style) {
+  api.calibrateNow = function (boxes, style, o) {
     if (hands()) {
       if (!B.solver) ensureTracker();
       if (!B.solver || !B.lastHands || !B.lastHands.ok) return { ok: false, reason: 'nohands', warnings: [] };
@@ -956,11 +1015,13 @@ CB.input = CB.input || {};
         if (hs[0].h.label && hs[1].h.label && hs[0].h.label !== hs[1].h.label) labels = { a: hs[0].h.label, b: hs[1].h.label };
       }
       if (labels) B.solver.cal.labels = labels;
-      api.setPrefs({ handCal: { two: B.solver.cal ? B.solver.cal.two : 0, labels: B.solver.cal && B.solver.cal.labels || null } });
+      var pc = null;
+      if (B.pedals) { pc = B.pedals.calibrateNeutral(B.lastHands, { curl: !!(o && o.curl) }); }
+      api.setPrefs({ handCal: { two: B.solver.cal ? B.solver.cal.two : 0, labels: B.solver.cal && B.solver.cal.labels || null }, pedalCal: B.pedals ? pedalCalOf() : api.prefs.pedalCal });
       B.steer = createSteer(api.prefs); B.steer.centre = 0;
       if (B.autoCal) B.autoCal.pending = false;
       setState('tracking');
-      return { ok: true, mode: mode === 'two' ? 'hands2' : 'hands1', warnings: [] };
+      return { ok: true, mode: mode === 'two' ? 'hands2' : 'hands1', warnings: [], open: pc && pc.open };
     }
     if (!B.lastRgba) return { ok: false, reason: 'noframe', warnings: [] };
     style = style || api.prefs.style;
@@ -975,11 +1036,62 @@ CB.input = CB.input || {};
     }
     return r;
   };
-  api.recentre = function () {
-    if (hands()) { var r = api.calibrateNow(); if (r.ok) return; }
+  function pedalCalOf() { var c = B.pedals.cal; return { open: +c.open.toFixed(3), grip: +c.grip.toFixed(3), scale: Object.assign({}, c.scale), world: c.world }; }
+  /** re-centre right now (no countdown): hands = the current pose is straight ahead; markers = the current angle */
+  api.recentreNow = function () {
+    if (hands()) { var r = api.calibrateNow(); if (r.ok) return r; }
     if (B.steer) B.steer.recentre();
+    return { ok: !!B.steer };
   };
-  api.forget = function () { api.setPrefs({ cal: null, handCal: null }); B.tracker = null; B.solver = null; if (B.enabled) api.disable(); };
+  /** hands: the current full grip = full gas (Calibrate's second step) */
+  api.captureGrip = function () {
+    if (!B.pedals || !hands()) return { ok: false, reason: 'nohands' };
+    if (nowMs() - B.lastHandsT > 400) return { ok: false, reason: 'nohands' };
+    var r = B.pedals.calibrateGrip(B.lastHands);
+    if (r.ok) api.setPrefs({ pedalCal: pedalCalOf() });
+    return r;
+  };
+  /* ---- the 3-2-1 countdown: kind 'centre' (straight ahead), 'calibrate' (neutral + full grip), 'auto' (first auto-centre) */
+  function cdEmit(e) { B.cdState = e; emit('countdown', e); }
+  function cdStep() {
+    var e = B.cd.step(nowMs());
+    if (!e) { stopCdTimer(); return; }
+    if (e.state === 'count') { if (!B.cdState || B.cdState.left !== e.left || B.cdState.phase !== e.phase || B.cdState.state !== 'count') cdEmit(e); else B.cdState = e; return; }
+    // capture at the end of a phase
+    var res;
+    if (e.phase === 'grip') res = api.captureGrip();
+    else if (hands()) {
+      res = nowMs() - B.lastHandsT > 400 ? { ok: false, reason: 'nohands' } : api.calibrateNow(null, null, { curl: e.kind !== 'centre' });
+    } else if (e.kind === 'calibrate' || !api.prefs.cal) res = api.calibrateNow(null, api.prefs.style);
+    else { if (B.steer) B.steer.recentre(); res = { ok: !!B.steer }; }
+    if (!res || !res.ok) { B.cd.cancel(); stopCdTimer(); if (e.kind === 'auto' && B.autoCal) B.autoCal.pending = true; cdEmit({ state: 'fail', phase: e.phase, kind: e.kind, result: res || { ok: false } }); return; }
+    if (e.phase === 'neutral' && e.kind === 'auto') emit('autocentre', { angle: 0 });
+    if (e.next) { cdEmit({ state: 'captured', phase: e.phase, next: e.next, kind: e.kind, result: res }); cdStep(); return; }
+    stopCdTimer();
+    cdEmit({ state: 'done', phase: e.phase, kind: e.kind, result: res });
+  }
+  function stopCdTimer() { if (B.cdTimer) { clearInterval(B.cdTimer); B.cdTimer = 0; } }
+  /** start (or, when one is running, cancel) the 3-2-1 re-centre countdown. kind 'centre' | 'calibrate' | 'auto' */
+  api.startCentre = function (kind) {
+    kind = kind || 'centre';
+    if (B.cd.active()) { api.cancelCentre(); return { state: 'cancelled' }; }
+    var ph = [{ id: 'neutral', ms: num(api.countMs, COUNT_MS) }];
+    if (kind === 'calibrate' && hands()) ph.push({ id: 'grip', ms: num(api.gripMs, GRIP_MS) });
+    if (B.autoCal && kind !== 'auto') B.autoCal.pending = false;    // asked for: no auto-centre on top of it
+    var e = B.cd.start(nowMs(), ph, kind);
+    cdEmit(e);
+    stopCdTimer();
+    if (typeof setInterval === 'function') B.cdTimer = setInterval(cdStep, 50);
+    return e;
+  };
+  api.cancelCentre = function () {
+    var was = B.cd.cancel(); stopCdTimer();
+    if (was) cdEmit({ state: 'cancel', kind: B.cd.kind });
+    return was;
+  };
+  api.countdown = function () { return B.cd.active() ? B.cd.step(nowMs()) : null; };
+  api.recentre = function () { return api.startCentre('centre'); };
+  api.forget = function () { api.setPrefs({ cal: null, handCal: null, pedalCal: null }); B.tracker = null; B.solver = null; B.pedals = null; if (B.enabled) api.disable(); };
   api.stats = function () {
     function med(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); return s[s.length >> 1]; }
     var t = nowMs(), r = B.steer ? B.steer.read(t) : { steer: 0, lost: true };
@@ -993,7 +1105,8 @@ CB.input = CB.input || {};
       hands: lh && lh.ok ? lh.pts.length : 0, handMode: lh && lh.ok ? lh.mode : null,
       w: B.w, h: B.h, camW: B.camW, camH: B.camH, camFps: B.camFps, path: B.path ? B.path.name : 'auto',
       calibrated: hands() ? true : !!api.prefs.cal, mode: hands() ? 'hands' : api.prefs.cal ? api.prefs.cal.mode : null,
-      gestures: { throttle: B.gestOut.throttle, nitro: !!B.gestOut.nitro }
+      gestures: { nitro: !!B.gestOut.nitro },
+      pedals: hands() && B.pedals ? B.pedals.read(t, api.prefs.pedals) : null, pedalMode: api.prefs.pedals
     };
   };
   api._b = B;

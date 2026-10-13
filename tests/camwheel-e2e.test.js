@@ -4,7 +4,8 @@
    pipeline: getUserMedia -> MediaPipe Hand Landmarker in its worker (vendor/) -> solver -> steer -> CB.input.hub.
    Reports and checks: angle error vs the truth per frame, jitter while held level, inference ms, fps, and the delay
    from the camera frame to the steering read by the game loop; the main thread's frame pacing stays smooth.
-   Then the colour-marker fallback on a marker video.
+   Then the colour-marker fallback on a marker video, and the hands-only pedals (Grip to drive: fists = gas, the hands
+   pulled back = brake) on a third video.
    Opt-in (spawns Chrome, wants a GPU): REDLINE_E2E=1 node tests/run.js camwheel-e2e
    Ports: dev server 9867, Chrome 9868 (REDLINE_E2E_CAM_PORT=<n> uses n, n+1); REDLINE_E2E_TMP=<dir> for the profile + video.
    Chrome always runs --headless=new --mute-audio with a throw-away profile. */
@@ -112,5 +113,53 @@ t('camwheel e2e: bare hands through MediaPipe (fake camera) track the wheel angl
     var m = await session(mv, 'marker', mt);
     console.log('    markers: ' + JSON.stringify({ frames: m.frames, lost: m.lost, med: +m.med.toFixed(2), p95: +m.p95.toFixed(2), procMs: m.stats.procMs, delayMs: m.latency && +m.latency.toFixed(1) }));
     assert.ok(m.cal.ok && m.med < 3 && m.lost < m.frames * 0.05, JSON.stringify({ cal: m.cal.reason, med: m.med, lost: m.lost }));
+  } finally { cleanup(); }
+});
+
+// hands-only pedals (Grip to drive): fists = gas; the same hands 25 % smaller (pulled back) = brake. Checks the gas /
+// brake state of every landmark result against the video's script, and how many camera frames a switch takes.
+async function pedalSession(video, labels, fps, edges) {
+  var b = await chrome(video);
+  try {
+    await b.goto('http://localhost:' + PS + '/index.html', 3000);
+    await b.eval("(function(){ var cw=CB.input.camwheel, dec=" + DECODE + "; cw.setPrefs({method:'hands', pedals:'grip'}); window.__at={}; window.__s=[];" +
+      " cw.on('frame', function(f){ window.__idx=dec(cw); window.__at[Math.round(f.t)]=window.__idx; });" +
+      " cw.on('hands', function(e){ var i=window.__at[Math.round(e.t)]; if(i==null) return; var p=cw._b.pedals.read(performance.now(), 'grip'); window.__s.push({i:i, st:p.state}); });" +
+      " return cw.start().then(function(r){ return r.ok; }); })()");
+    for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
+    for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
+    var cal = JSON.parse(await b.eval("JSON.stringify(CB.input.camwheel.calibrateNow())"));
+    await b.eval("CB.input.camwheel.enable(); window.__s.length=0; 1");
+    await sleep(labels.length / fps * 1000 + 1500);
+    var S = JSON.parse(await b.eval('JSON.stringify(window.__s)'));
+    var ok = 0, n = 0;
+    S.forEach(function (r) {
+      if (r.i >= labels.length) return;
+      var tr = r.i / fps; if (edges.some(function (e) { return tr >= e && tr < e + 0.15; })) return;
+      n++; if (r.st === labels[r.i]) ok++;
+    });
+    var resp = edges.map(function (e) { var f = Math.round(e * fps), want = labels[f]; var hit = S.filter(function (r) { return r.i >= f && r.i < f + 30 && r.st === want; })[0]; return hit ? hit.i - f : null; });
+    return { cal: cal, n: n, acc: ok / Math.max(1, n), resp: resp };
+  } finally { b.close(); }
+}
+
+t('camwheel e2e: grip to drive (fists = gas, pull back = brake) through MediaPipe', async function () {
+  tmp = fs.mkdtempSync(path.join(process.env.REDLINE_E2E_TMP || os.tmpdir(), 'redline-camped-'));
+  var srv = cp.spawn(process.execPath, [path.join(root, 'tools/dev-server.js'), '--port', String(PS)], { stdio: 'ignore', cwd: root });
+  procs.push(srv);
+  try {
+    await sleep(800);
+    var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 12, edges = [4, 6.5, 9, 10.5];
+    function brake(tt) { return (tt >= 4 && tt < 6.5) || (tt >= 9 && tt < 10.5); }
+    var v = path.join(tmp, 'pedals.y4m');
+    HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return tt < 1.5 ? 0 : 35 * Math.sin((tt - 1.5) * 1.6); },
+      per: function (i, tt) { var k = brake(tt) ? 0.75 : 1; return { scale: 0.42 * k, radius: 0.24 * k }; } });
+    var labels = []; for (var i = 0; i < fps * sec; i++) labels.push(brake(i / fps) ? 'brake' : 'gas');
+    var r = await pedalSession(v, labels, fps, edges);
+    console.log('    pedals: ' + JSON.stringify({ samples: r.n, accuracy: +(r.acc * 100).toFixed(1), switchFrames: r.resp }));
+    assert.ok(r.cal.ok, 'calibrated');
+    assert.ok(r.n > 200, 'samples ' + r.n);
+    assert.ok(r.acc >= 0.95, 'accuracy ' + r.acc);
+    r.resp.forEach(function (f) { assert.ok(f != null && f <= 3, 'switch within 3 frames: ' + r.resp); });
   } finally { cleanup(); }
 });
