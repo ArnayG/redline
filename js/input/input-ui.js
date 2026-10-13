@@ -6,7 +6,9 @@
      ui.closePairing()
      ui.menuItems()          pause-menu entries for race-ui ([{label, icon, fn}])
      ui.setupRow()           race / drift setup "Controls & input" row (Element)
-     ui.settingsHTML()       Settings → Driving rows (HTML; clicks are delegated on [data-pw-act])
+     ui.settingsHTML()       Settings → Driving rows (HTML; clicks are delegated on [data-pw-act]); the shared "Steering
+                             source" picker (CB.input.sources, js/input/sources.js) is rendered first, and also heads
+                             setupRow() and adds the picked source's entries to menuItems()
      ui.mountTouch(layer, R, refresh)   tilt-steering touch layout while driving on a phone: gas (right), brake (left),
                              handbrake, re-centre, gears (pause = race-ui's own pause button); plus the "Enable tilt steering" button on touch devices
      ui.enableTilt() -> Promise   (call from a user gesture)   ui.toast(text, kind?)
@@ -458,6 +460,8 @@ CB.input = CB.input || {};
         items.push({ label: 'Tilt steering: off', icon: 'steer', fn: disableTilt });
       } else items.push({ label: 'Enable tilt steering', icon: 'steer', fn: function () { enableTilt(); } });
     }
+    var SS = CB.input.sources;   // the picked steering source's own entries (mouse, controller tilt, webcam)
+    if (SS && typeof SS.menuItems === 'function') items = items.concat(SS.menuItems());
     return items;
   }
   function sensRow() {
@@ -488,13 +492,20 @@ CB.input = CB.input || {};
     }
     box.appendChild(row);
     box.appendChild(sensRow());
+    var SS = CB.input.sources;   // shared "Steering source" picker (js/input/sources.js) above the phone row
+    if (SS && typeof SS.setupEl === 'function') {
+      var wrap = el('div', ''); wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+      wrap.appendChild(SS.setupEl()); wrap.appendChild(box);
+      return wrap;
+    }
     return box;
   }
   function settingsHTML() {
     ensureCss();
     var p = H() ? H().prefs : { maxAngle: 35, smoothing: 0.5, invert: false };
     function row(label, hint, ctl) { return '<div class="gh-row"><div class="lbl"><b>' + esc(label) + '</b>' + (hint ? '<small>' + esc(hint) + '</small>' : '') + '</div>' + ctl + '</div>'; }
-    return '<h2 class="gh-h2">Phone steering</h2>' +
+    var SS = CB.input.sources;   // shared "Steering source" picker (js/input/sources.js)
+    return (SS && typeof SS.settingsHTML === 'function' ? SS.settingsHTML() : '') + '<h2 class="gh-h2">Phone steering</h2>' +
       row('Use phone as wheel', 'Pair your phone (QR code) and steer by tilting it like a wheel', '<button class="gh-btn" type="button" data-pw-act="pair">' + ICON.phone + ' Pair phone</button>') +
       (canTilt() ? row('Tilt steering on this device', 'Steer by tilting this phone; gas / brake on screen', '<button class="gh-btn" type="button" data-pw-act="tilt">' + (TL().local.enabled ? 'Turn off' : 'Enable tilt steering') + '</button>') : '') +
       row('Full lock angle', 'How far to turn the phone for full steering', '<label class="pw-range" style="min-width:220px"><input type="range" min="15" max="180" step="1" value="' + p.maxAngle + '" data-pw-pref="maxAngle"><b>' + p.maxAngle + '°</b></label>') +

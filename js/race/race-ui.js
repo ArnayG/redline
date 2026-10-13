@@ -867,6 +867,11 @@ CB.race = CB.race || {};
     return { held: held, action: action };
   }
 
+  /** Settings → Driving "Gamepad stick" (js/input/sources.js): proportional (default) unless set to digital (classic). */
+  function gamepadProportional() {
+    var SS = CB.input && CB.input.sources;
+    try { return !SS || typeof SS.gamepadProportional !== 'function' || SS.gamepadProportional(); } catch (e) { return true; }
+  }
   function createInput(opts) {
     opts = opts || {};
     var maps = buildKeymaps(opts.bindings || (opts.settings && opts.settings.bindings) || profileBindings());
@@ -922,7 +927,7 @@ CB.race = CB.race || {};
       if (!r || !r.active || !I.enabled) { X.active = false; X.steer = X.throttle = X.brake = 0; X.handbrake = false; X.source = null; return; }
       X.active = true; X.source = r.source;
       X.steer = clamp(-(+r.steer || 0), -1, 1); X.throttle = clamp(+r.throttle || 0, 0, 1); X.brake = clamp(+r.brake || 0, 0, 1); X.handbrake = !!r.handbrake;
-      if (Math.abs(X.steer) > 0.05 || X.throttle > 0.05 || X.brake > 0.05) I.lastDevice = r.source === 'wheel' ? 'phone' : 'tilt';
+      if (Math.abs(X.steer) > 0.05 || X.throttle > 0.05 || X.brake > 0.05) I.lastDevice = r.source === 'wheel' ? 'phone' : r.source || 'tilt';
     };
     /** Edge events from the phone (shift, pause, camera, reset) -> the same actions as keys. Polled every frame, even paused. */
     I.pollExtEvents = function () {
@@ -984,8 +989,12 @@ CB.race = CB.race || {};
         handbrake: out.handbrake, shiftUp: out.shiftUp, shiftDown: out.shiftDown, pit: out.pit
       };
       var axisSign = inv ? -1 : 1;
-      if (I.gp.active && Math.abs(I.gp.steer) > 0.015) intent.steerAxis = clamp(I.gp.steer * axisSign, -1, 1);
-      else if (I.touch.active && Math.abs(I.touch.steer) > 0.01) intent.steerAxis = clamp(I.touch.steer * axisSign, -1, 1);
+      if (I.gp.active && Math.abs(I.gp.steer) > 0.015) {
+        intent.steerAxis = clamp(I.gp.steer * axisSign, -1, 1);
+        // Settings "Gamepad stick: proportional" (default, CB.input.sources): the assist follows the stick's magnitude at
+        // every level (no line pick); 'digital' keeps the classic arrow-key-like reading under Heavy / Auto
+        if (gamepadProportional()) { intent.steerAnalog = true; intent.steerSource = 'gamepad'; }
+      } else if (I.touch.active && Math.abs(I.touch.steer) > 0.01) intent.steerAxis = clamp(I.touch.steer * axisSign, -1, 1);
       // phone tilt / wheel: a continuous wheel angle; steerAnalog tells CB.race.assist to steer proportionally (no line pick)
       else if (extSteer) { intent.steerAxis = clamp(X.steer * axisSign, -1, 1); intent.steerAnalog = true; intent.steerSource = X.source; }
       var thrAxis = Math.max(I.gp.active ? I.gp.throttle : 0, I.touch.active ? I.touch.throttle : 0, X.throttle);

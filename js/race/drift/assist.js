@@ -595,8 +595,9 @@ CB.race.drift = CB.race.drift || {};
     function rampedSteer(raw, dt, v) {
       // gamepad axis wins when it carries intent
       var axis = num(raw.steerAxis, NaN);
-      // phone wheel / tilt (raw.steerAnalog): the wheel angle IS the driver's steer -> linear, no deadband, no ramp
-      if (raw.steerAnalog && isFinite(axis)) { st.u = clamp(axis, -1, 1); return st.u; }
+      // phone wheel / tilt / mouse (raw.steerAnalog): the wheel angle IS the driver's steer -> linear, no deadband, no ramp.
+      // A proportional gamepad stick (steerSource 'gamepad') is analog too but keeps the stick response curve below.
+      if (raw.steerAnalog && isFinite(axis) && raw.steerSource !== 'gamepad') { st.u = clamp(axis, -1, 1); return st.u; }
       if (isFinite(axis) && Math.abs(axis) > 0.04) {
         var ax = clamp(axis, -1, 1);
         // light response curve: precise around centre

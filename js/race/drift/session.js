@@ -84,6 +84,7 @@ CB.race.drift = CB.race.drift || {};
     };
     if (isNum(raw.steerAxis)) it.steerAxis = clamp(raw.steerAxis, -1, 1);
     if (raw.steerAnalog && isNum(raw.steerAxis)) it.steerAnalog = true;      // phone wheel / tilt: proportional steer
+    if (it.steerAnalog && typeof raw.steerSource === 'string') it.steerSource = raw.steerSource;   // 'gamepad' keeps its response curve
     if (isNum(raw.throttleAxis)) it.throttleAxis = clamp01(raw.throttleAxis);
     if (isNum(raw.brakeAxis)) it.brakeAxis = clamp01(raw.brakeAxis);
     if (!digital) {
