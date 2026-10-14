@@ -6,12 +6,12 @@
      snapshot()                          engine-shaped snapshot (cars[] with 2D x/y/heading for HUD minimaps) + 3D extras
      results()                           engine-shaped classification + stunt stats (air time, landings, falls)
      restart(), end(), resetPlayerToTrack(), simulate(seconds, input), time(), getPhase(), alpha(),
-     setPlayerAutopilot(bool), setAssist(level), getState() / setState(state)  (JSON; replays / future netcode),
+     setPlayerAutopilot(bool), setAssist() (no-op: arcade has no assist), getState() / setState(state)  (JSON; replays / future netcode),
      applyBoost(id, secs, top, accel), spinOut(id, secs), addNitro(id, amount), spawn(entity), despawn(id), entities()
      geom (2D HUD geometry), track (built stunt track), trackDef, config, gameplay (CB.arcade.gameplay instance|null)
 
    cfg { trackId | track (def or built), laps, opponents (count | [{name, build, color, number, skill}]), difficulty,
-         build | playerBuild, playerName, seed, assist 'heavy'|'light'|'off' (default heavy), jumpAssist (true),
+         build | playerBuild, playerName, seed, (no steering assist: humans always drive the arcade 'player' helpers), jumpAssist (true),
          mode 'race'|'time-trial'|'practice', rubberBanding (true), items (true: CB.arcade.gameplay when loaded),
          gameplay {extra CB.arcade.gameplay.create opts}, hooks (object | array), drive (see stunt-physics),
          playerAutopilot, countdown (true), startPosition (1-based | 'back'|'front'|'middle'), timeOfDay }
@@ -82,9 +82,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     cfg.laps = Math.max(1, Math.round(num(cfg.laps, track.laps || 3)));
     cfg.mode = cfg.mode === 'time-trial' || cfg.mode === 'practice' ? cfg.mode : 'race';
     cfg.seed = (num(cfg.seed, 1234) >>> 0) || 1;
-    var lvl = cfg.assist || cfg.steerAssist || (cfg.assists && cfg.assists.steeringAssist);
-    if (lvl === true) lvl = 'heavy';
-    cfg.assist = lvl === 'off' || lvl === false ? 'off' : lvl === 'light' || lvl === 'medium' ? 'light' : 'heavy';
+    // arcade handling has no steering assist: every human drives the one tuned arcade model ('player' safety helpers +
+    // the mercy rule, stunt-physics.js); cfg.assist / steerAssist from older callers are ignored
+    cfg.assist = 'player';
     var driveModel = P.resolveDrive(cfg);
     var hooks = [].concat(cfg.hooks || []).filter(function (h) { return h && typeof h === 'object'; });
     // an arcade gameplay layer delivered as engine hooks (CB.arcade.mode extension) replaces our own instance
@@ -375,7 +375,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           if (c.mode === 'air') c.nitro = clamp01(c.nitro + 0.11 * STEP);
         } else c.nitroOn = !!(fx && (fx.nitroOn || fx.boostKind === 'nitro'));
         c.noCollide = !!(fx && fx.noCollide);
-        var assist = c.isPlayer && !sess.autopilot ? sess.assist : (c.humanAssist && !c.finished ? c.humanAssist : 'ai');   // humanAssist: a remote player's level (netarcade host)
+        var human = c.isPlayer ? !sess.autopilot : !!c.humanAssist && !c.finished;   // humanAssist: a remote player's car (netarcade host)
+        var help = human ? 'player' : 'ai';
         var pace = 1;
         if (!c.isPlayer && !gp && cfg.rubberBanding !== false && cfg.mode === 'race' && sess.player) {
           var gap = sess.player.dist - c.dist;
@@ -384,7 +385,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (!c.isPlayer && c.ai && !c.humanAssist) pace *= c.ai.pace;   // a remote player's car (netarcade host) drives like a player car
         var prevDist = c.dist;
         P.step(c, {
-          track: track, dt: STEP, drive: driveModel, input: inp, fx: fx, assist: assist, jumpAssist: cfg.jumpAssist !== false || assist === 'ai',
+          track: track, dt: STEP, drive: driveModel, input: inp, fx: fx, help: help, jumpAssist: cfg.jumpAssist !== false || help === 'ai',
           respawnPoint: respawnPoint, paceMult: pace, latMult: c.ai && !c.humanAssist ? c.ai.latMult : 1
         });
         if (c.events) { for (var e = 0; e < c.events.length; e++) { var ev = c.events[e]; evt(ev.type, c, ev); } c.events = null; }
@@ -588,8 +589,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     session.getPhase = function () { return sess.phase; };
     session.alpha = function () { return clamp01(sess.acc / STEP); };
     session.setPlayerAutopilot = function (b) { sess.autopilot = !!b; };
-    session.setAssist = function (a) { if (['heavy', 'light', 'off'].indexOf(a) >= 0) sess.assist = a; };
-    session.setAssists = function (a) { if (a && a.steeringAssist) session.setAssist(a.steeringAssist === true ? 'heavy' : a.steeringAssist); };
+    session.setAssist = function () { return 'player'; };    // no steering assist in arcade (kept for callers; no-op)
+    session.setAssists = function () {};
     session.getState = getState;
     session.setState = setState;
     session.cars = function () { return sess.cars; };

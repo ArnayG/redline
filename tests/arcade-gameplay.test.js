@@ -475,7 +475,7 @@ if (REAL && CB.race.vehicle.spinOut) {
     var r = arcRun({ items: false });
     r.s.simulate(4, { throttle: 1 });
     var t = 0;
-    while (t < 2.4) { r.s.simulate(0.1, { throttle: 1, steer: 0.7, handbrake: true }); t += 0.1; }
+    while (t < 2.4) { r.s.simulate(0.1, { throttle: 1, steer: 0.4, handbrake: true }); t += 0.1; }   // a gentle slide (arcade turns tight: 0.7 would loop off the road)
     var K = r.gp.kart('player');
     assert.ok(K.drift.on && K.drift.tier >= 1, 'tier ' + K.drift.tier + ' slide ' + r.s._debug().player.state.powerslide);
     r.s.simulate(0.05, { throttle: 1, steer: 0.2 });

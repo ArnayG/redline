@@ -1080,7 +1080,7 @@ CB.race = CB.race || {};
    *  saturates first its yaw damping collapses (a car beyond its critical speed), so the plan must keep the
    *  rear out of the flat top of its tyre curve instead of relying on a catch. */
   function highSpeedMargin(v, L) {
-    if (L && L.arcade) return 1 - 0.035 * smoothstep(30, 60, v);   // no snap at the limit: only a tracking margin
+    if (L && L.arcade) return 1 - 0.06 * smoothstep(25, 55, v);   // no snap at the limit: only a tracking margin (2.2 g arcade grip)
     var ov = L ? oversteerFactor(L, v) : 0;
     return 1 - (0.07 + 0.06 * ov) * smoothstep(30, 52, v) - 0.03 * ov;
   }
@@ -1183,11 +1183,11 @@ CB.race = CB.race || {};
     // arcade cars cannot spin: drivers lean harder on the grip and brake later
     var arcadeK = null;
     if (L.arcade) {
-      latUse = lerp(0.86, 0.96, skill); brakeUse = lerp(0.8, 0.95, skill) * pers.brakeBias;
+      latUse = lerp(0.84, 0.94, skill); brakeUse = lerp(0.8, 0.95, skill) * pers.brakeBias;
       var VM = CB.race && CB.race.vehicle;
       if (VM && typeof VM.arcadeCurvatureLimit === 'function') arcadeK = function (v, g) { return VM.arcadeCurvatureLimit(params, v, g); };
     }
-    var steerSmooth = lerp(5, 11, skill);       // steer input slew (1/s)
+    var steerSmooth = L.arcade ? lerp(9, 15, skill) : lerp(5, 11, skill);   // steer input slew (1/s; arcade cars turn snappier)
     var pedalRate = lerp(4, 9, skill);          // pedal slew (1/s)
     var halfCarW = L.width / 2, halfCarL = L.length / 2;
 
@@ -1287,7 +1287,7 @@ CB.race = CB.race || {};
 
     function usableHalf(i, side) {
       var kerb = side > 0 ? A.kerbL[i] : A.kerbR[i];
-      var margin = A.hasWalls ? 0.75 : 0.35;
+      var margin = (A.hasWalls ? 0.75 : 0.35) + (L.arcade ? 0.4 : 0);   // arcade cars change lanes faster: keep a bigger edge margin
       return Math.max(0.3, A.hw[i] + (A.hasWalls ? 0 : kerb * 0.5) - halfCarW - margin);
     }
 
@@ -2270,7 +2270,7 @@ CB.race = CB.race || {};
       setRubberBand: function (on) { rubberBandOpt = !!on; },
       setSkill: function (v) {
         skill = clamp(v, 0, 1);
-        latUse = L.arcade ? lerp(0.86, 0.96, skill) : lerp(0.8, 0.93, skill);
+        latUse = L.arcade ? lerp(0.84, 0.94, skill) : lerp(0.8, 0.93, skill);
         brakeUse = (L.arcade ? lerp(0.8, 0.95, skill) : lerp(0.7, 0.9, skill)) * pers.brakeBias; profileCache = {};
       },
       profile: function (gripScale) { return profileFor(gripScale == null ? 1 : gripScale); },

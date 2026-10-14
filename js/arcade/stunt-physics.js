@@ -47,7 +47,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   var LAND_MARGIN = HALF_W + 0.5; // landing capture beyond the road edge (car centre): a car half over the edge still lands
   var CREST_VY = 9;              // m/s: a hill crest only throws the car once its climb rate is below this (<= ~3 m hops)
   var GAP_FLAT = 1.06;           // faster than this x the design speed: launch on the flat ballistic solution to the deck
-  var MERCY_FALLS = 2;           // falls in a row before the next jumps get one assist level more (until a clean landing)
+  var MERCY_FALLS = 2;           // mercy rule: falls in a row before the next jumps get guided help (until a clean landing)
   var RESPAWN_T = 0.9, RESPAWN_SWAP = 0.42;
 
   var V = S._vec;
@@ -146,7 +146,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (D.broken) return FALLBACK.step(D.fb, inp, ctx);
         var dt = ctx.dt, v = ctx.speed, av = Math.abs(v);
         var steer = clamp(num(inp.steer, 0), -1, 1);
-        D.steer += (steer - D.steer) * Math.min(1, dt * 9);
+        // the circuit arcade model's steer slew (V.ARCADE): snappy in, quicker back to centre / through a flip
+        var AR = Vh.ARCADE || {}, bigger = Math.abs(steer) > Math.abs(D.steer) && steer * D.steer >= 0;
+        var rS = (bigger ? num(AR.steerRateIn, 14) : num(AR.steerRateOut, 18)) * dt;
+        D.steer = D.steer < steer ? Math.min(D.steer + rS, steer) : Math.max(D.steer - rS, steer);
         var grip = stuntGrip(D, ctx.bank), topMult = num(ctx.topMult, 1) * (D.vmax / Math.max(10, D.top));
         var push = ctx.push > 0 && v < num(ctx.vTarget, 1e9) ? ctx.push : 0;
         var thr = clamp01(num(inp.throttle, 0)) * num(ctx.throttleMult, 1), brk = clamp01(num(inp.brake, 0));
@@ -277,7 +280,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   /* ======================================================================
      Step (one fixed substep)
      ctx { track, dt, drive (model), input {throttle, brake, steer, handbrake}, fx (gameplay effects or null),
-           assist 'heavy'|'light'|'off'|'ai', jumpAssist (bool), respawnPoint(car) -> {s, dist}, latMult, paceMult }
+           help 'player'|'guided'|'ai'|'off', jumpAssist (bool), respawnPoint(car) -> {s, dist}, latMult, paceMult }
+     help = the internal stunt safety helpers (NOT a steering assist — the player's steering is never touched on the ground):
+       'player' every human (one arcade feel): jump launch topped up to 1.02 x the gap's design speed, mild air guidance
+                (flight pulled back over the road, heading follows the road below), softened landings;
+       'guided' the mercy rule (after MERCY_FALLS falls in a row, until a clean landing): loop / gap speed top-up on the
+                ground, 1.05 x launches, strong air guidance;  'ai' = guided for AI cars;  'off' raw physics (tests).
+       Always on, any level: loop / wall adhesion, swept landing capture, guard rails (also in the air), over-speed gap arcs.
+       Legacy ctx.assist values map: heavy -> guided, light / medium -> player, off -> off.
      ====================================================================== */
   var _a = null, _b = null;
   function step(c, ctx) {
@@ -326,15 +336,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     if (fx && fx.steer != null && isNum(fx.steer)) yaw = clamp(fx.steer, -1, 1) * Math.min(Math.abs(c.v), 40) * 0.012 + yaw * 0.3;
     c.steerAngle = num(r.steerAngle, 0); c.rpm = num(r.rpm, c.rpm); c.gear = num(r.gear, c.gear);
     c.vTop = num(r.vTop, c.vTop || 55);
-    // assists: heading alignment (keyboard heavy assist / AI never needs it)
-    var assist = ctx.assist || 'heavy';
-    var steerIn = Math.abs(num(inp.steer, 0));
-    if ((assist === 'heavy' || assist === 'light') && steerIn < 0.08 && Math.abs(c.v) > 3) {
-      var k = assist === 'heavy' ? 2.6 : 1.1;
-      yaw += -c.psi * k + sm.kLeft * c.v * (assist === 'heavy' ? 1 : 0.6);
-    }
-    // loop / jump speed assist (heavy + AI): top up speed approaching a loop or a gap
-    if ((assist === 'heavy' || assist === 'ai') && c.v > 5) {
+    // no steering help on the ground (arcade handling: the player steers, nothing auto-aligns the nose)
+    // loop / jump speed top-up (guided = the mercy rule, and AI): approaching a loop or a gap
+    var help = helpOf(c, ctx);
+    if ((help === 'guided' || help === 'ai') && c.v > 5) {
       var need = stuntNeed(tr, c.s, 90);
       if (need && c.v < need) accel = Math.max(accel, Math.min(9, (need - c.v) * 0.8 + 3));
     }
@@ -397,23 +402,30 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     return best;
   }
 
-  /** Effective air / jump assist: after MERCY_FALLS falls in a row the next jumps get one level more help (off -> light,
-   *  light -> heavy) until a clean landing, so nobody is stuck in a respawn loop in front of a gap. */
-  function assistOf(c, ctx) {
-    var a = ctx.assist || 'heavy';
-    if (c.fallStreak >= MERCY_FALLS) return a === 'off' ? 'light' : a === 'light' ? 'heavy' : a;
+  /** Base helper level of a step context ('player' default; legacy ctx.assist mapped). */
+  function baseHelp(ctx) {
+    var a = ctx.help || ctx.assist;
+    if (a === 'player' || a === 'guided' || a === 'ai' || a === 'off') return a;
+    if (a === 'heavy' || a === 'auto') return 'guided';
+    return 'player';   // light / medium / undefined
+  }
+  /** Effective helper level incl. the mercy rule: after MERCY_FALLS falls in a row the next jumps get one level more help
+   *  (off -> player, player -> guided) until a clean landing, so nobody is stuck in a respawn loop in front of a gap. */
+  function helpOf(c, ctx) {
+    var a = baseHelp(ctx);
+    if (c.fallStreak >= MERCY_FALLS) return a === 'off' ? 'player' : a === 'player' ? 'guided' : a;
     return a;
   }
   function launch(c, ctx, gap, sm) {
     var tr = ctx.track;
     var P = pose(tr, c);
     var v = c.v;
-    var assist = assistOf(c, ctx);
-    var ja = (ctx.jumpAssist !== false || c.fallStreak >= MERCY_FALLS) && assist !== 'off';
+    var help = helpOf(c, ctx);
+    var ja = (ctx.jumpAssist !== false || c.fallStreak >= MERCY_FALLS) && help !== 'off';
     if (gap && ja) {
-      var want = gap.designSpeed * (assist === 'light' ? 1.02 : 1.05);   // the design arc lands exactly on the lip: aim past it
+      var want = gap.designSpeed * (help === 'player' ? 1.02 : 1.05);   // the design arc lands exactly on the lip: aim past it
       if (v < want) { v = want; c.assisted = true; }
-      if (assist !== 'light') c.psi *= 0.2;
+      if (help !== 'player') c.psi *= 0.2;
       P = pose(tr, c);
     }
     var vel = mul(P.fwd, v);
@@ -455,8 +467,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   }
 
   function airStep(c, ctx) {
-    var tr = ctx.track, dt = ctx.dt, inp = ctx.input || {}, assist = assistOf(c, ctx), L = tr.length;
-    var guided = assist === 'ai' || assist === 'heavy';
+    var tr = ctx.track, dt = ctx.dt, inp = ctx.input || {}, help = helpOf(c, ctx), L = tr.length;
+    var guided = help === 'ai' || help === 'guided';
     c.airT += dt;
     var vel = [c.vx, c.vy, c.vz];
     vel[1] -= G_AIR * dt;
@@ -479,7 +491,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (c.airHd !== null && isNum(c.airHd)) {
           var dh = wrapA(hd - c.airHd);
           if (Math.abs(dh) < 0.25) {
-            var kf = assist === 'off' ? 0.8 : 1, ph = dh * kf, cph = Math.cos(ph), sph = Math.sin(ph), ux = vel[0], uz = vel[2];
+            var kf = help === 'off' ? 0.8 : 1, ph = dh * kf, cph = Math.cos(ph), sph = Math.sin(ph), ux = vel[0], uz = vel[2];
             vel[0] = ux * cph + uz * sph; vel[2] = -ux * sph + uz * cph;
           }
         }
@@ -489,16 +501,16 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       // and its outward drift is damped — a flight that started over the road lands on it (edge landings included).
       // Over a gap (no rails) 'off' only loses the outward air steering.
       var overGap = !!(smN.flags & tr.FLAGS.gap);
-      var edge = smN.halfWidth - HALF_W - (assist === 'off' ? -0.3 : 0.4), over = Math.abs(near.lateral) - edge;
-      var guard = over > 0, guardDamp = guard && !(overGap && assist === 'off');
+      var edge = smN.halfWidth - HALF_W - (help === 'off' ? -0.3 : 0.4), over = Math.abs(near.lateral) - edge;
+      var guard = over > 0, guardDamp = guard && !(overGap && help === 'off');
       // air steering: a lateral nudge in the track frame to aim the landing (bounded, so holding a key through a long
       // flight cannot carry the car metres off the road)
       if (st) {
         var aSt = st * 3.5;
         if (!(aSt > 0 && latV > 4.5) && !(aSt < 0 && latV < -4.5) && !(guard && aSt * near.lateral > 0)) { vel = madd(vel, smN.left, aSt * dt); latV += aSt * dt; }
       }
-      // assist: pull the flight back over the track centre (heavy / AI strong, light weak)
-      var kAs = guided ? 1 : assist === 'light' ? 0.4 : 0.12;
+      // guidance: pull the flight back over the track centre (guided / AI strong, player mild)
+      var kAs = guided ? 1 : help === 'player' ? 0.4 : 0.12;
       var target = clamp(near.lateral, -smN.halfWidth, smN.halfWidth);
       var aLat = clamp(-target * 1.6 * kAs - latV * 1.4 * kAs, -9, 9);
       vel = madd(vel, smN.left, aLat * dt);
@@ -509,9 +521,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         var gq = tr.gapAt(near.s), hs = Math.hypot(vel[0], vel[2]);
         if (gq && hs > 1 && hs < gq.designSpeed * 0.98) { var kk = gq.designSpeed * 0.98 / hs; vel[0] *= kk; vel[2] *= kk; if (vel[1] < 0 && near.height < 3) vel[1] *= 0.5; c.assisted = true; }
       }
-      // ... and align the horizontal flight direction with the track below (assisted levels; corrects a launch heading)
+      // ... and align the horizontal flight direction with the track below (corrects a launch heading)
       var th = [smN.tangent[0], 0, smN.tangent[2]], hv = Math.hypot(vel[0], vel[2]);
-      if (thl > 0.3 && hv > 2 && assist !== 'off') {
+      if (thl > 0.3 && hv > 2 && help !== 'off') {
         var ang = Math.atan2((vel[2] * th[0] - vel[0] * th[2]) / thl, (vel[0] * th[0] + vel[2] * th[2]) / thl);
         if (Math.abs(ang) < 1.4) {
           var rate = (guided ? 1.3 : 0.6) * dt;
@@ -575,8 +587,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     var noseT = c.fx * sm.tangent[0] + c.fy * sm.tangent[1] + c.fz * sm.tangent[2];
     if (noseT > 0.2 && v < 0) { v = -v * 0.5; psi = 0; }
     psi = clamp(psi, -0.9, 0.9);
-    var assist = assistOf(c, ctx);
-    if (assist !== 'off') psi *= 0.5;
+    if (helpOf(c, ctx) !== 'off') psi *= 0.5;
     c.mode = 'ground';
     c.s = pr.s; c.lat = clamp(pr.lateral, -(sm.halfWidth - HALF_W), sm.halfWidth - HALF_W);
     c.psi = psi;
@@ -634,7 +645,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     RESPAWN_T: RESPAWN_T, RESPAWN_SWAP: RESPAWN_SWAP, LAND_MARGIN: LAND_MARGIN, GAP_FLAT: GAP_FLAT, MERCY_FALLS: MERCY_FALLS, CREST_VY: CREST_VY,
     FALLBACK: FALLBACK, resolveDrive: resolveDrive, vehicleAdapter: vehicleAdapter, responseAdapter: responseAdapter, STUNT_VMAX: STUNT_VMAX, perfOf: perfOf,
     createCar: createCar, step: step, pose: pose, boost: boost, spinOut: spinOut, startRespawn: startRespawn,
-    latMaxAt: latMaxAt, cornerSpeed: cornerSpeed, stuntNeed: stuntNeed
+    latMaxAt: latMaxAt, cornerSpeed: cornerSpeed, stuntNeed: stuntNeed, helpOf: helpOf, HELP_LEVELS: ['player', 'guided', 'ai', 'off']
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = S.physics;
 })(CB.arcade.stunt);

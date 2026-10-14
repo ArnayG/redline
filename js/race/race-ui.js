@@ -46,7 +46,7 @@ CB.race = CB.race || {};
   var LS_RECORDS = 'forge.race.records.v1';
   var LS_SETTINGS = 'forge.race.settings.v1';
   /* arcade session keys (stored in settings.arcade) and the presentation keys an arcade setup may share with Race */
-  var ARC_KEYS = ['trackId', 'mode', 'laps', 'opponents', 'difficulty', 'weather', 'timeOfDay', 'steerAssist'];
+  var ARC_KEYS = ['trackId', 'mode', 'laps', 'opponents', 'difficulty', 'weather', 'timeOfDay'];   // no steerAssist: arcade handling needs none
   var ARC_SHARED = ['camera', 'camera3d', 'graphics', 'quality', 'units', 'muted', 'steerSensitivity', 'invertSteer', 'touchControls', 'showHints'];
   var RESULTS_DELAY_AFTER_PLAYER_FINISH = 9;   // sim seconds before results are forced
   var RESULTS_DELAY_AFTER_SESSION_FINISH = 1.6;
@@ -943,6 +943,12 @@ CB.race = CB.race || {};
     };
     I.queueShift = function (dir) { if (dir > 0) I.pendingUp = true; else I.pendingDown = true; };
 
+    /** Arcade sessions: the key-steering rates of the arcade model (CB.race.vehicle.ARCADE.keys), else null. */
+    function arcadeKeyShape(s) {
+      if (!s || s.discipline !== 'arcade') return null;
+      var A = CB.race && CB.race.vehicle && CB.race.vehicle.ARCADE;
+      return (A && A.keys) || { rateIn: 10, rateOut: 14, rateFlip: 18 };
+    }
     /** Speed-sensitive, rate-limited digital steering + source blending. */
     I.sample = function (dt, speed) {
       var s = I.settings, sens = clamp(s.steerSensitivity || 1, 0.5, 1.6);
@@ -956,7 +962,13 @@ CB.race = CB.race || {};
       var hi = smoothstep(4, 72, speed);
       var limit = clamp(lerp(1, 0.5, hi) * lerp(0.85, 1.15, (sens - 0.5) / 1.1), 0.2, 1);
       var cur = I.kb.steer, rate;
-      if (target === 0) rate = 5.5 + 2 * hi;                                   // self-centering
+      var AK = arcadeKeyShape(s);
+      if (AK) {
+        // ARCADE: full lock already IS the cornering limit at every speed (vehicle.js arcadeCurvatureLimit), so no
+        // speed-dependent lock cut and no assist layer: ~100 ms to full lock, quick centering and direction flips
+        hi = 0; limit = 1;
+        rate = target === 0 ? AK.rateOut : cur !== 0 && (target > 0) !== (cur > 0) ? AK.rateFlip : AK.rateIn * lerp(0.8, 1.2, (sens - 0.5) / 1.1);
+      } else if (target === 0) rate = 5.5 + 2 * hi;                            // self-centering
       else if (cur !== 0 && (target > 0) !== (cur > 0)) rate = 9;                // fast direction change
       else rate = (3.1 * sens) * lerp(1, 0.62, hi);                              // build-up
       I.kb.steer = approach(cur, target * limit, rate * dt);
@@ -1307,6 +1319,7 @@ CB.race = CB.race || {};
     S.assists.steeringAssist = false;
     syncAssist(S);   // the player's own level for this discipline (race / drift battle) ...
     S.steerAssist = netSteerLevel(S.steerAssist, cfg.maxSteerAssist === 'auto' ? 'heavy' : cfg.maxSteerAssist);   // ... capped by the host
+    if (S.discipline === 'arcade') S.steerAssist = 'off';   // arcade MP: the single arcade handling model, no assist
     if (mode === 'drift') {
       var snap = netCall(session, 'snapshot', null), bt = snap && snap.net && snap.net.battle;
       S.driftMode = bt && bt.format === 'attack' ? 'trial' : 'tandem';
@@ -1874,6 +1887,7 @@ CB.race = CB.race || {};
     '#race-root .rx-step.is-link:hover{color:var(--rx-text)}',
     '#race-root .rx-chip.drift{color:#ff7a3d;border-color:rgba(255,122,61,.45)}',
     '#race-root .rx-chip.arcade{color:#ffcf3a;border-color:rgba(255,207,58,.5)}',
+    '#race-root .rx-arcade-handling{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid rgba(255,207,58,.4);border-radius:10px;color:#ffcf3a;font-size:13px;font-weight:600}',
     '#race-root .rx-arcade-intro{display:flex;flex-direction:column;gap:6px;padding:12px 14px;margin-bottom:12px;border-color:rgba(255,207,58,.35)}',
     '#race-root .rx-arcade-intro p{margin:0;font-size:13px;line-height:1.45;color:var(--rx-dim)}',
     /* ---------------- drift results */
@@ -2337,7 +2351,7 @@ CB.race = CB.race || {};
     return { trackId: typeof a.trackId === 'string' ? a.trackId : null, mode: a.mode === 'time-trial' ? 'time-trial' : 'race', laps: Math.round(clamp(isNum(+a.laps) ? +a.laps : 3, 1, 20)),
       opponents: Math.round(clamp(isNum(+a.opponents) ? +a.opponents : 7, 1, 11)), difficulty: ids(DIFFICULTIES).indexOf(a.difficulty) >= 0 ? a.difficulty : 'amateur',
       weather: ids(WEATHERS).indexOf(a.weather) >= 0 ? a.weather : 'dry', timeOfDay: ids(TIMES).indexOf(a.timeOfDay) >= 0 ? a.timeOfDay : 'day',
-      steerAssist: ids(STEER_ASSISTS).indexOf(a.steerAssist) >= 0 ? a.steerAssist : 'heavy', options: isPlain(a.options) ? a.options : {} };
+      options: isPlain(a.options) ? a.options : {} };
   }
   /** Overlay the saved arcade session values on S (S.discipline = 'arcade'); deep-link values (dl) win. */
   function enterArcadeSettings(S, dl) {
@@ -2346,7 +2360,8 @@ CB.race = CB.race || {};
     ARC_KEYS.forEach(function (k) { S[k] = A[k]; });
     S.arcadeOptions = deepClone(A.options || {});
     dl = dl || {};
-    ['trackId', 'laps', 'opponents', 'difficulty', 'weather', 'timeOfDay', 'steerAssist'].forEach(function (k) { if (dl[k] != null && dl[k] !== '') S[k] = dl[k]; });
+    ['trackId', 'laps', 'opponents', 'difficulty', 'weather', 'timeOfDay'].forEach(function (k) { if (dl[k] != null && dl[k] !== '') S[k] = dl[k]; });
+    S.steerAssist = 'off';   // arcade handling: no steering assist layer (Race / Drift keep their own levels, assistKey('arcade') = null)
     if (dl.mode === 'race' || dl.mode === 'time-trial') S.mode = dl.mode;
     if (S.mode !== 'race' && S.mode !== 'time-trial') S.mode = 'race';
     return S;
@@ -2753,7 +2768,8 @@ CB.race = CB.race || {};
     var diffField = field('AI difficulty', segmented(DIFFICULTIES, S.difficulty, function (v, o) { S.difficulty = v; persist(); diffField._desc.textContent = o.desc; refreshSetupState(); }), { desc: pick(DIFFICULTIES, S.difficulty).desc });
     refs.fields.difficulty = diffField;
     form.appendChild(diffField);
-    form.appendChild(steerAssistField());
+    form.appendChild(field('Handling', h('div', { class: 'rx-arcade-handling' }, icon('steer', 14), h('span', { text: 'Arcade handling — no assist needed' })),
+      { desc: 'Tight, snappy steering and grip that never lets go. Steering assist is a Race / Drift option.' }));
     // extension options (nitro / items / speed classes ...) registered via CB.arcade.mode.registerExtension
     var defs = arcadeMod() ? arcadeMod().optionDefs() : [];
     if (!isPlain(S.arcadeOptions)) S.arcadeOptions = {};
@@ -2829,7 +2845,7 @@ CB.race = CB.race || {};
       def && isStuntDef(def) ? h('span', { class: 'rx-chip arcade', text: 'Stunt' }) : null,
       h('span', { class: 'rx-chip', text: plural(S.laps, 'lap') }),
       h('span', { class: 'rx-chip', text: cars === 1 ? 'Solo' : cars + ' cars · ' + pick(DIFFICULTIES, S.difficulty).name }),
-      h('span', { class: 'rx-chip accent' }, icon('steer', 12), pick(STEER_ASSISTS, S.steerAssist).name + ' assist')
+      h('span', { class: 'rx-chip accent' }, icon('steer', 12), 'Arcade handling')
     ]);
     var stuntOk = !def || !isStuntDef(def) || !!(CB.arcade && CB.arcade.stunt && typeof CB.arcade.stunt.createSession === 'function');
     var can = mods.canRace && !!def && stuntOk;
@@ -3381,7 +3397,7 @@ CB.race = CB.race || {};
           buildHash: U.hash
         };
         if (R.isArcade) {   // ARCADE-SPEC: every car on the arcade vehicle model
-          cfg.handling = 'arcade'; cfg.arcade = arcadeSettingsOf(R.settings); cfg.steerAssist = R.settings.steerAssist;
+          cfg.handling = 'arcade'; cfg.arcade = arcadeSettingsOf(R.settings); cfg.steerAssist = 'off';   // no assist layer in arcade
           cfg.rubberBanding = false; cfg.field = 'mixed';
           if (R.testCfg && R.testCfg.seed != null) cfg.seed = R.testCfg.seed;
         }
@@ -3478,7 +3494,7 @@ CB.race = CB.race || {};
         try { return createRaceSession(R, def, c); } finally { R.arcInner = false; }
       } });
     }
-    var S2 = R.settings, D = driftMod(), lvl = S2.steerAssist;
+    var S2 = R.settings, D = driftMod(), lvl = R.isArcade ? 'off' : S2.steerAssist;   // arcade: never the race / drift assist layer
     var hooks = cfg.hooks;
     R.rawInput = false; R.assistVia = 'none';
     if (R.isDrift && D) {
@@ -3907,7 +3923,7 @@ CB.race = CB.race || {};
           h('span', { class: 'rx-chip' }, icon(pick(TIMES, S.timeOfDay).icon, 12), pick(TIMES, S.timeOfDay).name),
           drifting ? h('span', { class: 'rx-chip drift' }, icon('drift', 12), pick(DRIFT_MODES, S.driftMode).name) : null,
           drifting ? h('span', { class: 'rx-chip', text: pick(DRIFT_TUNES, S.driftTune).name + ' tune' }) : h('span', { class: 'rx-chip accent', text: pick(DIFFICULTIES, S.difficulty).name + ' AI' }),
-          h('span', { class: 'rx-chip' }, icon('steer', 12), pick(STEER_ASSISTS, S.steerAssist).name + ' assist')),
+          h('span', { class: 'rx-chip' }, icon('steer', 12), isArcadeS(S) ? 'Arcade handling' : pick(STEER_ASSISTS, S.steerAssist).name + ' assist')),
         h('div', { class: 'rx-loadbar' }, bar),
         h('div', { class: 'rx-progress' }, steps),
         h('div', { class: 'rx-go-row' }, go,
@@ -4345,7 +4361,7 @@ CB.race = CB.race || {};
     var canSetAssist = !!(R.session && typeof R.session.setAssistLevel === 'function') || !!(R.assistObj && typeof R.assistObj.setLevel === 'function');
     var netMax = R.net && R.net.cfg ? (R.net.cfg.maxSteerAssist === 'auto' ? 'heavy' : R.net.cfg.maxSteerAssist) : null;
     var assistLevels = netMax && has(STEER_RANK, netMax) ? STEER_ASSISTS.filter(function (a) { return STEER_RANK[a.id] <= STEER_RANK[netMax]; }) : STEER_ASSISTS;
-    var assistRow = field('Steering assist', segmented(assistLevels, S.steerAssist, function (v, o) {
+    var assistRow = R.isArcade ? null : field('Steering assist', segmented(assistLevels, S.steerAssist, function (v, o) {
       setAssist(U.settings, v); S.steerAssist = v; persist();
       try {
         if (R.net && !R.isDrift) {
@@ -4539,7 +4555,8 @@ CB.race = CB.race || {};
     netHookTarget.R = R;
     // arcade MP on a stunt track: the stunt drive model runs its own assist at the level the host replays (no CB.race.assist)
     var stuntNet = R.isArcade && netGet(s, 'arcadeKind') === 'stunt';
-    if (!R.isDrift && !stuntNet) {
+    if (R.isArcade) { R.netAssist = null; }   // arcade MP: one arcade handling model, no assist layer (circuit or stunt)
+    else if (!R.isDrift && !stuntNet) {
       var AS = CB.race && CB.race.assist;
       if (S.steerAssist !== 'off' && AS && typeof AS.create === 'function') {
         try { R.netAssist = AS.create({ level: S.steerAssist, mode: 'race' }); R.assistObj = R.netAssist; } catch (e) { R.netAssist = null; }

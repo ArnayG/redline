@@ -4,7 +4,8 @@
    bowl, Neon Wall-Ride's wall roll-ins), so a landing car could step from just above one plane to below the next and
    tunnel through the deck. Also covers: over-speed (Mega Nitro) gap launches, hill-crest moon shots, wall-entry drops at
    speed, edge landings, low bowl edges vs the ground plane, the respawn-loop mercy rule, and a full human input sweep
-   (lateral offsets, speed / boost / item profiles, air inputs, car builds, assist levels, frame-rate profiles). */
+   (lateral offsets, speed / boost / item profiles, air inputs, car builds, frame-rate profiles) on the single arcade
+   handling model (no steering assist; humans get the stunt 'player' safety helpers + the mercy rule). */
 'use strict';
 const path = require('path');
 const assert = require('node:assert/strict');
@@ -26,7 +27,7 @@ function airCar(t, s0, lat, h, fwd, sink) {
 function stepN(t, c, n, extra) {
   const ev = [];
   for (let i = 0; i < n; i++) {
-    P.step(c, Object.assign({ track: t, dt: 1 / 120, drive: P.FALLBACK, input: {}, assist: 'off', jumpAssist: false, respawnPoint: () => ({ s: 0, dist: 0, speed: 15 }) }, extra || {}));
+    P.step(c, Object.assign({ track: t, dt: 1 / 120, drive: P.FALLBACK, input: {}, help: 'off', jumpAssist: false, respawnPoint: () => ({ s: 0, dist: 0, speed: 15 }) }, extra || {}));
     if (c.events) { ev.push.apply(ev, c.events); c.events = null; }
     if (extra && extra.until && extra.until(c)) break;
   }
@@ -82,16 +83,16 @@ test('stunt landing: an edge landing (car centre beyond the road edge) is caught
   assert.ok(ev.some((e) => e.type === 'land'));
 });
 
-test('stunt gaps: over-speed launches (nitro / Mega Nitro up to 2x the design speed) still land on the deck, every assist level', () => {
+test('stunt gaps: over-speed launches (nitro / Mega Nitro up to 2x the design speed) still land on the deck, every helper level', () => {
   SW.MAPS.forEach((id) => {
     const t = S.get(id);
     t.gaps.forEach((g) => {
-      [1.3, 1.6, 2.0].forEach((k) => ['off', 'light', 'heavy'].forEach((assist) => {
+      [1.3, 1.6, 2.0].forEach((k) => ['off', 'player', 'guided'].forEach((help) => {
         const c = P.createCar({ id: 'g', s: g.s0 - 12, L: t.length, dist: g.s0 - 12, v: Math.min(94, g.designSpeed * k) });
         c.drive = P.FALLBACK.create(null, {});
-        const ev = stepN(t, c, 600, { assist: assist, input: { throttle: 1 }, until: (q) => q.landings > 0 || q.mode === 'respawn' });
+        const ev = stepN(t, c, 600, { help: help, input: { throttle: 1 }, until: (q) => q.landings > 0 || q.mode === 'respawn' });
         const land = ev.find((e) => e.type === 'land');
-        assert.ok(land, id + ' gap@' + g.s0.toFixed(0) + ' x' + k + ' ' + assist + ' lands (no fall)');
+        assert.ok(land, id + ' gap@' + g.s0.toFixed(0) + ' x' + k + ' ' + help + ' lands (no fall)');
         const d = V.wrapD(land.s - g.landS, t.length);
         assert.ok(d > -1 && d < 45, id + ' x' + k + ' lands on the deck (' + d.toFixed(1) + ' m past the lip)');
       }));
@@ -114,7 +115,7 @@ test('stunt crests: a Mega-Nitro car hops over a bunny hill instead of a 20 m mo
   w.pieces.filter((p) => p.type === 'wall').forEach((wall) => {
     const k = P.createCar({ id: 'w', s: wall.s0 - 20, L: w.length, dist: wall.s0 - 20, v: 80 });
     k.drive = P.FALLBACK.create(null, {});
-    const ev = stepN(w, k, 240, { input: { throttle: 1 }, assist: 'heavy' });
+    const ev = stepN(w, k, 240, { input: { throttle: 1 }, help: 'guided' });
     assert.ok(!ev.some((e) => e.type === 'drop'), 'no drop off the wall entry at 80 m/s');
   });
 });
@@ -129,14 +130,14 @@ test('stunt ground plane sits below every road edge (a 50° bowl edge is road, n
   });
 });
 
-test('stunt mercy: assist Off, too slow for a gap twice -> the next attempt gets the light jump assist and lands', () => {
+test('stunt mercy: raw physics, too slow for a gap twice -> the next attempt gets the player jump help and lands', () => {
   const t = S.get('canyon-leap'), g = t.gaps[0];
   const c = P.createCar({ id: 'm', s: g.s0 - 20, L: t.length, dist: g.s0 - 20, v: 14 });
   c.drive = P.FALLBACK.create(null, {});
   const rp = () => ({ s: g.s0 - 20, dist: g.s0 - 20, speed: 14 });
   let falls = 0, landed = null;
   for (let i = 0; i < 120 * 40 && !landed; i++) {
-    P.step(c, { track: t, dt: 1 / 120, drive: P.FALLBACK, input: { throttle: 0 }, assist: 'off', respawnPoint: rp });
+    P.step(c, { track: t, dt: 1 / 120, drive: P.FALLBACK, input: { throttle: 0 }, help: 'off', respawnPoint: rp });
     if (c.mode === 'ground' && c.v < 14) c.v = 14;
     (c.events || []).forEach((e) => { if (e.type === 'fall') falls++; if (e.type === 'land' && e.air > 0.5) landed = e; });
     c.events = null;
@@ -146,7 +147,7 @@ test('stunt mercy: assist Off, too slow for a gap twice -> the next attempt gets
   assert.equal(c.fallStreak, 0);
 });
 
-test('stunt human sweep: lateral offsets x speeds / boosts / item hits x air inputs x builds x assists x frame rates — every map completes, no fall-through', () => {
+test('stunt human sweep: lateral offsets x speeds / boosts / item hits x air inputs x builds x frame rates (one arcade model, no assist) — every map completes, no fall-through', () => {
   const res = SW.sweep(SW.MAPS, false);
   SW.MAPS.forEach((id) => {
     res[id].forEach((r) => {
@@ -158,8 +159,7 @@ test('stunt human sweep: lateral offsets x speeds / boosts / item hits x air inp
       assert.equal(r.stuck.length, 0, 'stuck ' + tag);
       assert.equal(r.loopDrop.length, 0, 'dropped off a loop / wall at speed ' + tag);
       assert.ok(r.finished, 'lap completed ' + tag + ' progress ' + r.progress);
-      if (p.assist !== 'off') assert.equal(r.falls, 0, 'no falls with assist ' + p.assist + ' ' + tag + ' ' + JSON.stringify(r.respawns));
-      else assert.ok(r.falls <= 6, 'assist off: the mercy rule ends a respawn loop ' + tag + ' falls ' + r.falls);
+      assert.equal(r.falls, 0, 'no falls (none of the profiles is a real mistake) ' + tag + ' ' + JSON.stringify(r.respawns));
     });
   });
 });

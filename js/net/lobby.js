@@ -1402,17 +1402,16 @@ CB.net = CB.net || {};
       render();
       return;
     }
-    var steer = c.maxSteerAssist === 'off' ? 'off' : c.maxSteerAssist === 'light' || c.maxSteerAssist === 'medium' ? c.maxSteerAssist : 'heavy';
     try {
       if (c.mode === 'arcade' && core.isHost() && n.host) {
         session = NA.createHostSession(n.host, {
           trackId: c.trackId, laps: c.laps || 3, weather: c.weather, timeOfDay: c.timeOfDay, ai: c.ai, difficulty: c.difficulty, arcade: { options: c.arcade || {} },
-          build: myBuild(), name: myName(), seed: info.seed, maxSteerAssist: c.maxSteerAssist, steerAssist: steer,
-          players: c.players.filter(function (p) { return p.id !== st.selfId; }).map(function (p) { return { peerId: p.id, name: p.name, build: p.build, steerAssist: steer }; }),
+          build: myBuild(), name: myName(), seed: info.seed,   // arcade: one handling model, no steering assist
+          players: c.players.filter(function (p) { return p.id !== st.selfId; }).map(function (p) { return { peerId: p.id, name: p.name, build: p.build }; }),
           hooks: uiHooks()
         });
       } else if (c.mode === 'arcade' && n.peer) {
-        session = NA.createClientSession(n.peer.raw, { start: NA.isArcadeStart(st.netStart) ? st.netStart : undefined, build: myBuild(), name: myName(), steerAssist: steer, hooks: uiHooks() });
+        session = NA.createClientSession(n.peer.raw, { start: NA.isArcadeStart(st.netStart) ? st.netStart : undefined, build: myBuild(), name: myName(), hooks: uiHooks() });
       } else if (core.isHost() && typeof R.createHostSession === 'function' && n.host) {
         session = R.createHostSession(n.host, {
           mode: c.mode, trackId: c.trackId, laps: c.laps || 1, weather: c.weather, timeOfDay: c.timeOfDay, ai: c.ai,
@@ -1674,7 +1673,8 @@ CB.net = CB.net || {};
       '<div class="nl-field"><span class="nl-label">Weather</span>' + seg('weather', WEATHERS, s.weather, locked) + '</div>' +
       '<div class="nl-field"><span class="nl-label">Time of day</span>' + seg('timeOfDay', TIMES, s.timeOfDay, locked) + '</div>' +
       (s.mode === 'arcade' ? arcadeHtml(s, locked) : '<div class="nl-field nl-wide"><span class="nl-label">Allowed assists</span><div class="nl-checks">' + checks + '</div></div>') +
-      '<div class="nl-field nl-wide"><span class="nl-label">Max steering assist</span>' + seg('maxSteerAssist', STEER_LEVELS, s.maxSteerAssist, locked) + '</div>';
+      (s.mode === 'arcade' ? '<div class="nl-field nl-wide"><span class="nl-label">Handling</span><p class="nl-hint">Arcade handling — no assist needed (one handling model for every driver).</p></div>'
+        : '<div class="nl-field nl-wide"><span class="nl-label">Max steering assist</span>' + seg('maxSteerAssist', STEER_LEVELS, s.maxSteerAssist, locked) + '</div>');
   }
   /** Arcade rules (host): items, item boxes, nitro, speed class, coins, AI difficulty. */
   function arcadeHtml(s, locked) {

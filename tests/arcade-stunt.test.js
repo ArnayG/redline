@@ -82,7 +82,7 @@ function makeCar(t, s, v) {
 function run(t, c, secs, input, extra) {
   const evs = [];
   for (let i = 0; i < Math.round(secs * 120); i++) {
-    P.step(c, Object.assign({ track: t, dt: 1 / 120, drive: P.FALLBACK, input: input || { throttle: 0, brake: 0, steer: 0 }, assist: 'off', respawnPoint: () => ({ s: 5, dist: 5, speed: 15 }) }, extra || {}));
+    P.step(c, Object.assign({ track: t, dt: 1 / 120, drive: P.FALLBACK, input: input || { throttle: 0, brake: 0, steer: 0 }, help: 'off', respawnPoint: () => ({ s: 5, dist: 5, speed: 15 }) }, extra || {}));
     if (c.events) { evs.push.apply(evs, c.events); c.events = null; }
   }
   return evs;
@@ -114,15 +114,15 @@ test('stunt physics: ballistic gap at the design speed clears and lands on the f
     assert.ok(!ev.some((e) => e.type === 'fall'));
     assert.ok(land.air > 0.6 && land.air < 3.5, 'air time ' + land.air);
   });
-  // assist: launch 30% under the design speed
+  // guided help (mercy rule / AI): launch 30% under the design speed
   const g0 = t.gaps[0];
   const slow = makeCar(t, g0.s0 - 30, g0.designSpeed * 0.7);
-  const evA = run(t, slow, 5, { throttle: 0, brake: 0, steer: 0 }, { assist: 'heavy' });
+  const evA = run(t, slow, 5, { throttle: 0, brake: 0, steer: 0 }, { help: 'guided' });
   assert.ok(evA.some((e) => e.type === 'land' && e.assisted), 'assisted landing');
   assert.ok(!evA.some((e) => e.type === 'fall'));
   // no assist and far too slow: falls into the canyon and respawns at the checkpoint
   const nope = makeCar(t, g0.s0 - 20, 12);
-  const evN = run(t, nope, 6, { throttle: 0, brake: 0, steer: 0 }, { assist: 'off', jumpAssist: false });
+  const evN = run(t, nope, 6, { throttle: 0, brake: 0, steer: 0 }, { help: 'off', jumpAssist: false });
   assert.ok(evN.some((e) => e.type === 'fall'), 'falls short');
   assert.ok(evN.some((e) => e.type === 'respawn'), 'respawns');
   assert.equal(nope.mode, 'ground');
@@ -280,4 +280,19 @@ test('stunt integration: index.html loads the stunt modules before race-ui and t
   assert.ok(last < scripts.indexOf('js/race/race-ui.js') && last < scripts.indexOf('js/router.js'));
   assert.ok(scripts.indexOf('js/arcade/mode.js') < scripts.indexOf('js/arcade/stunt-track.js'));
   assert.equal(typeof S.createRenderer, 'function'); assert.equal(typeof S.drawThumb, 'function');
+});
+
+test('stunt: no steering assist — the nose is never auto-aligned on the ground, sessions ignore an assist level', () => {
+  const t = S.get('loop-rush');
+  let s0 = 0;
+  for (let s = 20; s < t.length; s += 2) { const sm = t.sample(s); if (Math.abs(sm.kLeft) < 1e-4 && !(sm.flags & (t.FLAGS.gap | t.FLAGS.loop)) && Math.abs(sm.up[1]) > 0.95) { s0 = s; break; } }
+  ['player', 'heavy'].forEach((help) => {
+    const c = P.createCar({ id: 'n', s: s0, L: t.length, dist: s0, v: 25 });
+    c.drive = P.FALLBACK.create(null, {}); c.psi = 0.08;
+    for (let i = 0; i < 30; i++) P.step(c, { track: t, dt: 1 / 120, drive: P.FALLBACK, input: { throttle: 0.5, steer: 0 }, help: help, assist: help, respawnPoint: () => ({ s: 0, dist: 0 }) });
+    assert.ok(Math.abs(c.psi - 0.08) < 0.01, help + ': heading kept (' + c.psi.toFixed(3) + '), nothing steers for the player');
+  });
+  const sess = S.createSession({ trackId: 'loop-rush', laps: 1, opponents: 0, countdown: false, steerAssist: 'heavy', assist: 'heavy' });
+  assert.equal(sess.config.assist, 'player');
+  assert.equal(sess.snapshot().stunt.assist, 'player');
 });

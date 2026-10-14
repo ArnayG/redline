@@ -7,7 +7,7 @@
    stunt tracks (CB.arcade.stunt, feature-detected) or on any normal circuit. Race and Drift never touch this.
 
      CB.arcade.mode.DEFAULTS / MODES / DIFFICULTIES
-     sanitize(settings) -> arcade session settings { trackId, mode, laps, opponents, difficulty, weather, timeOfDay, steerAssist, options }
+     sanitize(settings) -> arcade session settings { trackId, mode, laps, opponents, difficulty, weather, timeOfDay, options }
      registerExtension(ext) -> unregister()     gameplay layers (nitro / items / speed classes ...), see ARCADE-SPEC §3
      extensions() / optionDefs()                registered extensions / their setup options (sorted by ext.order)
      trackEntries(circuits) -> [{ id, name, kind 'stunt'|'circuit', def }]   stunt tracks FIRST, then the circuits
@@ -37,7 +37,7 @@ CB.arcade = CB.arcade || {};
     { id: 'pro', name: 'Pro', desc: 'Quick, clean rivals' },
     { id: 'alien', name: 'Alien', desc: 'Flat out, every lap' }
   ];
-  var DEFAULTS = { trackId: null, mode: 'race', laps: 3, opponents: 7, difficulty: 'amateur', weather: 'dry', timeOfDay: 'day', steerAssist: 'heavy', options: {} };
+  var DEFAULTS = { trackId: null, mode: 'race', laps: 3, opponents: 7, difficulty: 'amateur', weather: 'dry', timeOfDay: 'day', options: {} };
   var RECORDS_KEY = 'forge.arcade.records.v1';
 
   function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
@@ -85,7 +85,7 @@ CB.arcade = CB.arcade || {};
     o.difficulty = ids(DIFFICULTIES).indexOf(s.difficulty) >= 0 ? s.difficulty : DEFAULTS.difficulty;
     o.weather = ['dry', 'damp', 'wet'].indexOf(s.weather) >= 0 ? s.weather : DEFAULTS.weather;
     o.timeOfDay = ['day', 'dusk', 'night'].indexOf(s.timeOfDay) >= 0 ? s.timeOfDay : DEFAULTS.timeOfDay;
-    o.steerAssist = ['off', 'light', 'medium', 'heavy', 'auto'].indexOf(s.steerAssist) >= 0 ? s.steerAssist : 'heavy';
+    // no steerAssist: arcade handling needs no assist layer (a stored level from older saves is ignored)
     var opts = isObj(s.options) ? s.options : {};
     o.options = {};
     optionDefs().forEach(function (d) { o.options[d.id] = optionValue(d, opts[d.id]); });

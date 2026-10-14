@@ -30,10 +30,10 @@
    API
      CB.net.arcade.createHostSession(host, cfg)   host = CB.net.transport Host
        cfg { trackId, laps, ai (fill count), difficulty, weather, timeOfDay, arcade { options {items, itemFrequency,
-             nitro, speedClass, coins} }, build, name, seed, players [{peerId, name, build}], maxSteerAssist,
-             steerAssist, leadIn_s 3, snapHz 20, hooks (race-ui netHooks), finishWait_s, autopilot }
+             nitro, speedClass, coins} }, build, name, seed, players [{peerId, name, build}],
+             leadIn_s 3, snapHz 20, hooks (race-ui netHooks), finishWait_s, autopilot }
      CB.net.arcade.createClientSession(client, cfg)  cfg { start (the host's start message, optional), build, name,
-             steerAssist, hooks, autopilot }
+             hooks, autopilot }   (no steering assist: every car drives the one arcade handling model)
      CB.net.arcade.isArcadeStart(msg)  CB.net.arcade.waitForStart(client, fn)
      Session: the CB.net.race surface (update, snapshot, results, netState, onResults, onEnd, end, destroy, time,
        alpha, getPhase, isFinished, geom, track, trackDef, config, mode 'race', playerState ...) plus arcade (the
@@ -98,8 +98,9 @@ CB.net = CB.net || {};
   function defaultBuild() { var D = CB.data; return D && typeof D.defaultBuild === 'function' ? safe(function () { return D.defaultBuild(); }, null) : null; }
   function isStuntTrack(id) { var M = CB.arcade && CB.arcade.mode; return !!(M && typeof M.isStunt === 'function' && safe(function () { return M.isStunt(id); }, false)); }
   function circuitDef(id) { var T = CB.race && CB.race.tracks; return T && typeof T.get === 'function' ? safe(function () { return T.get(id); }, null) : null; }
-  /** Quantised steering-assist level for the stunt drive model ('heavy' | 'light' | 'off'). */
-  function stuntAssist(l) { return l === 'off' ? 'off' : l === 'light' || l === 'medium' ? 'light' : 'heavy'; }
+  /** Arcade handling has no steering assist: every human (local or remote) drives the one arcade model with the stunt
+      'player' safety helpers (stunt-physics.js help levels). Kept as a function for older callers. */
+  function stuntAssist() { return 'player'; }
   var RANK = { off: 0, light: 1, medium: 2, heavy: 3, auto: 4 };
   function capAssist(want, max) {
     var w = RANK[want] != null ? want : 'heavy';
@@ -281,7 +282,7 @@ CB.net = CB.net || {};
 
     /* ---------------- the local session ---------------- */
     function buildSim() {
-      var sc = start.cfg, entrants = [], level = capAssist(cfg.steerAssist || 'heavy', sc.maxSteerAssist);
+      var sc = start.cfg, entrants = [];
       grid.forEach(function (e, i) {
         if (e.carId === myCarId) return;
         entrants.push({ id: e.carId, name: e.name, team: e.team || '', number: e.number, color: e.color, accent: e.accent, build: e.build || undefined,
@@ -298,7 +299,7 @@ CB.net = CB.net || {};
         playerBuild: build, build: build, playerName: cfg.name || me.name || 'You', playerColor: me.color, playerNumber: me.number,
         weather: sc.weather, timeOfDay: sc.timeOfDay, seed: start.seed, difficulty: sc.difficulty,
         assists: { abs: true, tc: true, autoShift: true, racingLine: false, steeringAssist: false },
-        steerAssist: level, assist: kind === 'stunt' ? stuntAssist(level) : level, arcade: jclone(sc.arcade) || {},
+        steerAssist: 'off', arcade: jclone(sc.arcade) || {},   // one arcade handling model for everyone (no assist layer)
         hooks: hooks, persistGhost: false, storage: storage, stuckDnf_s: 0, finishTimeout_s: 1e7, rubberBanding: false, field: 'mixed',
         lightsOutDelay_s: sc.lightsOutDelay_s, trackLimitsWarnings: 99, playerAutopilot: autopilot
       };
@@ -348,7 +349,7 @@ CB.net = CB.net || {};
         carsByLocal[car.id] = car;
         if (car.isPlayer) return;
         var e = entryOfLocal(car.id);
-        if (isHost) { if (e && e.kind === 'human') car.humanAssist = stuntAssist(capAssist(e.assist || 'heavy', start.cfg.maxSteerAssist)); return; }
+        if (isHost) { if (e && e.kind === 'human') car.humanAssist = 'player'; return; }   // remote human: player helpers, no AI pace / grip
         // client: every other car is a puppet
         if (kind === 'stunt') car.external = true;
         else { car._net = true; car.frozenUntil = 1e9; car._hold = { x: car.state.x, y: car.state.y, heading: car.state.heading }; }
@@ -561,21 +562,21 @@ CB.net = CB.net || {};
       L = trackLength();
       if (isHost) grid.forEach(function (e) { if (e.kind === 'human' && e.carId !== myCarId) inbufs[e.carId] = new InputBuffer(); });
     }
-    function humanEntry(peerId, name, build, idx, assist) {
+    function humanEntry(peerId, name, build, idx) {
       var ext = (build && build.exterior) || {};
-      return { carId: carIdOf(peerId), peerId: peerId, kind: 'human', name: name || 'Driver', team: '', build: build || null, assist: assist || 'heavy',
+      return { carId: carIdOf(peerId), peerId: peerId, kind: 'human', name: name || 'Driver', team: '', build: build || null,
                number: String(ext.livery_number || idx + 1), color: ext.paint || '#b3121f', accent: ext.stripeColor || '#ffffff' };
     }
     function initHost() {
       var seed = isNum(cfg.seed) ? (cfg.seed >>> 0) : (Math.floor(Math.random() * 4294967296) >>> 0);
       var rng = mulberry32(seed);
       var hostBuild = cfg.build || cfg.playerBuild || defaultBuild();
-      var humans = [humanEntry(link.id || 'host', cfg.name || 'Host', hostBuild, 0, cfg.steerAssist)];
+      var humans = [humanEntry(link.id || 'host', cfg.name || 'Host', hostBuild, 0)];
       var players = Array.isArray(cfg.players) ? cfg.players : link.peers().map(function (id) { return { peerId: id }; });
       players.forEach(function (p) {
         if (!p || p.peerId == null || humans.length >= cfg.maxPlayers) return;
         if (humans.some(function (h) { return h.peerId === p.peerId; })) return;
-        humans.push(humanEntry(p.peerId, p.name || ('Driver ' + (humans.length + 1)), p.build || null, humans.length, p.steerAssist));
+        humans.push(humanEntry(p.peerId, p.name || ('Driver ' + (humans.length + 1)), p.build || null, humans.length));
       });
       var list = humans.slice();
       var aiCount = clamp(Math.round(num(cfg.ai, 0)), 0, Math.max(0, cfg.maxGrid - humans.length));
@@ -602,7 +603,7 @@ CB.net = CB.net || {};
       var arc = (CB.arcade && CB.arcade.mode && CB.arcade.mode.sanitize) ? CB.arcade.mode.sanitize(assign({}, cfg.arcade || {}, { trackId: trackId, mode: 'race', laps: cfg.laps, difficulty: cfg.difficulty || 'amateur' })) : (cfg.arcade || {});
       var scfg = {
         trackId: trackId, kind: kindS, laps: clamp(Math.round(num(cfg.laps, 3)), 1, 20), weather: cfg.weather || 'dry', timeOfDay: cfg.timeOfDay || 'day',
-        difficulty: cfg.difficulty || 'amateur', arcade: arc, maxSteerAssist: cfg.maxSteerAssist || 'auto', snapHz: clamp(num(cfg.snapHz, list.length > 5 ? 15 : 20), 5, 30),
+        difficulty: cfg.difficulty || 'amateur', arcade: arc, snapHz: clamp(num(cfg.snapHz, list.length > 5 ? 15 : 20), 5, 30),
         lightsOutDelay_s: isNum(cfg.lightsOutDelay_s) ? cfg.lightsOutDelay_s : Math.round((0.4 + rng() * 1.6) * 1000) / 1000
       };
       var st = { t: 'start', v: VERSION, arcade: true, seed: seed, t0: link.now() + num(cfg.leadIn_s, 3), cfg: scfg, grid: list };
@@ -930,8 +931,8 @@ CB.net = CB.net || {};
       restart: function () { return api; },
       resetPlayerToTrack: function () { /* no manual resets in a multiplayer race (stunt falls respawn on their own) */ },
       setAssists: function () {},
-      setAssistLevel: function (l) { if (sim && kind === 'stunt' && typeof sim.setAssist === 'function') sim.setAssist(stuntAssist(capAssist(l, start && start.cfg.maxSteerAssist))); return l; },
-      getAssistLevel: function () { return cfg.steerAssist || 'heavy'; },
+      setAssistLevel: function () { return 'off'; },   // arcade: no steering assist
+      getAssistLevel: function () { return 'off'; },
       setPlayerAutopilot: function (on) { autopilot = !!on; if (sim && typeof sim.setPlayerAutopilot === 'function') sim.setPlayerAutopilot(autopilot); },
       playerState: function () { return sim && typeof sim.playerState === 'function' ? sim.playerState() : null; },
       setButtons: function (b) { buttons = b ? assign({}, b) : null; if (gp && b) gp.setInput({ nitro: !!b.nitro, item: !!b.item, aimBack: !!b.aimBack }); },

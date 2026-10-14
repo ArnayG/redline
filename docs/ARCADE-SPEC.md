@@ -32,18 +32,30 @@ V.step(p, s, input, dt, env);                                  // same contract 
 ```
 
 * `p.handling === 'arcade'`, `p.arcade = { latG, brakeG, tracG, dfGain, punch }`. `p.capabilities`,
-  `p.maxLatG`, `p.maxBrakeG`, `p.topSpeed_ms` are the **arcade** envelope (AI / assists plan with them).
-  `latG` ≈ 1.22–1.7 g (tyre/suspension stats only nudge it), `brakeG` ≈ 1.25–1.6 g, drive force × 1.12
+  `p.maxLatG`, `p.maxBrakeG`, `p.topSpeed_ms` are the **arcade** envelope (AI plans with them).
+  `latG` = clamp(2.2 + 0.4·(simLat − 1), 2.0, 2.6) g × a mass factor (1 − 0.09 per tonne over 1.45 t, 0.88–1.03:
+  a 2.6 t van ≈ −10 %, slightly less agile, never sluggish), `brakeG` ≈ 1.25–1.6 g, drive force × 1.12
   capped at `tracG` g (1.12, AWD 1.25) so launches never spin the wheels.
-* Steering: `input.steer` (−1..1, +left) is a **curvature command**: full lock = `arcadeCurvatureLimit(p, v, grip)`
-  = min(lock geometry, latCap(v)/v²), i.e. full lock is the cornering limit at every speed (controllable at
-  300 km/h). Linear, so analog phone/tilt input stays proportional. Slew 7.5 /s in, 11 /s back to centre.
-  Yaw rate follows `v·κ` with a 70 ms lag; body slip relaxes in 45 ms. Cornering at the limit scrubs
-  ≤ 0.12 g so lines still matter.
+* Steering (Mario-Kart agile, retuned 2026-10): `input.steer` (−1..1, +left) is a **curvature command**: full lock =
+  `arcadeCurvatureLimit(p, v, grip)` = min(lock geometry × 1.2, latCap(v)/v²), i.e. full lock is the cornering limit at
+  every speed (controllable at 300 km/h). Linear, so analog phone/tilt/webcam input stays proportional. Slew 14 /s in,
+  18 /s back to centre / through a flip. Yaw rate follows `v·κ` with a 40 ms lag; body slip relaxes in 35 ms.
+  Cornering at the limit scrubs ≤ 0.12 g so lines still matter.
+  Measured (`node tools/arcade-turn.js`, hot hatch, full lock): 30 / 60 / 100 / 150 / 200 / 250 km/h →
+  150 / 74 / 44 / 30 / 22 / 18 °/s (before: 89 / 43 / 25 / 17 / 13 / 10 with the old Heavy assist default);
+  90 % of the yaw rate after ~150 ms on keys, ~130 ms on a pad / phone (before 320–440 / 240 ms). Van ≈ 0.75–0.85 ×.
+* **Keyboard** in arcade sessions (race-ui `I.sample`, `V.ARCADE.keys`): 10 /s ramp (~100 ms to full lock, ×0.8–1.2
+  with the sensitivity setting), 14 /s centering, 18 /s direction flips, **no** speed-dependent lock cut (the vehicle's
+  full lock already is the limit). Pad / touch / phone / webcam axes go through unscaled.
+* **No steering assist in Arcade.** The setup shows "Arcade handling — no assist needed"; the pause menu has no
+  assist row; arcade sessions never apply `CB.race.assist` / the drift race wrapper (circuits run the plain engine with
+  the raw shaped input, `cfg.steerAssist = 'off'`); a stored `settings.arcade.steerAssist` is ignored (`sanitize` drops
+  it). Race (default Light) and Drift (default Heavy) keep their assist options.
 * Off-track: `env.gripMult` only scales the limit by `0.7 + 0.3·grip` (grass 0.58 → 0.87); the engine's surface
   drag slows the car. Nothing spins.
-* **Powerslide** (Mario-Kart style, cosmetic + slightly tighter): handbrake + steer above 9 m/s swings the nose
-  in up to ~29° while the path stays exactly as commanded (×1.3 curvature, 0.06 g scrub). State:
+* **Powerslide** (Mario-Kart style, cosmetic + tighter): handbrake + steer above 9 m/s swings the nose
+  in up to ~29° while the path stays exactly as commanded (×1.5 curvature and lateral limit, 0.06 g scrub; hatch at
+  60 / 100 km/h: 111 / 66 °/s). State:
   `s.powerslide` (bool), `s.slideTime` (s held), `s.slideAngle` (rad, +left), `s.slideDir`. Below 9 m/s the
   handbrake is a 0.45 g brake.
 * **Boost** per step through `env.arcade` (e.g. from a `vehicleEnv` hook):
@@ -85,12 +97,12 @@ read `s.ax` (forward accel) / `s.yawRate` / `s.speed`, then re-project onto the 
   `snapshot().handling` / `results().handling` = `'arcade' | 'sim'`. Ghosts are stored under
   `forge.race.ghost.v1:arcade:<track>:<build>` (separate from simulation ghosts).
 * `CB.race.ai` reads `params.handling`: neutral axle balance, arcade grip / braking caps, steering through
-  `arcadeCurvatureLimit` (curvature command instead of a learned wheel-angle ratio), higher grip use
-  (0.86–0.96) and later braking. Measured (pro AI, 2 laps, 4 cars): 0 off-track ticks and 0 wall hits on all 10
-  circuits, laps ~15–20 % quicker than the simulation.
-* `CB.race.assist` (off/light/medium/heavy/auto) applies on top: steering maps through the arcade limit, the
-  slide catchers / traction limiter / spin guard are skipped for arcade cars (they cannot slide), line hold,
-  lane keeping, edge guard and brake assist keep working with the arcade speed profile.
+  `arcadeCurvatureLimit` (curvature command instead of a learned wheel-angle ratio), grip use 0.84–0.94, later
+  braking, a faster steer slew (9–15 /s), a 6 % tracking margin above 90 km/h and a 0.4 m bigger edge margin for lane
+  changes (arcade cars move sideways quicker). Measured (pro AI, 2 laps, 4 cars): 0 off-track ticks and 0 wall hits
+  on all 10 circuits; laps ~12–17 % quicker than before the 2026-10 turning retune (the player gains the same grip).
+* `CB.race.assist` still understands arcade params (steering through the arcade limit, no slide catchers) for
+  callers outside Arcade, but Arcade sessions never use it.
 
 ## 3. Gameplay extensions (nitro, items, speed classes …)
 
@@ -135,7 +147,7 @@ The session returned by `CB.arcade.mode.createSession` exposes the same aggregat
   `update(dt, input)`, `snapshot()` (RACE-SPEC snapshot; cars may add `z`, `pitch`, `roll`, `airborne`),
   `results()`, `restart()`, `geom`, `trackDef`, `config`; optional `setPlayerAutopilot`, `resetPlayerToTrack`.
   `cfg` is the engine-style cfg race-ui builds: `trackId, track, laps, mode, opponents (ai.createGrid entries),
-  playerBuild, playerMetrics, playerName, weather, timeOfDay, difficulty, seed, assists, steerAssist (level),
+  playerBuild, playerMetrics, playerName, weather, timeOfDay, difficulty, seed, assists (steerAssist is ignored: one arcade model),
   hooks (extension engine hooks — call them with the same contract), handling: 'arcade', arcade (settings)`.
 * Rendering: if the session (or `CB.arcade.stunt`) has `createRenderer(canvas, session, opts)` returning
   `{ render(snap, alpha), resize?, destroy?, setCamera?, cycleCamera?, getCameraState? }`, race-ui uses it
@@ -203,7 +215,23 @@ fallback handles pads / rings / cans / boxes and a nitro meter. Direct API: `ses
   `CB.arcade.drive` → `CB.race.vehicle.arcadeResponse` (§1.1; build drive force / gearing / brakes, curvature-command
   steering, stunt grip bonus via `env.gripMult`, top speed capped at 58 m/s + boosts) → built-in fallback
   (`cfg.drive: 'builtin'`). Assist levels: heavy (auto-align + loop / gap speed top-up + full jump assist; holding
-  throttle alone completes every map), light, off.
+  throttle alone completes every map), light, off. **Superseded (2026-10): see §4.5.**
+
+### 4.5 One arcade model for every human (no assist levels)
+
+Stunt sessions ignore `cfg.assist` / `steerAssist`: every human (local player, netarcade remote players) drives the
+same handling, with internal stunt **helpers** (`ctx.help`, stunt-physics.js — not a steering assist, the ground steering
+is never touched: no heading auto-align):
+* `'player'` (every human): jump launches topped up to 1.02 × the gap's design speed, mild air guidance (flight pulled
+  back over the road ×0.4, heading follows the road below), landings soften the heading ×0.5.
+* `'guided'` — the **mercy rule**: after `MERCY_FALLS` (2) falls in a row the next jumps get loop / gap speed top-up on
+  the ground, 1.05 × launches and strong air guidance until a clean landing (`fallStreak`). `'ai'` = guided for AI cars.
+  `'off'` = raw physics (unit tests only). Legacy `ctx.assist` maps heavy → guided, light/medium → player.
+* Always on: loop / wall adhesion, swept landing capture (+ lip save), guard rails (also in the air), over-speed gap arcs,
+  crest release, respawns.
+Human sweep (`node tools/stunt-sweep.js`, 462 runs: 7 lateral offsets × 11 speed/boost/item profiles × air inputs ×
+8 builds × 6 frame-rate profiles on all 6 maps): 0 falls, 0 fall-throughs / road-under / wrong re-attaches / launches /
+stuck / loop drops, 100 % laps completed.
 
 ### 4.3 Rendering (`stunt-mesh.js`, `stunt-renderer.js`)
 
@@ -232,7 +260,7 @@ Implemented (§6) with: entrant `id`s (`opponents[i].id` becomes the car id), `p
 
 * Route `#/arcade` (router NAV item "Arcade", hub main-menu tile). Deep links `#/arcade?track=<id>&quick=1`.
 * Setup: track list (stunt first, then circuits), Mode (Race / Time trial), Laps, Opponents, AI difficulty,
-  Steering assist, **Arcade rules** (extension options), Weather / Time of day, graphics. Arcade settings are
+  Handling note ("Arcade handling — no assist needed"), **Arcade rules** (extension options), Weather / Time of day, graphics. Arcade settings are
   stored in `forge.race.settings.v1 → arcade` and never change Race / Drift defaults.
 * HUD: `ARCADE` badge; results screen shows an `ARCADE` chip; best laps go to the separate store
   `forge.arcade.records.v1` (same record format as race records, per track and build).
@@ -258,7 +286,9 @@ same-device tabs all work; online rooms fall back to the server relay (`relay: t
   loss-proof because every packet repeats all un-acked changes). The host applies tick `n − D` at its tick `n` (D adaptive:
   measured lateness + 2.5·jitter + one send interval, 3–42 ticks, 96 on relay links) and holds the car until GO + D, so its
   copy of the car is the player's own trajectory shifted by D. Remote players' rocket starts come from the client's grade
-  (`gp.launchKart`). Remote cars on a stunt track drive with the player assist (`car.humanAssist`, AI pace / grip off).
+  (`gp.launchKart`). Remote cars on a stunt track drive the same arcade model as every human (`car.humanAssist = 'player'`:
+  the stunt player helpers, AI pace / grip off). There is no steering assist in arcade multiplayer (the old "everyone
+  Heavy" rule is gone; the lobby shows "Arcade handling — no assist needed" instead of Max steering assist).
 * **Client = predicted mirror.** Same seed / track / grid; only the own car is simulated. Other cars are puppets (stunt:
   `car.external = true`, the session skips AI + physics and calls the `externalStep` hook; circuit: frozen engine cars posed
   in `postStep`), interpolated ~2 snapshots behind (adaptive, 60–400 ms; relay 300–1000 ms). The gameplay layer is a
@@ -270,7 +300,7 @@ same-device tabs all work; online rooms fall back to the server relay (`relay: t
   (τ 0.12 s). Mode mismatch (ground / air) for 4 snapshots or > 14 m → hard snap. Without interaction the error is millimetres
   (`tests/net-arcade.test.js`).
 * **Messages.** `start{v:'redline-net-arcade/1', arcade:true, seed, t0, cfg{trackId, kind, laps, arcade, snapHz,
-  lightsOutDelay_s, maxSteerAssist}, grid, you}` · `na.s` (fast, `snapHz` 20 Hz / 15 Hz for > 5 cars: quantised pose arrays per
+  lightsOutDelay_s}, grid, you}` · `na.s` (fast, `snapHz` 20 Hz / 15 Hz for > 5 cars: quantised pose arrays per
   grid index — stunt `[i, mode, s, dist, lat, psi, v, rpm, gear, steer, thr, flags, fade, (air pose)]`, circuit `[i, x, y, h,
   vx, vy, w, rpm, gear, steer, thr, brk, flags]` — the gameplay pack every 2nd, acks) · `na.in` (fast) · `na.st` standings 5 Hz
   · `na.ev` gameplay events ~15 Hz · `results{arcade:true, classification[{…, arcade{hitsLanded, hitsTaken, itemsUsed, coins,

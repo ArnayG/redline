@@ -49,11 +49,29 @@ test('no slip / no spin: full throttle + full lock at 60..300 km/h', function ()
       }
       assert.ok(maxB * DEG < 1.0, 'beta ' + (maxB * DEG).toFixed(2) + ' deg at ' + v0);
       assert.ok(maxSpin < 0.01, 'wheelspin / skid ' + maxSpin);
-      assert.ok(Math.abs(s.gLat) > 1.1 && Math.abs(s.gLat) < 2.2, 'lateral g ' + s.gLat);
+      assert.ok(Math.abs(s.gLat) > 1.6 && Math.abs(s.gLat) < 3.4, 'lateral g ' + s.gLat);
       assert.ok(s.speed > 10 && isFinite(s.x), 'still driving');
       assert.ok(Math.sign(s.yawRate) === dir, 'turning the way it was steered');
     });
   });
+});
+
+test('turning: Mario-Kart agile — fast full-lock yaw at every speed, ~100 ms key ramp, heavier cars slightly less agile', function () {
+  var T = require(path.join(root, 'tools', 'arcade-turn.js'));
+  var hatch = V.fromBuild(CB.data.presets[3].build), van = V.fromBuild(CB.data.presets[13].build, null, { handling: 'arcade' });
+  var H = V.withHandling(hatch, 'arcade');
+  var want = { 30: 120, 60: 65, 100: 40, 150: 26, 200: 19, 250: 15 };   // deg/s (was ~89 / 43 / 25 / 17 / 13 / 10 with the assist)
+  Object.keys(want).forEach(function (k) {
+    var a = T.circuitProbe(H, +k, 'keys'), b = T.circuitProbe(van, +k, 'keys'), pad = T.circuitProbe(H, +k, 'pad');
+    assert.ok(a.yaw * DEG >= want[k], k + ' km/h yaw ' + (a.yaw * DEG).toFixed(1));
+    assert.ok(a.t90 <= 0.17 && pad.t90 <= 0.15, k + ' km/h response keys ' + a.t90 + ' pad ' + pad.t90);
+    var r = b.yaw / a.yaw;
+    assert.ok(r > 0.7 && r < 1.0, 'van / hatch agility ' + r.toFixed(2));
+    var sl = T.slideProbe(H, +k);
+    assert.ok(sl > a.yaw * 1.3, k + ' km/h powerslide turns tighter ' + (sl * DEG).toFixed(0));
+  });
+  var st = T.stuntProbe(CB.data.presets[3].build, 100, 'keys');
+  assert.ok(st.yaw * DEG >= 40 && st.t90 <= 0.15, 'stunt tracks: same agility ' + (st.yaw * DEG).toFixed(1) + ' / ' + st.t90);
 });
 
 test('steering is proportional (analog input) and speed sensitive', function () {
@@ -180,7 +198,8 @@ test('replay: recorder stores handling meta and playback snapshots carry it', fu
 
 test('CB.arcade.mode: settings, stunt tracks first, extensions (options, env hooks, snapshot)', function () {
   var S = M.sanitize({ laps: 99, mode: 'bogus', opponents: 0, steerAssist: 'light' });
-  assert.strictEqual(S.laps, 20); assert.strictEqual(S.mode, 'race'); assert.strictEqual(S.opponents, 1); assert.strictEqual(S.steerAssist, 'light');
+  assert.strictEqual(S.laps, 20); assert.strictEqual(S.mode, 'race'); assert.strictEqual(S.opponents, 1);
+  assert.ok(!('steerAssist' in S), 'arcade settings carry no steering assist (a stored level is ignored)');
   var hadStunt = CB.arcade.stunt;
   CB.arcade.stunt = hadStunt || { list: function () { return [{ id: 'stub-loop', name: 'Stub Loop', kind: 'stunt' }]; }, createSession: function () { return null; } };
   var entries = M.trackEntries([{ id: 'c1', name: 'C1' }]);

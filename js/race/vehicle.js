@@ -867,11 +867,13 @@ CB.race = CB.race || {};
      m/s^2 (boost pads, independent of throttle), topSpeedMult: governor multiplier (speed classes) }.            */
   var ARC = {
     punch: 1.12,          // drive-force bonus (arcade feels a little livelier than the sim)
-    yawTau: 0.07,         // s: yaw-rate lag behind the commanded curvature (crisp but not digital)
-    slipTau: 0.045,       // s: body slip decay (the "grip constraint")
-    steerRateIn: 7.5,     // 1/s: normalised steer slew toward a bigger input
-    steerRateOut: 11,     // 1/s: ... and back toward centre
-    hbCurv: 1.3,          // handbrake: tighter turning (and a light brake), never a spin
+    yawTau: 0.04,         // s: yaw-rate lag behind the commanded curvature (snappy, Mario-Kart-like, not digital)
+    slipTau: 0.035,       // s: body slip decay (the "grip constraint")
+    steerRateIn: 14,      // 1/s: normalised steer slew toward a bigger input (pad / phone: ~70 ms to full lock)
+    steerRateOut: 18,     // 1/s: ... and back toward centre (quick self-centering)
+    lockK: 1.2,           // low-speed lock geometry x this (tight hairpins / parking-lot turns)
+    latBase: 2.2,         // g: cornering limit of an average car (was 1.32: ~1.7x the yaw rate at every speed)
+    hbCurv: 1.5,          // handbrake / powerslide: tighter turning (and a light brake), never a spin
     hbBrakeG: 0.45,
     engBrakeG: 0.32,      // max engine braking on lift
     scrubG: 0.12,         // g of drag at full cornering load
@@ -880,7 +882,10 @@ CB.race = CB.race || {};
     slideIn: 1.8,         // rad/s: slide angle build-up
     slideOut: 2.6,        // rad/s: ... and recovery once the handbrake is released
     slideBrakeG: 0.06,    // light scrub while powersliding (keeps the speed, Mario-Kart style)
-    wallYawCap: 1.6       // rad/s: yaw kick the engine may leave after a wall / car contact (soft bounces)
+    wallYawCap: 1.6,      // rad/s: yaw kick the engine may leave after a wall / car contact (soft bounces)
+    // keyboard shaping for arcade sessions (race-ui I.sample arcade branch, tools/arcade-turn.js): ~100 ms to full lock,
+    // no speed-dependent lock cut (full lock already IS the cornering limit at every speed), quick centering / flips
+    keys: { rateIn: 10, rateOut: 14, rateFlip: 18 }
   };
   function arcadeSurfaceGrip(g) { return 0.7 + 0.3 * clamp(num(g, 1), 0, 1); }
   /** Arcade lateral limit (m/s^2) at speed v: generous, a little more with downforce, a little less off-road. */
@@ -891,7 +896,7 @@ CB.race = CB.race || {};
   }
   /** Max path curvature (1/m) the steering may ask for at speed v (full lock). */
   function arcadeCurvatureLimit(p, v, gripMult) {
-    var kLock = Math.tan(p.lockAngle) / p.wheelbase;
+    var kLock = Math.tan(p.lockAngle) / p.wheelbase * ARC.lockK;
     var va = Math.max(Math.abs(num(v, 0)), 0.1);
     return Math.min(kLock, arcadeLatCap(p, va, gripMult) / (va * va));
   }
@@ -900,8 +905,10 @@ CB.race = CB.race || {};
     p.handling = 'sim';
     var simLat = latAccelAt(p, 0, 1) / G, simBrake = brakeAccelAt(p, 0, 1) / G;
     p.handling = 'arcade';
+    // heavier cars are a little less agile (a 2.6 t van ~ -10 %), never sluggish
+    var massF = clamp(1 - 0.09 * (num(p.mass, 1450) - 1450) / 1000, 0.88, 1.03);
     p.arcade = {
-      latG: clamp(1.32 + 0.4 * (simLat - 1.0), 1.22, 1.7),
+      latG: clamp(ARC.latBase + 0.4 * (simLat - 1.0), 2.0, 2.6) * massF,
       brakeG: clamp(1.35 + 0.25 * (simBrake - 1.0), 1.25, 1.6),
       tracG: p.layout === 'awd' ? 1.25 : 1.12,
       dfGain: 0.35,

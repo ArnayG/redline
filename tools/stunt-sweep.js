@@ -4,7 +4,8 @@
    Human-driver fuzz / sweep harness for the Arcade STUNT tracks (js/arcade/stunt-*.js). Drives the PLAYER car through
    the real CB.arcade.mode session (gameplay extension, CB.race.vehicle arcadeResponse drive model) with scripted input
    profiles — speed sweeps (coasting .. Mega Nitro), lateral offsets across the whole road, air steering, throttle
-   lifts, handbrake, item hits, car builds, assist levels, frame-rate / dt-spike profiles — and flags:
+   lifts, handbrake, item hits, car builds, frame-rate / dt-spike profiles — with the single arcade handling model (no
+   steering assist; the stunt 'player' safety helpers + mercy rule) — and flags:
      fallThrough   the car ended up just below a road surface it was over (lateral within the road) and then fell /
                    respawned — i.e. it tunnelled through the road instead of landing
      roadUnder     a fall / lost respawn started while a road surface was right under the car
@@ -51,14 +52,14 @@ function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
 /**
  * One scripted run. o {
- *   map, build (BUILDS key), assist 'off'|'light'|'medium'|'heavy', lat (-1..1 fraction of the usable half width),
+ *   map, build (BUILDS key), lat (-1..1 fraction of the usable half width),
  *   wobble (m amplitude of a slow weave), throttle (0..1), speed 'full'|'slow'|'crawl'|'lift'|'brakeGap'|'coast',
  *   boost 'none'|'nitro'|'mega'|'megaGap'|'pads'|'hit', air 'none'|'left'|'right'|'lift'|'brake'|'handbrake'|'wiggle',
  *   keyboard (digital steering), dt (DT key), laps (1), timeout_s, seed }
  */
 function runCase(o) {
   var CB = load();
-  o = Object.assign({ map: 'loop-rush', build: 'hatch', assist: 'heavy', lat: 0, wobble: 0, throttle: 1, speed: 'full', boost: 'none', air: 'none',
+  o = Object.assign({ map: 'loop-rush', build: 'hatch', lat: 0, wobble: 0, throttle: 1, speed: 'full', boost: 'none', air: 'none',
     keyboard: false, dt: 'hz60', laps: 1, timeout_s: 0, seed: 7 }, o || {});
   var S = CB.arcade.stunt, P = S.physics, V = S._vec;
   var track = S.get(o.map), L = track.length, F = track.FLAGS;
@@ -112,7 +113,7 @@ function runCase(o) {
   };
   var sess = CB.arcade.mode.createSession({
     trackId: o.map, laps: o.laps, mode: 'race', opponents: 0, countdown: false, seed: o.seed, playerBuild: build, build: build,
-    assist: o.assist, steerAssist: o.assist, hooks: [obs], arcade: { options: { items: true, nitro: true } }
+    hooks: [obs], arcade: { options: { items: true, nitro: true } }
   });
   var gpInst = (sess.arcade.instances || []).filter(function (i) { return i.id === 'gameplay'; })[0];
   var gp = gpInst ? gpInst.gameplay : null;
@@ -177,7 +178,6 @@ function runCase(o) {
 /** Profile list: full sweep (quick = a reduced deterministic subset for CI). */
 function profiles(map, quick) {
   var out = [];
-  var assists = ['off', 'light', 'medium', 'heavy'];
   var lats = quick ? [-0.9, 0, 0.9] : [-1, -0.6, -0.25, 0, 0.3, 0.65, 1];
   var speeds = quick ? [['full', 'none'], ['full', 'megaGap'], ['lift', 'none']] :
     [['full', 'none'], ['full', 'nitro'], ['full', 'mega'], ['full', 'megaGap'], ['full', 'hit'], ['human', 'none'], ['lift', 'none'], ['coast', 'none'], ['slow', 'none'], ['brakeGap', 'none'], ['full', 'pads']];
@@ -189,7 +189,7 @@ function profiles(map, quick) {
   lats.forEach(function (lat) {
     speeds.forEach(function (sp) {
       var i = n++;
-      out.push({ map: map, lat: lat, speed: sp[0], boost: sp[1], assist: assists[i % assists.length], air: airs[(i * 3 + 1) % airs.length],
+      out.push({ map: map, lat: lat, speed: sp[0], boost: sp[1], air: airs[(i * 3 + 1) % airs.length],
         build: builds[(i * 5 + 2) % builds.length], dt: dts[(i * 7 + 3) % dts.length], keyboard: i % 3 === 0, wobble: i % 4 === 1 ? 2.5 : 0, seed: 11 + i });
     });
   });
@@ -222,7 +222,7 @@ if (require.main === module) {
   var res = sweep(maps, quick, function (r) {
     if (verbose || bad(r)) {
       var p = r.profile;
-      console.log((bad(r) ? 'BAD ' : 'ok  ') + p.map + ' lat=' + p.lat + ' ' + p.speed + '/' + p.boost + ' ' + p.assist + ' air=' + p.air + ' ' + p.build + ' ' + p.dt + (p.keyboard ? ' kb' : '') +
+      console.log((bad(r) ? 'BAD ' : 'ok  ') + p.map + ' lat=' + p.lat + ' ' + p.speed + '/' + p.boost + ' air=' + p.air + ' ' + p.build + ' ' + p.dt + (p.keyboard ? ' kb' : '') +
         ' | fin=' + r.finished + ' t=' + r.time + ' prog=' + r.progress + ' falls=' + r.falls + ' maxV=' + r.maxV +
         (r.fallThrough.length ? ' FT=' + JSON.stringify(r.fallThrough) : '') + (r.roadUnder.length ? ' RU=' + JSON.stringify(r.roadUnder) : '') +
         (r.wrongAttach.length ? ' WA=' + JSON.stringify(r.wrongAttach) : '') + (r.launched.length ? ' LA=' + JSON.stringify(r.launched) : '') +
