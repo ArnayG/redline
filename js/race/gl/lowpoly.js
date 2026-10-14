@@ -577,6 +577,24 @@ var CB = (globalThis.CB = globalThis.CB || {});
     return { grid: grid, clamped: clampF };
   }
   /** emit a mirrored shell. grid: [{x, pts:[[y,z]]}] descending x; matFn(i, j, quad) -> mat key */
+  /** Glass tips: where a side-window column tapers out (the DLO's front tip on the cowl, its rear tip on a haunch /
+      C-pillar) the authored glass quad is twisted, and one of its two triangles lies nearly flat on the body. Flat
+      glass mirrors the sky, so that sliver reads as a pale triangle on the dark side glass. A glass quad folded by
+      more than GT_FOLD whose more upward-facing triangle is clearly flatter (ny > the other's + GT_DNY) gives that
+      triangle to the panel it lies against: the column below (it holds the quad's lower edge) or above (it holds the
+      upper edge), unless that neighbour is glass too (side glass running into a screen). -> [mat t1, mat t2] | null */
+  var GT_FOLD = Math.cos(25 * DEG), GT_DNY = 0.12;
+  function triN(a, b, c) { var v = cross(sub(b, a), sub(c, a)), l = len(v); return l > 1e-12 ? scl(v, 1 / l) : null; }
+  function glassTipMats(matFn, i, j, i2, n, P, t1, t2, A, Bq) {
+    var n1 = triN(t1[0], t1[1], t1[2]), n2 = triN(t2[0], t2[1], t2[2]);
+    if (!n1 || !n2 || dot(n1, n2) >= GT_FOLD || Math.abs(n1[1] - n2[1]) < GT_DNY) return null;
+    var si = n1[1] > n2[1] ? 0 : 1, t = si ? t2 : t1;
+    var lower = t.indexOf(A) >= 0 && t.indexOf(Bq) >= 0, jn = lower ? j - 1 : j + 1;
+    if (jn < 0 || jn >= n - 1) return null;
+    var nm = matFn(i, jn, [P(i, jn), P(i2, jn), P(i2, jn + 1), P(i, jn + 1)], i2);
+    if (!nm || nm === 'glass') return null;
+    return si ? ['glass', nm] : [nm, 'glass'];
+  }
   function emitShell(B, grid, matFn, o) {
     o = o || {};
     var S2 = grid.length, n = grid[0].pts.length, i, j;
@@ -600,9 +618,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
         // shorter diagonal
         var t1, t2;
         if (len(sub(A, C)) <= len(sub(Bq, D))) { t1 = [A, D, C]; t2 = [A, C, Bq]; } else { t1 = [A, D, Bq]; t2 = [D, C, Bq]; }
-        [t1, t2].forEach(function (t) {
-          B.face(mat, t[0], t[1], t[2], jit, null);
-          B.face(mat, [t[0][0], t[0][1], -t[0][2]], [t[2][0], t[2][1], -t[2][2]], [t[1][0], t[1][1], -t[1][2]], jit, null);
+        var mats2 = mat === 'glass' ? glassTipMats(matFn, i, j, i2, n, P, t1, t2, A, Bq) : null;
+        [t1, t2].forEach(function (t, ti) {
+          var m2 = mats2 ? mats2[ti] : mat;
+          B.face(m2, t[0], t[1], t[2], jit, null);
+          B.face(m2, [t[0][0], t[0][1], -t[0][2]], [t[2][0], t[2][1], -t[2][2]], [t[1][0], t[1][1], -t[1][2]], jit, null);
         });
       }
     }
@@ -1868,7 +1888,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   LP.PAL = PAL;
   LP.MATS = MATS.slice();
   LP.clearCache = function () { compiled = {}; autoCache = {}; };
-  LP._ = { earClip: earClip, clipConvex: clipConvex, projectOutline: projectOutline, planeDecal: planeDecal, clampFlare: clampFlare, exhaustTips: exhaustTips, wellGrid: wellGrid, wheelGeo: wheelGeo, compile: compile, sampleHalf: sampleHalf, simplifyClosed: simplifyClosed };
+  LP._ = { earClip: earClip, clipConvex: clipConvex, projectOutline: projectOutline, planeDecal: planeDecal, clampFlare: clampFlare, exhaustTips: exhaustTips, wellGrid: wellGrid, wheelGeo: wheelGeo, glassTipMats: glassTipMats, compile: compile, sampleHalf: sampleHalf, simplifyClosed: simplifyClosed };
   // drain definitions queued before this script loaded
   var pend = LP._pending;
   LP._pending = { push: function () { for (var i = 0; i < arguments.length; i++) { var e = arguments[i]; if (e) register(e[0], e[1]); } return 0; } };

@@ -1937,6 +1937,22 @@ CB.race = CB.race || {};
     '#race-root .rx-res-foot{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}#race-root .rx-res-foot>*{flex:0 0 auto}#race-root .rx-res-foot>.rx-btn.primary{order:-1}#race-root .rx-res-foot{gap:8px}#race-root .rx-res-foot>.rx-btn:not(.primary){padding:0 12px}#race-root .rx-res-foot>.rx-btn:not(.primary) .rx-ico{display:none}',
     '#race-root .rx-touch{padding-bottom:max(12px,env(safe-area-inset-bottom))}#race-root .rx-pedal{height:112px;width:70px}#race-root .rx-pedal.gas{height:128px}',
     '#race-root .rx-quickbar{top:auto;transform:none;flex-direction:row;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 140px)}}',
+    /* short landscape phones while driving: the canvas HUD turns its tach into a slim bar at the bottom centre (below the
+       car), so the touch controls slim down to leave that band free and the right column stacks, bottom-up: pedals ·
+       arcade ITEM / NITRO (+ the webcam GO / COAST / BRAKE chip) · quick buttons; the webcam preview sits above the
+       steering pad. All tap targets stay >= 44px, every edge is safe-area aware. */
+    '@media (pointer:coarse) and (max-height:500px) and (orientation:landscape){',
+    '#race-root .rx-touch{padding-bottom:max(10px,env(safe-area-inset-bottom));gap:8px}',
+    '#race-root .rx-steerpad{width:min(34vw,260px);height:84px;border-radius:42px}#race-root .rx-steerpad::before{font-size:30px;letter-spacing:30px;padding-left:30px}',
+    '#race-root .rx-pedals{gap:8px}#race-root .rx-touch-aux{gap:6px}#race-root .rx-tbtn{width:52px;height:44px}',
+    '#race-root .rx-pedal{width:64px;height:100px;padding-bottom:10px}#race-root .rx-pedal.gas{height:116px}',
+    '#race-root .rx-quickbar{gap:6px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 192px)}',
+    '#race-root .arc-touch{right:max(16px,env(safe-area-inset-right));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 124px);gap:10px}',
+    '#race-root .arc-btn.nitro{width:60px;height:60px;font-size:13px}#race-root .arc-btn.item{width:50px;height:50px}#race-root .arc-btn.item canvas{width:34px;height:34px}',
+    'html body .cw-pip{width:150px;left:max(16px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 94px)}html body .cw-pip .cw-pl{padding:3px 5px;font-size:9.5px}',
+    'html body .cw-hud{top:auto;transform:none;right:max(16px,env(safe-area-inset-right));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 128px);min-width:0;flex-direction:row;gap:6px;padding:6px 12px;border-radius:12px}',
+    'html body .cw-hud b{font-size:22px}html body .cw-hud b.is-rev{font-size:26px}html body .cw-hud small{display:none}html body .cw-hud .cw-hand svg{width:22px;height:22px}',
+    'html body:has(#race-root .arc-touch) .cw-hud{right:calc(max(16px,env(safe-area-inset-right)) + 130px)}}',
   ].join('\n');
 
   /* ----------------------------------------------------------- canvas utils */
@@ -4107,6 +4123,7 @@ CB.race = CB.race || {};
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         if (typeof R.hud.setCockpit === 'function') R.hud.setCockpit(isCockpitView(R));
+        if (typeof R.hud.setLayout === 'function') hudTouchLayout(R, now);
         try {
           if (R.isDrift) { drawHudForDrift(R, ctx, snap, cw, U.canvas.clientHeight || 1); drawDriftLayer(R, ctx, snap, cw, U.canvas.clientHeight || 1); }
           else R.hud.draw(ctx, snap);
@@ -4778,6 +4795,36 @@ CB.race = CB.race || {};
     R.input.touch.active = on;
     var gears = R.touchEl.querySelector('.rx-touch-gears');
     if (gears) gears.style.display = R.settings.assists.autoShift ? 'none' : '';
+  }
+  /** Phone layout hints for the canvas HUD (CB.race.hud.setLayout), re-measured ~4x a second: the free bottom band
+      between the touch steering pad / tilt zones (left) and the pedals (right), the controls' bottom edge, and whether
+      the webcam preview sits in the left column. Only on coarse pointers: desktop layouts never change. */
+  function hudTouchLayout(R, t) {
+    if (R._hudLayoutAt && t - R._hudLayoutAt < 250 && t >= R._hudLayoutAt) return;
+    R._hudLayoutAt = t;
+    var o = { touch: false, band: null, bottom: 0, noMinimap: false };
+    try {
+      o.touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      var cv = U.canvas, cr = cv && cv.getBoundingClientRect(), root = U.root || document;
+      if (o.touch && cr && cr.width > 0) {
+        var W = cr.width, H = cr.height, l = 0, r = W, bottom = 0, lift = 0;
+        var els = root.querySelectorAll('.rx-steerpad,.rx-pedals,.pw-zone,.pw-tb,.pw-steerind,.pw-chip');
+        for (var i = 0; i < els.length; i++) {
+          var b = els[i].getBoundingClientRect();
+          if (b.width < 1 || b.height < 1) continue;
+          var x0 = b.left - cr.left, x1 = b.right - cr.left, y0 = b.top - cr.top, y1 = b.bottom - cr.top;
+          if (y1 < H * 0.6) continue;
+          if (x0 < W / 2 && x1 > W / 2) { lift = Math.max(lift, H - y0 + 6); continue; }   // centred: the bar sits above it
+          if (x1 <= W / 2) l = Math.max(l, x1); else r = Math.min(r, x0);
+          bottom = Math.max(bottom, H - y1);
+        }
+        if (l > 0 || r < W) o.band = { l: l, r: r };
+        o.bottom = Math.max(bottom, lift);
+        var pip = document.querySelector('.cw-pip');
+        if (pip && pip.style.display !== 'none') { var pb = pip.getBoundingClientRect(); o.noMinimap = pb.width > 0 && pb.left - cr.left < W * 0.3; }
+      }
+    } catch (e) { /* hints are optional */ }
+    try { R.hud.setLayout(o); } catch (e2) { /* ignore */ }
   }
   function buildTouchControls(layer) {
     var R = U.race, T = R.input.touch;

@@ -121,6 +121,33 @@ test('draw runs for all phases/modes and shows key text', function () {
   small.draw(fakeCtx(), snap());
   h.destroy();
 });
+test('short phone landscape: tach becomes a bottom bar clear of the car, inside the touch band; desktop unchanged', function () {
+  var SL = I.stripLayout;
+  // only on touch, short (H <= 500), landscape screens
+  assert.strictEqual(SL(1366, 768, { touch: true }), null, 'desktop size');
+  assert.strictEqual(SL(844, 390, { touch: false }), null, 'no touch -> normal layout');
+  assert.strictEqual(SL(390, 844, { touch: true }), null, 'portrait');
+  [[844, 390, 16 + 287, 610], [667, 375, 16 + 227, 455], [932, 430, 16 + 260, 718]].forEach(function (c) {
+    var W = c[0], H = c[1], band = { l: c[2], r: c[3] };
+    var r = SL(W, H, { touch: true, band: band, bottom: 10 });
+    assert.ok(r, W + 'x' + H + ' strip');
+    assert.ok(r.x >= band.l && r.x + r.w <= band.r, W + 'x' + H + ' inside the band ' + JSON.stringify(r));
+    assert.strictEqual(r.y + r.h, H - 10, 'bottom aligned with the touch controls');
+    assert.ok(r.y > H * 0.8, 'below the chase-cam car (bottom fifth)');
+    assert.ok(r.h >= 34 && r.h <= 46 && r.w >= 132);
+  });
+  // drawing: the bar replaces the round tach (no 'x1000 RPM' label), lap sectors are dropped, speed still shown
+  var phone = hud.create({ clientWidth: 844, clientHeight: 390 }, oval(200), null, { units: 'kph' });
+  phone.setLayout({ touch: true, band: { l: 303, r: 610 }, bottom: 10 });
+  var c1 = fakeCtx(); phone.draw(c1, snap());
+  assert.ok(c1.texts.indexOf('x1000 RPM') < 0 && c1.texts.indexOf('KM/H') >= 0, 'bar cluster');
+  assert.ok(c1.texts.indexOf('S2') < 0 && c1.texts.indexOf('LAST') < 0, 'slim timing');
+  assert.ok(hud.strip && hud.strip.y + hud.strip.h === 380, 'strip rect published for the arcade nitro gauge');
+  var desk = hud.create({ clientWidth: 844, clientHeight: 390 }, oval(200), null, { units: 'kph' });
+  var c2 = fakeCtx(); desk.draw(c2, snap());
+  assert.ok(c2.texts.indexOf('x1000 RPM') >= 0 && c2.texts.indexOf('LAST') >= 0 && c2.texts.indexOf('S2') >= 0, 'no touch: the classic compact cluster');
+  assert.strictEqual(hud.strip, null);
+});
 test('banners fire from state diffs', function () {
   var h = hud.create({ clientWidth: 1280, clientHeight: 720 }, oval(400), null, {});
   var ctx = fakeCtx();

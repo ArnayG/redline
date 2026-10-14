@@ -279,4 +279,52 @@ test('lowpoly: opt-in all-terrain tyres (wheels.tyre "at"): lug blocks on the tr
   });
 });
 
+test('lowpoly: glass tips — a twisted side-glass quad gives its flat sliver to the panel it lies on', function () {
+  var GT = LP._.glassTipMats;
+  // emitShell quad A (row i, col j) -> Bq (row i2, col j) -> C (i2, j+1) -> D (i, j+1); split A-D-Bq / D-C-Bq.
+  // Rear station's glass column lies nearly flat on the haunch: D-C-Bq faces the sky.
+  var A = [-0.4, 0.9, 0.66], Bq = [-0.9, 0.97, 0.6], C = [-0.9, 1.05, 0.42], D = [-0.4, 1.11, 0.52];
+  var mats = { 6: 'paint', 7: 'glass', 8: 'paint2' }, calls = [];
+  function matFn(i, j) { calls.push(j); return mats[j]; }
+  function P() { return [0, 0, 0]; }
+  assert.deepStrictEqual(GT(matFn, 0, 7, 1, 11, P, [A, D, Bq], [D, C, Bq], A, Bq), ['glass', 'paint2'], 'upper sliver -> roof column');
+  assert.deepStrictEqual(calls, [8]);
+  // front tip: the window column starts as a flat ledge on the cowl, the sliver along the lower edge -> belt column
+  var A1 = [0.4, 0.9, 0.7], D1 = [0.4, 0.93, 0.6], B1 = [-0.1, 0.885, 0.745], C1 = [-0.1, 1.115, 0.62];
+  assert.deepStrictEqual(GT(matFn, 0, 7, 1, 11, P, [A1, D1, B1], [D1, C1, B1], A1, B1), ['paint', 'glass'], 'lower sliver -> belt column');
+  // side glass running into a screen keeps its glass; a planar quad is left alone
+  mats[8] = 'glass';
+  assert.strictEqual(GT(matFn, 0, 7, 1, 11, P, [A, D, Bq], [D, C, Bq], A, Bq), null);
+  var A2 = [-0.4, 0.9, 0.7], B2 = [-0.9, 0.92, 0.69], C2 = [-0.9, 1.1, 0.6], D2 = [-0.4, 1.08, 0.61];
+  assert.strictEqual(GT(matFn, 0, 7, 1, 11, P, [A2, D2, B2], [D2, C2, B2], A2, B2), null);
+});
+
+test('lowpoly: rear side glass on the hypercars / C 63 has no pale up-facing facet (no hard fold inside the glass)', function () {
+  // a facet folded >20 deg off its glass neighbours toward the sky mirrors the environment as a pale triangle on the
+  // dark side window (rear 3/4 views). The P1 is exempt: its side glass runs on into the glass roof panel.
+  ['ferrari-sf90-stradale', 'bugatti-chiron', 'koenigsegg-jesko', 'porsche-918-spyder', 'lamborghini-huracan-evo', 'ferrari-296-gtb',
+    'audi-r8-v10-gen2', 'chevrolet-corvette-c8', 'ford-gt-2017', 'mercedes-amg-c63-w206'].forEach(function (id) {
+    var r = lp(id, 'high'), T = [];
+    r.parts.filter(function (p) { return p.mat === 'glass'; }).forEach(function (p) {
+      var P = p.positions, N = p.normals, I = p.indices;
+      for (var t = 0; t < I.length; t += 3) {
+        var v = [0, 1, 2].map(function (q) { var k = I[t + q] * 3; return [P[k], P[k + 1], P[k + 2]]; });
+        var cx = (v[0][0] + v[1][0] + v[2][0]) / 3, cz = (v[0][2] + v[1][2] + v[2][2]) / 3;
+        if (cx < -0.3 && cz > 0.45) T.push({ v: v, n: [N[I[t] * 3], N[I[t] * 3 + 1], N[I[t] * 3 + 2]] });
+      }
+    });
+    function key(q) { return q.map(function (x) { return x.toFixed(4); }).join(','); }
+    var E = {};
+    T.forEach(function (t, ti) { for (var e = 0; e < 3; e++) { var a = key(t.v[e]), b = key(t.v[(e + 1) % 3]), k = a < b ? a + '|' + b : b + '|' + a; (E[k] = E[k] || []).push(ti); } });
+    Object.keys(E).forEach(function (k) {
+      var l = E[k]; if (l.length !== 2) return;
+      var a = T[l[0]].n, b = T[l[1]].n, ang = Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) / Math.PI * 180;
+      assert.ok(ang < 20, id + ': rear side glass folds ' + ang.toFixed(1) + ' deg at ' + k);
+    });
+  });
+  // the C 63's C-pillar (roof-rail column behind the quarter glass) is body colour, not glass
+  var c63 = LP.get('mercedes-amg-c63-w206');
+  assert.strictEqual(c63.body.mats[10][7], 'paint'); assert.strictEqual(c63.body.mats[11][7], 'paint');
+});
+
 if (standalone && require.main === module) console.log(process.exitCode ? 'FAILED' : 'all lowpoly tests passed');

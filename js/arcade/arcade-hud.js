@@ -252,6 +252,14 @@ CB.arcade = CB.arcade || {};
       var x = W / 2 - w / 2;
       var y = compact ? H - clamp(Math.min(W, H) * 0.16, 46, 90) * 2.25 - 26 * k : H - 30 * k - h;
       if (compact && y < H * 0.45) y = H * 0.45;
+      // short phone landscape: CB.race.hud draws a slim cluster bar at the bottom centre -> the gauge sits right on top of
+      // it (same width, room for the coin counter on the left), below the car in the chase view
+      var SB = CB.race && CB.race.hud && CB.race.hud.strip;
+      if (compact && SB && SB.w > 0) {
+        var coins = !(st.options && st.options.coins === false);
+        w = Math.min(SB.w - (coins ? 40 * k : 0), 210); h = 9 * k;
+        x = SB.x + SB.w - w; y = SB.y - 7 * k - h;
+      }
       // label + coins
       font(ctx, 800, (compact ? 12 : 14) * k, true);
       ctx.textAlign = 'left'; ctx.fillStyle = P.nitroOn ? NITRO_CYAN : 'rgba(255,255,255,.88)';

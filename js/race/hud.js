@@ -443,6 +443,11 @@ CB.race = CB.race || {};
     // cockpit camera: the 3D dash (CB.gl.cockpit) already shows rpm / speed / gear, so the HUD tach + shift lights are
     // hidden (they would sit on top of the in-car display) and only the pedal bars + assists stay, tucked in the corner
     var cockpitView = !!opts.cockpit;
+    // phone layout hints from race-ui (setLayout): touch = coarse pointer; band = {l, r} free x-range between the touch
+    // steering pad and pedals; bottom = px from the canvas bottom to the touch controls' bottom edge; noMinimap = the
+    // webcam preview occupies the left column
+    var layout = { touch: false, band: null, bottom: 0, noMinimap: false };
+    if (CB.race.hud) CB.race.hud.strip = null;
 
     // ----- animated / remembered state
     var S = {
@@ -915,7 +920,7 @@ CB.race = CB.race || {};
     }
 
     // --- timing panel (position / lap / times / sectors / delta) -----------
-    function drawTiming(ctx, snap, player, x, y, k, compact) {
+    function drawTiming(ctx, snap, player, x, y, k, compact, slim) {
       var mode = snap.mode || 'race';
       var cars = (snap.cars || []).filter(Boolean);
       var w = Math.round((compact ? 178 : 268) * k);
@@ -1010,6 +1015,8 @@ CB.race = CB.race || {};
         text(ctx, 'DELTA', dx + dw / 2, dy + dh / 2, PAL.inkFaint, 'center');
       }
       cy += ch + 4 * k;
+
+      if (slim) { ctx.restore(); return cy - y; }   // short phone landscape: position, lap, time + delta only
 
       // ---- sector boxes
       var sh = Math.round((compact ? 20 : 30) * k);
@@ -1242,6 +1249,55 @@ CB.race = CB.race || {};
       if (player.maxGear && !compact) {
         font(ctx, '600', R * 0.07, FONT_NUM);
         text(ctx, '/' + player.maxGear, gx + gw + R * 0.03, gy + gh - R * 0.07, PAL.inkFaint, 'left');
+      }
+      ctx.restore();
+    }
+
+    /** Short phone-landscape cluster: a slim bar at the bottom centre (below the car in the chase view, between the touch
+        steering pad and pedals): gear | speed + assists | segmented rpm bar that doubles as the shift lights. */
+    function drawStrip(ctx, snap, player, L, k) {
+      var x = L.x, y = L.y, w = L.w, h = L.h;
+      var redline = num(player.redline, 7500) || 7500;
+      var maxRpm = Math.ceil((redline * 1.08) / 1000) * 1000;
+      var rpm = clamp(num(player.rpm, 0), 0, maxRpm);
+      S.rpmDisp = lerp(S.rpmDisp, rpm, 1 - Math.exp(-S.dt * 18));
+      var spdMs = Math.max(0, num(player.speed, 0));
+      var spd = units === 'mph' ? spdMs * 2.236936 : spdMs * 3.6;
+      S.speedDisp = lerp(S.speedDisp, spd, 1 - Math.exp(-S.dt * 14));
+      var tnow = now(), inRed = S.rpmDisp >= redline * 0.97;
+      ctx.save();
+      panel(ctx, x, y, w, h, 7 * k, 'rgba(10,12,16,0.72)');
+      // gear
+      var gear = player.gear;
+      var gStr = gear == null ? 'N' : gear < 0 ? 'R' : gear === 0 ? 'N' : (num(player.maxGear, 2) <= 1 && gear === 1 ? 'D' : String(gear));
+      var pad = 4 * k, gs = h - pad * 2;
+      rr(ctx, x + pad, y + pad, gs, gs, 5 * k);
+      ctx.fillStyle = inRed ? (Math.floor(tnow / 90) % 2 ? PAL.blue : '#1b2030') : 'rgba(255,255,255,0.08)'; ctx.fill();
+      font(ctx, '800', gs * 0.72);
+      text(ctx, gStr, x + pad + gs / 2, y + h / 2 + 1, gStr === 'R' ? PAL.red : PAL.ink, 'center');
+      // speed + unit
+      var bx = x + pad * 2 + gs + 2 * k, bw = x + w - pad - 2 * k - bx;
+      var row = y + h * 0.36;
+      font(ctx, '800', h * 0.5, FONT_UI);
+      var sStr = String(Math.round(S.speedDisp));
+      text(ctx, sStr, bx, row, PAL.ink, 'left');
+      var sw = ctx.measureText(sStr).width;
+      font(ctx, '600', h * 0.2);
+      text(ctx, units === 'mph' ? 'MPH' : 'KM/H', bx + sw + 3 * k, row + h * 0.06, PAL.inkDim, 'left');
+      drawAssists(ctx, snap, player, x + w - pad - 1 * k, y + pad, k * 0.78, true);
+      // rpm bar (10 segments = the shift lights)
+      var n = 10, st = shiftLights(S.rpmDisp || player.rpm, player.redline, n);
+      var flashOn = !st.flash || Math.floor(tnow / 80) % 2 === 0;
+      var rh = Math.max(4, h * 0.17), ry = y + h - pad - rh - 1 * k, gap = 2 * k, segW = (bw - gap * (n - 1)) / n;
+      var rf = clamp(S.rpmDisp / maxRpm, 0, 1) * n;
+      for (var i = 0; i < n; i++) {
+        var sx = bx + i * (segW + gap), col = st.colors[i];
+        rr(ctx, sx, ry, segW, rh, 1.5 * k); ctx.fillStyle = rgba(col, 0.16); ctx.fill();
+        var f = clamp(rf - i, 0, 1);
+        if (f > 0 && (i >= st.lit || flashOn)) {
+          rr(ctx, sx, ry, segW * f, rh, 1.5 * k);
+          ctx.fillStyle = i < st.lit ? col : 'rgba(255,255,255,0.82)'; ctx.fill();
+        }
       }
       ctx.restore();
     }
@@ -1697,6 +1753,8 @@ CB.race = CB.race || {};
       var k = compact ? clamp(Math.min(W / 420, H / 420), 0.62, 1.05) : clamp(Math.min(W / 1366, H / 800) * 1.06, 0.72, 1.6);
       var M = Math.round((compact ? 8 : 18) * k);
       var mode = snap.mode || 'race';
+      var strip = stripLayout(W, H, layout, k);
+      HUD.strip = strip;
 
       ctx.save();
       ctx.lineJoin = 'miter';
@@ -1706,7 +1764,7 @@ CB.race = CB.race || {};
       // --- top-right: timing
       var timingW = (compact ? 178 : 268) * k;
       var tx = W - M - timingW;
-      var th = drawTiming(ctx, snap, player, tx, M, k, compact);
+      var th = drawTiming(ctx, snap, player, tx, M, k, compact, !!strip);
       var stripY = M + th;
       stripY += drawTrackLimitsStrip(ctx, player, tx, stripY, k);
       stripY += drawPenaltyOnly(ctx, player, tx, stripY, k);
@@ -1714,13 +1772,19 @@ CB.race = CB.race || {};
       // --- top-left: tower (race) or minimap in compact
       var towerH = 0;
       if (mode === 'race' || (snap.cars || []).length > 1) {
-        var maxH = compact ? H * 0.42 : H * 0.62;
+        var maxH = compact ? H * (strip && layout.noMinimap ? 0.36 : 0.42) : H * 0.62;
         towerH = drawTower(ctx, snap, player, M, M, k, maxH, compact);
       }
 
       // --- minimap
       var mmW, mmH, mmX, mmY;
-      if (compact) {
+      if (strip) {
+        // short phone landscape: the right column holds the quick buttons / arcade buttons, so the map goes under the
+        // tower and only if it clears the touch steering pad (and the webcam preview is not shown there)
+        mmW = Math.min(timingW, 150 * k); mmH = mmW * 0.78;
+        mmX = M; mmY = M + towerH + (towerH ? 6 * k : 0);
+        if (layout.noMinimap || mmY + mmH > H - strip.bottomPad - 104) mmW = 0;
+      } else if (compact) {
         mmW = Math.min(timingW, 150 * k); mmH = mmW * 0.78;
         mmX = W - M - mmW; mmY = stripY + 4 * k;
         if (mmY + mmH > H * 0.62) { mmY = M + towerH + 6 * k; mmX = M; }
@@ -1738,7 +1802,11 @@ CB.race = CB.race || {};
       if (compact) { cx = W / 2; cy = H - M - R * 1.0; }
       else { cx = W - M - R * 1.12; cy = H - M - R * 1.0; }
       var kk = compact ? R / 104 : k;
-      if (cockpitView || snap.cockpit) {
+      if (strip) {
+        if (cockpitView || snap.cockpit) {
+          S.speedDisp = Math.abs(num(player.speed, 0)) * (units === 'mph' ? 2.23694 : 3.6); S.rpmDisp = num(player.rpm, S.rpmDisp);
+        } else drawStrip(ctx, snap, player, strip, k);   // touch pedals show their own fill: no pedal bars
+      } else if (cockpitView || snap.cockpit) {
         // keep the smoothed displays ticking so leaving the cockpit view does not jump the needle
         S.speedDisp = Math.abs(num(player.speed, 0)) * (units === 'mph' ? 2.23694 : 3.6); S.rpmDisp = num(player.rpm, S.rpmDisp);
         var ph = R * 0.8;
@@ -1770,6 +1838,13 @@ CB.race = CB.race || {};
       setUnits: function (u) { units = u === 'mph' ? 'mph' : 'kph'; },
       /** true while the 3D cockpit camera is active: hides the tach / speed cluster (the in-car dash shows them). */
       setCockpit: function (on) { cockpitView = !!on; },
+      /** Phone layout hints (race-ui measures its touch controls): { touch, band: {l, r} | null, bottom, noMinimap }. */
+      setLayout: function (o) {
+        o = o || {};
+        layout.touch = !!o.touch; layout.noMinimap = !!o.noMinimap; layout.bottom = Math.max(0, num(o.bottom, 0));
+        layout.band = o.band && isNum(o.band.l) && isNum(o.band.r) && o.band.r > o.band.l ? { l: o.band.l, r: o.band.r } : null;
+      },
+      getLayout: function () { return layout; },
       isCockpit: function () { return cockpitView; },
       getUnits: function () { return units; },
       /** Optional: renderer/UI may push a banner (e.g. 'PIT LIMITER'). */
@@ -1780,6 +1855,24 @@ CB.race = CB.race || {};
       },
       destroy: function () { destroyed = true; S.banners = []; S.trace = []; S.bestTrace = null; }
     };
+  }
+
+  /**
+   * Short phone landscape (touch, compact, H <= 500, W >= 1.3 H): the speed / rpm cluster becomes a slim bar at the bottom
+   * centre, clear of the car in the chase view; returns its rect { x, y, w, h, bottomPad } or null (normal layout).
+   * L = { touch, band: {l, r} | null, bottom } (see setLayout).
+   */
+  function stripLayout(W, H, L, k) {
+    L = L || {};
+    if (!L.touch || !(W < 760 || H < 480) || H > 500 || W < H * 1.3) return null;
+    k = isNum(k) ? k : clamp(Math.min(W / 420, H / 420), 0.62, 1.05);
+    var h = Math.round(clamp(H * 0.105, 34, 46));
+    var l = L.band ? L.band.l : 0, r = L.band ? L.band.r : W;
+    var cx = (l + r) / 2;
+    var w = Math.round(clamp(Math.min(r - l - 16 * k, 250 * k), 132, 260));
+    var x = Math.round(clamp(cx - w / 2, 4, W - w - 4));
+    var bottomPad = Math.max(isNum(L.bottom) ? L.bottom : 0, 8);
+    return { x: x, y: Math.round(H - bottomPad - h), w: w, h: h, bottomPad: bottomPad };
   }
 
   /** Ease an animated tower row index toward its slot; snaps when close or far. */
@@ -1810,9 +1903,13 @@ CB.race = CB.race || {};
     return out;
   }
 
-  CB.race.hud = {
+  var HUD = CB.race.hud = {
     create: create,
+    /** last drawn short-landscape cluster bar rect (or null) — CB.arcade.hud stacks its nitro gauge on it */
+    strip: null,
+    stripLayout: stripLayout,
     _internal: {
+      stripLayout: stripLayout,
       fmtTime: fmtTime, fmtDelta: fmtDelta, fmtGap: fmtGap, sectorClass: sectorClass,
       shiftLights: shiftLights, extractGeom: extractGeom, fitTransform: fitTransform,
       mapPoint: mapPoint, traceAt: traceAt, nearestIndex: nearestIndex, tla: tla, surname: surname,

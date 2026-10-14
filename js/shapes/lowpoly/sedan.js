@@ -233,8 +233,9 @@
         'kkpppcgcrr',   // front door glass, roof
         'kkpppcgcrr',   // rear door glass
         'kkpppcgcrr',   // rear door glass / roof end
-        'kkpppcgggg',   // quarter glass, backlight (the roof-rail band widens into a big C-pillar triangle
-        'kkpppcgggg',   // pointed quarter glass, backlight   here: glass, not chrome, or it read as a white panel)
+        'kkpppcgpgg',   // quarter glass, backlight (the roof-rail band widens into a big C-pillar triangle here:
+        'kkpppcgpgg',   // pointed quarter glass, backlight   body colour like the real car — chrome read as a white
+                        //   panel, glass as a pale up-facing facet between the quarter glass and the backlight)
         'kkppppppgg',   // backlight base
         'kkpppppppp', 'kkpppppppp'   // deck, tail
       ]),
