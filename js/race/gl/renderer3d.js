@@ -1637,7 +1637,7 @@ CB.race.renderer3d = (function () {
 
     var onLost = function (e) { if (e && e.preventDefault) e.preventDefault(); S.lost = true; };
     var onRestored = function () {
-      try { S.lost = false; if (ctx && ctx.gl && ctx._onRestored && !G.lite) initContextWith(G, true); else initContext(); if (M.car && M.car.cache && typeof M.car.cache.clear === 'function') safe('car.cache.clear', function () { M.car.cache.clear(ctx); }); S.fbMeshCache = {}; S.cockpitBuild = null; buildWorld(); S.cars = {}; S.cockpit = null; S.post = null; S.targets = null; S.sizeKey = ''; destroyPost2(); destroyProbe(); S.post2Broken = false; S.probeBroken = false; S.nearBroken = false; }
+      try { S.lost = false; if (ctx && ctx.gl && ctx._onRestored && !G.lite) initContextWith(G, true); else initContext(); if (M.car && M.car.cache && typeof M.car.cache.clear === 'function') safe('car.cache.clear', function () { M.car.cache.clear(ctx); }); S.fbMeshCache = {}; S.cockpitBuild = null; S.csRes = undefined; buildWorld(); S.cars = {}; S.cockpit = null; S.post = null; S.targets = null; S.sizeKey = ''; destroyPost2(); destroyProbe(); S.post2Broken = false; S.probeBroken = false; S.nearBroken = false; }
       catch (e) { warn('restore', e); S.lost = true; }
     };
     glCanvas.addEventListener('webglcontextlost', onLost, false);
@@ -2225,6 +2225,68 @@ CB.race.renderer3d = (function () {
       // tail 0.7 -> 2.0 (clears the night bloom threshold without braking), brake 1.5..3.4 -> 2.4..5.4
       var k = r < 1.4 ? 2.0 / r : 1.6;
       em[0] = r * k; em[1] *= k; em[2] *= k;
+    }
+    /* ---------------- contact shadow (ground AO) under every visible car, all tiers
+       A soft rounded-rect darkening quad on the road below the chassis (one shared vertex-alpha grid mesh,
+       one tiny material per car for its strength). Grounds the cars where the sun shadow map is missing (low tier,
+       night) or falls to the side (dusk, low sun); much weaker in daylight when the shadow map already does the job.
+       Follows the road pitch (track heightAt at s +- 1.6 m), stays on the road while an arcade hop lifts the car and
+       fades with the hop height and with distance. */
+    var CS_FAR = 110;
+    function contactShadowRes() {
+      if (S.csRes !== undefined) return S.csRes;
+      S.csRes = safe('contactShadow', function () {
+        if (G.lite || !ctx || !ctx.gl) return null;
+        // footprint as a vertex-alpha grid (no texture): dark core out to the body outline (normalised 0.8 along,
+        // 0.68 across), then a smooth falloff to the quad edge; grid lines concentrated in the falloff band
+        var GX = [-1, -0.95, -0.9, -0.85, -0.8, -0.4, 0, 0.4, 0.8, 0.85, 0.9, 0.95, 1];
+        var GZ = [-1, -0.92, -0.84, -0.76, -0.68, -0.3, 0, 0.3, 0.68, 0.76, 0.84, 0.92, 1];
+        var NX = GX.length, NZ = GZ.length, pos = [], nrm = [], col = [], idx = [], x, z;
+        for (z = 0; z < NZ; z++) for (x = 0; x < NX; x++) {
+          var qx = Math.max(Math.abs(GX[x]) - 0.8, 0) / 0.2, qy = Math.max(Math.abs(GZ[z]) - 0.68, 0) / 0.32;
+          var d = Math.min(1, Math.sqrt(qx * qx + qy * qy)), a = 1 - d * d * (3 - 2 * d);
+          pos.push(GX[x] * 0.5, 0, GZ[z] * 0.5); nrm.push(0, 1, 0); col.push(1, 1, 1, a * a);
+        }
+        for (z = 0; z < NZ - 1; z++) for (x = 0; x < NX - 1; x++) {
+          var i0 = z * NX + x;
+          idx.push(i0, i0 + NX, i0 + 1, i0 + 1, i0 + NX, i0 + NX + 1);
+        }
+        var me = mesh({ positions: pos, normals: nrm, colors: col, colorSize: 4, indices: idx });
+        return me ? { mesh: me } : null;
+      }, null);
+      return S.csRes;
+    }
+    var csProbe = { x: 0, y: 0, s: 0 };
+    function contactShadowItem(e, c, dims, isP) {
+      if (opts.contactShadows === false || e.dist > CS_FAR) return null;
+      var R = contactShadowRes();
+      if (!R) return null;
+      var hop = isNum(c.arcadeHop) && c.arcadeHop > 0 ? c.arcadeHop : 0;
+      var sunMap = S.Q.shadow > 0 && S.timeOfDay !== 'night';
+      var k = (sunMap ? (S.timeOfDay === 'dusk' ? 0.5 : 0.36) : 0.62) * (1 - smoothstep(CS_FAR * 0.55, CS_FAR, e.dist)) * (1 - smoothstep(0.05, 1.6, hop));
+      if (k < 0.02) return null;
+      var it = e.csItem;
+      if (!it) {
+        var mt = material({ color: [0, 0, 0, k], unlit: true, transparent: true });
+        mt.name = 'contact-shadow'; mt.depthWrite = false; mt.polygonOffset = [-2, -6]; mt.castShadow = false;
+        it = e.csItem = { mesh: R.mesh, material: mt, model: m4.create(), kind: 'contact-shadow', castShadow: false, receiveShadow: false, transparent: true };
+      }
+      it.material.baseColor[3] = k;
+      // road pitch under the car from the track profile (cheap: two heightAt lookups)
+      var pitch = 0;
+      if (isNum(c.s) && S.world.roadY) {
+        var ch = Math.cos(e.pose.heading), sh = Math.sin(e.pose.heading), dd = 1.6;
+        csProbe.x = e.pose.x + ch * dd; csProbe.y = e.pose.y + sh * dd; csProbe.s = c.s + dd;
+        var hf = roadElevation(csProbe);
+        csProbe.x = e.pose.x - ch * dd; csProbe.y = e.pose.y - sh * dd; csProbe.s = c.s - dd;
+        var hb = roadElevation(csProbe);
+        pitch = clamp(Math.atan2(hf - hb, dd * 2), -0.5, 0.5);
+      }
+      var M = it.model;
+      carMatrix(M, e.pose.x, e.pose.y, e.elev - hop + 0.025, e.pose.heading, pitch, 0);
+      var sx = dims.length * 1.25 + 0.3, sz = dims.width * 1.5 + 0.3;
+      M[0] *= sx; M[1] *= sx; M[2] *= sx; M[8] *= sz; M[9] *= sz; M[10] *= sz;
+      return it;
     }
     function roadElevation(c) {
       var f = S.world.roadY;
@@ -3233,7 +3295,10 @@ CB.race.renderer3d = (function () {
           if (castsHere) casters.push(it);
           if (forMirror) mirrorList.push(it);
         }
-        if (inView) drawnCars++;
+        if (inView) {
+          drawnCars++;
+          if (!(isP && (hidePlayerAll || S.mode === 'cockpit'))) { var csi = contactShadowItem(oe, oc, dims, isP); if (csi) main.push(csi); }
+        }
       }
       S.stats.cars = drawnCars; S.stats.high = highCount;
 

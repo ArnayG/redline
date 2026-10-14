@@ -1201,7 +1201,33 @@ CB.gl = CB.gl || {};
     '  vec3 gnd = mix(uEnvHorizon * 0.6 + uEnvBottom * 0.4, uEnvBottom, pow(saturate(-y), 0.35));',
     '  return y >= 0.0 ? sky : gnd;',
     '}',
+    /* photo studio (uStudio.x = softbox strength > 0, the Garage turntable): a dark room lit by a large overhead
+       softbox (long axis along the car, +X) and three vertical strip lights placed around the key light's azimuth
+       (key, fill side, behind). Gives paint, clear coat, glass and rims crisp light shapes to reflect instead of a
+       sky gradient with a trackside skyline. uStudio.y = room brightness, uStudio.z = floor bounce. */
+    'uniform vec4 uStudio;',
+    'float studioStrip(float az, float el, float a0, float w, float soft) {',
+    '  float da = abs(mod(az - a0 + PI, 2.0 * PI) - PI);',
+    '  return (1.0 - smoothstep(w - soft, w + soft, da)) * smoothstep(-0.02 - soft, 0.06 + soft, el) * (1.0 - smoothstep(0.82 - soft, 0.95 + soft, el));',
+    '}',
+    'vec3 studioEnv(vec3 d, float rough, vec3 sunDir) {',
+    '  float k = uStudio.x; float soft = 0.025 + rough * 0.6;',
+    '  vec3 c = d.y >= 0.0 ? mix(uEnvHorizon, uEnvTop, pow(saturate(d.y), 0.6)) * uStudio.y : mix(uEnvHorizon * uStudio.y, uEnvBottom, pow(saturate(-d.y * 4.0), 0.5)) * mix(1.0, uStudio.z * 4.0, saturate(-d.y));',
+    '  if (d.y > 0.12) {',
+    '    vec2 p = d.xz / d.y; vec2 q = abs(p) - vec2(1.5, 0.55);',
+    '    float sb = 1.0 - smoothstep(-soft * 1.5, soft * 1.5 + 0.02, max(q.x, q.y));',
+    '    c += vec3(1.0, 0.985, 0.96) * 3.0 * k * sb * (0.82 + 0.18 * saturate(1.0 - length(p) * 0.6));',
+    '  }',
+    '  float az = atan(d.z, d.x); float el = asin(clamp(d.y, -1.0, 1.0)); float ka = atan(sunDir.z, sunDir.x);',
+    '  c += vec3(1.0, 0.95, 0.88) * 2.6 * k * studioStrip(az, el, ka, 0.085, soft);',
+    '  c += vec3(0.85, 0.9, 1.0) * 1.3 * k * studioStrip(az, el, ka - 2.18, 0.07, soft);',
+    '  c += vec3(0.8, 0.88, 1.0) * 1.8 * k * studioStrip(az, el, ka + 1.9, 0.16, soft);',
+    '  // faint floor-wall kicker line: gives sills and lower doors a clean horizon',
+    '  c += uEnvHorizon * k * 0.35 * (1.0 - smoothstep(0.0, 0.03 + soft * 0.4, abs(d.y + 0.015)));',
+    '  return c;',
+    '}',
     'vec3 envColor(vec3 d, float rough, vec3 sunDir, vec3 sunColor) {',
+    '  if (uStudio.x > 0.0) return studioEnv(d, rough, sunDir);',
     '  vec3 base = envGradient(d);',
     '  // fake trackside skyline: trees / stands / buildings as a dark band just above the horizon',
     '  float az = atan(d.z, d.x);',
@@ -1960,6 +1986,7 @@ CB.gl = CB.gl || {};
     '}',
     'vec3 bakeEnv(vec3 d, float r) {',
     '  vec3 L = normalize(uSunDir);',
+    '  if (uStudio.x > 0.0) return studioEnv(d, r, L);',
     '  vec3 c = envColor(d, r, L, uSunColor);',
     '  // atmospheric forward scatter around the sun (matches the sky shader halo), broad horizon brightening',
     '  float mu = saturate(dot(d, L));',
@@ -2802,7 +2829,7 @@ CB.gl = CB.gl || {};
     if (c && m[c] !== undefined) return m[c];
     return undefined;
   }
-  var WHITE4 = [1, 1, 1, 1], ZERO3 = [0, 0, 0];
+  var WHITE4 = [1, 1, 1, 1], ZERO3 = [0, 0, 0], ZERO4 = new Float32Array(4);
   /** Shading model: 0 standard, 1 thin glass, 2 rubber. Explicit materialType / shading ('glass' | 'tyre' | 'tire' |
       'rubber' or the number) wins; otherwise `glass: true` or a material name starting with glass / tyre / tire / rubber. */
   var MATERIAL_TYPES = { standard: 0, glass: 1, tyre: 2, tire: 2, rubber: 2 };
@@ -2912,6 +2939,7 @@ CB.gl = CB.gl || {};
     });
   }
   function envVec(env, a, b, d) { var v = env[a] !== undefined ? env[a] : env[b]; return v && v.length >= 3 ? v : d; }
+  function envVec4(env, a, b, d) { var v = env[a] !== undefined ? env[a] : env[b]; return v && v.length >= 4 ? v : d; }
   function envNum(env, a, b, d) { var v = env[a] !== undefined ? env[a] : env[b]; return typeof v === 'number' && isFinite(v) ? v : d; }
 
   /** Resolve the per-frame environment once (pure-ish; writes into S.env). */
@@ -2926,6 +2954,7 @@ CB.gl = CB.gl || {};
     E.envTop = envVec(env, 'envTop', 'uEnvTop', [0.3, 0.5, 0.8]);
     E.envHorizon = envVec(env, 'envHorizon', 'uEnvHorizon', [0.8, 0.85, 0.9]);
     E.envBottom = envVec(env, 'envBottom', 'uEnvBottom', [0.25, 0.25, 0.22]);
+    E.studio = envVec4(env, 'studio', 'uStudio', ZERO4);
     E.wetness = envNum(env, 'wetness', 'uWetness', envNum(env, 'wet', 'wet', 0));
     E.exposure = envNum(env, 'exposure', 'uExposure', 1);
     E.linearOut = env.linearOutput ? 1 : 0;
@@ -3043,6 +3072,7 @@ CB.gl = CB.gl || {};
     if (u.uEnvTop) gl.uniform3fv(u.uEnvTop, E.envTop);
     if (u.uEnvHorizon) gl.uniform3fv(u.uEnvHorizon, E.envHorizon);
     if (u.uEnvBottom) gl.uniform3fv(u.uEnvBottom, E.envBottom);
+    if (u.uStudio) gl.uniform4fv(u.uStudio, E.studio);
     if (u.uExposure) gl.uniform1f(u.uExposure, E.exposure);
     if (u.uLinearOut) gl.uniform1f(u.uLinearOut, E.linearOut);
     if (u.uTime) gl.uniform1f(u.uTime, E.time);
@@ -3621,6 +3651,7 @@ CB.gl = CB.gl || {};
       gl.useProgram(prog.program);
       gl.uniform3fv(u.uEnvTop, E.envTop); gl.uniform3fv(u.uEnvHorizon, E.envHorizon); gl.uniform3fv(u.uEnvBottom, E.envBottom);
       gl.uniform3fv(u.uSunDir, E.sunDir); gl.uniform3fv(u.uSunColor, E.sunColor);
+      if (u.uStudio) gl.uniform4fv(u.uStudio, E.studio);
       if (u.uRGBM) gl.uniform1f(u.uRGBM, probe.rgbm ? 1 : 0);
       var ok = true;
       for (var lv = 0; lv < levels && ok; lv++) {
@@ -3652,7 +3683,7 @@ CB.gl = CB.gl || {};
   function q8(v) { return Math.round(num(v, 0) * 64); }
   /** lighting fingerprint for the automatic probe (quantised so float noise never forces a re-bake) */
   function envKey(E) {
-    var a = [E.envTop, E.envHorizon, E.envBottom, E.sunDir, E.sunColor], k = 17;
+    var a = [E.envTop, E.envHorizon, E.envBottom, E.sunDir, E.sunColor, E.studio], k = 17;
     for (var i = 0; i < a.length; i++) for (var j = 0; j < 3; j++) k = (k * 31 + q8(a[i][j])) | 0;
     return k;
   }

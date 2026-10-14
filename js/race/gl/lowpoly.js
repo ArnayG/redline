@@ -118,8 +118,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
       // white and the Fresnel sky term went pale at grazing angles (rear quarters, A-pillars beside a flat cowl, raked
       // rear screens). Here F0 = mix(0.04, near-black albedo, 0.85) ~ 0.014 (a third of the sun highlight / face-on
       // sheen), a moderate roughness (the split-sum env BRDF falls off fast at grazing) and a reduced env intensity:
-      // the greenhouse reads as dark tinted glass from every angle with a faint sky sheen
-      glass: Object.assign(material({ name: 'glass-lowpoly', roughness: 0.35, metallic: 0.85, clearcoat: 0, clearcoatRoughness: 0.1 }), DARK_ENV(0.4), { materialType: 'standard' }),
+      // the greenhouse reads as dark tinted glass from every angle with a faint sky sheen. A thin, glossy clear coat
+      // (Fresnel-weighted, scaled by the same env intensity) adds the crisp sky / studio softbox reflection real glass
+      // shows without lifting the dark tint face-on
+      glass: Object.assign(material({ name: 'glass-lowpoly', roughness: 0.35, metallic: 0.85, clearcoat: 0.7, clearcoatRoughness: 0.04 }), DARK_ENV(0.4), { materialType: 'standard' }),
       head: material({ name: 'light-head', roughness: 0.12, metallic: 0.2, clearcoat: 1, polygonOffset: lampOff }),
       drl: material({ name: 'light-drl', roughness: 0.12, metallic: 0, clearcoat: 1, polygonOffset: lampOff }),
       tail: material({ name: 'light-brake', roughness: 0.15, metallic: 0.1, clearcoat: 1, polygonOffset: lampOff }),
@@ -1304,9 +1306,24 @@ var CB = (globalThis.CB = globalThis.CB || {});
     emitShell(B, grid, function (i, j, Q, i2) {
       var xm = (grid[i].x + grid[i2].x) / 2, r = rowOf(stOrig, xm);
       if (low) {
-        if (j < (wells ? 3 : 1)) return 'under';
-        var colL = ringIdx[j] - (wells ? 2 : 0);
-        return matAt(body.mats, r, clamp(colL, 1, body.stations[0].pts.length - 2), 'paint');
+        // decimated ring: 0..2 are the well points and 2 doubles as the rocker, so quad 2 (rocker -> belt) is the
+        // lower flank (well liner only where it spans an arch station)
+        if (j < (wells ? 2 : 1)) return 'under';
+        if (wells && j === 2 && (grid[i].well != null || grid[i2].well != null)) return 'well';
+        // one low-LOD quad spans several authored columns (and stations): take the material covering most of them
+        // (paint wins ties) instead of the one at its lower edge — a black sill / intake strip otherwise paints the
+        // whole flank black
+        var off = wells ? 2 : 0, nc = body.stations[0].pts.length;
+        var c0 = clamp(ringIdx[j] - off, 1, nc - 2), c1 = j + 1 < ringIdx.length ? clamp(ringIdx[j + 1] - off, c0 + 1, nc - 1) : c0 + 1;
+        var xa = Math.max(grid[i].x, grid[i2].x), xb = Math.min(grid[i].x, grid[i2].x), rows = [];
+        for (var rr = 0; rr < stOrig.length; rr++) if (stOrig[rr].x <= xa + 1e-6 && stOrig[rr].x >= xb - 1e-6) rows.push(rr);
+        if (!rows.length) rows.push(r);
+        var tally = {}, best = null, bestN = 0;
+        for (var ri = 0; ri < rows.length; ri++) for (var cc = c0; cc < c1; cc++) {
+          var mm = matAt(body.mats, rows[ri], cc, 'paint'), nn2 = (tally[mm] = (tally[mm] || 0) + 1);
+          if (nn2 > bestN || (nn2 === bestN && mm === 'paint')) { best = mm; bestN = nn2; }
+        }
+        return best || matAt(body.mats, r, c0, 'paint');
       }
       if (!wells) return matAt(body.mats, r, j, 'paint');
       if (j === 0) return 'under';

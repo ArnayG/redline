@@ -462,10 +462,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
       refl: light ? 0.12 : 0.18,
       env: light ? {
         ambientSky: [0.5, 0.52, 0.56], ambientGround: [0.24, 0.23, 0.2], envTop: [0.45, 0.5, 0.6], envHorizon: [0.72, 0.72, 0.7], envBottom: [0.3, 0.29, 0.26],
-        sun: [1.35, 1.3, 1.18], rim: [1.4, 1.5, 1.7], fill: [0.35, 0.35, 0.37], exposure: 0.92
+        sun: [1.35, 1.3, 1.18], rim: [1.4, 1.5, 1.7], fill: [0.35, 0.35, 0.37], exposure: 0.92,
+        studio: [0.8, 0.95, 0.22, 0]
       } : {
         ambientSky: [0.4, 0.44, 0.52], ambientGround: [0.17, 0.16, 0.14], envTop: [0.34, 0.4, 0.52], envHorizon: [0.42, 0.43, 0.46], envBottom: [0.05, 0.05, 0.055],
-        sun: [1.3, 1.24, 1.12], rim: [1.7, 1.8, 2.1], fill: [0.35, 0.37, 0.42], exposure: 0.92
+        sun: [1.3, 1.24, 1.12], rim: [1.7, 1.8, 2.1], fill: [0.35, 0.37, 0.42], exposure: 0.92,
+        // softbox studio reflections (gl-core studioEnv): strength, room brightness, floor bounce
+        studio: [1, 0.4, 0.05, 0]
       }
     };
   }
@@ -548,6 +551,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
       try { if (st.floorMesh) st.floorMesh.destroy(); if (st.triMesh) st.triMesh.destroy(); } catch (e) { /* ignore */ }
       try { if (st.snapTex) st.gl.deleteTexture(st.snapTex); } catch (e2) { /* ignore */ }
     }
+    if (st.probe && !lost) { try { st.probe.destroy(); } catch (e3) { /* ignore */ } }
+    st.probe = null; st.probeKey = ''; st.probeFailed = false;
     st.floorMesh = st.triMesh = st.snapTex = null; st.fade = null;
   }
 
@@ -1099,11 +1104,29 @@ var CB = (globalThis.CB = globalThis.CB || {});
       sunDir: sun, sunColor: T.sun,
       ambientSky: mirror ? T.ambientGround : T.ambientSky, ambientGround: mirror ? T.ambientSky : T.ambientGround,
       envTop: T.envTop, envHorizon: T.envHorizon, envBottom: T.envBottom, fogDensity: 0, exposure: T.exposure,
+      studio: T.studio, envMap: studioProbe(sun, T),
       lights: [
         { pos: rp, color: T.rim, range: 22, type: 0 },
         { pos: fp, color: T.fill, range: 22, type: 0 }
       ]
     };
+  }
+
+  /** One studio reflection probe (WebGL2) shared by the car and its floor reflection, re-baked only when the key
+      light has turned by a few degrees or the theme changed. (Letting drawList auto-bake would alternate between the
+      mirrored and the normal pass's lighting and leave a random one on screen when the loop idles.) undefined =
+      no probe (WebGL1 / bake failed): gl-core then evaluates the same studio environment per pixel. */
+  function studioProbe(sun, T) {
+    if (!st.ctx.isWebGL2 || st.probeFailed || typeof G.createEnvMap !== 'function') return undefined;
+    var key = Math.round(Math.atan2(sun[2], sun[0]) / DEG / 3) + '|' + st.theme.theme;
+    if (st.probe && st.probeKey === key && st.probe.valid) return st.probe;
+    try {
+      if (!st.probe) st.probe = G.createEnvMap(st.ctx, null, { size: 128 });
+      var base = sun[1] < 0 ? [sun[0], -sun[1], sun[2]] : sun;
+      if (!st.probe || !st.probe.update({ sunDir: base, sunColor: T.sun, envTop: T.envTop, envHorizon: T.envHorizon, envBottom: T.envBottom, studio: T.studio })) { st.probeFailed = true; return undefined; }
+      st.probeKey = key;
+    } catch (e) { st.probeFailed = true; return undefined; }
+    return st.probe;
   }
 
   /* ---------------- render */
