@@ -87,7 +87,9 @@ test('lowpoly: every registered model builds (auto or authored) at both LODs, fi
       var t = r.stats.triangles;
       if (lod === 'high') {   // wheels stay cheap so authored bodies keep headroom for build extras (wings, splitters)
         var wt = r.parts.filter(function (p) { return p.attach === 'wheel' || p.attach === 'caliper'; }).reduce(function (a, p) { return a + p.triangles; }, 0);
-        assert.ok(wt <= 900, m.id + ' wheels ' + wt + ' tris');
+        // pickups opt into all-terrain tyres (wheels.tyre 'at': lug blocks on a grooved tread): their 33-35 in
+        // off-road tyres are the most visible part of the truck, so they get a larger wheel allowance
+        assert.ok(wt <= (m.style === 'pickup' ? 1500 : 900), m.id + ' wheels ' + wt + ' tris');
       }
       if (lod === 'low') assert.ok(t >= 120 && t <= 500, m.id + ' low LOD ' + t + ' tris');
       else assert.ok(t >= 600 && t <= 3600, m.id + ' high LOD ' + t + ' tris');
@@ -256,6 +258,25 @@ test('lowpoly: flare bands start at the arch cut; maxTilt decals are one flat po
   pcs[0].pts.forEach(function (p) { assert.ok(Math.abs(p[0] * n[0] + p[1] * n[1] + p[2] * n[2] - d0) < 1e-9, 'planar'); });
   var M = LP.materials({});
   assert.ok(M.glass.materialType === 'standard' && M.glass.envIntensity <= 0.5 && M.carbon.envIntensity <= 0.35 && M.gloss.envIntensity < 1, 'dark glass / carbon / gloss reflections');
+});
+
+test('lowpoly: opt-in all-terrain tyres (wheels.tyre "at"): lug blocks on the tread, true size, low LOD untouched', function () {
+  var W = { r: 0.44, rim: 0.22, tw: 0.32 }, o = { style: 'star', spokes: 6, sides: 12, finish: [0.3, 0.3, 0.3] };
+  var road = LP._.wheelGeo(W, o), at = LP._.wheelGeo(W, Object.assign({ tyre: 'at' }, o));
+  assert.ok(at.tyre.tris() > road.tyre.tris() + 100, 'lugs add geometry ' + road.tyre.tris() + ' -> ' + at.tyre.tris());
+  var mx = 0, mn = Infinity, P = at.tyre.p;
+  for (var i = 0; i < P.length; i += 3) { var rr = Math.hypot(P[i], P[i + 1]); mx = Math.max(mx, rr); if (Math.abs(P[i + 2]) < W.tw * 0.37 && rr > W.rim + 0.05) mn = Math.min(mn, rr); }
+  assert.ok(Math.abs(mx - W.r) < 0.004, 'lug tops on the tyre radius ' + mx);
+  assert.ok(mn < W.r - 0.01, 'grooved tread under the lugs ' + mn);
+  // the tall sidewall stays visible: the rim face does not grow over the bead as much as on a road tyre
+  function rimR(g) { var m = 0; for (var k = 0; k < g.rim.p.length; k += 3) m = Math.max(m, Math.hypot(g.rim.p[k], g.rim.p[k + 1])); return m; }
+  assert.ok(rimR(at) < rimR(road) - 0.01, 'AT rim face ' + rimR(at) + ' vs road ' + rimR(road));
+  var lowA = LP._.wheelGeo(W, Object.assign({ tyre: 'at', low: true }, o)), lowR = LP._.wheelGeo(W, Object.assign({ low: true }, o));
+  assert.strictEqual(lowA.tyre.tris(), lowR.tyre.tris(), 'low LOD unchanged');
+  ['ford-f150-raptor-gen3', 'toyota-tacoma-trdpro-2024', 'tesla-cybertruck'].forEach(function (id) {
+    var r = lp(id, 'high'), t = r.parts.filter(function (p) { return /^tire-/.test(p.kind); })[0];
+    assert.ok(t && t.triangles > 200, id + ' uses all-terrain tyres (' + (t && t.triangles) + ' tris)');
+  });
 });
 
 if (standalone && require.main === module) console.log(process.exitCode ? 'FAILED' : 'all lowpoly tests passed');

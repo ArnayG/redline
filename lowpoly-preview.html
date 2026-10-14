@@ -104,6 +104,7 @@
   if (Q.wire === '1') ui.wire.checked = true;
   if (Q.lod) ui.lod.value = Q.lod;
   if (Q.auto === '1') ui.auto.checked = true;
+  if (Q.ui === '0') document.getElementById('ui').style.display = 'none';   // clean screenshots
   if (Q.view) ui.view.value = Q.view;
   var yawQ = Q.yaw != null && Q.yaw !== '' ? +Q.yaw : null, pitchQ = Q.pitch != null && Q.pitch !== '' ? +Q.pitch : null;
   if (yawQ !== null || Q.spin === '0') ui.spin.checked = false;
@@ -185,7 +186,7 @@
   function camera(vx, vy, vw, vh, d, yaw, pitch, fov) {
     var y = yaw * Math.PI / 180, p = pitch * Math.PI / 180, R = Math.max(d.length, d.height * 2.2) * 0.62 / Math.tan(fov / 2) * (cam.distK || 1);
     if (cam.dist) R = cam.dist;
-    var tgt = [0, d.height * 0.42, 0];
+    var tgt = [Q.tx ? +Q.tx : 0, Q.ty ? +Q.ty : d.height * 0.42, Q.tz ? +Q.tz : 0];   // ?tx=&ty=&tz= close-ups
     var eye = [tgt[0] + Math.cos(y) * Math.cos(p) * R, tgt[1] + Math.sin(p) * R, tgt[2] + Math.sin(y) * Math.cos(p) * R];
     var view = M4.create(), proj = M4.create();
     M4.lookAt(view, eye, tgt, Math.abs(pitch) > 85 ? [-1, 0, 0] : [0, 1, 0]);

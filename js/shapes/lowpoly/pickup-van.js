@@ -99,6 +99,7 @@
   // Signature: hexagonal black grille box with heritage TOYOTA block letters over an LED light bar, slim
   // lamps on the upper grille corners with vertical vent slots beneath, hood scoop, silver skid plate,
   // square black flares, double cab + 5 ft bed, tall tail lamps, stamped TACOMA tailgate.
+  if (!GLYPH.P) GLYPH.P = [[0, 0, 1, 5], [1, 4, 2.6, 5], [2, 2.4, 3, 4], [1, 2, 2.6, 3]];   // "TRD PRO" bed badge
   var TACOMA = {
     body: {
       // pts: 0 bottom centre, 1 bottom edge, 2 lower flank, 3 waist, 4 upper flank, 5 shoulder,
@@ -162,8 +163,8 @@
         });
         return out;
       })(), 'front', 'carbon', 0.007, false),
-      polys([rect(-0.24, 1.130, 0.24, 1.210)], 'front', 'gloss', 0.007, false),
-      polys(word('TOYOTA', 0, 1.167, 0.062, -1, 1.25), 'front', 'badge', 0.011, false),
+      polys([rect(-0.31, 1.122, 0.31, 1.218)], 'front', 'gloss', 0.007, false),
+      polys(word('TOYOTA', 0, 1.170, 0.072, -1, 1.4), 'front', 'badge', 0.011, false),
       polys([rect(-0.32, 1.060, 0.32, 1.085)], 'front', 'drl', 0.009, false),
       // slim lamps on the upper grille corners (amber tip) + vertical vent slots under them
       polys([[[0.62, 1.190], [0.89, 1.200], [0.915, 1.270], [0.66, 1.280]]], 'front', 'gloss', 0.006, true),
@@ -173,11 +174,12 @@
       polys([rect(0.77, 0.950, 0.90, 1.130)], 'front', 'black', 0.006, true),
       polys([0, 1, 2, 3].map(function (k) { var y = 0.97 + k * 0.042; return rect(0.78, y, 0.89, y + 0.016); }), 'front', 'gloss', 0.009, true),
       // lower bumper: black centre, fog / LED pods, silver skid plate with dark cut-outs
-      polys([[[-0.66, 0.76], [0.66, 0.76], [0.78, 0.93], [-0.78, 0.93]]], 'front', 'black', 0.005, false),
-      polys([rect(-0.40, 0.86, 0.40, 0.92)], 'front', 'grille', 0.008, false),
-      polys([rect(0.42, 0.80, 0.62, 0.835)], 'front', 'drl', 0.009, true),
-      polys([[[-0.70, 0.62], [0.70, 0.62], [0.68, 0.755], [-0.68, 0.755]]], 'front', 'chrome', 0.008, false),
-      polys([-0.45, -0.15, 0.15, 0.45].map(function (z) { return rect(z - 0.09, 0.635, z + 0.09, 0.675); }), 'front', 'black', 0.011, false),
+      polys([[[-0.56, 0.745], [0.56, 0.745], [0.70, 0.905], [-0.70, 0.905]]], 'front', 'black', 0.005, false),
+      polys([[[-0.50, 0.77], [0.50, 0.77], [0.60, 0.88], [-0.60, 0.88]]], 'front', 'grille', 0.008, false),
+      polys([rect(-0.16, 0.79, 0.16, 0.86)], 'front', 'black', 0.010, false),
+      polys([[[0.47, 0.80], [0.60, 0.80], [0.655, 0.845], [0.50, 0.845]]], 'front', 'indicator', 0.011, true),
+      polys([[[-0.58, 0.62], [0.58, 0.62], [0.62, 0.735], [-0.62, 0.735]]], 'front', 'chrome', 0.008, false),
+      polys([-0.36, -0.12, 0.12, 0.36].map(function (z) { return rect(z - 0.07, 0.64, z + 0.07, 0.67); }), 'front', 'black', 0.011, false),
       // cab rear window + 3rd brake light
       polys([rect(-0.62, 1.56, 0.62, 1.84)], 'rear', 'glass', 0.005, false),
       polys([rect(-0.14, 1.865, 0.14, 1.89)], 'rear', 'tail', 0.008, false),
@@ -185,12 +187,15 @@
       polys([[[0.79, 0.96], [0.94, 0.96], [0.94, 1.39], [0.84, 1.39]]], 'rear', 'tail', 0.006, true),
       polys([rect(0.89, 1.04, 0.925, 1.30)], 'rear', 'gloss', 0.009, true),
       polys([rect(-0.11, 1.28, 0.11, 1.32)], 'rear', 'black', 0.006, false),
-      polys(word('TACOMA', 0, 1.13, 0.075, 1, 1.35), 'rear', 'gloss', 0.006, false),
+      polys(word('TACOMA', 0, 1.105, 0.085, 1, 2.05), 'rear', 'gloss', 0.006, false),
       polys([rect(-0.98, 0.68, 0.98, 0.86)], 'rear', 'black', 0.005, false),
       polys([rect(-0.16, 0.89, 0.16, 0.97)], 'rear', 'plate', 0.008, false),
       // door handles, TACOMA door badge
       polys([rect(0.34, 1.29, 0.48, 1.32), rect(-0.56, 1.29, -0.42, 1.32)], 'side', 'black', 0.004, true),
       polys([[[0.99, 1.43], [0.80, 1.43], [0.80, 1.58]]], 'side', 'gloss', 0.006, true),
+      // TRD PRO lettering on the rear of the bed sides (each flank reads left -> right)
+      polys(word('TRD PRO', -2.42, 1.30, 0.06, 1, 1.15), 'side', 'gloss', 0.005, false),
+      polys(word('TRD PRO', -2.42, 1.30, 0.06, -1, 1.15), 'left', 'gloss', 0.005, false),
       // hood scoop (TRD Pro) — black, in the hood centre
       [{ t: 'prism', mat: 'black', z0: -0.27, z1: 0.27, pts2d: [[2.05, 1.36], [1.45, 1.42], [1.38, 1.475], [1.92, 1.395]] }],
       // square black flares
@@ -200,17 +205,24 @@
         // rock rails, bed-rail caps, mirrors on black feet, rear bumper step
         { t: 'box', mat: 'black', mirror: true, c: [-0.10, 0.50, 0.92], s: [2.0, 0.06, 0.13] },
         { t: 'box', mat: 'black', mirror: true, c: [-2.0, 1.432, 0.94], s: [1.78, 0.02, 0.11] },
-        { t: 'prism', mat: 'mirror', mirror: true, z0: 0.94, z1: 1.14, pts2d: [[0.92, 1.53], [0.72, 1.535], [0.725, 1.69], [0.90, 1.70]] },
-        { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.50, 0.95], s: [0.12, 0.05, 0.08] },
+        { t: 'prism', mat: 'mirror', mirror: true, z0: 0.95, z1: 1.16, pts2d: [[0.93, 1.47], [0.71, 1.465], [0.715, 1.69], [0.89, 1.70]] },
+        { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.705, 1.485, 0.98], [0.705, 1.485, 1.145], [0.705, 1.675, 1.145], [0.705, 1.675, 0.98]] },
+        { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.455, 0.95], s: [0.13, 0.05, 0.09] },
         { t: 'box', mat: 'black', c: [-2.90, 0.70, 0], s: [0.10, 0.12, 1.70] }
       ]
     ),
-    wheels: { style: 'star', spokes: 6 },
+    wheels: { style: 'star', spokes: 6, tyre: 'at' },
     notes: 'Toyota Tacoma TRD Pro (N400, 2024) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2024_Cleveland_Auto_Show_(53571764732).jpg (front, TRD Pro), ' +
       'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_IMG_9727.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_IMG_9735.jpg (rear 3/4).'
   };
+  // shoulder crease: the flank leans out to a sharp horizontal crease a hand below the belt and tucks back in
+  // above it (both trucks carry one along the doors and the bed), so the light splits the slab side in two
+  TACOMA.body.stations.forEach(function (st) {
+    var a = st.pts[3], b = st.pts[4];
+    if (Math.abs(a[1] - b[1]) < 0.015) { a[1] -= 0.012; b[0] -= 0.05; b[1] += 0.014; }
+  });
   reg('toyota-tacoma-trdpro-2024', TACOMA);
 
   /* ================================================================ Tesla Cybertruck (2024–) */
@@ -224,7 +236,7 @@
   var CYB = (function () {
     var XF = 2.807, XR = -2.875, XA = -0.35;            // nose, tail, apex
     var top = pl([[XF, 1.075], [XA, 1.79], [XR, 1.215]]);
-    var belt = pl([[XF, 1.04], [XR, 1.10]]);
+    var belt = pl([[XF, 1.04], [XR, 1.13]]);
     var ze = pl([[XF, 0.92], [2.35, 0.84], [1.35, 0.74], [XA, 0.64], [-1.25, 0.68], [XR, 0.82]]);
     function ring(x, yb, zb) {
       var t = top(x), b = belt(x);
@@ -238,6 +250,7 @@
       ring(1.00, 0.44, 0.96),
       ring(-0.28, 0.44, 0.96),
       ring(-0.42, 0.44, 0.96),
+      ring(-0.98, 0.44, 0.96),
       ring(-1.25, 0.44, 0.96),
       ring(-2.78, 0.46, 0.96),
       { x: XR, pts: [[0.52, 0], [0.52, 0.92], [0.64, 0.97], [1.10, 0.97], [1.15, 0.925], [1.205, 0.81], [1.212, 0.41], [1.215, 0]] }
@@ -255,9 +268,10 @@
           ['black', 'black', 'paint', 'paint', 'paint', 'glass', 'glass'],    // windscreen, A-pillar side
           ['black', 'black', 'paint', 'paint', 'glass', 'glass', 'glass'],    // front door glass, windscreen / glass roof
           ['black', 'black', 'paint', 'paint', 'gloss', 'glass', 'glass'],    // B-pillar
-          ['black', 'black', 'paint', 'paint', 'glass', 'paint', 'glass'],    // rear door glass, glass roof
-          ['black', 'black', 'paint', 'paint', 'paint', 'paint', 'paint'],    // sail / vault
-          ['black', 'black', 'paint', 'paint', 'paint', 'paint', 'paint']     // tail
+          ['black', 'black', 'paint', 'paint', 'glass', 'glass', 'glass'],    // rear door glass, rear window behind the apex
+          ['black', 'black', 'paint', 'paint', 'paint', 'black', 'black'],    // C-pillar, start of the matte black vault tonneau
+          ['black', 'black', 'paint', 'paint', 'paint', 'black', 'black'],    // stainless sail rails + tonneau
+          ['black', 'black', 'paint', 'paint', 'paint', 'black', 'black']     // tail (tonneau to the tailgate)
         ],
         capF: 'paint', capR: 'paint'
       },
@@ -276,19 +290,23 @@
         polys([rect(0.70, 0.78, 0.84, 0.80)], 'rear', 'tail', 0.008, true),
         // door seams / handles-free flanks: the door cut lines
         polys([rect(1.0, 0.62, 1.012, 1.04), rect(-0.30, 0.62, -0.288, 1.07), rect(-1.25, 0.62, -1.238, 1.08)], 'side', 'black', 0.004, true),
-        // angular trapezoid arch cladding (3-segment) + dark rocker
-        flare(1.81737, 0.43925, 0.52, 0.62, 0.90, 1.02, 'black', 3, false),
-        flare(-1.81737, 0.43925, 0.52, 0.62, 0.90, 1.02, 'black', 3, false),
+        // angular trapezoid arch cladding (3-segment, thick as on the real truck) + dark rocker; the black
+        // bumpers wrap round the corners into the arch cladding (cyb-b / cyb-a photos)
+        flare(1.81737, 0.43925, 0.52, 0.665, 0.90, 1.025, 'black', 3, false),
+        flare(-1.81737, 0.43925, 0.52, 0.665, 0.90, 1.025, 'black', 3, false),
+        polys([[[2.46, 0.44], [2.82, 0.48], [2.82, 0.72], [2.42, 0.70]]], 'side', 'black', 0.004, true),
+        polys([[[-2.46, 0.46], [-2.88, 0.50], [-2.88, 0.77], [-2.42, 0.72]]], 'side', 'black', 0.004, true),
         [
           { t: 'box', mat: 'black', mirror: true, c: [-0.0, 0.50, 0.985], s: [2.40, 0.14, 0.05] },
           { t: 'box', mat: 'black', c: [2.80, 0.58, 0], s: [0.08, 0.20, 1.98] },
           { t: 'box', mat: 'black', c: [-2.87, 0.63, 0], s: [0.10, 0.24, 1.98] },
           { t: 'box', mat: 'plate', c: [-2.922, 0.65, 0], s: [0.01, 0.11, 0.32] },
-          // small door mirrors on the A-pillar base
-          { t: 'prism', mat: 'mirror', mirror: true, z0: 0.92, z1: 1.10, pts2d: [[1.02, 1.27], [0.86, 1.27], [0.86, 1.39], [0.98, 1.39]] }
+          // small black door mirrors at the front corner of the door glass, mirror glass facing back
+          { t: 'prism', mat: 'gloss', mirror: true, z0: 0.90, z1: 1.09, pts2d: [[1.03, 1.20], [0.87, 1.21], [0.87, 1.33], [0.99, 1.33]] },
+          { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.865, 1.225, 0.93], [0.865, 1.225, 1.075], [0.865, 1.315, 1.075], [0.865, 1.315, 0.93]] }
         ]
       ),
-      wheels: { style: 'disc', spokes: 6 },
+      wheels: { style: 'split', spokes: 6, tyre: 'at' },   // black 20 in twin-spoke (covers off) on 35 in all-terrains
       notes: 'Tesla Cybertruck (2024) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Cybertruck_supercharging_at_Bravoland.jpg (side 3/4), ' +

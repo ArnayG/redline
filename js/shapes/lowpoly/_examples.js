@@ -46,16 +46,19 @@
     F: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 2, 2.4, 3]],
     O: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1], [1, 4, 2, 5]],
     R: [[0, 0, 1, 5], [1, 4, 2.6, 5], [2, 2.6, 3, 4], [1, 2, 2.6, 3], [2, 0, 3, 2]],
-    D: [[0, 0, 1, 5], [1, 0, 2.2, 1], [1, 4, 2.2, 5], [2.2, 0.8, 3, 4.2]]
+    D: [[0, 0, 1, 5], [1, 0, 2.2, 1], [1, 4, 2.2, 5], [2.2, 0.8, 3, 4.2]],
+    A: [[0, 0, 1, 4], [2, 0, 3, 4], [0.45, 4, 2.55, 5], [1, 2, 2, 2.9]],
+    P: [[0, 0, 1, 5], [1, 4, 2.6, 5], [2, 2.4, 3, 4], [1, 2, 2.6, 3]],
+    T: [[0, 4, 3, 5], [1, 0, 2, 4]]
   };
   /** word centred at (ac, bc), letter height h; dir = +1 when +a reads left -> right for the viewer */
-  function word(txt, ac, bc, h, dir) {
-    var cell = h / 5, lw = 3 * cell, gap = cell * 1.1, total = txt.length * lw + (txt.length - 1) * gap, out = [];
+  function word(txt, ac, bc, h, dir, asp) {   // asp (optional) widens the letters (extended block capitals)
+    var cell = h / 5, cw = cell * (asp || 1), lw = 3 * cw, gap = cw * 1.1, total = txt.length * lw + (txt.length - 1) * gap, out = [];
     for (var i = 0; i < txt.length; i++) {
       var g = GLYPH[txt[i]]; if (!g) continue;
       var x0 = -total / 2 + i * (lw + gap);
       g.forEach(function (c) {
-        var u0 = x0 + c[0] * cell, u1 = x0 + c[2] * cell;
+        var u0 = x0 + c[0] * cw, u1 = x0 + c[2] * cw;
         out.push(rect(ac + dir * u0, bc - h / 2 + c[1] * cell, ac + dir * u1, bc - h / 2 + c[3] * cell));
       });
     }
@@ -242,13 +245,13 @@
         { x: 2.805, pts: [[0.64, 0], [0.64, 0.86], [0.72, 0.95], [0.95, 0.97], [1.30, 0.97], [1.435, 0.93], [1.455, 0.70], [1.465, 0.40], [1.465, 0]] },
         { x: 2.70, pts: [[0.56, 0], [0.56, 0.90], [0.62, 0.99], [0.95, 1.01], [1.32, 1.01], [1.465, 0.96], [1.485, 0.70], [1.495, 0.40], [1.495, 0]] },
         { x: 2.40, pts: [[0.56, 0], [0.57, 0.95], [0.64, 1.035], [0.95, 1.055], [1.34, 1.055], [1.49, 1.00], [1.515, 0.72], [1.53, 0.40], [1.535, 0]] },
-        { x: 1.85, pts: [[0.56, 0], [0.57, 0.97], [0.66, 1.06], [0.95, 1.08], [1.345, 1.07], [1.505, 1.01], [1.535, 0.72], [1.55, 0.40], [1.555, 0]] },
-        { x: 1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.36, 1.02], [1.55, 0.99], [1.575, 0.76], [1.585, 0.40], [1.585, 0]] },
-        { x: -1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.36, 1.02], [1.55, 0.99], [1.575, 0.76], [1.585, 0.40], [1.585, 0]] },
-        { x: -1.18, pts: [[0.70, 0], [0.70, 0.95], [0.75, 1.00], [0.95, 1.02], [1.30, 1.02], [1.405, 1.00], [1.405, 0.90], [0.97, 0.88], [0.97, 0]] },
-        { x: -1.85, pts: [[0.70, 0], [0.70, 0.97], [0.76, 1.06], [0.95, 1.08], [1.30, 1.07], [1.405, 1.01], [1.405, 0.90], [0.97, 0.88], [0.97, 0]] },
-        { x: -3.03, pts: [[0.62, 0], [0.62, 0.95], [0.68, 1.00], [0.95, 1.01], [1.30, 1.01], [1.405, 1.00], [1.405, 0.90], [0.97, 0.88], [0.97, 0]] },
-        { x: -3.10, pts: [[0.66, 0], [0.66, 0.84], [0.70, 0.88], [0.95, 0.885], [1.30, 0.885], [1.385, 0.875], [1.385, 0.70], [1.385, 0.40], [1.385, 0]] }
+        { x: 1.85, pts: [[0.56, 0], [0.57, 0.97], [0.66, 1.06], [0.95, 1.08], [1.33, 1.07], [1.48, 1.01], [1.51, 0.72], [1.525, 0.40], [1.53, 0]] },
+        { x: 1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.33, 1.02], [1.49, 0.99], [1.51, 0.76], [1.52, 0.40], [1.52, 0]] },
+        { x: -1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.33, 1.02], [1.49, 0.99], [1.51, 0.76], [1.52, 0.40], [1.52, 0]] },
+        { x: -1.18, pts: [[0.70, 0], [0.70, 0.95], [0.75, 1.00], [0.95, 1.02], [1.36, 1.02], [1.47, 1.00], [1.47, 0.90], [0.97, 0.88], [0.97, 0]] },
+        { x: -1.85, pts: [[0.70, 0], [0.70, 0.97], [0.76, 1.06], [0.95, 1.08], [1.36, 1.07], [1.47, 1.01], [1.47, 0.90], [0.97, 0.88], [0.97, 0]] },
+        { x: -3.03, pts: [[0.62, 0], [0.62, 0.95], [0.68, 1.00], [0.95, 1.01], [1.36, 1.01], [1.47, 1.00], [1.47, 0.90], [0.97, 0.88], [0.97, 0]] },
+        { x: -3.10, pts: [[0.66, 0], [0.66, 0.84], [0.70, 0.88], [0.95, 0.885], [1.36, 0.885], [1.45, 0.875], [1.45, 0.70], [1.45, 0.40], [1.45, 0]] }
       ],
       //       c0 under  c1       c2       c3       c4       c5       c6       c7
       mats: [
@@ -267,12 +270,12 @@
     cabin: {
       // pts: belt, glass base, roof rail, roof edge, roof centre
       stations: [
-        { x: 1.12, pts: [[1.575, 0.93], [1.585, 0.92], [1.595, 0.88], [1.60, 0.84], [1.605, 0]] },
-        { x: 0.42, pts: [[1.575, 0.955], [1.62, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
-        { x: -0.20, pts: [[1.575, 0.955], [1.62, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
-        { x: -0.31, pts: [[1.575, 0.955], [1.62, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
-        { x: -1.05, pts: [[1.575, 0.955], [1.62, 0.945], [1.965, 0.865], [2.005, 0.80], [2.02, 0]] },
-        { x: -1.13, pts: [[1.575, 0.94], [1.615, 0.93], [1.95, 0.85], [1.99, 0.79], [2.005, 0]] }
+        { x: 1.12, pts: [[1.51, 0.93], [1.52, 0.92], [1.53, 0.88], [1.535, 0.84], [1.54, 0]] },
+        { x: 0.42, pts: [[1.51, 0.955], [1.55, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
+        { x: -0.20, pts: [[1.51, 0.955], [1.55, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
+        { x: -0.31, pts: [[1.51, 0.955], [1.55, 0.945], [1.965, 0.865], [2.005, 0.80], [2.027, 0]] },
+        { x: -1.05, pts: [[1.51, 0.955], [1.55, 0.945], [1.965, 0.865], [2.005, 0.80], [2.02, 0]] },
+        { x: -1.13, pts: [[1.51, 0.94], [1.545, 0.93], [1.95, 0.85], [1.99, 0.79], [2.005, 0]] }
       ],
       mats: [
         ['paint', 'paint', 'glass', 'glass'],      // windscreen + A-pillar
@@ -284,55 +287,74 @@
       capF: null, capR: 'paint'
     },
     parts: [].concat(
-      // grille box, block FORD letters, amber grille markers
-      polys([rect(-0.67, 0.94, 0.67, 1.425)], 'front', 'grille', 0.004, false),
-      polys([rect(-0.67, 1.40, 0.67, 1.425), rect(-0.67, 0.94, 0.67, 0.965)], 'front', 'gloss', 0.007, false),
-      polys(word('FORD', 0, 1.17, 0.17, -1), 'front', 'badge', 0.01, false),
-      polys([-0.22, -0.07, 0.07, 0.22].slice(0, 3).map(function (z, i) { var zc = [-0.16, 0, 0.16][i]; return rect(zc - 0.04, 1.37, zc + 0.04, 1.39); }), 'front', 'indicator', 0.012, false),
-      // C-clamp headlamps: dark housing, projector block, C-shaped light guide on the outboard side
-      polys([rect(0.66, 1.195, 1.0, 1.425)], 'front', 'gloss', 0.006, true),
-      polys([rect(0.71, 1.24, 0.86, 1.385)], 'front', 'light', 0.009, true),
-      polys([[[0.87, 1.405], [0.985, 1.405], [0.985, 1.21], [0.87, 1.21], [0.87, 1.24], [0.955, 1.24], [0.955, 1.375], [0.87, 1.375]]], 'front', 'drl', 0.011, true),
-      // lower bumper: dark surround, centre intake, fog pods, silver skid plate
-      polys([rect(-1.0, 0.62, 1.0, 0.915)], 'front', 'black', 0.005, false),
-      polys([rect(-0.40, 0.70, 0.40, 0.86)], 'front', 'grille', 0.008, false),
-      polys([rect(0.62, 0.74, 0.86, 0.82)], 'front', 'gloss', 0.008, true),
-      polys([rect(-0.62, 0.575, 0.62, 0.665)], 'front', 'chrome', 0.009, false),
-      polys([rect(-0.155, 0.70, 0.155, 0.85)].slice(0, 0), 'front', 'plate', 0.01, false),
-      // hood vents
-      polys([rect(1.22, 0.22, 1.52, 0.42)], 'top', 'black', 0.004, true),
-      polys([rect(2.22, 0.55, 2.52, 0.68)], 'top', 'black', 0.004, true),
+      // grille: full-width dark box, black frame, a gloss bar through the middle carrying the extended block FORD
+      // letters (they span most of the grille), three amber clearance lamps along the top edge
+      polys([rect(-0.67, 0.955, 0.67, 1.425)], 'front', 'black', 0.004, false),
+      polys([rect(-0.635, 0.985, 0.635, 1.395)], 'front', 'grille', 0.007, false),
+      polys([rect(-0.635, 1.115, 0.635, 1.235)], 'front', 'gloss', 0.009, false),
+      polys(word('FORD', 0, 1.175, 0.095, -1, 2.45), 'front', 'badge', 0.012, false),
+      polys([-0.16, 0, 0.16].map(function (zc) { return rect(zc - 0.045, 1.405, zc + 0.045, 1.42); }), 'front', 'indicator', 0.012, false),
+      // C-clamp headlamps: dark housing, twin stacked projector blocks, C-shaped light guide on the outboard side
+      polys([rect(0.66, 1.17, 1.0, 1.425)], 'front', 'gloss', 0.006, true),
+      polys([rect(0.69, 1.20, 0.86, 1.395)], 'front', 'chrome', 0.008, true),
+      polys([rect(0.725, 1.315, 0.825, 1.375), rect(0.725, 1.22, 0.825, 1.28)], 'front', 'light', 0.011, true),
+      polys([[[0.87, 1.405], [0.985, 1.405], [0.985, 1.19], [0.87, 1.19], [0.87, 1.215], [0.955, 1.215], [0.955, 1.38], [0.87, 1.38]]], 'front', 'drl', 0.011, true),
+      // lower bumper: dark bumper with a centre intake, fog pods, silver skid plate with black tow hooks
+      polys([rect(-1.0, 0.62, 1.0, 0.925)], 'front', 'black', 0.005, false),
+      polys([rect(-0.42, 0.69, 0.42, 0.865)], 'front', 'grille', 0.008, false),
+      polys([rect(0.58, 0.735, 0.88, 0.835)], 'front', 'gloss', 0.008, true),
+      polys([rect(0.62, 0.765, 0.70, 0.805), rect(0.74, 0.765, 0.82, 0.805)], 'front', 'light', 0.011, true),
+      polys([rect(-0.62, 0.565, 0.62, 0.665)], 'front', 'chrome', 0.009, false),
+      // hood heat extractors on the leading corners
+      polys([rect(2.20, 0.50, 2.55, 0.68)], 'top', 'black', 0.004, true),
       // cab: rear window, third brake light, roof clearance lamps
-      polys([rect(-0.64, 1.63, 0.64, 1.92)], 'rear', 'glass', 0.005, false),
+      polys([rect(-0.64, 1.57, 0.64, 1.92)], 'rear', 'glass', 0.005, false),
       polys([rect(-0.14, 1.94, 0.14, 1.975)], 'rear', 'tail', 0.008, false),
-      // rear: tall tail lamps (reverse lamp inside), dark tailgate band with FORD, bumper, plate
-      polys([rect(0.80, 0.90, 0.975, 1.40)], 'rear', 'tail', 0.006, true),
-      polys([rect(0.84, 1.06, 0.94, 1.22)], 'rear', 'rev', 0.009, true),
-      polys([rect(-0.79, 0.98, 0.79, 1.19)], 'rear', 'gloss', 0.005, false),
-      polys(word('FORD', 0, 1.085, 0.13, 1), 'rear', 'badge', 0.009, false),
+      // rear: tall tail lamps from the bed rail down (white reverse block in the middle), dark full-width tailgate
+      // band with extended FORD letters, handle, dark bumper + step pads, plate
+      polys([rect(0.80, 0.93, 0.985, 1.445)], 'rear', 'tail', 0.006, true),
+      polys([rect(0.835, 1.10, 0.95, 1.235)], 'rear', 'rev', 0.009, true),
+      polys([rect(-0.79, 1.00, 0.79, 1.235)], 'rear', 'gloss', 0.005, false),
+      polys(word('FORD', 0, 1.118, 0.11, 1, 2.3), 'rear', 'badge', 0.009, false),
+      polys([rect(-0.11, 1.33, 0.11, 1.375)], 'rear', 'black', 0.008, false),
       polys([rect(-1.03, 0.60, 1.03, 0.88)], 'rear', 'black', 0.005, false),
-      polys([rect(-0.155, 0.645, 0.155, 0.797)], 'rear', 'plate', 0.009, false),
-      // door handles
+      polys([rect(0.66, 0.845, 0.98, 0.875)], 'rear', 'gloss', 0.008, true),
+      polys([rect(-0.155, 0.665, 0.155, 0.815)], 'rear', 'plate', 0.009, false),
+      // door handles, RAPTOR lettering on the bed sides (each flank reads front -> rear... i.e. left to right)
       polys([rect(0.30, 1.30, 0.44, 1.335), rect(-0.62, 1.30, -0.48, 1.335)], 'side', 'black', 0.004, true),
+      polys(word('RAPTOR', -1.72, 1.375, 0.075, 1, 1.3), 'side', 'gloss', 0.005, false),
+      polys(word('RAPTOR', -1.72, 1.375, 0.075, -1, 1.3), 'left', 'gloss', 0.005, false),
       // flat-topped black flares over both axles
       flare(1.8466, 0.4364, 0.49, 0.62, 0.92, 1.13, 'black', 6, true),
       flare(-1.8466, 0.4364, 0.49, 0.62, 0.92, 1.13, 'black', 6, true),
       [
-        // rock rails, bed-rail caps, tow mirrors on black arms, roof clearance lamps
+        // rock rails, bed-rail caps, tow mirrors (body-colour caps on black arms, mirror glass facing back),
+        // roof clearance lamps, front tow hooks, hitch receiver
         { t: 'box', mat: 'black', mirror: true, c: [0.0, 0.47, 1.02], s: [2.25, 0.06, 0.16] },
-        { t: 'box', mat: 'black', mirror: true, c: [-2.11, 1.415, 0.955], s: [1.86, 0.025, 0.12] },
-        { t: 'prism', mat: 'mirror', mirror: true, z0: 1.05, z1: 1.23, pts2d: [[0.96, 1.60], [0.70, 1.60], [0.70, 1.86], [0.94, 1.86]] },
-        { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.66, 1.0], s: [0.12, 0.06, 0.12] },
+        { t: 'box', mat: 'black', mirror: true, c: [-2.11, 1.48, 0.955], s: [1.86, 0.025, 0.12] },
+        { t: 'prism', mat: 'mirror', mirror: true, z0: 1.05, z1: 1.25, pts2d: [[0.97, 1.55], [0.72, 1.54], [0.72, 1.83], [0.93, 1.83]] },
+        { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.714, 1.565, 1.07], [0.714, 1.565, 1.235], [0.714, 1.81, 1.235], [0.714, 1.81, 1.07]] },
+        { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.585, 1.0], s: [0.14, 0.07, 0.12] },
         { t: 'box', mat: 'indicator', c: [0.37, 2.03, 0.0], s: [0.04, 0.016, 0.06] },
         { t: 'box', mat: 'indicator', c: [0.37, 2.03, 0.16], s: [0.04, 0.016, 0.06] },
-        { t: 'box', mat: 'indicator', c: [0.37, 2.03, -0.16], s: [0.04, 0.016, 0.06] }
+        { t: 'box', mat: 'indicator', c: [0.37, 2.03, -0.16], s: [0.04, 0.016, 0.06] },
+        { t: 'box', mat: 'black', mirror: true, c: [2.83, 0.635, 0.44], s: [0.09, 0.055, 0.045] },
+        { t: 'box', mat: 'black', c: [-3.15, 0.55, 0], s: [0.14, 0.075, 0.075] }
       ]
     ),
-    wheels: { style: 'star', spokes: 6 },
+    // twin tips under the rear bumper ends (rap-r34 photo)
+    exhaust: [{ cx: 0.52, cy: 0.6, w: 0.11, shape: 'round', mirror: true }],
+    wheels: { style: 'star', spokes: 6, tyre: 'at' },
     notes: 'Ford F-150 Raptor (gen 3) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2021_Ford_F-150_Raptor,_front.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2021_Ford_F-150_Raptor,_rear.jpg (rear 3/4).'
   };
+  // shoulder crease: the flank leans out to a sharp horizontal crease a hand below the belt and tucks back in
+  // above it (both trucks carry one along the doors and the bed), so the light splits the slab side in two
+  RAPTOR.body.stations.forEach(function (st) {
+    var a = st.pts[3], b = st.pts[4];
+    if (Math.abs(a[1] - b[1]) < 0.015) { a[1] -= 0.012; b[0] -= 0.05; b[1] += 0.014; }
+  });
   reg('ford-f150-raptor-gen3', RAPTOR);
 
   // exported for authors / tests

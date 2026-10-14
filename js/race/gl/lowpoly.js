@@ -703,13 +703,17 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var R = W.r, rr = Math.min(W.rim, R - 0.035), w = W.tw, N = o.sides || 14, hw = w / 2;
     // the rim face reaches a little over the bead (as the lip and the tyre's rim protector do on the real wheel):
     // flat-shaded sidewalls otherwise read thicker than they are. Taller profiles (sidewall / width) get more.
-    if (!o.low) { var asp = (R - rr) / Math.max(0.1, w); rr = Math.min(R - 0.04, rr + (R - rr) * clamp(0.08 + asp * 0.3, 0.12, 0.26)); }
+    // all-terrain tyre (def wheels.tyre 'at', opt-in): the real tall sidewall (only a slim rim-protector overlap)
+    // and a grooved tread carrying chunky staggered lug blocks (tyreLugs) that wrap onto the outer shoulder
+    var at = o.tyre === 'at' && !o.low, gr = at ? 0.014 : 0;
+    if (!o.low) { var asp = (R - rr) / Math.max(0.1, w); rr = Math.min(R - 0.04, rr + (R - rr) * (at ? 0.05 : clamp(0.08 + asp * 0.3, 0.12, 0.26))); }
     var tyre = new Acc(), rim = new Acc(), cal = new Acc();
     var tc = PAL.tyre, tc2 = [PAL.tyre[0] * 1.35, PAL.tyre[1] * 1.35, PAL.tyre[2] * 1.35];
+    if (at) tc2 = [PAL.tyre[0] * 1.6, PAL.tyre[1] * 1.6, PAL.tyre[2] * 1.6];
     // tyre profile (radius, z) from outer sidewall round to inner sidewall
     // outer sidewall, outer shoulder chamfer, tread, inner sidewall (the inner shoulder is merged: it only shows
     // from under the car) -> 4 bands x 12 sides = 96 triangles
-    var prof = [[rr + 0.012, hw * 0.9], [R - 0.028, hw], [R, hw * 0.72], [R, -hw * 0.72], [rr + 0.012, -hw * 0.9]];
+    var prof = [[rr + 0.012, hw * 0.9], [R - 0.028 - gr, hw], [R - gr, hw * 0.72], [R - gr, -hw * 0.72], [rr + 0.012, -hw * 0.9]];
     var cols = [tc2, tc, tc, tc2];
     if (o.low) { prof = [[rr, hw], [R, hw * 0.8], [R, -hw * 0.8]]; cols = [tc2, tc]; }
     var a, k, s;
@@ -727,6 +731,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         tyre.tri(A, Bv, C, col, hint); tyre.tri(A, C, D, col, hint);
       }
     }
+    if (at) tyreLugs(tyre, R, gr, hw, clamp(o.lugs | 0 || 16, 8, 24), tc);
     var fin = o.finish || [0.5, 0.5, 0.52], dark = [fin[0] * 0.35 + 0.004, fin[1] * 0.35 + 0.004, fin[2] * 0.35 + 0.004];
     var zr = hw * 0.9 - 0.012, back = [0.012, 0.012, 0.013];
     if (o.low) {
@@ -813,6 +818,28 @@ var CB = (globalThis.CB = globalThis.CB || {});
       });
     }
     return { tyre: tyre, rim: rim, cal: cal };
+  }
+  /** all-terrain lug blocks on a grooved tread (wheel-local, axle z, outer face +z): n blocks round the tyre, each
+      a flat top on the full radius R (corners exactly on R: the silhouette stays the tyre's size) standing gr proud
+      of the tread, alternating a block that steps off mid-tread and wraps deep onto the outer sidewall with a
+      full-width block that wraps less, so the tread reads chunky from the side, the front and the rear. 8-10 triangles a
+      block (top, two walls, end faces; the faces into the tyre are never seen). */
+  function tyreLugs(acc, R, gr, hw, n, tc) {
+    function P(r, a, z) { return [Math.cos(a) * r, Math.sin(a) * r, z]; }
+    var Rb = R - gr - 0.006, half = PI / n * 0.76;
+    for (var k = 0; k < n; k++) {
+      var a = (k + 0.5) / n * TAU, a0 = a - half, a1 = a + half, odd = k & 1;
+      var zi = odd ? -hw : -hw * 0.3, zo = hw + 0.004, rd = odd ? R - 0.045 : R - 0.085;   // shoulder wrap depth
+      var jit = 1 + (hash(k * 13 + 5) - 0.5) * 0.14, col = [tc[0] * 1.12 * jit, tc[1] * 1.12 * jit, tc[2] * 1.12 * jit];
+      var up = [Math.cos(a), Math.sin(a), 0];
+      acc.tri(P(R, a0, zi), P(R, a1, zi), P(R, a1, zo), col, up); acc.tri(P(R, a0, zi), P(R, a1, zo), P(R, a0, zo), col, up);
+      acc.tri(P(R, a0, zo), P(R, a1, zo), P(rd, a1, zo), col, [0, 0, 1]); acc.tri(P(R, a0, zo), P(rd, a1, zo), P(rd, a0, zo), col, [0, 0, 1]);
+      if (!odd) { acc.tri(P(R, a0, zi), P(Rb, a1, zi), P(R, a1, zi), col, [0, 0, -1]); acc.tri(P(R, a0, zi), P(Rb, a0, zi), P(Rb, a1, zi), col, [0, 0, -1]); }
+      [[a0, -1], [a1, 1]].forEach(function (e) {
+        var t = [-Math.sin(e[0]) * e[1], Math.cos(e[0]) * e[1], 0];
+        acc.tri(P(Rb, e[0], zi), P(R, e[0], zi), P(R, e[0], zo), col, t); acc.tri(P(Rb, e[0], zi), P(R, e[0], zo), P(rd, e[0], zo), col, t);
+      });
+    }
   }
   function mirrorAcc(src) {
     var o = new Acc();
@@ -1382,7 +1409,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       if (wheelGeos[k]) return wheelGeos[k];
       var W = front ? wF : wR;
       return (wheelGeos[k] = wheelGeo({ r: W.r, rim: W.rimR, tw: W.width }, {
-        style: wstyle, spokes: spokes, split: split, sides: low ? 6 : 12, finish: S.wheelFinish || [0.45, 0.45, 0.47],
+        style: wstyle, spokes: spokes, split: split, sides: low ? 6 : 12, finish: S.wheelFinish || [0.45, 0.45, 0.47], tyre: wdef.tyre, lugs: wdef.lugs,
         caliper: low ? null : (S.caliper || [0.6, 0.6, 0.6]), front: front, low: low
       }));
     }
@@ -1762,7 +1789,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
       ex.forEach(function (t) {
         if (!t || t.shape === 'hidden' || !isFinite(t.cx) || !isFinite(t.cy)) return;
         var z = t.cx, y = t.cy, xh = Sh.rearX(y, z);
-        if (xh === null) xh = xR + 0.05;
+        // below a high rear body (pickup bed / bumper) the ray runs on under the car to a wheel well or the cab
+        // floor: the tip then belongs just behind the rear face's underside, not half way up the car
+        if (xh === null || xh > xR + 0.3) xh = xR + 0.05;
         var w = Math.max(0.04, num(t.w, 0.09)), hh = Math.max(0.04, num(t.h, w));
         if (t.shape === 'trapezoid') emitBox(B, 'chrome', [xh - 0.005, y, z], [0.07, hh, w], 0);
         else emitCyl(B, 'chrome', [xh - 0.01, y, z], w / 2, hh / 2, 0.08, 'x', 8);
