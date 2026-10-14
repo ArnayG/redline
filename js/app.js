@@ -1191,13 +1191,13 @@ window.CB = window.CB || {};
 
   function raceAvailable() { return !!(CB.race && CB.race.ui && typeof CB.race.ui.open === 'function'); }
   /**
-   * drive(discipline 'race' | 'drift', opts?) — take the configurator's current build (CB.state) out on track.
+   * drive(discipline 'race' | 'drift' | 'arcade', opts?) — take the configurator's current build (CB.state) out on track.
    * Unified game: routes to #/race or #/drift (CB.race.ui mounts its setup there, heavy steering assist by default).
    * A career purchase / upgrade session test-drives in an overlay on top of the Atelier instead, so the session survives.
    */
   function drive(discipline, opts) {
     opts = opts || {};
-    discipline = discipline === 'drift' ? 'drift' : 'race';
+    discipline = discipline === 'drift' || discipline === 'arcade' ? discipline : 'race';
     if (!raceAvailable()) {
       if (routedActive()) { CB.router.go(discipline); return; }
       toast('Race mode is not loaded on this page.', 'warning'); return;
@@ -1217,13 +1217,15 @@ window.CB = window.CB || {};
     }, null, 'race.ui.open');
   }
   function openRace() { drive('race'); }
-  /** The Atelier's "Drive it" call to action: Race or Drift with this exact build. */
+  /** The Garage's "Drive it" call to action: Race, Drift or Arcade with this exact build, or take it online. */
   function openDriveMenu(anchor) {
     if (!anchor) { drive('race'); return; }
     popover(anchor, [
       { label: 'Race', hint: 'R · grid race, 3D', icon: 'check', run: function () { drive('race'); } },
-      { label: 'Drift', hint: 'D · scored drift run, 3D', icon: 'spark', run: function () { drive('drift'); } }
-    ], 'menu-pop drive-pop');
+      { label: 'Drift', hint: 'D · scored drift run, 3D', icon: 'spark', run: function () { drive('drift'); } },
+      { label: 'Arcade', hint: 'A · stunt tracks, nitro and items', icon: 'spark', run: function () { drive('arcade'); } },
+      routedActive() ? { label: 'Multiplayer', hint: 'Race friends online in this car', icon: 'check', run: function () { closePop(); CB.router.go('multiplayer'); } } : null
+    ].filter(Boolean), 'menu-pop drive-pop');
   }
 
   /** A race started from the Atelier (Free Build) still counts towards the driver's record and achievements;
@@ -1346,6 +1348,7 @@ window.CB = window.CB || {};
         { sep: true },
         raceAvailable() ? { label: 'Race this build', hint: 'R', run: openRace } : null,
         raceAvailable() && routed() ? { label: 'Drift this build', hint: 'D', run: function () { drive('drift'); } } : null,
+        raceAvailable() && routed() ? { label: 'Arcade with this build', hint: 'A', run: function () { drive('arcade'); } } : null,
         hubAvailable() ? { label: 'Main menu', hint: 'M', run: function () { openHub('menu'); } } : null,
         hubAvailable() ? { label: 'Career hub', hint: 'H', run: function () { openHub('career'); } } : null,
         has('game.achievements.openGallery') ? { label: 'Achievements', hint: 'Medals and milestones', run: function () { safe(function () { CB.game.achievements.openGallery(); }, null, 'achievements.openGallery'); } } : null,
@@ -1555,7 +1558,7 @@ window.CB = window.CB || {};
     ['[  ]', 'Previous / next section'], ['X', 'Toggle x-ray view'], ['S', 'Toggle wheel spin'],
     ['V', 'Cycle camera: side, front, rear, top'], ['T', 'Toggle light / dark theme'],
     ['P', 'Presets gallery'], ['G', 'Saved builds'], ['C', 'Compare builds'], ['Ctrl/⌘ S', 'Save build'],
-    ['Ctrl/⌘ P', 'Spec sheet'], ['R', 'Race this build (when race mode is loaded)'], ['D', 'Drift this build'], ['H', 'Career hub (when the game is loaded)'], ['M', 'Main menu (title screen, career, my cars)'], ['?', 'This help'], ['Esc', 'Close dialogs and menus']
+    ['Ctrl/⌘ P', 'Spec sheet'], ['R', 'Race this build (when race mode is loaded)'], ['D', 'Drift this build'], ['A', 'Arcade with this build'], ['H', 'Career hub (when the game is loaded)'], ['M', 'Main menu (title screen, career, my cars)'], ['?', 'This help'], ['Esc', 'Close dialogs and menus']
   ];
   function showShortcuts() {
     if (!CB.ui || !CB.ui.modal) return;
@@ -1619,6 +1622,7 @@ window.CB = window.CB || {};
       case 'c': case 'C': ev.preventDefault(); openGarage('openCompare'); break;
       case 'r': case 'R': if (raceAvailable()) { ev.preventDefault(); openRace(); } break;
       case 'd': case 'D': if (raceAvailable() && routed()) { ev.preventDefault(); drive('drift'); } break;
+      case 'a': case 'A': if (raceAvailable() && routed()) { ev.preventDefault(); drive('arcade'); } break;
       case 'h': case 'H': if (hubAvailable()) { ev.preventDefault(); openHub('career'); } break;
       case 'm': case 'M': if (hubAvailable()) { ev.preventDefault(); openHub('menu'); } break;
       default: break;
