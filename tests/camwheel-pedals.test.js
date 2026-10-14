@@ -190,13 +190,16 @@ test('camwheel pedals: handbrake yank and item flick gestures (opt-in), steering
   assert.ok(!hb, 'gestures off by default');
 });
 
-test('camwheel: prefs default to grip-to-drive pedals; pedal calibration normalised', function () {
+test('camwheel: prefs default to fist = go / open = brake pedals (old grip default migrated); pedal calibration normalised', function () {
   var p = CW.normPrefs({});
-  assert.equal(p.pedals, 'grip'); assert.equal(p.gestureHandbrake, false); assert.equal(p.gestureItem, false); assert.equal(p.gestureNitro, false);
+  assert.equal(p.pedals, 'fist'); assert.equal(p.pullBrake, false); assert.equal(p.gestureHandbrake, false); assert.equal(p.gestureItem, false); assert.equal(p.gestureNitro, false);
   assert.equal(CW.normPrefs({ pedals: 'push' }).pedals, 'push');
-  assert.equal(CW.normPrefs({ pedals: 'bogus' }).pedals, 'grip');
-  var c = CW.normPrefs({ pedalCal: { open: 0.5, grip: 0.4, scale: { a: 12, b: -1 } } }).pedalCal;
+  assert.equal(CW.normPrefs({ pedals: 'bogus' }).pedals, 'fist');
+  assert.equal(CW.normPrefs({ pedals: 'grip' }).pedals, 'fist', 'the old default moves to the new one');
+  assert.equal(CW.normPrefs({ pedals: 'grip', pedalsV: 2 }).pedals, 'grip', 'chosen again later: kept');
+  var c = CW.normPrefs({ pedalCal: { open: 0.5, grip: 0.4, scale: { a: 12, b: -1 }, v: 2 } }).pedalCal;
   assert.ok(c.grip >= c.open + 0.15 && c.scale.a === 12 && c.scale.b == null, JSON.stringify(c));
+  assert.equal(CW.normPrefs({ pedalCal: { open: 0.3, grip: 0.9, scale: { a: 12 } } }).pedalCal.scale.a, undefined, 'an old 2D neutral size is dropped');
 });
 
 test('camwheel countdown: 3-2-1 then one capture; again = cancel; re-trigger restarts; calibrate adds the grip step', function () {

@@ -7,7 +7,9 @@
    Then the colour-marker fallback on a marker video, and the hands-only pedals (Grip to drive: fists = gas, the hands
    pulled back = brake) on a third video, and the hands leaving the frame and coming back (re-acquired consistently,
    never upside down at -180, and the steering eases back in without a jump) on a fourth, and the one-hand top grip
-   (one hand steering along the rim of the wheel) on a fifth.
+   (one hand steering along the rim of the wheel) on a fifth, and the default "Fist = go, open hand = brake" pedals on
+   two more: closed fists turned / rolled / tilted / moved nearer, farther and to the frame edges (zero brakes allowed),
+   and open / half-closed / mixed hands (brake exactly on open hands), from real open and half-closed hand photos.
    Opt-in (spawns Chrome, wants a GPU): REDLINE_E2E=1 node tests/run.js camwheel-e2e
    Ports: dev server 9867, Chrome 9868 (REDLINE_E2E_CAM_PORT=<n> uses n, n+1); REDLINE_E2E_TMP=<dir> for the profile + video.
    Chrome always runs --headless=new --mute-audio with a throw-away profile. Each session cancels the automatic
@@ -155,7 +157,8 @@ t('camwheel e2e: grip to drive (fists = gas, pull back = brake) through MediaPip
     var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 12, edges = [4, 6.5, 9, 10.5];
     function brake(tt) { return (tt >= 4 && tt < 6.5) || (tt >= 9 && tt < 10.5); }
     var v = path.join(tmp, 'pedals.y4m');
-    HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return tt < 1.5 ? 0 : 35 * Math.sin((tt - 1.5) * 1.6); },
+        // (turns kept within 25 deg: the pull-back size is ignored while the wheel is turned > 30 deg, see createPedals)
+    HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return tt < 1.5 ? 0 : 25 * Math.sin((tt - 1.5) * 1.6); },
       per: function (i, tt) { var k = brake(tt) ? 0.75 : 1; return { scale: 0.42 * k, radius: 0.24 * k }; } });
     var labels = []; for (var i = 0; i < fps * sec; i++) labels.push(brake(i / fps) ? 'brake' : 'gas');
     var r = await pedalSession(v, labels, fps, edges);
@@ -261,5 +264,87 @@ t('camwheel e2e: one hand at the top of the wheel steers along the rim (MediaPip
     assert.ok(lost < errs.length * 0.05, 'lost ' + lost);
     assert.ok(q(errs, 0.5) < 6, 'median error ' + q(errs, 0.5));
     assert.ok(q(errs, 0.95) < 18, 'p95 error ' + q(errs, 0.95));
+  } finally { cleanup(); }
+});
+
+// "Fist = go, open hand = brake" with REAL MediaPipe landmarks of real hand photos (tests/fixtures/hands/README.md):
+// video 1: closed fists only, while the wheel turns +-90 deg with the hands rolled (foreshortened), tilted, moved towards /
+// away from the camera and to the frame edges -> ZERO frames may brake. Video 2: fists, open hands (two different
+// photos), half-closed hands, one hand open with the other a fist -> brake exactly on the open hands. Every landmark
+// result is recorded (REDLINE_E2E_DUMP=<dir> writes them, for comparing classifiers offline on the same videos).
+function seg(list, tt) { for (var k = 0; k < list.length; k++) if (tt < list[k][1]) return list[k]; return list[list.length - 1]; }
+var CLOSED_SCRIPT = [
+  [0, 1.5, function () { return {}; }],
+  [1.5, 5, function (u) { var a = 90 * Math.sin((u - 1.5) / 3.5 * Math.PI * 2); return { angle: a, squash: 1 - 0.45 * Math.abs(Math.sin(a * Math.PI / 180)) }; }],
+  [5, 7, function (u) { var k = Math.sin((u - 5) / 2 * Math.PI * 2); return { squash: [1 - 0.5 * Math.abs(k), 1 - 0.3 * Math.abs(k)], pitch: 1 - 0.3 * Math.max(0, -k) }; }],
+  [7, 9, function (u) { var k = 1 + 0.28 * Math.sin((u - 7) / 2 * Math.PI * 2); return { scale: 0.42 * k, radius: 0.24 * k }; }],
+  [9, 11, function (u) { var p = (u - 9) / 2 * Math.PI * 2; return { cx: 0.5 + 0.2 * Math.sin(p), cy: 0.58 - 0.12 * Math.sin(p * 2), angle: 45 * Math.sin(p) }; }],
+  [11, 12, function () { return {}; }]
+];
+var OPEN_SCRIPT = [
+  [0, 1.5, 'gas', {}], [1.5, 3.5, 'brake', { sprite: 'open-hand' }], [3.5, 5, 'gas', {}], [5, 6.5, 'nobrake', { sprite: 'half-hand' }],
+  [6.5, 8.5, 'brake', { sprite: 'open-hand-2', angle: 25 }], [8.5, 10, 'gas', { angle: -20 }], [10, 12, 'gas', { spriteL: 'open-hand' }]
+];
+async function recordSession(video, fps, seconds) {
+  var b = await chrome(video);
+  try {
+    await b.goto('http://localhost:' + PS + '/index.html', 3000);
+    await b.eval("(function(){ var cw=CB.input.camwheel, dec=" + DECODE + "; cw.setPrefs({method:'hands', handStyle:'two', pedals:'fist', pullBrake:false}); window.__at={}; window.__s=[];" +
+      " function r4(v){ return Math.round(v*1e5)/1e5; } function flat(a){ var o=[]; (a||[]).forEach(function(p){ o.push(r4(p.x), r4(p.y), r4(p.z||0)); }); return o; }" +
+      " cw.on('frame', function(f){ window.__idx=dec(cw); window.__at[Math.round(f.t)]=window.__idx; });" +
+      " cw.on('hands', function(e){ var i=window.__at[Math.round(e.t)]; if(i==null) return; var p=cw._b.pedals.read(performance.now(), 'fist');" +
+      "   window.__s.push({i:i, t:Math.round(e.t), st:p.state, open:(e.meas.pts||[]).map(function(q){ return q.open==null?null:Math.round(q.open*1000)/1000; }), mode:e.meas.mode, a:e.meas.ok?Math.round(e.meas.angle*10)/10:null," +
+      "     hd:(e.meas.hands||[]).map(function(c){ return { lm:flat(c.h.lm), wl:c.h.wl?flat(c.h.wl):null, s:c.h.score, l:c.h.label }; }) }); });" +
+      " return cw.start().then(function(r){ return r.ok; }); })()");
+    for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
+    for (i = 0; i < 1500; i++) { var ix = await b.eval('window.__idx'); if (ix >= 12 && ix <= 30) break; await sleep(20); }
+    var cal;
+    for (i = 0; i < 50; i++) { cal = JSON.parse(await b.eval("(CB.input.camwheel.cancelCentre(), JSON.stringify(CB.input.camwheel.calibrateNow()))")); if (cal.ok) break; await sleep(100); }
+    await b.eval("CB.input.camwheel.enable(); window.__s.length=0; 1");
+    // wait for the video to come round to its start, then record one full loop
+    for (i = 0; i < 1500; i++) { var j = await b.eval('window.__idx'); if (j >= seconds * fps - 20) break; await sleep(20); }
+    await b.eval("window.__s.length=0; 1");
+    await sleep(seconds * 1000 + 800);
+    var S = JSON.parse(await b.eval('JSON.stringify(window.__s)'));
+    return { cal: cal, S: S.filter(function (r) { return r.i < seconds * fps; }) };
+  } finally { b.close(); }
+}
+t('camwheel e2e: fist = go, open hand = brake on real hand photos (zero false brakes with closed hands)', async function () {
+  tmp = fs.mkdtempSync(path.join(process.env.REDLINE_E2E_TMP || os.tmpdir(), 'redline-camfist-'));
+  var srv = cp.spawn(process.execPath, [path.join(root, 'tools/dev-server.js'), '--port', String(PS)], { stdio: 'ignore', cwd: root });
+  procs.push(srv);
+  try {
+    await sleep(800);
+    var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 12, dump = process.env.REDLINE_E2E_DUMP;
+    var v1 = path.join(tmp, 'closed.y4m');
+    HS.writeY4m(v1, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { var o = seg(CLOSED_SCRIPT, tt)[2](tt); return o.angle || 0; },
+      per: function (i, tt) { var o = seg(CLOSED_SCRIPT, tt)[2](tt); delete o.angle; return o; } });
+    var r1 = await recordSession(v1, fps, sec);
+    var seen = r1.S.filter(function (r) { return r.hd.length; }), brakes = r1.S.filter(function (r) { return r.st === 'brake'; });
+    var gas = r1.S.filter(function (r) { return r.st === 'gas'; });
+    console.log('    closed fists: ' + JSON.stringify({ results: r1.S.length, withHands: seen.length, brake: brakes.length, gas: gas.length, maxOpen: Math.max.apply(null, [0].concat(...seen.map(function (r) { return r.open.filter(function (v) { return v != null; }); }))) }));
+    assert.ok(r1.cal.ok, 'calibrated ' + JSON.stringify(r1.cal));
+    assert.ok(seen.length > 250, 'hands seen in ' + seen.length + ' results');
+    assert.equal(brakes.length, 0, 'false brakes with closed hands at frames ' + brakes.map(function (r) { return r.i; }).slice(0, 20));
+    assert.ok(gas.length >= seen.length * 0.9, 'gas while gripping: ' + gas.length + ' / ' + seen.length);
+    var v2 = path.join(tmp, 'open.y4m');
+    HS.writeY4m(v2, { w: 640, h: 360, fps: fps, seconds: sec, truth: function (tt) { return seg(OPEN_SCRIPT, tt)[3].angle || 0; },
+      per: function (i, tt) { var o = Object.assign({}, seg(OPEN_SCRIPT, tt)[3]); delete o.angle; return o; } });
+    var r2 = await recordSession(v2, fps, sec);
+    var per = {};
+    r2.S.forEach(function (r) {
+      var tt = r.i / fps, sg = seg(OPEN_SCRIPT, tt);
+      if (tt - sg[0] < 0.35) return;                                // switching (persistence + the camera's own delay)
+      var k = sg[0] + '-' + sg[1] + ':' + sg[2], P0 = per[k] = per[k] || { n: 0, ok: 0, states: {} };
+      P0.n++; P0.states[r.st] = (P0.states[r.st] || 0) + 1;
+      if (sg[2] === 'nobrake' ? r.st !== 'brake' : r.st === sg[2]) P0.ok++;
+    });
+    console.log('    open / half / fists: ' + JSON.stringify(per));
+    if (dump) { fs.mkdirSync(dump, { recursive: true }); fs.writeFileSync(path.join(dump, 'closed.json'), JSON.stringify(r1.S)); fs.writeFileSync(path.join(dump, 'open.json'), JSON.stringify(r2.S)); }
+    Object.keys(per).forEach(function (k) {
+      var P0 = per[k];
+      if (/:(gas|nobrake)$/.test(k)) assert.equal(P0.states.brake || 0, 0, 'no brake in ' + k + ': ' + JSON.stringify(P0.states));
+      assert.ok(P0.n > 10 && P0.ok >= P0.n * (/:brake$/.test(k) ? 0.9 : 0.85), k + ' ' + JSON.stringify(P0));
+    });
   } finally { cleanup(); }
 });

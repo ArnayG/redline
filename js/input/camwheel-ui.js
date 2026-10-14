@@ -2,13 +2,19 @@
    FORGE — js/input/camwheel-ui.js
    CB.input.camUI : the browser UI for the webcam air wheel (js/input/camwheel.js + js/input/camwheel-hands.js).
      camUI.open()     "Use webcam as wheel" dialog: mirrored live preview with the hand landmarks and a drawn virtual
-                      wheel (steering style: Two hands at 9 and 3 | One hand at the top of the wheel, steering along
-                      the rim, with a Wheel size slider | Auto), Calibrate (2-1, or Space; it also centres itself after ~1 s of steady, level hands),
-                      Centre (C), camera picker, full lock / dead zone / smoothing, live status (fps, inference ms,
-                      GPU / CPU, confidence, delay), gas / brake mode (Grip to drive default, Auto-gas, Push / pull,
-                      keyboard pedals only) with live gas / brake bars. Every re-centre counts 3-2-1 first (again or
-                      Esc cancels; in-game too). Advanced: handbrake / nitro / item gestures, CPU mode, and the
-                      colour-marker fallback (marker mode) with its calibration boxes and mask view.
+                      wheel, and ONE primary Start flow (Space): camera (permission) -> 3-2-1 centre ("hold your hands like
+                      a wheel") -> "make fists" test (GO) -> "open your hands" test (BRAKE) -> done (webcam on, steering
+                      source selected, "Easy driving" applied). Live steering / gas / brake bars and a GO / COAST / BRAKE / R
+                      chip with the hand state. Everything else is under Options (collapsed): steering style (Two hands |
+                      One hand at the top of the wheel | Auto, Wheel size), gas and brake mode ("Fist = go, open hand =
+                      brake" default, Auto-gas, keyboard pedals; older: Grip + pull back, Push / pull), Easy driving (Heavy
+                      steering assist for Race and Drift + automatic gearbox, on by default for the webcam), full lock / dead
+                      zone / smoothing, camera picker, and Advanced: the opt-in pull-back brake, handbrake / nitro / item
+                      gestures, CPU mode, the colour-marker fallback (marker mode) with its calibration boxes and mask view.
+                      Every re-centre counts 3-2-1 first (Esc cancels; in-game too).
+     Driving HUD      while the webcam drives the pedals: a big GO (green) / COAST / BRAKE (red) / R (reverse) chip with
+                      a tiny hand-state icon; the first drives show a 3-step intro ("1 Hold hands like a wheel · 2 Make
+                      fists to go · 3 Open hands to brake").
      camUI.close()    camUI.menuItems()  (pause menu)   camUI.detailHTML()  (steering-source picker)
    Steering-source picker: registers itself as the 'webcam' source of CB.input.sources (js/input/sources.js) when that
    module is loaded; otherwise it adds its own entries to CB.input.ui's pause menu / setup row / Settings rows.
@@ -104,6 +110,26 @@ CB.input = CB.input || {};
     '.cw-cd b{font:800 120px/1 var(--font,system-ui)} .cw-cd span{font:700 18px/1.3 var(--font,system-ui);padding:6px 14px;border-radius:999px;background:rgba(8,9,11,.75);border:1px solid rgba(255,255,255,.2);text-align:center}',
     '.cw-cd small{font:600 12px var(--font,system-ui);opacity:.75}',
     '.cw-count small{display:block;font:700 17px/1.3 var(--font,system-ui);margin-top:10px;text-align:center}',
+    /* the Start flow, the pedal chip, the driving HUD and the first-drive intro */
+    '.cw-btn.big{min-height:46px;padding:0 20px;font-size:15px}',
+    '.cw-flow{margin:0;padding:0;list-style:none;display:grid;gap:6px;counter-reset:cwf}',
+    '.cw-flow li{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--text-dim,#9b9890);counter-increment:cwf}',
+    '.cw-flow li i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line,#2b2c33);display:grid;place-items:center;font:700 11px var(--font,system-ui);font-style:normal}',
+    '.cw-flow li i::before{content:counter(cwf)} .cw-flow li.is-now{color:var(--text-strong,#fff);font-weight:700} .cw-flow li.is-now i{border-color:var(--accent,#c9a56b);color:var(--accent,#c9a56b)}',
+    '.cw-flow li.is-done{color:var(--text,#ecebe6)} .cw-flow li.is-done i{background:var(--good,#3fbf7f);border-color:transparent;color:#08130d} .cw-flow li.is-done i::before{content:"\\2713"}',
+    '.cw-flow small{font-weight:600;color:var(--accent,#c9a56b);margin-left:4px}',
+    '.cw-more summary{cursor:pointer;font-size:12px;color:var(--text-dim,#9b9890);margin-top:4px} .cw-more label{margin-top:6px}',
+    '.cw-pchip{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;border-radius:12px;border:1px solid var(--line,#2b2c33);background:rgba(255,255,255,.03);min-height:44px}',
+    '.cw-pchip b{font:800 22px/1 var(--font,system-ui);letter-spacing:.04em;min-width:96px} .cw-pchip small{color:var(--text-dim,#9b9890);font-size:12px;margin-left:auto}',
+    '.cw-pchip .cw-hand{display:inline-grid;place-items:center} .cw-pchip.is-go b,.cw-hud.is-go b{color:#3fbf7f} .cw-pchip.is-brake b,.cw-hud.is-brake b{color:#ff5a5f} .cw-pchip.is-rev b,.cw-hud.is-rev b{color:#f2c14e} .cw-pchip.is-lost b,.cw-hud.is-lost b{color:#c9ced6}',
+    '.cw-hud{position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:2147481200;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:112px;padding:10px 14px;border-radius:16px;background:rgba(8,9,11,.72);border:2px solid rgba(255,255,255,.18);color:#fff;font-family:var(--font,system-ui,sans-serif);box-shadow:0 8px 26px rgba(0,0,0,.45)}',
+    '.cw-hud b{font:900 34px/1 var(--font,system-ui);letter-spacing:.04em} .cw-hud small{font:600 10.5px/1.2 var(--font,system-ui);opacity:.75;text-align:center} .cw-hud .cw-hand{opacity:.9}',
+    '.cw-hud.is-go{border-color:rgba(63,191,127,.75);background:rgba(10,40,24,.78)} .cw-hud.is-brake{border-color:rgba(255,90,95,.85);background:rgba(60,10,12,.8)} .cw-hud.is-rev{border-color:rgba(242,193,78,.85);background:rgba(55,40,6,.8)}',
+    '.cw-hud b.is-rev{font-size:44px}',
+    '.cw-intro{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147482500;display:grid;gap:12px;padding:22px 26px;border-radius:18px;background:rgba(8,9,11,.9);border:1px solid rgba(255,255,255,.22);color:#fff;font-family:var(--font,system-ui,sans-serif);box-shadow:0 20px 60px rgba(0,0,0,.55);max-width:min(560px,92vw);cursor:pointer}',
+    '.cw-intro h3{margin:0;font:800 20px/1.2 var(--font,system-ui)} .cw-intro ol{margin:0;padding:0;list-style:none;display:grid;gap:10px}',
+    '.cw-intro li{display:flex;align-items:center;gap:12px;font:600 17px/1.3 var(--font,system-ui)} .cw-intro li b{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--accent,#c9a56b);color:#17130b;font-size:15px}',
+    '.cw-intro small{opacity:.7;font-size:12px}',
     '.cw-tipx{position:fixed;left:50%;bottom:calc(30% + 8px);transform:translateX(-50%);z-index:2147481500;pointer-events:none;padding:9px 16px;border-radius:999px;background:rgba(8,9,11,.85);border:1px solid rgba(255,255,255,.22);color:#fff;font:600 14px var(--font,system-ui,sans-serif);text-align:center;max-width:min(560px,90vw);box-shadow:0 6px 20px rgba(0,0,0,.4)}'
   ].join('\n');
   function ensureCss() {
@@ -144,12 +170,77 @@ CB.input = CB.input || {};
     noframe: 'No camera picture yet. Wait for the preview, then calibrate.'
   };
 
+  // [id, name, description, older (listed under "Older pedal modes")]
   var PEDAL_OPTS = [
-    ['grip', 'Grip to drive (recommended)', 'Close your hands = gas (the tighter, the more), relax = coast, pull both hands back = brake (hold it when stopped to reverse).'],
-    ['auto', 'Auto-gas', 'The car accelerates on its own; open your hands (or pull back) to brake.'],
-    ['push', 'Push / pull', 'Push your hands towards the screen = gas, pull them back = brake.'],
-    ['off', 'Keyboard / gamepad pedals only', 'Hands steer; W / S, the arrows, triggers or touch pedals drive.']
+    ['fist', 'Fist = go, open hand = brake (recommended)', 'Make fists (grip the wheel) to drive, open your hands (fingers straight) to brake, in between = coast. Keep them open at a stop to reverse.'],
+    ['auto', 'Auto-gas', 'The car drives itself; open your hands to brake.'],
+    ['off', 'Keyboard / gamepad pedals', 'Hands steer; W / S, the arrows, triggers or touch pedals drive.'],
+    ['grip', 'Grip + pull back', 'Close your hands = gas (the tighter, the more), pull both hands back towards you = brake.', true],
+    ['push', 'Push / pull', 'Push your hands towards the screen = gas, pull them back = brake.', true]
   ];
+  function pedalHelp(one) {
+    var cw = CW(), p = cw ? cw.prefs.pedals : 'fist';
+    if (p === 'fist') return one ? '<b>Make a fist</b> to drive (GO), <b>open your hand</b> to brake, in between = coast. Keep it open at a stop to reverse.' :
+      '<b>Make fists</b> to drive (GO), <b>open both hands</b> (fingers straight) to brake, in between = coast. Keep them open at a stop to reverse.';
+    if (p === 'auto') return 'The car accelerates on its own: <b>open your hand' + (one ? '' : 's') + '</b> to brake.';
+    if (p === 'push') return '<b>Push your hands towards the screen</b> for gas, <b>pull them back</b> to brake; hold the brake when stopped to reverse.';
+    if (p === 'grip') return '<b>Close your hands</b> to drive (the tighter, the more gas), <b>relax</b> them to coast, <b>pull both hands back</b> towards you to brake.';
+    return 'Throttle and brake stay on the keyboard or gamepad.';
+  }
+  /* hand-state icons (fist / half / open) for the pedal chip and the HUD */
+  var HAND_SVG = {
+    closed: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="5" y="7" width="14" height="10" rx="3.5"/><rect x="7" y="16" width="9" height="6" rx="2"/><path d="M8.5 7v4M12 7v4M15.5 7v4" stroke="rgba(0,0,0,.35)" stroke-width="1.2"/></svg>',
+    mid: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="6" y="11" width="12" height="8" rx="3"/><rect x="6.2" y="5.5" width="2.6" height="7" rx="1.3"/><rect x="9.6" y="4.5" width="2.6" height="8" rx="1.3"/><rect x="13" y="5" width="2.6" height="7.5" rx="1.3"/><rect x="2.8" y="11" width="4.5" height="2.6" rx="1.3"/><rect x="8" y="18" width="8" height="4" rx="1.5"/></svg>',
+    open: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="6" y="11" width="12" height="8" rx="3"/><rect x="6" y="2" width="2.6" height="11" rx="1.3"/><rect x="9.4" y="1" width="2.6" height="12" rx="1.3"/><rect x="12.8" y="1.5" width="2.6" height="11.5" rx="1.3"/><rect x="16" y="3.5" width="2.4" height="9.5" rx="1.2"/><rect x="1.5" y="9" width="6" height="2.6" rx="1.3" transform="rotate(25 4.5 10.3)"/><rect x="8" y="18" width="8" height="4" rx="1.5"/></svg>'
+  };
+  /** the big pedal state: GO / COAST / BRAKE / R (+ the hand icon) from a pedals output */
+  function pedalLabel(pd) {
+    if (!pd || pd.state === 'off') return { k: 'off', t: '—' };
+    if (pd.reverse) return { k: 'rev', t: 'R' };
+    if (pd.state === 'lost') return { k: 'lost', t: pd.brake ? 'NO HANDS' : 'COAST' };
+    if (pd.state === 'gas') return { k: 'go', t: 'GO' };
+    if (pd.state === 'brake' || pd.state === 'reverse') return { k: 'brake', t: 'BRAKE' };
+    return { k: 'coast', t: 'COAST' };
+  }
+  function paintChip(node, pd, mode) {
+    if (!node) return;
+    var L = pedalLabel(pd), hand = pd && pd.hand, key = L.k + '|' + L.t + '|' + hand;
+    if (node._k === key) return;
+    node._k = key;
+    node.className = 'cw-pchip is-' + L.k;
+    node.innerHTML = '<b>' + L.t + '</b>' + (hand && HAND_SVG[hand] ? '<span class="cw-hand" title="' + (hand === 'closed' ? 'hands closed' : hand === 'open' ? 'hands open' : 'hands half open') + '">' + HAND_SVG[hand] + '</span>' : '') +
+      '<small>' + (mode === 'auto' ? 'open hands = brake' : mode === 'fist' ? 'fists = go · open = brake' : '') + '</small>';
+  }
+  /* "Easy driving" for the webcam (prefs.easyAssist, on by default): Heavy steering assist for Race and Drift and the
+     automatic gearbox, applied the first time the webcam wheel is switched on (and whenever the toggle is turned on);
+     turning it off restores the levels the player had before. force: apply / restore now (the toggle). */
+  var EASY_KEY = 'forge.camWheel.easy.v1';
+  function applyEasy(force) {
+    var cw = CW(), R = CB.race && CB.race.ui;
+    if (!cw || !R || typeof R.patchSettings !== 'function') return false;
+    var st = null; try { st = JSON.parse(localStorage.getItem(EASY_KEY) || 'null'); } catch (e) { st = null; }
+    if (cw.prefs.easyAssist) {
+      if (st && st.applied && !force) return false;
+      var prev = null;
+      R.patchSettings(function (s) {
+        prev = { race: s.raceSteerAssist, drift: s.driftSteerAssist, autoShift: !!(s.assists && s.assists.autoShift) };
+        s.raceSteerAssist = 'heavy'; s.driftSteerAssist = 'heavy';
+        if (s.assists) s.assists.autoShift = true;
+      });
+      try { localStorage.setItem(EASY_KEY, JSON.stringify({ applied: true, prev: st && st.prev && st.applied ? st.prev : prev })); } catch (e) { /* ignore */ }
+      return true;
+    }
+    if (force && st && st.applied && st.prev) {
+      R.patchSettings(function (s) {
+        if (s.raceSteerAssist === 'heavy') s.raceSteerAssist = st.prev.race || s.raceSteerAssist;
+        if (s.driftSteerAssist === 'heavy') s.driftSteerAssist = st.prev.drift || s.driftSteerAssist;
+        if (s.assists && typeof st.prev.autoShift === 'boolean') s.assists.autoShift = st.prev.autoShift;
+      });
+      try { localStorage.setItem(EASY_KEY, JSON.stringify({ applied: false, prev: null, off: true })); } catch (e) { /* ignore */ }
+      return true;
+    }
+    return false;
+  }
 
   /* ---------------------------------------------------------------- overlay drawing */
   var BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
@@ -293,7 +384,7 @@ CB.input = CB.input || {};
     var cw = CW();
     if (cw && !cw.enabled()) cw.stop();                  // never switched on: camera off again
     refreshPicker();
-    pipSync();
+    pipSync(); hudSync();
   }
   function modeName(st) { return st.handMode === 'two' ? 'Two hands' : st.handMode === 'top' ? sideName(st.handSide) + ' at the top' : 'One hand'; }
   function delayText(st) { return st.latency != null ? ' · delay ~' + Math.round(st.latency) + ' ms' : st.pageLatency != null ? ' · delay ~' + Math.round(st.pageLatency) + ' ms' : ''; }
@@ -315,6 +406,10 @@ CB.input = CB.input || {};
     if (st.lost) return { cls: 'bad', text: 'Lost: show the marker(s) to the camera · ' + inf };
     return { cls: 'ok', text: 'Tracking markers · ' + Math.round(st.conf * 100) + '% · ' + inf };
   }
+  /* the Start flow (hands): camera -> 3-2-1 centre -> "make fists" test -> "open your hands" test -> done */
+  var FLOW = [['camera', 'Camera on'], ['centre', 'Hold your hands like a wheel (3-2-1)'], ['fist', 'Make fists: that is GO'], ['open', 'Open your hands: that is BRAKE'], ['done', 'Drive!']];
+  function needHands() { return hstyle() === 'two' ? 2 : 1; }
+  function testsWanted() { var p = CW().prefs.pedals; return p === 'fist' || p === 'auto'; }
   function open() {
     var cw = CW();
     if (!cw) return null;
@@ -329,55 +424,41 @@ CB.input = CB.input || {};
     left.appendChild(view);
     var meter = el('div', '', '<div class="cw-range"><span>Steering</span><div class="cw-bar"><i></i></div><b data-k="ang">—</b></div>' +
       '<div class="cw-ped" data-ped style="margin-top:6px"><span>Gas</span><div class="cw-pbar"><i data-k="gas"></i></div><b data-k="gasv">—</b></div>' +
-      '<div class="cw-ped" data-ped style="margin-top:6px"><span>Brake</span><div class="cw-pbar brk"><i data-k="brk"></i></div><b data-k="brkv">—</b></div>');
+      '<div class="cw-ped" data-ped style="margin-top:6px"><span>Brake</span><div class="cw-pbar brk"><i data-k="brk"></i></div><b data-k="brkv">—</b></div>' +
+      '<div class="cw-pchip" data-ped data-k="chip"></div>');
     meter.style.cssText = 'display:grid;gap:0';
     left.appendChild(meter);
     var tools = el('div', 'cw-row');
-    tools.innerHTML = '<button class="cw-btn primary" type="button" data-k="cal">Calibrate <kbd>Space</kbd></button>' +
-      '<button class="cw-btn" type="button" data-k="ctr">Centre <kbd>C</kbd></button>' +
+    tools.innerHTML = '<button class="cw-btn" type="button" data-k="ctr">Centre <kbd>C</kbd></button>' +
+      '<button class="cw-btn" type="button" data-k="cal" data-marker>Calibrate markers</button>' +
       '<label class="cw-check" data-marker><input type="checkbox" data-k="mask"> Show mask</label>';
     left.appendChild(tools);
     left.appendChild(el('div', 'cw-priv', ICON.cam + '<span>Your video stays on this computer: frames are analysed in this tab and are never uploaded, saved or shared. The camera turns off when you switch the webcam wheel off or leave the page.</span>'));
     var head = el('div', '');
+    var flowEl = el('ol', 'cw-flow'); flowEl.setAttribute('data-hands', '');
     var steps = el('div', '');
+    var go = el('div', 'cw-row');
+    go.innerHTML = '<button class="cw-btn primary big" type="button" data-k="go">' + ICON.cam + ' <span>Start</span> <kbd>Space</kbd></button>' +
+      '<button class="cw-btn ghost" type="button" data-k="skip" style="display:none">Skip this test</button>';
     var hseg = el('div', 'cw-seg'); hseg.setAttribute('data-hands', ''); hseg.setAttribute('aria-label', 'Steering style');
     STYLE_OPTS.forEach(function (o) { var b = el('button', '', esc(o[1])); b.type = 'button'; b.setAttribute('data-hs', o[0]); hseg.appendChild(b); });
     var wsize = el('label', 'cw-range', '<span>Wheel size</span><input type="range" min="0.5" max="2" step="0.05" value="' + cw.prefs.wheelSize + '" data-p="wheelSize"><b>' + Math.round(cw.prefs.wheelSize * 100) + '%</b>');
-    function pedalHelp(one) {
-      var p = cw.prefs.pedals;
-      if (one && p === 'grip') return '<b>Close the hand</b> to drive (the tighter, the more gas), <b>relax</b> it to coast, <b>pull it back</b> towards you to brake.';
-      if (p === 'auto') return 'The car accelerates on its own: <b>open your hands</b> (or pull them back) to brake.';
-      if (p === 'push') return '<b>Push your hands towards the screen</b> for gas, <b>pull them back</b> to brake; hold the brake when stopped to reverse.';
-      if (p === 'off') return 'Throttle and brake stay on the keyboard or gamepad.';
-      return '<b>Close your hands</b> (grip the wheel) to drive: the tighter, the more gas. <b>Relax</b> them to coast. <b>Pull both hands back</b> towards you to brake; hold it when stopped to reverse.';
-    }
     function renderText() {
       var hm = handsMode();
-      head.innerHTML = '<div class="cw-eyebrow">Webcam air wheel</div><h2 class="cw-h">' + (hm ? 'Steer with your hands' : 'Marker mode') + '</h2>';
+      head.innerHTML = '<div class="cw-eyebrow">Webcam air wheel</div><h2 class="cw-h">' + (hm ? 'Drive with your hands' : 'Marker mode') + '</h2>';
       var hs = hstyle();
       Array.prototype.forEach.call(hseg.children, function (c) { c.classList.toggle('is-on', c.getAttribute('data-hs') === hs); });
       wsize.style.display = hm && hs !== 'two' ? '' : 'none';
-      steps.innerHTML = hm && hs === 'top' ?
-        '<ol class="cw-steps"><li>Sit back so the camera sees your face and your hand.</li>' +
-        '<li>Hold <b>one hand</b> (either) up at the <b>top of an imaginary wheel</b>, at 12 o\'clock, relaxed. Press <b>Calibrate</b>: after a 3-2-1 it learns where the top is and which hand you use (then one firm grip, for the gas).</li>' +
-        '<li>Steer by moving your hand <b>along the rim</b>: left and down turns left, right and down turns right, as if you held the wheel with one hand. <b>Wheel size</b> sets how big the imaginary wheel is. ' + pedalHelp(true) + '</li></ol>' +
-        '<div class="cw-dim">The preview draws the wheel, its centre and where your hand grips it. Your other hand is free (keyboard or gamepad pedals always work too).</div>' :
-        hm && hs === 'auto' ?
-        '<ol class="cw-steps"><li>Sit back so the camera sees your face and your hands.</li>' +
-        '<li>Hold your hands up, <b>relaxed and open</b>, at <b>9 and 3 o\'clock</b> of an imaginary wheel and press <b>Calibrate</b> (3-2-1, then one firm grip). To calibrate the one-hand grip too, calibrate again with one hand at the top.</li>' +
-        '<li>Turn the wheel with both hands; take one hand off and the other carries on <b>along the rim</b>, like holding a real wheel with one hand. ' + pedalHelp() + '</li></ol>' +
-        '<div class="cw-dim">Hands not found? Show your open palms to the camera for a moment. Even light from the front helps.</div>' :
-        hm ?
-        '<ol class="cw-steps"><li>Sit back so the camera sees your face and both hands.</li>' +
-        '<li>Hold your hands up, <b>relaxed and open</b>, at <b>9 and 3 o\'clock</b> of an imaginary wheel. Keep them still: after a 3-2-1 the wheel centres itself. <b>Calibrate</b> also asks you to grip once, so it learns your full grip.</li>' +
-        '<li>Turn the imaginary wheel to steer. ' + pedalHelp() + '</li></ol>' +
-        '<div class="cw-dim">Hands not found? Show your open palms to the camera for a moment. Even light from the front helps. Keyboard and gamepad pedals always work too.</div>' :
+      steps.innerHTML = hm ?
+        '<div class="cw-dim">' + (hs === 'top' ? 'Hold <b>one hand</b> at the <b>top of an imaginary wheel</b> and move it along the rim to steer. ' : 'Hold your hands up at <b>9 and 3</b> of an imaginary wheel and turn it to steer. ') +
+        pedalHelp(hs === 'top') + ' Sit back so the camera sees both hands; light from the front helps. Keyboard and gamepad pedals always work too.</div>' :
         '<ol class="cw-steps"><li>Hold a brightly coloured marker in each hand (or one coloured bar).</li>' +
-        '<li>Hold them level inside the dashed box(es) and press <b>Calibrate</b> (3-2-1).</li>' +
+        '<li>Hold them level inside the dashed box(es) and press <b>Start</b> (3-2-1).</li>' +
         '<li>Turn them like a steering wheel. <b>Centre</b> sets straight ahead.</li></ol>';
       Array.prototype.forEach.call(card.querySelectorAll('[data-marker]'), function (n) { n.style.display = hm ? 'none' : ''; });
       Array.prototype.forEach.call(card.querySelectorAll('[data-hands]'), function (n) { n.style.display = hm ? '' : 'none'; });
       Array.prototype.forEach.call(card.querySelectorAll('[data-ped]'), function (n) { n.style.display = hm && cw.prefs.pedals !== 'off' ? '' : 'none'; });
+      renderFlow();
     }
     var seg = el('div', 'cw-seg'); seg.setAttribute('data-marker', '');
     [['pair', 'Two markers'], ['bar', 'One bar']].forEach(function (s) {
@@ -386,8 +467,6 @@ CB.input = CB.input || {};
     });
     var camRow = el('div', 'cw-row'); camRow.style.display = 'none';
     camRow.innerHTML = '<span class="cw-dim">Camera</span><select class="cw-sel" data-k="dev"></select>';
-    var startRow = el('div', 'cw-row'); startRow.style.display = 'none';
-    startRow.innerHTML = '<button class="cw-btn primary" type="button" data-k="start">' + ICON.cam + ' Start camera</button>';
     var warn = el('div', 'cw-warn');
     var status = el('div', 'cw-status', '<span class="cw-dot"></span><span>Starting…</span>');
     var tune = el('div', '');
@@ -398,47 +477,115 @@ CB.input = CB.input || {};
       '<label class="cw-check"><input type="checkbox" data-k="pip"' + (P.pip ? ' checked' : '') + '> Show the camera preview while driving</label>';
     tune.insertBefore(wsize, tune.firstChild);
     var peds = el('fieldset', 'cw-radios'); peds.setAttribute('data-hands', '');
-    peds.innerHTML = '<legend>Gas and brake</legend>' + PEDAL_OPTS.map(function (o) {
-      return '<label><input type="radio" name="cw-ped" value="' + o[0] + '"' + (P.pedals === o[0] ? ' checked' : '') + '><span><b>' + esc(o[1]) + '</b><br><small>' + esc(o[2]) + '</small></span></label>';
-    }).join('');
-    var adv = el('details', 'cw-adv');
-    adv.innerHTML = '<summary>Advanced</summary><div class="cw-advb">' +
+    function radio(o) { return '<label><input type="radio" name="cw-ped" value="' + o[0] + '"' + (cw.prefs.pedals === o[0] ? ' checked' : '') + '><span><b>' + esc(o[1]) + '</b><br><small>' + esc(o[2]) + '</small></span></label>'; }
+    peds.innerHTML = '<legend>Gas and brake</legend>' + PEDAL_OPTS.filter(function (o) { return !o[3]; }).map(radio).join('') +
+      '<details class="cw-more"><summary>Older pedal modes</summary>' + PEDAL_OPTS.filter(function (o) { return o[3]; }).map(radio).join('') + '</details>';
+    var easy = el('label', 'cw-check'); easy.setAttribute('data-hands', '');
+    easy.innerHTML = '<input type="checkbox" data-k="easy"' + (P.easyAssist ? ' checked' : '') + '> <span><b>Easy driving</b> (recommended for the webcam): Heavy steering assist for Race and Drift, and an automatic gearbox</span>';
+    var opts = el('details', 'cw-adv'); opts.setAttribute('data-k', 'opts');
+    opts.innerHTML = '<summary>Options</summary><div class="cw-advb"></div>';
+    var ob = opts.querySelector('.cw-advb');
+    var advB = el('div', 'cw-advb');
+    advB.innerHTML =
+      '<div class="cw-dim" style="font-weight:700">Advanced</div>' +
+      '<label class="cw-check" data-hands><input type="checkbox" data-g="pullBrake"' + (P.pullBrake ? ' checked' : '') + '> Also brake by pulling both hands back towards you (off by default: a turned or rolled hand can look smaller; ignored while the wheel is turned or a hand is rolled)</label>' +
       '<label class="cw-check"><input type="checkbox" data-g="gestureHandbrake"' + (P.gestureHandbrake ? ' checked' : '') + '> Handbrake gesture (Drift): a quick downward yank of both hands</label>' +
       '<label class="cw-check"><input type="checkbox" data-g="gestureNitro"' + (P.gestureNitro ? ' checked' : '') + '> Nitro gesture (Arcade): push your hands quickly towards the camera (not with push / pull pedals)</label>' +
       '<label class="cw-check"><input type="checkbox" data-g="gestureItem"' + (P.gestureItem ? ' checked' : '') + '> Item gesture (Arcade): a quick upward flick of both hands</label>' +
       '<label class="cw-check"><input type="checkbox" data-g="lookahead"' + (P.lookahead ? ' checked' : '') + '> Lookahead (cancels the smoothing delay while turning)</label>' +
       '<label class="cw-check"><input type="checkbox" data-g="cpu"' + (P.cpu ? ' checked' : '') + '> Run hand tracking on the CPU (if the GPU misbehaves; slower)</label>' +
-      '<label class="cw-check"><input type="checkbox" data-k="marker"' + (P.method === 'marker' ? ' checked' : '') + '> Marker mode: track coloured objects instead of hands (for very dim rooms or old computers)</label>' +
-      '</div>';
+      '<label class="cw-check"><input type="checkbox" data-k="marker"' + (P.method === 'marker' ? ' checked' : '') + '> Marker mode: track coloured objects instead of hands (for very dim rooms or old computers)</label>';
+    [el('div', 'cw-dim', '<b>Steering style</b>'), hseg, seg, peds, easy, tune, camRow, advB].forEach(function (n) { ob.appendChild(n); });
     var btns = el('div', 'cw-row');
-    btns.innerHTML = '<button class="cw-btn primary" type="button" data-k="done">Done</button><button class="cw-btn ghost" type="button" data-k="off">Turn webcam wheel off</button>';
+    btns.innerHTML = '<button class="cw-btn" type="button" data-k="done">Close</button><button class="cw-btn ghost" type="button" data-k="off">Turn webcam wheel off</button>';
     var x = el('button', 'cw-btn ghost cw-x', ICON.close); x.type = 'button'; x.setAttribute('aria-label', 'Close');
-    right.appendChild(head); right.appendChild(hseg); right.appendChild(steps); right.appendChild(seg); right.appendChild(camRow); right.appendChild(startRow);
-    right.appendChild(status); right.appendChild(warn); right.appendChild(peds); right.appendChild(tune); right.appendChild(adv); right.appendChild(btns);
+    [head, flowEl, steps, go, status, warn, opts, btns].forEach(function (n) { right.appendChild(n); });
     card.appendChild(left); card.appendChild(right); card.appendChild(x); ov.appendChild(card);
     document.body.appendChild(ov);
-    var D = dlg = { ov: ov, offs: [], raf: 0, mask: false, counting: false, result: null, key: null };
+    var D = dlg = { ov: ov, offs: [], raf: 0, mask: false, counting: false, result: null, key: null, flow: null };
+    hudSync();
     peds.addEventListener('change', function (e) {
       if (e.target.name !== 'cw-ped') return;
       cw.setPrefs({ pedals: e.target.value }); renderText();
     });
     var g = cv.getContext('2d');
+
+    /* ---- the Start flow */
+    function flowIdx(s) { for (var i = 0; i < FLOW.length; i++) if (FLOW[i][0] === s) return i; return -1; }
+    function renderFlow() {
+      var cur = D.flow ? flowIdx(D.flow.step) : D.flowDone ? FLOW.length : -1, tests = testsWanted();
+      flowEl.innerHTML = FLOW.filter(function (f) { return tests || (f[0] !== 'fist' && f[0] !== 'open'); }).map(function (f) {
+        var i = flowIdx(f[0]), cls = i < cur ? 'is-done' : i === cur ? 'is-now' : '';
+        var txt = f[0] === 'centre' && hstyle() === 'top' ? 'Hold one hand at the top of the wheel (3-2-1)' : f[0] === 'fist' && hstyle() === 'top' ? 'Make a fist: that is GO' : f[0] === 'open' && hstyle() === 'top' ? 'Open your hand: that is BRAKE' : f[1];
+        return '<li class="' + cls + '"><i></i><span>' + esc(txt) + (i === cur && D.flow && D.flow.note ? ' <small>' + esc(D.flow.note) + '</small>' : '') + '</span></li>';
+      }).join('');
+      var b = go.querySelector('[data-k="go"] span');
+      b.textContent = D.flow ? 'Cancel' : D.flowDone ? 'Done: drive!' : handsMode() ? 'Start' : 'Start: calibrate';
+      go.querySelector('[data-k="skip"]').style.display = D.flow && (D.flow.step === 'fist' || D.flow.step === 'open') && performance.now() - D.flow.t0 > 6000 ? '' : 'none';
+    }
+    function setStep(step, note) {
+      if (dlg !== D) return;
+      if (!step) { D.flow = null; renderFlow(); return; }
+      D.flow = { step: step, t0: performance.now(), okT: 0, note: note || '' };
+      if (step === 'centre') { cw.cancelCentre(); cw.startCentre(cw.prefs.pedals === 'grip' ? 'calibrate' : 'setup'); }
+      if (step === 'fist') showWarn('<p><b>Make fists</b>, as if you grip the wheel tightly. The bar turns green: <b>GO</b>.</p>');
+      if (step === 'open') showWarn('<p><b>Open your hands</b>: fingers straight, palms to the camera. That is <b>BRAKE</b> (and, held at a stop, <b>reverse</b>).</p>');
+      if (step === 'done') finishFlow();
+      renderFlow();
+    }
+    function startFlow() {
+      if (D.flow) { cw.cancelCentre(); setStep(null); showWarn('Start cancelled.'); return; }
+      if (D.flowDone) { doneClose(); return; }
+      if (!handsMode()) { if (!cw.running()) start(); else cw.startCentre('calibrate'); return; }
+      setStep('camera');
+      if (!cw.running() && !D.starting) start();
+    }
+    function finishFlow() {
+      D.flow = null; D.flowDone = true;
+      cw.enable(); selectSource(); applyEasy(false);
+      var p = cw.prefs.pedals;
+      showWarn('<p><b>All set.</b> ' + (p === 'fist' ? '<b>Fists = go</b>, in between = coast, <b>open hands = brake</b> (held at a stop: reverse). ' : p === 'auto' ? 'The car drives itself: <b>open your hands to brake</b>. ' : '') +
+        'Turn the wheel to steer. Press <b>Done</b> and drive.</p>', true);
+      refreshPicker();
+    }
+    function flowTick() {
+      var F = D.flow; if (!F) return;
+      var now = performance.now(), hs = cw.handState(), need = needHands(), M = cw.model();
+      if (F.step === 'camera') {
+        if (!cw.running() || M.state !== 'ready') { F.note = ''; return; }
+        if (hs.n >= need) { if (!F.okT) F.okT = now; if (now - F.okT > 400) setStep('centre'); }
+        else { F.okT = 0; if (F.note !== 'show your hands') { F.note = 'show your hands'; renderFlow(); } }
+        return;
+      }
+      if (F.step === 'fist' || F.step === 'open') {
+        var good = hs.n >= need && (F.step === 'fist' ? hs.closed : hs.opened);
+        if (good) { if (!F.okT) F.okT = now; } else F.okT = 0;
+        var note = hs.n < need ? (need === 2 ? 'show both hands' : 'show your hand') : good ? 'hold it…' : F.step === 'fist' ? 'close them tighter' : 'straighten your fingers';
+        if (note !== F.note) { F.note = note; renderFlow(); }
+        if (F.okT && now - F.okT > 600) {
+          var r = F.step === 'fist' ? cw.captureFist() : cw.captureOpen();
+          if (r.ok || now - F.t0 > 15000) setStep(F.step === 'fist' ? 'open' : 'done');
+        }
+        if (now - F.t0 > 6000 && go.querySelector('[data-k="skip"]').style.display === 'none') renderFlow();
+      }
+    }
     renderText();
 
     function boxesNow() { return cw.defaultBoxes(cw.prefs.style); }
     function showWarn(html, ok) { warn.className = 'cw-warn' + (ok ? ' cw-ok' : ''); warn.innerHTML = html || ''; }
     function intro() {
-      if (handsMode()) showWarn('');
-      else if (!cw.prefs.cal || cw.prefs.cal.style !== cw.prefs.style) showWarn('Hold your marker' + (cw.prefs.style === 'bar' ? '' : 's') + ' in the dashed box' + (cw.prefs.style === 'bar' ? '' : 'es') + ' and press <b>Calibrate</b>.');
+      if (handsMode()) { if (!D.flow && !D.flowDone) showWarn(cw.prefs.handCal ? 'Press <b>Start</b> to set up again, or just <b>Close</b> and drive.' : 'Press <b>Start</b>: about 10 seconds, then drive.'); }
+      else if (!cw.prefs.cal || cw.prefs.cal.style !== cw.prefs.style) showWarn('Hold your marker' + (cw.prefs.style === 'bar' ? '' : 's') + ' in the dashed box' + (cw.prefs.style === 'bar' ? '' : 'es') + ' and press <b>Start</b>.');
     }
     function start(devId) {
-      startRow.style.display = 'none';
       msg.style.display = ''; msg.innerHTML = 'Starting the camera…';
+      D.starting = true;
       return cw.start(devId ? { deviceId: devId } : {}).then(function (r) {
-        if (dlg !== D) return r;
+        D.starting = false;
+        if (dlg !== D || r.reason === 'cancelled') return r;
         if (!r.ok) {
           msg.innerHTML = REASONS[r.reason] || REASONS.error;
-          if (r.reason !== 'insecure' && r.reason !== 'unsupported' && r.reason !== 'file') startRow.style.display = '';
+          if (D.flow) setStep(null);
           return r;
         }
         msg.style.display = 'none';
@@ -469,14 +616,15 @@ CB.input = CB.input || {};
       if (e.state === 'count') {
         var what = e.phase === 'grip' ? (hstyle() === 'top' ? 'Now <b>close your hand</b>: a firm grip' : 'Now <b>close your hands</b>: a firm grip') : hm ? holdText(e.kind) : (cw.prefs.style === 'bar' ? 'Hold the bar level' + (e.kind === 'centre' ? '' : ' inside the box') : 'Hold the markers level' + (e.kind === 'centre' ? '' : ', one in each box'));
         count.innerHTML = e.left + '<small>' + what + '</small>';
-        if (e.left === 3 || e.phase === 'grip') showWarn((e.kind === 'auto' ? 'Centring automatically… ' : '') + what + '. Press again or <b>Esc</b> to cancel.');
+        if (e.left === 3 || e.phase === 'grip') showWarn((e.kind === 'auto' ? 'Centring automatically… ' : '') + what + '. Press <b>Esc</b> to cancel.');
         return;
       }
       count.innerHTML = '';
-      if (e.state === 'cancel') { showWarn('Re-centre cancelled: the previous centre is kept.'); return; }
+      if (e.state === 'cancel') { if (!D.flow) showWarn('Re-centre cancelled: the previous centre is kept.'); return; }
       if (e.state === 'fail') {
         var r = e.result || {};
-        if (e.phase === 'grip') showWarn('<p><b>Centred</b>, but the grip did not look closed enough to learn it' + (r.reason === 'nohands' ? ' (hands not in view)' : '') + '. The default grip is used; press <b>Calibrate</b> to try again.</p>');
+        if (D.flow && D.flow.step === 'centre') { showWarn('<p>' + (FAIL[r.reason] || FAIL.nothing) + '</p>'); setStep('camera'); return; }
+        if (e.phase === 'grip') showWarn('<p><b>Centred</b>, but the grip did not look closed enough to learn it' + (r.reason === 'nohands' ? ' (hands not in view)' : '') + '. The default grip is used; press <b>Start</b> to try again.</p>');
         else showWarn('<p>' + (FAIL[r.reason] || FAIL.nothing) + '</p>');
         return;
       }
@@ -486,6 +634,7 @@ CB.input = CB.input || {};
       D.result = r2;
       cw.enable();
       if (hm) {
+        if (D.flow && D.flow.step === 'centre') { setStep(testsWanted() ? 'fist' : 'done'); return; }
         var txt = e.kind === 'calibrate' ? '<b>Calibrated:</b> centre and full grip learnt. ' : e.kind === 'auto' ? '<b>Centred automatically.</b> ' : '<b>Centred.</b> ';
         var how = r2.mode === 'top' ? '<b>' + sideName(r2.side) + '</b> at the top of the wheel: move it along the rim to steer. ' : r2.mode === 'hands1' ? 'One hand: tilt it like a wheel. Two hands track better. ' : 'Turn your hands like a wheel to steer. ';
         showWarn('<p>' + txt + how + (cw.prefs.pedals !== 'off' && r2.mode !== 'hands1' ? pedalHelp(r2.mode === 'top') : '') + '</p>', true);
@@ -493,8 +642,8 @@ CB.input = CB.input || {};
       }
       var ws = (r2.warnings || []).map(function (k) { return WARN[k] ? '<p>' + WARN[k] + '</p>' : ''; }).join('');
       if (!r2.mode) { showWarn('<p><b>Centred.</b></p>', true); return; }
-      var how = r2.mode === 'two' ? 'two colours (full 360° turns)' : r2.mode === 'same' ? 'two markers of the same colour' : 'one bar';
-      showWarn('<p><b>Calibrated:</b> ' + how + '.</p>' + ws, !ws);
+      var how2 = r2.mode === 'two' ? 'two colours (full 360° turns)' : r2.mode === 'same' ? 'two markers of the same colour' : 'one bar';
+      showWarn('<p><b>Calibrated:</b> ' + how2 + '.</p>' + ws, !ws);
       refreshPicker();
     }));
     seg.addEventListener('click', function (e) {
@@ -503,10 +652,11 @@ CB.input = CB.input || {};
       Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle('is-on', c === b); });
       intro();
     });
+    go.querySelector('[data-k="go"]').addEventListener('click', startFlow);
+    go.querySelector('[data-k="skip"]').addEventListener('click', function () { if (D.flow) setStep(D.flow.step === 'fist' ? 'open' : 'done'); });
     tools.querySelector('[data-k="cal"]').addEventListener('click', function () { calibrate('calibrate'); });
     tools.querySelector('[data-k="ctr"]').addEventListener('click', function () { calibrate('centre'); });
     tools.querySelector('[data-k="mask"]').addEventListener('change', function (e) { D.mask = !!e.target.checked; });
-    startRow.querySelector('[data-k="start"]').addEventListener('click', function () { start(); });
     camRow.querySelector('select').addEventListener('change', function (e) { var id = e.target.value; cw.setPrefs({ deviceId: id }); cw.stop(true); start(id); });
     tune.addEventListener('input', function (e) {
       var k = e.target.getAttribute('data-p'); if (!k) return;
@@ -519,11 +669,12 @@ CB.input = CB.input || {};
       cw.setPrefs({ handStyle: hs });
       renderText();
       var P2 = cw.prefs;
-      if (hs === 'top' && !(P2.handCal && P2.handCal.top)) showWarn('Hold one hand at the top of the wheel and press <b>Calibrate</b>.');
+      if (hs === 'top' && !(P2.handCal && P2.handCal.top)) showWarn('Hold one hand at the top of the wheel and press <b>Start</b>.');
       else showWarn('');
     });
     tune.querySelector('[data-k="pip"]').addEventListener('change', function (e) { cw.setPrefs({ pip: !!e.target.checked }); });
-    adv.addEventListener('change', function (e) {
+    easy.querySelector('input').addEventListener('change', function (e) { cw.setPrefs({ easyAssist: !!e.target.checked }); applyEasy(true); toast(e.target.checked ? 'Easy driving on: Heavy steering assist + automatic gearbox' : 'Easy driving off: your previous assists are back', 'ok'); });
+    advB.addEventListener('change', function (e) {
       var k = e.target.getAttribute('data-g');
       if (k) {
         var o = {}; o[k] = !!e.target.checked; cw.setPrefs(o);
@@ -536,17 +687,18 @@ CB.input = CB.input || {};
         if (cw.running() && cw.ready()) cw.enable();
       }
     });
-    btns.querySelector('[data-k="done"]').addEventListener('click', function () {
-      if (cw.ready() && cw.running()) { cw.enable(); selectSource(); toast(handsMode() ? 'Webcam wheel on: turn your hands like a steering wheel' + (cw.prefs.pedals === 'grip' ? '; close them to drive, pull back to brake' : '') : 'Webcam wheel on (marker mode)', 'ok'); }
+    function doneClose() {
+      if (cw.ready() && cw.running()) { cw.enable(); selectSource(); applyEasy(false); toast(handsMode() ? 'Webcam wheel on: turn your hands like a steering wheel' + (cw.prefs.pedals === 'fist' ? '; fists = go, open hands = brake' : '') : 'Webcam wheel on (marker mode)', 'ok'); }
       close();
-    });
+    }
+    btns.querySelector('[data-k="done"]').addEventListener('click', doneClose);
     btns.querySelector('[data-k="off"]').addEventListener('click', function () { cw.disable(); deselectSource(); close(); toast('Webcam wheel off (camera stopped)'); });
     x.addEventListener('click', close);
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
     D.key = function (e) {
       var tag = e.target && e.target.tagName;
-      if (e.key === 'Escape') { e.preventDefault(); if (cw.countdown()) cw.cancelCentre(); else close(); }
-      else if ((e.code === 'Space' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'SELECT' && tag !== 'SUMMARY' && tag !== 'INPUT') { e.preventDefault(); calibrate('calibrate'); }
+      if (e.key === 'Escape') { e.preventDefault(); if (cw.countdown()) { cw.cancelCentre(); if (D.flow) setStep(null); } else if (D.flow) { setStep(null); showWarn('Start cancelled.'); } else close(); }
+      else if ((e.code === 'Space' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'SELECT' && tag !== 'SUMMARY' && tag !== 'INPUT') { e.preventDefault(); startFlow(); }
       else if ((e.key === 'c' || e.key === 'C') && tag !== 'INPUT') { calibrate('centre'); }
       e.stopPropagation();
     };
@@ -570,8 +722,9 @@ CB.input = CB.input || {};
       var st = statusLine(cw);
       status.innerHTML = '<span class="cw-dot ' + st.cls + '"></span><span>' + esc(st.text) + '</span>';
       var M = cw.model();
-      if (handsMode() && M.state === 'error' && msg.getAttribute('data-m') !== 'err') { msg.style.display = ''; msg.innerHTML = MODEL_FAIL[M.reason] || MODEL_FAIL.load; msg.setAttribute('data-m', 'err'); }
-      if (handsMode() && M.state === 'ready' && M.delegate === 'CPU' && !D.cpuNote) { D.cpuNote = true; showWarn('Hand tracking runs on the CPU here (no usable GPU): expect about 10–20 fps, a little more delay. Closing other heavy tabs helps; marker mode (Advanced) is lighter.'); }
+      if (handsMode() && M.state === 'error' && msg.getAttribute('data-m') !== 'err') { msg.style.display = ''; msg.innerHTML = MODEL_FAIL[M.reason] || MODEL_FAIL.load; msg.setAttribute('data-m', 'err'); if (D.flow) setStep(null); }
+      if (handsMode() && M.state === 'ready' && M.delegate === 'CPU' && !D.cpuNote) { D.cpuNote = true; if (!D.flow) showWarn('Hand tracking runs on the CPU here (no usable GPU): expect about 10–20 fps, a little more delay. Closing other heavy tabs helps; marker mode (Advanced) is lighter.'); }
+      flowTick();
       // read the hub source like the game does (also measures the delay to "applied")
       var H = CB.input.hub, s = cw.stats();
       if (H && cw.enabled()) { try { H.read(); } catch (e) { /* ignore */ } }
@@ -583,6 +736,7 @@ CB.input = CB.input || {};
       meter.querySelector('[data-k="brk"]').style.width = Math.round(clamp(pd.brake, 0, 1) * 100) + '%';
       meter.querySelector('[data-k="gasv"]').textContent = pd.state === 'off' ? '—' : Math.round(pd.throttle * 100) + '%';
       meter.querySelector('[data-k="brkv"]').textContent = pd.state === 'off' ? '—' : pd.state === 'lost' && pd.brake ? 'lost' : Math.round(pd.brake * 100) + '%';
+      paintChip(meter.querySelector('[data-k="chip"]'), pd, cw.prefs.pedals);
       D.raf = requestAnimationFrame(tick);
     }
     D.raf = requestAnimationFrame(tick);
@@ -590,6 +744,7 @@ CB.input = CB.input || {};
     if (!cw.secure()) { msg.innerHTML = location.protocol === 'file:' ? REASONS.file : REASONS.insecure; }
     else if (!cw.supported()) { msg.innerHTML = REASONS.unsupported; }
     else start();
+    D.startFlow = startFlow;
     return ov;
   }
 
@@ -621,7 +776,7 @@ CB.input = CB.input || {};
     var cw = CW(); if (!cw) return Promise.resolve({ ok: false });
     if (!cw.ready()) { open(); return Promise.resolve({ ok: true }); }
     return cw.start().then(function (r) {
-      if (r.ok) { cw.enable(); selectSource(); toast('Webcam wheel on: hold your hands up like a steering wheel' + (cw.prefs.pedals === 'grip' ? ', close them to drive' : ''), 'ok'); }
+      if (r.ok) { cw.enable(); selectSource(); applyEasy(false); toast('Webcam wheel on: hold your hands up like a steering wheel' + (cw.prefs.pedals === 'fist' ? '; fists = go, open hands = brake' : ''), 'ok'); }
       else open();
       refreshPicker();
       return r;
@@ -639,7 +794,7 @@ CB.input = CB.input || {};
     defineSource.done = S;
     S.define('webcam', {
       name: 'Webcam air wheel', short: 'Webcam',
-      hint: 'Hold your hands up in front of the webcam as if gripping a steering wheel, and turn it. Close your hands to drive, relax them to coast, pull them back to brake (other pedal modes in Webcam setup). Keyboard and gamepad pedals still work.',
+      hint: 'Hold your hands up in front of the webcam as if gripping a steering wheel, and turn it. Fists = go, open hands = brake, in between = coast; keep them open at a stop to reverse (other pedal modes in Webcam setup). Keyboard and gamepad pedals still work.',
       available: function () {
         var cw = CW();
         if (!cw) return { ok: false, reason: 'Not loaded' };
@@ -761,17 +916,65 @@ CB.input = CB.input || {};
     if (dlg || !cw || e.key !== 'Escape' || !cw.countdown || !cw.countdown()) return;
     e.preventDefault(); e.stopPropagation(); cw.cancelCentre();
   }, true);
-  /* ---- first drive with hands-only pedals: one hint (twice at most, a few seconds each) */
-  var HINT_KEY = 'forge.camWheel.hint.v1', tipEl = null, tipT = 0;
+  /* ---- the driving HUD: a big GO / COAST / BRAKE / R chip (+ the hand state) while the webcam drives the pedals */
+  var hud = null, hudRaf = 0;
+  function hudWanted() { var cw = CW(); return !!(cw && driving && cw.enabled() && cw.running() && cw.prefs.method !== 'marker' && cw.prefs.pedals !== 'off' && !dlg); }
+  function hudSync() {
+    if (!hudWanted()) { if (hud) hud.style.display = 'none'; if (hudRaf) { cancelAnimationFrame(hudRaf); hudRaf = 0; } return; }
+    ensureCss();
+    if (!hud) { hud = el('div', 'cw-hud'); hud.setAttribute('aria-live', 'polite'); hud.setAttribute('data-cw-hud', ''); document.body.appendChild(hud); }
+    hud.style.display = '';
+    if (!hudRaf) hudRaf = requestAnimationFrame(hudTick);
+  }
+  function hudTick() {
+    hudRaf = 0;
+    if (!hudWanted()) { hudSync(); return; }
+    var cw = CW(), pd = cw.stats().pedals, L = pedalLabel(pd), hand = pd && pd.hand, mode = cw.prefs.pedals;
+    var key = L.k + '|' + L.t + '|' + hand + '|' + mode;
+    if (hud._k !== key) {
+      hud._k = key; hud.className = 'cw-hud is-' + L.k; hud.setAttribute('data-state', L.k);
+      hud.innerHTML = '<b class="is-' + L.k + '">' + L.t + '</b>' + (hand && HAND_SVG[hand] ? '<span class="cw-hand">' + HAND_SVG[hand] + '</span>' : '') +
+        '<small>' + (L.k === 'rev' ? 'fists = forward' : L.k === 'lost' ? 'show your hands' : mode === 'auto' ? 'open = brake' : mode === 'fist' ? 'fist = go<br>open = brake' : '') + '</small>';
+    }
+    hudRaf = requestAnimationFrame(hudTick);
+  }
+  /* ---- first drive with the webcam: a 3-step intro ("1 Hold hands like a wheel · 2 Make fists to go · 3 Open hands to
+     brake"), twice at most, ~8 s or until clicked / a key; other pedal modes: the one-line tip */
+  var HINT_KEY = 'forge.camWheel.hint.v1', INTRO_KEY = 'forge.camWheel.intro.v2', tipEl = null, tipT = 0, introEl = null;
   function pedalTip() {
     var p = CW().prefs.pedals;
-    return p === 'auto' ? 'The car accelerates on its own: open your hands (or pull them back) to brake' :
+    return p === 'auto' ? 'The car accelerates on its own: open your hands to brake' :
       p === 'push' ? 'Push your hands towards the screen for gas, pull them back to brake' :
-        'Close your hands to drive, open to coast, pull back to brake';
+        p === 'grip' ? 'Close your hands to drive, relax to coast, pull back to brake' : 'Fists = go, open hands = brake';
   }
+  function showIntro(force) {
+    var cw = CW();
+    if (!cw) return false;
+    var n = 0; try { n = +(localStorage.getItem(INTRO_KEY) || 0) || 0; } catch (e) { n = 0; }
+    if (n >= 2 && !force) return false;
+    try { localStorage.setItem(INTRO_KEY, String(n + 1)); } catch (e) { /* ignore */ }
+    ensureCss();
+    if (!introEl) {
+      introEl = el('div', 'cw-intro'); introEl.setAttribute('role', 'note'); introEl.setAttribute('data-cw-intro', '');
+      introEl.addEventListener('click', hideIntro);
+      document.body.appendChild(introEl);
+    }
+    var one = hstyle() === 'top';
+    introEl.innerHTML = '<h3>Drive with your hands</h3><ol>' +
+      '<li><b>1</b><span>' + (one ? 'Hold one hand at the top of a wheel' : 'Hold hands like a wheel') + '</span></li>' +
+      '<li><b>2</b><span>' + (cw.prefs.pedals === 'auto' ? 'The car drives itself' : one ? 'Make a fist to go' : 'Make fists to go') + '</span>' + HAND_SVG.closed + '</li>' +
+      '<li><b>3</b><span>' + (one ? 'Open your hand to brake' : 'Open hands to brake') + '</span>' + HAND_SVG.open + '</li></ol>' +
+      '<small>Keep them open at a stop to reverse. Click or press any key to hide.</small>';
+    introEl.style.display = '';
+    clearTimeout(showIntro.t); showIntro.t = setTimeout(hideIntro, 8000);
+    window.addEventListener('keydown', hideIntro, true);
+    return true;
+  }
+  function hideIntro() { if (introEl) introEl.style.display = 'none'; window.removeEventListener('keydown', hideIntro, true); }
   function maybeHint() {
     var cw = CW();
     if (!cw || !driving || !cw.enabled() || cw.prefs.method === 'marker' || cw.prefs.pedals === 'off') return;
+    if (cw.prefs.pedals === 'fist' || cw.prefs.pedals === 'auto') { showIntro(maybeHint.force); return; }
     var n = 0; try { n = +(localStorage.getItem(HINT_KEY) || 0) || 0; } catch (e) { n = 0; }
     var key = cw.prefs.pedals;
     var seen = {}; try { seen = JSON.parse(localStorage.getItem(HINT_KEY + '.modes') || '{}') || {}; } catch (e) { seen = {}; }
@@ -784,14 +987,14 @@ CB.input = CB.input || {};
   }
   document.addEventListener('cb:driving', function (e) {
     var was = driving;
-    driving = !!(e && e.detail && e.detail.driving); lostSince = 0; lostToast = false; pipSync();
+    driving = !!(e && e.detail && e.detail.driving); lostSince = 0; lostToast = false; pipSync(); hudSync();
     if (driving && !was) { clearTimeout(maybeHint.t); maybeHint.t = setTimeout(maybeHint, 1500); }   // after the loading screen
-    if (!driving) { clearTimeout(maybeHint.t); if (tipEl) tipEl.style.display = 'none'; }
+    if (!driving) { clearTimeout(maybeHint.t); if (tipEl) tipEl.style.display = 'none'; hideIntro(); }
   });
 
   function boot(late) {
     var cw = CW(); if (!cw) return;
-    if (!boot.done) { boot.done = true; cw.on('frame', onFrame); cw.on('prefs', pipSync); cw.on('state', function () { pipSync(); }); cw.on('countdown', onCountdown); }
+    if (!boot.done) { boot.done = true; cw.on('frame', onFrame); cw.on('prefs', function () { pipSync(); hudSync(); }); cw.on('state', function () { pipSync(); hudSync(); }); cw.on('countdown', onCountdown); }
     defineSource();
     if (CB.input.ui && !CB.input.ui.openCamWheel) CB.input.ui.openCamWheel = open;
     if (late) patchUi();                 // only once every script has loaded: the shared picker may come after us
@@ -800,5 +1003,7 @@ CB.input = CB.input || {};
   document.addEventListener('DOMContentLoaded', function () { boot(true); });
   window.addEventListener('load', function () { boot(true); });
 
-  CB.input.camUI = { open: open, close: close, menuItems: menuItems, detailHTML: detailHTML, start: startQuick, _drawOverlay: drawOverlay, isOpen: function () { return !!dlg; } };
+  CB.input.camUI = { open: open, close: close, menuItems: menuItems, detailHTML: detailHTML, start: startQuick, _drawOverlay: drawOverlay, isOpen: function () { return !!dlg; },
+    startFlow: function () { if (!dlg) open(); if (dlg && dlg.startFlow) dlg.startFlow(); }, flow: function () { return dlg && dlg.flow ? dlg.flow.step : dlg && dlg.flowDone ? 'done' : null; },
+    showIntro: showIntro, applyEasy: applyEasy, hudSync: hudSync, pedalLabel: pedalLabel };
 })();

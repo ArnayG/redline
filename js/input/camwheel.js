@@ -5,8 +5,9 @@
    vendor/mediapipe/, run in a worker: js/input/camwheel-worker.js). Fallback method 'marker' (Settings: Advanced ->
    marker mode): pure-JS colour tracking of one or two coloured objects (no ML, ~2 ms/frame). Frames never leave the device.
    This file: the camera, the per-frame pipeline, the shared angle -> steer stage, the 'camwheel' hub source (steering
-   + hands-only pedals: prefs.pedals 'grip' (default: close hands = gas, relax = coast, pull back = brake) | 'auto' |
-   'push' | 'off', see camhands.createPedals), the 3-2-1 re-centre countdown, and the colour-marker core (Node-tested).
+   + hands-only pedals: prefs.pedals 'fist' (default: "Fist = go, open hand = brake", in between = coast, open at a stop =
+   reverse) | 'auto' | 'grip' (older: close = gas, pull back = brake) | 'push' | 'off', see camhands.createPedals), the 3-2-1
+   re-centre countdown, and the colour-marker core (Node-tested).
 
    Pipeline: getUserMedia (640x360 ideal for hands, 640x480 for markers, 60 fps if offered) -> requestVideoFrameCallback
      hands : frame -> ImageBitmap -> worker (GPU, CPU fallback) -> 21 landmarks x 2 -> camhands solver (two-hand line,
@@ -24,11 +25,14 @@
    Prefs (localStorage 'forge.camWheel.v1'): method 'hands'|'marker', handStyle 'two' (hands at 9 and 3) | 'top' (one
      hand at the top of the wheel) | 'auto' (two if both visible, else one-hand top grip), wheelSize 1 (top grip radius
      x 0.5..2), maxAngle 90, deadzone 2, smoothing 0.3, lookahead,
-     deviceId, pip, pedals 'grip'|'auto'|'push'|'off', gestureNitro / gestureHandbrake / gestureItem (off), cpu,
+     deviceId, pip, pedals 'fist'|'auto'|'grip'|'push'|'off' (pedalsV 2: the old 'grip' default migrated to 'fist' once),
+     pullBrake (opt-in pull-back brake), easyAssist (webcam: Heavy steering assist + automatic gearbox, see camwheel-ui),
+     gestureNitro / gestureHandbrake / gestureItem (off), cpu,
      handCal {two, labels, top {x, y, L, q, side, roll0}}, pedalCal {open, grip, scale {a, b}, world}, style + cal (marker mode)
    Browser: secure() supported() listCameras() start({deviceId}) -> {ok, reason}  stop()  running()  enable() disable()
-     ready()  calibrateNow(boxes?, style?) (immediate)  startCentre('centre'|'calibrate'|'auto') (3-2-1 countdown, again =
-     cancel)  cancelCentre()  countdown()  recentre() (= startCentre('centre'))  recentreNow()  captureGrip()
+     ready()  calibrateNow(boxes?, style?) (immediate)  startCentre('centre'|'calibrate'|'setup'|'auto') (3-2-1 countdown,
+     again = cancel)  cancelCentre()  countdown()  recentre() (= startCentre('centre'))  recentreNow()  captureGrip()
+     captureFist() / captureOpen() (the Start flow's hand tests)  handState()  carStatus()
      model() / loadModel()  stats()  on('frame'|'hands'|'state'|'prefs'|'autocentre'|'countdown', fn)
      _feed(list, w, h, t) (Node tests: one detector result, as if from the camera)
    ========================================================================== */
@@ -41,8 +45,8 @@ CB.input = CB.input || {};
 
   var DEG = Math.PI / 180;
   var PREF_KEY = 'forge.camWheel.v1';
-  var DEFAULT_PREFS = { method: 'hands', handStyle: 'two', wheelSize: 1, maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, pedals: 'grip', gestureNitro: false, gestureHandbrake: false, gestureItem: false, cpu: false, handCal: null, pedalCal: null, cal: null };
-  var PEDAL_MODES = ['grip', 'auto', 'push', 'off'];
+  var DEFAULT_PREFS = { method: 'hands', handStyle: 'two', wheelSize: 1, maxAngle: 90, deadzone: 2, smoothing: 0.3, lookahead: true, style: 'pair', deviceId: '', pip: true, pedals: 'fist', pullBrake: false, pedalsV: 2, easyAssist: true, gestureNitro: false, gestureHandbrake: false, gestureItem: false, cpu: false, handCal: null, pedalCal: null, cal: null };
+  var PEDAL_MODES = ['fist', 'auto', 'grip', 'push', 'off'];   // 'grip' / 'push': the older modes (Advanced)
   var HAND_STYLES = ['two', 'top', 'auto'];      // two hands at 9 and 3 | one hand at the top of the wheel | either
   var COUNT_MS = 3000, GRIP_MS = 2000;
   var LUT_BITS = 6, LUT_SIZE = 1 << (3 * LUT_BITS);
@@ -633,7 +637,12 @@ CB.input = CB.input || {};
       style: p.style === 'bar' ? 'bar' : 'pair',
       deviceId: typeof p.deviceId === 'string' ? p.deviceId.slice(0, 200) : '',
       pip: p.pip !== false,
-      pedals: PEDAL_MODES.indexOf(p.pedals) >= 0 ? p.pedals : 'grip',
+      // pedalsV 2: "Fist = go, open hand = brake" is the default; a player still on the OLD default (grip + pull back
+      // to brake, or never chosen) moves to it once; a mode chosen after that (even 'grip') is kept
+      pedals: p.pedalsV !== 2 && (p.pedals === 'grip' || p.pedals == null) ? 'fist' : PEDAL_MODES.indexOf(p.pedals) >= 0 ? p.pedals : 'fist',
+      pedalsV: 2,
+      pullBrake: !!p.pullBrake,
+      easyAssist: p.easyAssist !== false,
       gestureNitro: !!p.gestureNitro,
       gestureHandbrake: !!p.gestureHandbrake,
       gestureItem: !!p.gestureItem,
@@ -653,9 +662,11 @@ CB.input = CB.input || {};
   }
   function normPedalCal(c) {
     if (!c || typeof c !== 'object') return null;
-    var o = { open: clamp(num(+c.open, 0.3), 0, 0.8), grip: clamp(num(+c.grip, 0.92), 0.2, 1), scale: {}, world: c.world == null ? null : !!c.world };
+    var o = { open: clamp(num(+c.open, 0.3), 0, 0.8), grip: clamp(num(+c.grip, 0.92), 0.2, 1), scale: {}, world: c.world == null ? null : !!c.world, v: 2,
+      fist: c.fist != null && isFinite(+c.fist) ? clamp(+c.fist, 0, 0.5) : null, ext: c.ext != null && isFinite(+c.ext) ? clamp(+c.ext, 0.5, 1) : null };
     if (o.grip < o.open + 0.15) o.grip = Math.min(1, o.open + 0.15);
-    if (c.scale && typeof c.scale === 'object') ['a', 'b'].forEach(function (k) { var v = +c.scale[k]; if (isFinite(v) && v > 0) o.scale[k] = v; });
+    // v 2: the pull-back size is the 3D (rotation-invariant) pullScale; an older 2D neutral is not comparable: dropped
+    if (c.v === 2 && c.scale && typeof c.scale === 'object') ['a', 'b'].forEach(function (k) { var v = +c.scale[k]; if (isFinite(v) && v > 0) o.scale[k] = v; });
     return o;
   }
   /* ================================================================ re-centre countdown (pure)
@@ -1020,6 +1031,12 @@ CB.input = CB.input || {};
     if (!hands() && meas && meas.ok) B.pend = { id: B.frameN, cap: cap, shown: shown, done: t1, mediaTime: md ? md.mediaTime : null };
     emit('frame', { rgba: rgba, w: B.w, h: B.h, meas: meas, steer: steer, t: tFrame, cap: cap, shown: shown, done: t1, md: md || null, split: B.split, hands: hands() });
   }
+  /** the player's car (speed m/s, gear) as race-ui reports it to the hub every frame: the pedals' reverse rule */
+  function carStatus() {
+    var Hb = CB.input.hub, st = Hb && Hb.status ? Hb.status() : null;
+    return st && st.driving && !st.paused ? { driving: true, speed: num(st.speed, 0), gear: num(st.gear, 0) } : null;
+  }
+  api.carStatus = carStatus;
   /* ---------------- hub source */
   function hubSource() {
     return {
@@ -1033,7 +1050,7 @@ CB.input = CB.input || {};
           B.pageLats.push(now - p.shown); if (B.pageLats.length > 120) B.pageLats.shift();
           B.lastApplied = { id: p.id, at: now, cap: p.cap, shown: p.shown, done: p.done, mediaTime: p.mediaTime };
         }
-        var pd = hands() && B.pedals && api.prefs.pedals !== 'off' ? B.pedals.read(nowMs(), api.prefs.pedals) : null;
+        var pd = hands() && B.pedals && api.prefs.pedals !== 'off' ? B.pedals.read(nowMs(), api.prefs.pedals, carStatus()) : null;
         return { active: true, stale: r.lost, steer: r.steer, throttle: pd ? pd.throttle : 0, brake: pd ? pd.brake : 0, handbrake: !!(pd && pd.handbrake) };
       }
     };
@@ -1092,7 +1109,7 @@ CB.input = CB.input || {};
     }
     return r;
   };
-  function pedalCalOf() { var c = B.pedals.cal; return { open: +c.open.toFixed(3), grip: +c.grip.toFixed(3), scale: Object.assign({}, c.scale), world: c.world }; }
+  function pedalCalOf() { var c = B.pedals.cal; return { open: +c.open.toFixed(3), grip: +c.grip.toFixed(3), scale: Object.assign({}, c.scale), world: c.world, v: 2, fist: c.fist == null ? null : +c.fist.toFixed(3), ext: c.ext == null ? null : +c.ext.toFixed(3) }; }
   /** re-centre right now (no countdown): hands = the current pose is straight ahead; markers = the current angle */
   api.recentreNow = function () {
     if (hands()) { var r = api.calibrateNow(); if (r.ok) return r; }
@@ -1107,6 +1124,24 @@ CB.input = CB.input || {};
     if (r.ok) api.setPrefs({ pedalCal: pedalCalOf() });
     return r;
   };
+  /** the Start flow's hand tests: "make fists" / "open your hands" -> the player's own closed / open readings (saved) */
+  function captureHand(which) {
+    if (!B.pedals || !hands()) return { ok: false, reason: 'nohands' };
+    if (nowMs() - B.lastHandsT > 400) return { ok: false, reason: 'nohands' };
+    var r = which === 'fist' ? B.pedals.calibrateFist(B.lastHands) : B.pedals.calibrateOpen(B.lastHands);
+    if (r.ok) api.setPrefs({ pedalCal: pedalCalOf() });
+    return r;
+  }
+  api.captureFist = function () { return captureHand('fist'); };
+  api.captureOpen = function () { return captureHand('open'); };
+  /** what the hands look like right now: {n hands, open: [0..1 per hand], hand 'closed'|'mid'|'open'|null, state} */
+  api.handState = function () {
+    var m = B.lastHands, fresh = m && m.ok && nowMs() - B.lastHandsT < 400;
+    var pd = B.pedals ? B.pedals.read(nowMs(), api.prefs.pedals, carStatus()) : null;
+    var op = fresh ? m.pts.map(function (p) { return p.open; }).filter(function (v) { return v != null; }) : [], bd = B.pedals ? B.pedals.bands() : HANDS().PEDALS;
+    return { n: op.length, mode: fresh ? m.mode : null, open: op, closed: op.length > 0 && op.every(function (v) { return v < bd.closeOn; }), opened: op.length > 0 && op.every(function (v) { return v > bd.extOn; }),
+      hand: pd && pd.ok ? pd.hand : null, state: pd ? pd.state : 'off', reverse: !!(pd && pd.reverse) };
+  };
   /* ---- the 3-2-1 countdown: kind 'centre' (straight ahead), 'calibrate' (neutral + full grip), 'auto' (first auto-centre) */
   function cdEmit(e) { B.cdState = e; emit('countdown', e); }
   function cdStep() {
@@ -1117,7 +1152,7 @@ CB.input = CB.input || {};
     var res;
     if (e.phase === 'grip') res = api.captureGrip();
     else if (hands()) {
-      res = nowMs() - B.lastHandsT > 400 ? { ok: false, reason: 'nohands' } : api.calibrateNow(null, null, { curl: e.kind !== 'centre' });
+      res = nowMs() - B.lastHandsT > 400 ? { ok: false, reason: 'nohands' } : api.calibrateNow(null, null, { curl: e.kind !== 'centre' && e.kind !== 'setup' });
     } else if (e.kind === 'calibrate' || !api.prefs.cal) res = api.calibrateNow(null, api.prefs.style);
     else { if (B.steer) B.steer.recentre(); res = { ok: !!B.steer }; }
     if (!res || !res.ok) { B.cd.cancel(); stopCdTimer(); if (e.kind === 'auto' && B.autoCal) B.autoCal.pending = true; cdEmit({ state: 'fail', phase: e.phase, kind: e.kind, result: res || { ok: false } }); return; }
@@ -1127,7 +1162,9 @@ CB.input = CB.input || {};
     cdEmit({ state: 'done', phase: e.phase, kind: e.kind, result: res });
   }
   function stopCdTimer() { if (B.cdTimer) { clearInterval(B.cdTimer); B.cdTimer = 0; } }
-  /** start (or, when one is running, cancel) the 3-2-1 re-centre countdown. kind 'centre' | 'calibrate' | 'auto' */
+  /** start (or, when one is running, cancel) the 3-2-1 re-centre countdown. kind 'centre' | 'calibrate' (+ the full grip,
+      for the older 'grip' pedals) | 'setup' (the Start flow: the centre and the pull-back neutral, the hands as they drive)
+      | 'auto' */
   api.startCentre = function (kind) {
     kind = kind || 'centre';
     if (B.cd.active()) { api.cancelCentre(); return { state: 'cancelled' }; }
@@ -1162,7 +1199,7 @@ CB.input = CB.input || {};
       w: B.w, h: B.h, camW: B.camW, camH: B.camH, camFps: B.camFps, path: B.path ? B.path.name : 'auto',
       calibrated: hands() ? true : !!api.prefs.cal, mode: hands() ? 'hands' : api.prefs.cal ? api.prefs.cal.mode : null,
       gestures: { nitro: !!B.gestOut.nitro },
-      pedals: hands() && B.pedals ? B.pedals.read(t, api.prefs.pedals) : null, pedalMode: api.prefs.pedals
+      pedals: hands() && B.pedals ? B.pedals.read(t, api.prefs.pedals, carStatus()) : null, pedalMode: api.prefs.pedals
     };
   };
   api._b = B;

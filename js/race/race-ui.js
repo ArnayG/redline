@@ -5761,6 +5761,14 @@ CB.race = CB.race || {};
     key: function (code, down) { if (U && U.race && U.race.input) U.race.input.handleKey(code, down !== false, false); }
   };
   api.getSettings = function () { return U ? deepClone(U.settings) : loadSettings(); };
+  /** change saved settings from outside (the webcam wheel's "easy driving" preset): fn(settings) mutates; applied to the
+      stored settings and to the open session's (its next race), each discipline's assist kept in sync */
+  api.patchSettings = function (fn) {
+    if (typeof fn !== 'function') return null;
+    var st = loadSettings(); fn(st); syncAssist(st); saveSettings(sanitizeSettings(st));
+    if (U && U.settings) { try { fn(U.settings); syncAssist(U.settings); } catch (e) { /* ignore */ } }
+    return deepClone(st);
+  };
 
   if (typeof module !== 'undefined') module.exports = CB.race.ui;
 })();
