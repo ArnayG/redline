@@ -199,12 +199,6 @@
       { t: 'box', mat: 'black', mirror: true, c: [(xa + xb) / 2 + 0.03, y0 - 0.01, z0 - 0.03], s: [0.08, 0.03, 0.08] }
     ];
   }
-  function exhaustPair(x, y, z, r, ry, l) {
-    return [
-      { t: 'cyl', mat: 'chrome', mirror: true, c: [x, y, z], r: r, ry: ry || r, l: l || 0.12, axis: 'x', sides: 8 },
-      { t: 'cyl', mat: 'gloss', mirror: true, c: [x - 0.005, y, z], r: r * 0.78, ry: (ry || r) * 0.78, l: (l || 0.12) + 0.004, axis: 'x', sides: 6 }
-    ];
-  }
   var defs = {};
 
   /* ================================================================ Audi RS 6 Avant (C8) */
@@ -227,9 +221,9 @@
       { x: 0.66, k: 'w', m: 'screen', low: [[0.20, 0], [0.20, 0.78], [0.30, 0.85], [0.74, 0.928], [0.935, 0.918], [1.0, 0.855]] },
       { x: 0.17, k: 'c', m: 'cab', yb: 0.20, hw: 0.925, yw: 0.74, ybl: 1.02, zbl: 0.836, low: [[0.20, 0], [0.20, 0.78], [0.30, 0.85], [0.74, 0.925], [0.94, 0.915], [1.02, 0.836]], yg: 1.37, zg: 0.64, yr: 1.425, zr: 0.585, yq: 1.44, zq: 0.33, yc: 1.448 },
             { x: -1.10, k: 'c', m: 'cab', yb: 0.20, hw: 0.945, yw: 0.80, ybl: 1.052, zbl: 0.85, yg: 1.384, zg: 0.665, yr: 1.443, zr: 0.6, yc: 1.452, low: [[0.20, 0], [0.20, 0.79], [0.30, 0.86], [0.78, 0.945], [0.95, 0.925], [1.052, 0.85]] },
-      { x: -1.85, k: 'c', m: 'cab', yb: 0.20, hw: 0.976, yw: 0.84, ybl: 1.075, zbl: 0.855, yg: 1.352, zg: 0.68, yr: 1.402, zr: 0.595, yc: 1.412, low: [[0.20, 0], [0.20, 0.84], [0.30, 0.915], [0.84, 0.978], [0.95, 0.935], [1.075, 0.855]] },
-      { x: -2.10, k: 'c', m: 'cabR', yb: 0.20, hw: 0.958, yw: 0.84, ybl: 1.09, zbl: 0.835, yg: 1.315, zg: 0.695, yr: 1.39, zr: 0.565, yc: 1.40, ysh: 0.95, zsh: 0.915 },
-      { x: -2.24, k: 'c', m: 'hatch', yb: 0.20, hw: 0.935, yw: 0.80, ybl: 1.10, zbl: 0.815, ygb: 1.112, zgb: 0.80, yg: 1.12, zg: 0.765, yr: 1.372, zr: 0.515, yq: 1.385, yc: 1.39 },
+      { x: -1.85, k: 'c', m: 'cab', yb: 0.20, hw: 0.976, yw: 0.84, ybl: 1.075, zbl: 0.855, yg: 1.338, zg: 0.68, yr: 1.386, zr: 0.595, yc: 1.396, low: [[0.20, 0], [0.20, 0.84], [0.30, 0.915], [0.84, 0.978], [0.95, 0.935], [1.075, 0.855]] },
+      { x: -2.10, k: 'c', m: 'cabR', yb: 0.20, hw: 0.958, yw: 0.84, ybl: 1.09, zbl: 0.835, yg: 1.30, zg: 0.695, yr: 1.362, zr: 0.565, yc: 1.372, ysh: 0.95, zsh: 0.915 },
+      { x: -2.24, k: 'c', m: 'hatch', yb: 0.20, hw: 0.935, yw: 0.80, ybl: 1.10, zbl: 0.815, ygb: 1.112, zgb: 0.80, yg: 1.12, zg: 0.765, yr: 1.335, zr: 0.515, yq: 1.346, yc: 1.351 },
       { x: -2.40, k: 'c', m: 'tail', yb: 0.21, hw: 0.88, yw: 0.80, ybl: 1.07, zbl: 0.77, yg: 1.085, zg: 0.695, yr: 1.10, zr: 0.585, yc: 1.11 },
       { x: -2.48, k: 'c', m: 'tail', yb: 0.27, hw: 0.80, yw: 0.70, ybl: 0.92, zbl: 0.72, yg: 0.93, zg: 0.675, yr: 0.935, zr: 0.585, yc: 0.94, ys: 0.33 },
       { x: -2.521, k: 'c', m: 'tail', yb: 0.42, hw: 0.68, yw: 0.62, ybl: 0.69, zbl: 0.62, yg: 0.70, zg: 0.575, yr: 0.705, zr: 0.515, yc: 0.71, ys: 0.46, ysh: 0.66 }
@@ -265,12 +259,12 @@
         polys([[[-0.86, 0.24], [0.86, 0.24], [0.88, 0.47], [0.80, 0.47], [0.76, 0.30], [-0.76, 0.30], [-0.80, 0.47], [-0.88, 0.47]]], 'rear', 'chrome', 0.006, false),
         polys([rect(-0.76, 0.24, 0.76, 0.30)], 'rear', 'grille', 0.008, false),
         polys([rect(-0.44, 0.30, 0.44, 0.38)], 'rear', 'grille', 0.008, false),
-        exhaustPair(-2.49, 0.335, 0.62, 0.105, 0.06, 0.14),
         // flush black roof rails, door handles, mirrors, side blade
-        [{ t: 'prism', mat: 'gloss', mirror: true, z0: 0.585, z1: 0.645, pts2d: [[0.05, 1.432], [-0.60, 1.458], [-1.40, 1.448], [-2.05, 1.405], [-2.05, 1.425], [-1.40, 1.468], [-0.60, 1.478], [0.05, 1.45]] }],
+        [{ t: 'prism', mat: 'gloss', mirror: true, z0: 0.585, z1: 0.645, pts2d: [[0.05, 1.432], [-0.60, 1.458], [-1.40, 1.448], [-2.05, 1.38], [-2.05, 1.40], [-1.40, 1.468], [-0.60, 1.478], [0.05, 1.45]] }],
         polys([rect(0.42, 0.955, 0.56, 0.98), rect(-0.68, 0.98, -0.54, 1.005)], 'side', 'black', 0.004, true),
         mirrorPart(0.78, 0.62, 1.05, 1.13, 0.84, 1.0)
       ),
+      exhaust: [{ cx: 0.64, cy: 0.335, w: 0.21, h: 0.115, shape: 'oval', mirror: true }],
       wheels: { style: 'split', spokes: 5 },
       notes: 'Audi RS 6 Avant (C8) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2021_Audi_RS6_Avant_in_Nardo_Gray,_front_right.jpg (front 3/4), ' +
@@ -337,13 +331,12 @@
         polys([rect(-0.26, 0.86, 0.26, 0.97)], 'rear', 'plate', 0.008, false),
         polys([rect(-0.84, 0.22, 0.84, 0.42)], 'rear', 'grille', 0.006, false),
         polys([rect(-0.84, 0.42, 0.84, 0.435)], 'rear', 'chrome', 0.008, false),
-        polys([rect(0.46, 0.255, 0.58, 0.335), rect(0.61, 0.255, 0.73, 0.335)], 'rear', 'chrome', 0.009, true),
-        polys([rect(0.475, 0.268, 0.565, 0.322), rect(0.625, 0.268, 0.715, 0.322)], 'rear', 'gloss', 0.012, true),
         // chrome roof rails, door handles, mirrors
         [{ t: 'prism', mat: 'chrome', mirror: true, z0: 0.55, z1: 0.60, pts2d: [[0.0, 1.425], [-0.70, 1.462], [-1.50, 1.445], [-2.20, 1.385], [-2.20, 1.405], [-1.50, 1.47], [-0.70, 1.487], [0.0, 1.445]] }],
         polys([rect(0.36, 0.955, 0.50, 0.98), rect(-0.75, 0.985, -0.61, 1.01)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.74, 0.58, 1.04, 1.13, 0.83, 1.0)
       ),
+      exhaust: [{ cx: 0.52, cy: 0.295, w: 0.12, h: 0.075, shape: 'trapezoid', mirror: true }, { cx: 0.67, cy: 0.295, w: 0.12, h: 0.075, shape: 'trapezoid', mirror: true }],
       wheels: { style: 'split', spokes: 5 },
       notes: 'Mercedes-AMG E 63 S Estate (S213 facelift) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_E-Klasse_T-Modell_(S213)_E_63_S_4MATIC%2B_AMG_(2022)_(53473649223).jpg (front 3/4), ' +
@@ -398,8 +391,9 @@
         polys([[[0.04, 0.63], [0.075, 0.635], [0.07, 0.60]]], 'front', 'chrome', 0.016, false),
         // headlamps with Thor's-hammer DRL (horizontal bar + inboard head)
         polys([[[0.42, 0.685], [0.86, 0.715], [0.905, 0.81], [0.47, 0.805], [0.41, 0.75]]], 'front', 'gloss', 0.006, true),
-        polys([[[0.45, 0.70], [0.84, 0.728], [0.875, 0.795], [0.48, 0.792], [0.44, 0.752]]], 'front', 'light', 0.009, true),
-        polys([rect(0.50, 0.748, 0.85, 0.761), rect(0.50, 0.722, 0.515, 0.785)], 'front', 'drl', 0.012, true),
+        polys([[[0.68, 0.716], [0.84, 0.728], [0.872, 0.79], [0.68, 0.792]]], 'front', 'light', 0.009, true),
+        // Thor's hammer: a full-width bar with the hammer head standing across its inboard end
+        polys([rect(0.46, 0.746, 0.86, 0.762), rect(0.585, 0.71, 0.603, 0.796)], 'front', 'drl', 0.012, true),
         // lower bumper: corner vents with chrome slats, lower intake, plate
         polys([[[0.58, 0.28], [0.82, 0.28], [0.86, 0.50], [0.62, 0.50]]], 'front', 'grille', 0.006, true),
         polys([0, 1, 2].map(function (k) { var y = 0.33 + k * 0.06; return [[0.60 + k * 0.009, y], [0.83 + k * 0.009, y], [0.835 + k * 0.009, y + 0.012], [0.605 + k * 0.009, y + 0.012]]; }), 'front', 'chrome', 0.009, true),
@@ -420,6 +414,7 @@
         polys([rect(0.30, 0.94, 0.44, 0.965), rect(-0.80, 0.965, -0.66, 0.99)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.66, 0.50, 1.03, 1.12, 0.81, 0.98)
       ),
+      exhaust: [],   // integrated faux outlets (decals) only
       wheels: { style: 'y', spokes: 5 },
       notes: 'Volvo V60 Polestar Engineered — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Volvo_V60_Polestar_Engineered_(SPA)_DSC_0746.jpg (front 3/4), ' +
@@ -466,11 +461,11 @@
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
         // upright teardrop lamps on the fender fronts (front-view outline wrapped onto the wing), four-point DRL
-        polys([ell(0.685, 0.735, 0.112, 0.098, 12, 0.35)], 'front', 'gloss', 0.006, true),
-        polys([ell(0.685, 0.735, 0.088, 0.074, 12, 0.35)], 'front', 'light', 0.009, true),
-        polys([[-1, -1], [-1, 1], [1, -1], [1, 1]].map(function (q) { return ell(0.685 + q[0] * 0.038, 0.735 + q[1] * 0.03, 0.016, 0.013, 6); }), 'front', 'drl', 0.012, true),
+        polys([ell(0.68, 0.73, 0.138, 0.108, 12, 0.42)], 'front', 'gloss', 0.006, true),
+        polys([ell(0.68, 0.73, 0.112, 0.084, 12, 0.42)], 'front', 'light', 0.009, true),
+        polys([[-1, -1], [-1, 1], [1, -1], [1, 1]].map(function (q) { return ell(0.68 + q[0] * 0.046, 0.73 + q[1] * 0.034, 0.019, 0.015, 6); }), 'front', 'drl', 0.012, true),
         // air-curtain inlets, lower intake split by two body-colour bars, black off-road apron, crest
-        polys([[[0.62, 0.30], [0.72, 0.30], [0.80, 0.60], [0.70, 0.62]]], 'front', 'gloss', 0.007, true),
+        polys([[[0.655, 0.31], [0.71, 0.31], [0.77, 0.60], [0.72, 0.615]]], 'front', 'gloss', 0.007, true),
         polys([[[-0.56, 0.235], [0.56, 0.235], [0.60, 0.37], [-0.60, 0.37]]], 'front', 'grille', 0.006, false),
         polys([rect(0.17, 0.235, 0.21, 0.37)], 'front', 'paint', 0.009, true),
         polys([rect(-0.95, 0.15, 0.95, 0.235)], 'front', 'black', 0.006, false),
@@ -559,11 +554,11 @@
         rl(0.58, 0.83), rl(0.75, 0.83),
         polys([rect(-0.26, 0.58, 0.26, 0.69)], 'rear', 'plate', 0.008, false),
         polys([rect(-0.60, 0.24, -0.57, 0.44), rect(0.57, 0.24, 0.60, 0.44), rect(-0.03, 0.24, 0.03, 0.44)], 'rear', 'grille', 0.009, false),
-        exhaustPair(-2.44, 0.32, 0.30, 0.045, 0.045, 0.12), exhaustPair(-2.44, 0.32, 0.42, 0.045, 0.045, 0.12),
         // door handles, mirrors
         polys([rect(-0.30, 0.90, -0.17, 0.92)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.10, -0.06, 0.95, 1.04, 0.76, 0.95)
       ),
+      exhaust: [{ cx: 0.44, cy: 0.315, w: 0.095, h: 0.095, mirror: true }, { cx: 0.56, cy: 0.315, w: 0.095, h: 0.095, mirror: true }],
       wheels: { style: 'split', spokes: 5 },
       notes: 'Ferrari GTC4Lusso — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Ferrari_GTC4Lusso_IMG_4353.jpg (front 3/4), ' +
@@ -593,9 +588,9 @@
       { x: 0.88, k: 'h', m: 'screen', yb: 0.22, hw: 0.92, yw: 0.80, ybl: 0.965, zbl: 0.81, yc: 0.985, ysh: 0.90, zsh: 0.87 },
       { x: 0.30, k: 'w', m: 'screen' },
       { x: -0.20, k: 'c', m: 'cab', yb: 0.22, hw: 0.907, yw: 0.73, ybl: 0.995, zbl: 0.72, yg: 1.355, zg: 0.53, yr: 1.375, zr: 0.47, yq: 1.385, zq: 0.25, yc: 1.39, ysh: 0.90, zsh: 0.85 },
-      { x: -0.62, k: 'c', m: 'cab', yb: 0.22, hw: 0.918, yw: 0.69, ybl: 1.0, zbl: 0.715, yg: 1.385, zg: 0.53, yr: 1.405, zr: 0.475, yc: 1.416, ysh: 0.91, zsh: 0.86 },
-      { x: -1.30, k: 'c', m: 'cab', yb: 0.22, hw: 0.935, yw: 0.64, ybl: 1.015, zbl: 0.685, yg: 1.345, zg: 0.52, yr: 1.368, zr: 0.465, yc: 1.375, ysh: 0.92, zsh: 0.885 },
-      { x: -1.90, k: 'c', m: 'cab', yb: 0.221, hw: 0.932, yw: 0.84, ybl: 1.06, zbl: 0.63, ygb: 1.085, zgb: 0.60, yg: 1.275, zg: 0.505, yr: 1.31, zr: 0.445, yc: 1.318, ysh: 0.96, zsh: 0.86 },
+      { x: -0.62, k: 'c', m: 'cab', yb: 0.22, hw: 0.918, yw: 0.71, ybl: 1.0, zbl: 0.715, yg: 1.385, zg: 0.53, yr: 1.405, zr: 0.475, yc: 1.416, ysh: 0.91, zsh: 0.86 },
+      { x: -1.30, k: 'c', m: 'cab', yb: 0.22, hw: 0.935, yw: 0.68, ybl: 1.015, zbl: 0.685, yg: 1.345, zg: 0.52, yr: 1.368, zr: 0.465, yc: 1.375, ysh: 0.92, zsh: 0.885 },
+      { x: -1.90, k: 'c', m: 'cab', yb: 0.221, hw: 0.932, yw: 0.80, ybl: 1.06, zbl: 0.63, ygb: 1.085, zgb: 0.60, yg: 1.275, zg: 0.505, yr: 1.31, zr: 0.445, yc: 1.318, ysh: 0.96, zsh: 0.86 },
       { x: -2.13, k: 'c', m: 'dpil', yb: 0.226, hw: 0.90, yw: 0.82, ybl: 1.10, zbl: 0.58, ygb: 1.17, zgb: 0.54, yg: 1.18, zg: 0.535, yr: 1.275, zr: 0.44, yc: 1.282, ysh: 0.99, zsh: 0.80 },
       { x: -2.222, k: 'c', m: 'hatch', yb: 0.228, hw: 0.88, yw: 0.80, ybl: 1.08, zbl: 0.60, ygb: 1.09, zgb: 0.58, yg: 1.10, zg: 0.57, yr: 1.255, zr: 0.44, yq: 1.262, yc: 1.265, ysh: 0.98, zsh: 0.80 },
       { x: -2.47, k: 'c', m: 'tail', yb: 0.235, hw: 0.78, yw: 0.74, ybl: 1.0, zbl: 0.66, yg: 1.015, zg: 0.62, yr: 1.025, zr: 0.53, yc: 1.03 },
@@ -631,12 +626,12 @@
         star('rear', 0, 0.99, 0.034, 0.008, 'paint'),
         polys([rect(-0.26, 0.80, 0.26, 0.91)], 'rear', 'plate', 0.008, false),
         polys([rect(-0.80, 0.23, 0.80, 0.37)], 'rear', 'grille', 0.006, false),
-        polys([[[0.42, 0.26], [0.70, 0.26], [0.68, 0.32], [0.44, 0.32]]], 'rear', 'chrome', 0.009, true),
         polys([rect(-0.30, 1.245, 0.30, 1.257)], 'rear', 'tail', 0.008, false),
         // chrome belt blade to the DLO point, door handles, mirrors
         polys([rect(0.30, 0.925, 0.44, 0.948), rect(-0.85, 0.95, -0.71, 0.972)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.70, 0.54, 1.0, 1.09, 0.76, 0.94)
       ),
+      exhaust: [{ cx: 0.56, cy: 0.29, w: 0.24, h: 0.06, shape: 'trapezoid', mirror: true }],
       wheels: { style: 'mesh', spokes: 10 },
       notes: 'Mercedes-Benz CLS Shooting Brake (X218, facelift) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_CLS_550_4MATIC_Shooting_Brake_(X218)_front.JPG (front 3/4), ' +

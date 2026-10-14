@@ -201,6 +201,9 @@
       polys([[[-0.74, 0.19], [0.74, 0.19], [0.80, 0.33], [0.62, 0.37], [-0.62, 0.37], [-0.80, 0.33]]], 'rear', 'black', 0.004, false),
       polys([rect(0.46, 0.335, 0.68, 0.355)], 'rear', 'tail', 0.006, true),
       polys([rect(-0.25, 0.39, 0.25, 0.50)], 'rear', 'plate', 0.006, false),
+      // "911" script under the lettering (text badge)
+      polys([[0, 4, 3, 5], [0, 2.5, 1, 4], [2, 0, 3, 5], [1, 2, 2, 3]].map(function (c) { return rect(-0.07 + c[0] * 0.007, 0.70 + c[1] * 0.007, -0.07 + c[2] * 0.007, 0.70 + c[3] * 0.007); })
+        .concat([0.012, 0.052].map(function (z) { return rect(z, 0.70, z + 0.009, 0.735); })), 'rear', 'badge', 0.007, false),
       // louvred engine lid with the vertical third brake light
       polys([rect(-1.98, -0.42, -1.66, 0.42)], 'top', 'gloss', 0.004, false),
       polys([-0.36, -0.28, -0.2, -0.12, 0.12, 0.2, 0.28, 0.36].map(function (z) { return rect(-1.97, z - 0.016, -1.67, z + 0.016); }), 'top', 'black', 0.007, false),
@@ -217,6 +220,8 @@
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.64, z1: 0.79, pts2d: [[0.50, 0.925], [0.41, 0.925], [0.39, 0.99], [0.46, 0.99]] }
       ]
     ),
+    // twin oval tips set in the black diffuser band (992 Carrera; audit: the base round pipes read too small)
+    exhaust: [{ cx: 0.55, cy: 0.27, w: 0.17, h: 0.075, shape: 'oval', mirror: true }],
     wheels: { style: 'split', spokes: 5 },
     notes: 'Porsche 911 Carrera (992) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Porsche_911_Carrera_S_(992)_-_2025-11-21.jpg (side), ' +

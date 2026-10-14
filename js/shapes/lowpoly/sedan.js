@@ -139,8 +139,8 @@
         'kkpppppppp',   // front wing
         'kkpppppppp',   // wing / bonnet
         'kkpppppppp',   // bonnet to the cowl
-        'kkppppsggg',   // windscreen lower, A-pillar foot
-        'kkpppppggg',   // windscreen upper (A-pillar in c7)
+        'kkppppspgg',   // windscreen lower, black mirror sail, A-pillar foot (c7)
+        'kkppppgpgg',   // front door glass reaches the A-pillar, A-pillar (c7), windscreen upper
         'kkppppgpnn',   // front door glass, carbon roof
         'kkppppgpnn',   // rear door glass (B-pillar is a side poly)
         'kkppppgpnn',   // rear door / backlight top
@@ -253,8 +253,10 @@
         return [P(0.074, d), P(0.016, d + 120), P(0.016, d - 120)];
       }), 'front', 'chrome', 0.015, false),
       // slim angular headlamps with the eyebrow DRL hooking down at the inner end
-      polys([[[0.405, 0.672], [0.47, 0.655], [0.80, 0.69], [0.875, 0.735], [0.86, 0.772], [0.48, 0.738]]], 'front', 'gloss', 0.005, true),
-      polys([[[0.48, 0.722], [0.85, 0.755], [0.85, 0.768], [0.48, 0.735]], [[0.445, 0.672], [0.46, 0.672], [0.482, 0.735], [0.465, 0.735]]], 'front', 'drl', 0.009, true),
+      // (audit: maxTilt keeps the lamp decals on the upright nose face; the DRL hook used to smear up the bonnet as a white wedge)
+      tilt(polys([[[0.405, 0.672], [0.47, 0.655], [0.80, 0.69], [0.875, 0.735], [0.86, 0.765], [0.48, 0.732]]], 'front', 'gloss', 0.005, true), 45),
+      tilt(polys([[[0.49, 0.718], [0.845, 0.748], [0.845, 0.758], [0.49, 0.729]], [[0.452, 0.676], [0.464, 0.676], [0.484, 0.724], [0.472, 0.724]]], 'front', 'drl', 0.009, true), 45),
+      tilt(polys([ell(0.70, 0.715, 0.05, 0.016, 8)], 'front', 'light', 0.008, true), 45),
       // AMG lower bumper: big outer intakes with a gloss flic, wide centre intake, chrome A-wing blade across, plate
       polys([[[0.44, 0.20], [0.86, 0.235], [0.885, 0.47], [0.70, 0.485], [0.49, 0.43]]], 'front', 'grille', 0.004, true),
       polys([[[0.47, 0.33], [0.87, 0.36], [0.875, 0.385], [0.475, 0.355]]], 'front', 'gloss', 0.008, true),
@@ -319,8 +321,9 @@
         deck(-2.030, [[0.25, 0.918], [0.32, 0.94], [0.70, 0.962], [0.86, 0.956], [1.042, 0.876]], 1.172, 0.64),
         deck(-2.180, [[0.25, 0.895], [0.32, 0.915], [0.70, 0.94], [0.86, 0.934], [1.03, 0.855]], 1.130, 0.62),
         deck(-2.370, [[0.25, 0.84], [0.32, 0.86], [0.70, 0.895], [0.86, 0.885], [1.01, 0.80]], 1.075, 0.58),
-        deck(-2.500, [[0.27, 0.73], [0.34, 0.765], [0.66, 0.805], [0.86, 0.795], [1.0, 0.695]], 1.050, 0.52),
-        deck(-2.585, [[0.38, 0.56], [0.44, 0.63], [0.62, 0.685], [0.85, 0.68], [0.99, 0.58]], 1.056, 0.46, 0.6)
+        deck(-2.470, [[0.26, 0.76], [0.33, 0.795], [0.66, 0.835], [0.86, 0.825], [1.003, 0.73]], 1.058, 0.54),
+        deck(-2.545, [[0.36, 0.64], [0.42, 0.70], [0.64, 0.75], [0.86, 0.75], [0.995, 0.655]], 1.054, 0.50, 0.7),
+        deck(-2.590, [[0.58, 0.48], [0.62, 0.56], [0.74, 0.62], [0.88, 0.63], [0.99, 0.55]], 1.046, 0.44, 0.6)
       ],
       mats: rows([
         'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp',   // nose .. cowl
@@ -332,10 +335,10 @@
         'kkpppsgsgg',   // rear door glass, glass roof
         'kkpppsgsgg',   // rear door glass, liftback glass
         'kkpppsgsgg',   // rear door glass, liftback glass
-        'kkpppsgpgg',   // quarter glass
-        'kkpppsgpgg',   // quarter glass tip
+        'kkpppsgsgg',   // quarter glass, black C-pillar trim
+        'kkpppsgsgg',   // quarter glass tip
         'kkppppppgg',   // liftback glass base
-        'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp'   // liftback, duck tail, tail face
+        'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp', 'kkpppppppp'   // liftback, duck tail, tail face leaning in
       ]),
       capF: 'paint', capR: 'paint'
     },

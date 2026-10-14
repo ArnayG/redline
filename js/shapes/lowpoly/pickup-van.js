@@ -388,21 +388,27 @@
       parts: [].concat(
         // grille: dark trapezoid, two slats, big star in a ring
         polys([[[-0.47, 0.775], [0.47, 0.775], [0.52, 1.015], [-0.52, 1.015]]], 'front', 'grille', 0.004, false),
-        polys([rect(-0.49, 0.865, 0.49, 0.885), rect(-0.505, 0.94, 0.505, 0.96)], 'front', 'gloss', 0.007, false),
+        polys([rect(-0.49, 0.865, 0.49, 0.885), rect(-0.505, 0.94, 0.505, 0.96)], 'front', 'chrome', 0.007, false),
         polys([ell(0, 0.905, 0.10, 0.10, 14)], 'front', 'chrome', 0.009, false),
         polys([ell(0, 0.905, 0.085, 0.085, 14)], 'front', 'grille', 0.011, false),
         polys(star(0, 0.905, 0.085, 1), 'front', 'chrome', 0.013, false),
         // headlamps swept round the fender corners (+ the side return)
-        polys([[[0.52, 0.89], [0.80, 0.86], [0.95, 0.88], [0.99, 0.97], [0.97, 1.045], [0.55, 1.035]]], 'front', 'gloss', 0.006, true),
-        polys([[[0.555, 0.905], [0.80, 0.877], [0.935, 0.895], [0.97, 0.97], [0.955, 1.028], [0.575, 1.02]]], 'front', 'light', 0.009, true),
-        polys([[[0.58, 0.91], [0.80, 0.884], [0.93, 0.90], [0.93, 0.915], [0.80, 0.898], [0.58, 0.924]]], 'front', 'drl', 0.012, true),
-        polys([[[2.76, 0.88], [2.50, 0.93], [2.44, 1.08], [2.62, 1.10], [2.78, 1.05]]], 'side', 'gloss', 0.005, true),
-        polys([[[2.74, 0.90], [2.52, 0.95], [2.47, 1.06], [2.62, 1.08], [2.76, 1.04]]], 'side', 'light', 0.008, true),
-        polys([[[2.74, 0.91], [2.62, 0.93], [2.60, 0.955], [2.745, 0.935]]], 'side', 'indicator', 0.011, true),
+        // (audit: the lamps read as small white slivers — the real units are big, run the full grille height and
+        //  sweep a long way back up the fender towards the bonnet shut line)
+        polys([[[0.52, 0.86], [0.80, 0.83], [0.96, 0.86], [1.01, 0.97], [0.99, 1.075], [0.55, 1.05]]], 'front', 'gloss', 0.006, true),
+        polys([[[0.555, 0.88], [0.80, 0.85], [0.945, 0.875], [0.985, 0.97], [0.97, 1.055], [0.575, 1.035]]], 'front', 'light', 0.009, true),
+        polys([[[0.58, 0.885], [0.80, 0.858], [0.94, 0.88], [0.94, 0.90], [0.80, 0.876], [0.58, 0.903]]], 'front', 'drl', 0.012, true),
+        polys([[[0.60, 0.935], [0.86, 0.925], [0.92, 0.96], [0.90, 1.005], [0.62, 1.01]]], 'front', 'gloss', 0.012, true),
+        polys([rect(0.66, 0.955, 0.86, 0.975)], 'front', 'chrome', 0.014, true),
+        polys([[[2.79, 0.86], [2.52, 0.90], [2.30, 1.02], [2.24, 1.14], [2.48, 1.13], [2.70, 1.09], [2.80, 1.06]]], 'side', 'gloss', 0.005, true),
+        polys([[[2.77, 0.88], [2.54, 0.92], [2.33, 1.03], [2.29, 1.12], [2.48, 1.11], [2.70, 1.07], [2.78, 1.04]]], 'side', 'light', 0.008, true),
+        polys([[[2.76, 0.89], [2.60, 0.915], [2.57, 0.945], [2.765, 0.92]]], 'side', 'indicator', 0.011, true),
         // bumper: lower intake, plate, fog lamps
-        polys([rect(-0.50, 0.48, 0.50, 0.62)], 'front', 'grille', 0.006, false),
-        polys([rect(-0.26, 0.63, 0.26, 0.74)], 'front', 'plate', 0.008, false),
-        polys([rect(0.66, 0.52, 0.80, 0.58)], 'front', 'gloss', 0.007, true),
+        // (real: a wide mesh intake under the grille with the plate set low in the bumper beneath it)
+        polys([[[-0.56, 0.56], [0.56, 0.56], [0.60, 0.72], [-0.60, 0.72]]], 'front', 'grille', 0.006, false),
+        polys([rect(-0.54, 0.625, 0.54, 0.64), rect(-0.56, 0.665, 0.56, 0.68)], 'front', 'gloss', 0.009, false),
+        polys([rect(-0.26, 0.42, 0.26, 0.53)], 'front', 'plate', 0.008, false),
+        polys([rect(0.68, 0.56, 0.84, 0.64)], 'front', 'gloss', 0.007, true),
         // bonnet vents at the base of the windscreen
         polys([rect(1.66, 0.30, 1.78, 0.70)], 'top', 'black', 0.004, true),
         // rear: tall corner lamps, split doors with windows, star, plate, 3rd brake light, bumper
@@ -511,6 +517,8 @@
         polys([[[0.51, 1.02], [0.54, 1.235], [0.93, 1.20], [0.99, 1.12], [0.97, 1.03]]], 'front', 'gloss', 0.006, true),
         polys([[[0.54, 1.04], [0.565, 1.215], [0.91, 1.185], [0.96, 1.12], [0.94, 1.045]]], 'front', 'light', 0.009, true),
         polys([[[0.80, 1.045], [0.94, 1.045], [0.955, 1.08], [0.80, 1.08]]], 'front', 'indicator', 0.012, true),
+        // dark projector band across the inner lamp (keeps the lens from reading as a blank white block)
+        polys([[[0.58, 1.10], [0.84, 1.095], [0.88, 1.13], [0.84, 1.165], [0.60, 1.175]]], 'front', 'gloss', 0.012, true),
         polys([[[2.87, 1.00], [2.60, 1.14], [2.42, 1.36], [2.70, 1.31], [2.88, 1.21]]], 'side', 'gloss', 0.005, true),
         polys([[[2.85, 1.03], [2.61, 1.15], [2.47, 1.33], [2.70, 1.28], [2.86, 1.19]]], 'side', 'light', 0.008, true),
         // black bumper: lower intake, fog pods, plate
@@ -610,6 +618,11 @@
         ]
       };
     }
+    // extra block capitals for the rear "ID. BUZZ" badge (local additions; the shared set has no B / U / Z / '.')
+    if (!GLYPH.B) GLYPH.B = [[0, 0, 1, 5], [1, 4, 2.4, 5], [1, 2, 2.4, 3], [1, 0, 2.4, 1], [2.2, 3, 3, 4.4], [2.2, 0.6, 3, 2]];
+    if (!GLYPH.U) GLYPH.U = [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1]];
+    if (!GLYPH.Z) GLYPH.Z = [[0, 4, 3, 5], [0, 0, 3, 1], [1.9, 3, 3, 4], [1, 2, 2, 3], [0, 1, 1.1, 2]];
+    if (!GLYPH['.']) GLYPH['.'] = [[1, 0, 2, 1]];
     var fl = vw(0, 1.01, 0.10), rl = vw(0, 1.02, 0.075);
     var holes = [];
     [0.515, 0.445, 0.375].forEach(function (y, r) {
@@ -636,14 +649,17 @@
         // honeycomb lower intake (body-colour lattice, dark cells) + dark lower lip
         polys(holes, 'front', 'grille', 0.006, false),
         polys([rect(-0.12, 0.33, 0.12, 0.37)], 'front', 'grille', 0.006, false),
+        // front plate on the bumper above the honeycomb (audit: missing; the real plate sits over the intake)
+        polys([rect(-0.25, 0.455, 0.25, 0.555)], 'front', 'plate', 0.009, false),
         // rear: white upper tailgate, big window, full-width light bar, roundel + ID. BUZZ, plate recess, bumper
         polys([[[-0.96, 1.17], [0.96, 1.17], [0.90, 1.90], [-0.90, 1.90]]], 'rear', 'white', 0.004, false),
-        polys([[[-0.74, 1.27], [0.74, 1.27], [0.70, 1.80], [-0.70, 1.80]]], 'rear', 'glass', 0.007, false),
+        polys([[[-0.76, 1.27], [0.76, 1.27], [0.64, 1.80], [-0.64, 1.80]]], 'rear', 'glass', 0.007, false),
         polys([[[0, 1.115], [0.90, 1.115], [0.945, 1.18], [0, 1.18]]], 'rear', 'tail', 0.008, true),
         polys([[[0.60, 1.10], [0.90, 1.10], [0.945, 1.19], [0.62, 1.19]]], 'rear', 'tail', 0.010, true),
         polys(rl.ring, 'rear', 'chrome', 0.008, false),
         polys(rl.inner, 'rear', 'gloss', 0.010, false),
         polys(rl.lines, 'rear', 'chrome', 0.012, false),
+        polys(word('ID. BUZZ', 0, 0.90, 0.036, 1, 0.8), 'rear', 'badge', 0.009, false),
         polys([rect(-0.17, 0.64, 0.17, 0.75)], 'rear', 'gloss', 0.006, false),
         polys([rect(-0.15, 0.65, 0.15, 0.74)], 'rear', 'plate', 0.009, false),
         polys([rect(-0.95, 0.34, 0.95, 0.47)], 'rear', 'black', 0.006, false),
@@ -657,7 +673,7 @@
           { t: 'box', mat: 'black', mirror: true, c: [1.18, 1.18, 0.97], s: [0.08, 0.04, 0.08] }
         ]
       ),
-      wheels: { style: 'disc', spokes: 5 },
+      wheels: { style: 'turbine', spokes: 5 },   // 5-blade 'turbine' aero wheel of the 1st Edition / Pro S
       notes: 'Volkswagen ID. Buzz (2022) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID.Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_front_left,_2025-03-14.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID._Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_rear_right,_2025-05-18.jpg (rear 3/4), ' +

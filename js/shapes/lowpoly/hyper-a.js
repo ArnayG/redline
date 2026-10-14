@@ -32,8 +32,8 @@
   function rrect(a0, b0, a1, b1, c) {
     return [[a0 + c, b0], [a1 - c, b0], [a1, b0 + c], [a1, b1 - c], [a1 - c, b1], [a0 + c, b1], [a0, b1 - c], [a0, b0 + c]];
   }
-  function polys(list, view, mat, off, mirror) {
-    return list.map(function (p) { return { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: p }; });
+  function polys(list, view, mat, off, mirror, maxTilt) {   // maxTilt (deg, optional): flat decal, see LOWPOLY-SPEC
+    return list.map(function (p) { var o = { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: p }; if (maxTilt) o.maxTilt = maxTilt; return o; });
   }
   function S(x, pts) { return { x: x, pts: pts }; }
   function row(spec) {   // 'b p p p g ...' -> material keys
@@ -106,7 +106,7 @@
       polys([[[0.92, 0.13], [-0.92, 0.13], [-0.92, 0.21], [0.92, 0.19]]], 'side', 'black', 0.004, true),
       // tail: black louvre band, two rounded lamps per side, dark exhaust panel (tips: model exhaust), plate, diffuser
       polys([rect(-0.50, 0.855, 0.50, 0.905)], 'rear', 'gloss', 0.004, false),
-      polys([rrect(0.52, 0.845, 0.66, 0.915, 0.022), rrect(0.69, 0.84, 0.83, 0.91, 0.022)], 'rear', 'tail', 0.007, true),
+      polys([rrect(0.50, 0.83, 0.655, 0.92, 0.026), rrect(0.68, 0.825, 0.84, 0.915, 0.026)], 'rear', 'tail', 0.007, true),
       polys([[[-0.80, 0.20], [0.80, 0.20], [0.88, 0.30], [0.86, 0.44], [0.34, 0.44], [0.30, 0.38], [-0.30, 0.38], [-0.34, 0.44], [-0.86, 0.44], [-0.88, 0.30]]], 'rear', 'black', 0.004, false),
       polys([rect(-0.26, 0.45, 0.26, 0.55)], 'rear', 'plate', 0.006, false),
       [
@@ -115,6 +115,8 @@
         { t: 'box', mat: 'black', mirror: true, c: [0.52, 0.87, 0.80], s: [0.06, 0.03, 0.08] }
       ]
     ),
+    // twin round tips flanking the plate (rear photo: just outside the plate edges, level with its top half)
+    exhaust: [{ cx: 0.36, cy: 0.525, w: 0.115, h: 0.105, shape: 'round', mirror: true }],
     wheels: { style: 'split', spokes: 5 },
     notes: 'Ferrari SF90 Stradale — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Red_2019_Ferrari_SF90_Stradale_(48264238897)_(cropped).jpg (front 3/4), ' +
@@ -191,9 +193,10 @@
       // nose: two huge black intakes beside the beak, small centre intake, swoosh headlamps
       polys([[[0.26, 0.18], [0.80, 0.22], [0.86, 0.36], [0.80, 0.47], [0.50, 0.44], [0.30, 0.34]]], 'front', 'grille', 0.004, true),
       polys([rect(-0.16, 0.14, 0.16, 0.21)], 'front', 'grille', 0.004, false),
-      polys([[[0.36, 0.555], [0.50, 0.535], [0.84, 0.585], [0.86, 0.64], [0.62, 0.615], [0.42, 0.60]]], 'front', 'gloss', 0.006, true),
-      polys([[[0.46, 0.565], [0.60, 0.56], [0.82, 0.598], [0.83, 0.625], [0.60, 0.60]]], 'front', 'light', 0.009, true),
-      polys([[[0.38, 0.565], [0.44, 0.555], [0.62, 0.606], [0.85, 0.628], [0.85, 0.638], [0.60, 0.616]], [[0.36, 0.555], [0.40, 0.575], [0.40, 0.50], [0.37, 0.50]]], 'front', 'drl', 0.011, true),
+      polys([[[0.36, 0.50], [0.47, 0.485], [0.66, 0.515], [0.82, 0.565], [0.865, 0.635], [0.80, 0.65], [0.60, 0.615], [0.42, 0.575], [0.355, 0.535]]], 'front', 'gloss', 0.006, true),
+      polys([[[0.50, 0.53], [0.66, 0.545], [0.80, 0.585], [0.83, 0.625], [0.66, 0.598], [0.52, 0.565]]], 'front', 'light', 0.009, true),
+      // the McLaren "speedmark" DRL: sweep along the upper edge, hooking down round the inner end of the pod
+      polys(strip([[0.85, 0.638], [0.70, 0.615], [0.52, 0.578], [0.40, 0.55], [0.375, 0.515], [0.42, 0.495]], 0.018), 'front', 'drl', 0.012, true),
       polys([rect(-0.03, 0.30, 0.03, 0.34)], 'front', 'badge', 0.008, false),
       // twin bonnet ducts by the screen
       polys([[[1.12, 0.10], [1.30, 0.12], [1.36, 0.42], [1.10, 0.40]]], 'top', 'gloss', 0.005, true),
@@ -273,15 +276,15 @@
     },
     parts: [].concat(
       // horseshoe grille: chrome frame, black mesh, badge
-      polys([horseshoe(0.19, 0.24, 0.70, 8)], 'front', 'chrome', 0.008, false),
-      polys([horseshoe(0.155, 0.275, 0.665, 8)], 'front', 'grille', 0.012, false),
+      polys([horseshoe(0.225, 0.21, 0.68, 10)], 'front', 'chrome', 0.008, false),
+      polys([horseshoe(0.19, 0.245, 0.645, 10)], 'front', 'grille', 0.012, false),
       polys([ell(0, 0.60, 0.04, 0.022, 8)], 'front', 'indicator', 0.016, false),
       // big lower intakes either side, outer vertical intakes
-      polys([[[0.24, 0.20], [0.70, 0.24], [0.72, 0.42], [0.26, 0.40]]], 'front', 'grille', 0.004, true),
+      polys([[[0.27, 0.20], [0.70, 0.24], [0.72, 0.42], [0.29, 0.40]]], 'front', 'grille', 0.004, true),
       polys([[[0.76, 0.26], [0.92, 0.30], [0.92, 0.52], [0.78, 0.48]]], 'front', 'black', 0.004, true),
       polys([rect(-0.60, 0.15, 0.60, 0.19)], 'front', 'chrome', 0.004, false),
       // slim headlamps with four round projectors in a row
-      polys([[[0.34, 0.60], [0.86, 0.645], [0.86, 0.71], [0.36, 0.665]]], 'front', 'gloss', 0.006, true),
+      polys([[[0.33, 0.60], [0.86, 0.645], [0.86, 0.70], [0.34, 0.655]]], 'front', 'gloss', 0.006, true),
       polys([0.42, 0.53, 0.64, 0.75].map(function (z, i) { return ell(z, 0.637 + i * 0.009, 0.034, 0.024, 8); }), 'front', 'light', 0.01, true),
       // the C-line, side intake inside the bow, sill
       polys(strip(CLINE, 0.045), 'side', 'chrome', 0.008, true),
@@ -391,6 +394,8 @@
         { t: 'box', mat: 'black', mirror: true, c: [0.58, 0.89, 0.82], s: [0.05, 0.03, 0.08] }
       ]
     ),
+    // single centre exhaust: wide bright oval low in the rear grille, above the plate (rear 3/4 photo)
+    exhaust: [{ cx: 0, cy: 0.585, w: 0.24, h: 0.10, shape: 'oval' }],
     wheels: { style: 'star', spokes: 5 },
     notes: 'Koenigsegg Jesko — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:GIMS_2019,_Le_Grand-Saconnex_(GIMS0833).jpg (front 3/4), ' +
@@ -449,11 +454,11 @@
     parts: [].concat(
       // apron: centre intake, outer intakes split by a body-colour blade
       polys([[[-0.30, 0.16], [0.30, 0.16], [0.34, 0.32], [-0.34, 0.32]]], 'front', 'grille', 0.004, false),
-      polys([[[0.44, 0.17], [0.84, 0.21], [0.86, 0.29], [0.45, 0.27]], [[0.46, 0.31], [0.86, 0.33], [0.86, 0.43], [0.50, 0.40]]], 'front', 'grille', 0.004, true),
+      polys([[[0.44, 0.17], [0.84, 0.21], [0.86, 0.29], [0.45, 0.27]], [[0.46, 0.30], [0.86, 0.32], [0.86, 0.385], [0.50, 0.36]]], 'front', 'grille', 0.004, true),
       // upright headlamps on the wing peaks with 2x2 LED spots
-      polys([ell(0.66, 0.65, 0.085, 0.105, 12, -0.45)], 'front', 'gloss', 0.007, true),
-      polys([ell(0.66, 0.65, 0.07, 0.09, 12, -0.45)], 'front', 'light', 0.010, true),
-      polys([[-1, -1], [1, -1], [-1, 1], [1, 1]].map(function (q) { return ell(0.66 + q[0] * 0.03, 0.655 + q[1] * 0.025, 0.017, 0.015, 6); }), 'front', 'drl', 0.013, true),
+      polys([ell(0.655, 0.50, 0.095, 0.115, 12, -0.45)], 'front', 'gloss', 0.012, true),
+      polys([ell(0.655, 0.50, 0.08, 0.098, 12, -0.45)], 'front', 'light', 0.018, true),
+      polys([[-1, -1], [1, -1], [-1, 1], [1, 1]].map(function (q) { return ell(0.655 + q[0] * 0.032, 0.505 + q[1] * 0.03, 0.02, 0.018, 6); }), 'front', 'drl', 0.024, true),
       polys([rect(-0.025, 0.47, 0.025, 0.52)], 'front', 'indicator', 0.008, false),
       // top-pipe exhausts in the deck behind the fairings
 

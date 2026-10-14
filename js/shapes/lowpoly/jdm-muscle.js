@@ -35,6 +35,8 @@
   function polys(list, view, mat, off, mirror) {
     return list.map(function (p) { return { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: p }; });
   }
+  /** opt-in generator maxTilt (deg) on projected decals: one flat face toward the view (no smear onto the flank) */
+  function tilt(list, deg) { list.forEach(function (p) { p.maxTilt = deg; }); return list; }
   function poly(pts, view, mat, off, mirror) { return { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: pts }; }
   /** flared arch band (side profile) extruded across z */
   function flare(cx, cy, rIn, rOut, z0, z1, mat, segs, a0d, a1d) {
@@ -130,8 +132,8 @@
         S(-2.277, { b: 0.34, zb: 0.52, yw: 0.50, w: 0.68, ys: 0.76, zs: 0.67, yb: 0.86, zbl: 0.56, h: 0.88, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('cowl'),
-        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('cowl'),
+        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -149,13 +151,13 @@
       polys([ell(0, 0.585, 0.03, 0.015, 6)], 'front', 'badge', 0.008, false),
       polys([[[-0.46, 0.24], [0.46, 0.24], [0.50, 0.44], [-0.50, 0.44]]], 'front', 'grille', 0.005, false),
       polys([rect(-0.2, 0.33, 0.2, 0.44)], 'front', 'plate', 0.009, false),
-      polys([[[0.55, 0.23], [0.73, 0.25], [0.74, 0.37], [0.56, 0.37]]], 'front', 'grille', 0.005, true),
-      polys([ell(0.635, 0.305, 0.04, 0.035, 8)], 'front', 'light', 0.009, true),
+      tilt(polys([[[0.55, 0.23], [0.73, 0.25], [0.74, 0.37], [0.56, 0.37]]], 'front', 'grille', 0.005, true), 35),
+      tilt(polys([ell(0.635, 0.305, 0.04, 0.035, 8)], 'front', 'light', 0.009, true), 35),
       polys([rect(-0.62, 0.19, 0.62, 0.215)], 'front', 'black', 0.004, false),
       // rear: wedge lamps (amber top strip) tapering toward the plate recess, boot badge, bumper plate
-      polys([[[0.74, 0.885], [0.36, 0.888], [0.36, 0.83], [0.50, 0.805], [0.75, 0.78]]], 'rear', 'tail', 0.006, true),
-      polys([[[0.738, 0.884], [0.44, 0.886], [0.44, 0.852], [0.745, 0.842]]], 'rear', 'indicator', 0.012, true),
-      polys([[[0.50, 0.815], [0.42, 0.822], [0.42, 0.84], [0.50, 0.835]]], 'rear', 'rev', 0.009, true),
+      tilt(polys([[[0.745, 0.865], [0.30, 0.872], [0.30, 0.79], [0.46, 0.76], [0.74, 0.735]]], 'rear', 'tail', 0.006, true), 45),
+      tilt(polys([[[0.742, 0.862], [0.40, 0.868], [0.40, 0.832], [0.745, 0.822]]], 'rear', 'indicator', 0.012, true), 45),
+      tilt(polys([[[0.46, 0.772], [0.36, 0.785], [0.36, 0.81], [0.46, 0.80]]], 'rear', 'rev', 0.009, true), 45),
       polys([[[-2.00, 0.80], [-2.00, 0.89], [-2.20, 0.885], [-2.24, 0.77]]], 'side', 'tail', 0.006, true),
       polys([rect(-0.17, 0.52, 0.17, 0.64)], 'rear', 'plate', 0.008, false),
       polys([rect(-0.62, 0.20, 0.62, 0.30)], 'rear', 'black', 0.004, false),
@@ -191,7 +193,7 @@
         S(2.328, { b: 0.26, zb: 0.60, yw: 0.42, w: 0.70, ys: 0.62, zs: 0.69, yb: 0.705, zbl: 0.62, h: 0.725, c: 0.2 }),
         S(2.30, { b: 0.16, zb: 0.75, yw: 0.42, w: 0.85, ys: 0.66, zs: 0.845, yb: 0.75, zbl: 0.785, h: 0.77, c: 0.5 }),
         S(2.10, { b: 0.15, zb: 0.79, yw: 0.45, w: 0.875, ys: 0.69, zs: 0.87, yb: 0.775, zbl: 0.825, h: 0.79 }),
-        S(1.65, { b: 0.16, zb: 0.80, yw: 0.48, w: 0.885, ys: 0.72, zs: 0.88, yb: 0.805, zbl: 0.84, h: 0.82 }),
+        S(1.72, { b: 0.16, zb: 0.80, yw: 0.48, w: 0.885, ys: 0.72, zs: 0.88, yb: 0.805, zbl: 0.84, h: 0.82 }),
         S(1.00, { b: 0.16, zb: 0.80, yw: 0.50, w: 0.89, ys: 0.75, zs: 0.88, yb: 0.835, zbl: 0.84, h: 0.85 }),
         S(0.58, { b: 0.16, zb: 0.80, yw: 0.50, w: 0.89, ys: 0.79, zs: 0.875, yb: 0.88, zbl: 0.835, h: 0.91, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
         S(-0.02, { b: 0.16, zb: 0.80, yw: 0.52, w: 0.89, ys: 0.82, zs: 0.87, yb: 0.925, zbl: 0.82, g: [0.945, 0.745], r: [1.28, 0.655], e: [1.315, 0.625], t: 1.335 }),
@@ -203,8 +205,8 @@
         S(-2.273, { b: 0.30, zb: 0.70, yw: 0.55, w: 0.81, ys: 0.84, zs: 0.80, yb: 0.955, zbl: 0.74, h: 0.98, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -222,8 +224,8 @@
       // big lower intercooler mouth with the plate, brake ducts, fog lamps, carbon chin
       polys([[[-0.62, 0.24], [0.62, 0.24], [0.66, 0.56], [-0.66, 0.56]]], 'front', 'grille', 0.005, false),
       polys([rect(-0.2, 0.38, 0.2, 0.50)], 'front', 'plate', 0.009, false),
-      polys([[[0.68, 0.26], [0.82, 0.27], [0.83, 0.38], [0.69, 0.38]]], 'front', 'grille', 0.005, true),
-      polys([rect(0.56, 0.44, 0.66, 0.50)], 'front', 'light', 0.009, true),
+      tilt(polys([[[0.68, 0.26], [0.80, 0.27], [0.81, 0.38], [0.69, 0.38]]], 'front', 'grille', 0.005, true), 35),
+      tilt(polys([rect(0.56, 0.44, 0.66, 0.50)], 'front', 'light', 0.009, true), 35),
       polys([rect(-0.80, 0.15, 0.80, 0.22)], 'front', 'carbon', 0.006, false),
       // bonnet NACA duct, fender vents behind the front wheels
       polys([[[1.25, -0.05], [1.25, 0.05], [1.05, 0.08], [1.05, -0.08]]], 'top', 'black', 0.004, false),
@@ -268,7 +270,7 @@
         S(2.167, { b: 0.22, zb: 0.46, yw: 0.30, w: 0.56, ys: 0.36, zs: 0.53, yb: 0.39, zbl: 0.45, h: 0.40, c: 0.1 }),
         S(2.10, { b: 0.15, zb: 0.64, yw: 0.32, w: 0.76, ys: 0.44, zs: 0.745, yb: 0.51, zbl: 0.66, h: 0.475, c: 0.4 }),
         S(1.90, { b: 0.14, zb: 0.73, yw: 0.37, w: 0.84, ys: 0.565, zs: 0.825, yb: 0.65, zbl: 0.735, h: 0.545, c: 0.5 }),
-        S(1.52, { b: 0.15, zb: 0.74, lf: [0.26, 0.84], yw: 0.45, w: 0.875, ys: 0.71, zs: 0.85, yb: 0.785, zbl: 0.73, h: 0.60, c: 0.9 }),
+        S(1.585, { b: 0.15, zb: 0.74, lf: [0.26, 0.84], yw: 0.45, w: 0.875, ys: 0.71, zs: 0.85, yb: 0.785, zbl: 0.73, h: 0.60, c: 0.9 }),
         S(1.21, { b: 0.15, zb: 0.74, lf: [0.25, 0.815], yw: 0.45, w: 0.877, ys: 0.715, zs: 0.855, yb: 0.795, zbl: 0.74, h: 0.635, c: 0.9 }),
         S(0.76, { b: 0.15, zb: 0.73, lf: [0.25, 0.80], yw: 0.44, w: 0.865, ys: 0.655, zs: 0.855, yb: 0.745, zbl: 0.755, h: 0.675, c: 0.9 }),
         S(0.56, { b: 0.15, zb: 0.72, lf: [0.26, 0.815], yw: 0.44, w: 0.855, ys: 0.645, zs: 0.855, yb: 0.755, zbl: 0.76, h: 0.735, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
@@ -283,8 +285,8 @@
         S(-2.117, { b: 0.34, zb: 0.53, yw: 0.48, w: 0.64, ys: 0.715, zs: 0.60, yb: 0.81, zbl: 0.50, h: 0.835, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('roof'), row('hatch'), row('hatch'), row('hatch'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('roof'), row('hatch'), row('hatch'), row('hatch'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -297,9 +299,9 @@
       polys([rect(-0.17, 0.27, 0.17, 0.355)], 'front', 'plate', 0.009, false),
       polys([[[0.52, 0.305], [0.76, 0.31], [0.79, 0.325], [0.53, 0.322]]], 'front', 'light', 0.008, true),
       polys([[[0.76, 0.31], [0.80, 0.312], [0.815, 0.33], [0.80, 0.335]]], 'front', 'indicator', 0.01, true),
-      polys([[[0.55, 0.20], [0.72, 0.20], [0.74, 0.25], [0.57, 0.25]]], 'front', 'grille', 0.005, true),
+      tilt(polys([[[0.55, 0.20], [0.70, 0.20], [0.72, 0.25], [0.57, 0.25]]], 'front', 'grille', 0.005, true), 35),
       polys([ell(0, 0.37, 0.025, 0.012, 6)], 'front', 'badge', 0.008, false),
-      polys([rect(1.62, 0.44, 1.95, 0.452), rect(1.62, 0.73, 1.95, 0.742), rect(1.62, 0.44, 1.632, 0.742)], 'top', 'black', 0.004, true),
+      polys([rect(1.64, 0.46, 1.92, 0.467), rect(1.64, 0.715, 1.92, 0.722), rect(1.64, 0.46, 1.647, 0.722)], 'top', 'black', 0.004, true),
       // '99 tail: smoked full-width band with three round lamps a side (amber inboard), plate in the bumper
       polys([[[-0.74, 0.69], [0.74, 0.69], [0.82, 0.715], [0.85, 0.76], [0.82, 0.805], [0.74, 0.83], [-0.74, 0.83], [-0.82, 0.805], [-0.85, 0.76], [-0.82, 0.715]]], 'rear', 'gloss', 0.006, false),
       polys([ell(0.72, 0.76, 0.05, 0.045, 10), ell(0.59, 0.76, 0.05, 0.045, 10)], 'rear', 'tail', 0.009, true),
@@ -352,8 +354,8 @@
         S(-2.31, { b: 0.34, zb: 0.68, yw: 0.55, w: 0.84, ys: 0.93, zs: 0.82, yb: 1.03, zbl: 0.72, h: 1.05, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('rscreen'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('rscreen'), row('rscreen'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -362,9 +364,11 @@
       polys([[[0.55, 1.0], [-0.08, 1.295], [-0.70, 1.315], [-0.98, 1.19], [-1.07, 1.11], [-1.24, 1.045], [-0.40, 1.02]]], 'side', 'glass', 0.006, true),
       polys([rect(-0.47, 1.0, -0.42, 1.31)], 'side', 'gloss', 0.007, true),
       // V-motion grille: chrome surround, mesh, badge
-      polys([[[-0.27, 0.635], [0.27, 0.635], [0.45, 0.39], [0.43, 0.27], [-0.43, 0.27], [-0.45, 0.39]]], 'front', 'chrome', 0.005, false),
-      polys([[[-0.235, 0.61], [0.235, 0.61], [0.41, 0.39], [0.40, 0.295], [-0.40, 0.295], [-0.41, 0.39]]], 'front', 'grille', 0.008, false),
-      polys([rect(-0.04, 0.565, 0.04, 0.595)], 'front', 'badge', 0.011, false),
+      polys([[[-0.29, 0.635], [0.29, 0.635], [0.35, 0.585], [0.44, 0.27], [-0.44, 0.27], [-0.35, 0.585]]], 'front', 'grille', 0.005, false),
+      // the matte-chrome V-motion bar across the top of the opening (dark mesh above, badge on it)
+      polys([[[-0.31, 0.615], [0.31, 0.615], [0.24, 0.515], [-0.24, 0.515]]], 'front', 'chrome', 0.008, false),
+      polys([[[-0.27, 0.618], [0.27, 0.618], [0.215, 0.545], [-0.215, 0.545]]], 'front', 'grille', 0.010, false),
+      polys([rect(-0.04, 0.575, 0.04, 0.60)], 'front', 'badge', 0.013, false),
       // long swept headlamps with lightning-bolt DRL, deep corner intakes, carbon chin
       polys([[[0.32, 0.625], [0.62, 0.635], [0.84, 0.70], [0.90, 0.745], [0.82, 0.76], [0.56, 0.69], [0.33, 0.665]]], 'front', 'gloss', 0.006, true),
       polys([[[0.35, 0.633], [0.62, 0.643], [0.83, 0.705], [0.875, 0.74], [0.81, 0.75], [0.56, 0.682], [0.36, 0.66]]], 'front', 'light', 0.009, true),
@@ -408,7 +412,7 @@
         S(2.23, { b: 0.20, zb: 0.68, yw: 0.42, w: 0.80, ys: 0.64, zs: 0.79, yb: 0.725, zbl: 0.72, h: 0.75, c: 0.4 }),
         S(2.06, { b: 0.15, zb: 0.83, yw: 0.45, w: 0.895, ys: 0.67, zs: 0.885, yb: 0.785, zbl: 0.81, h: 0.805, c: 0.6 }),
         S(1.62, { b: 0.15, zb: 0.86, yw: 0.48, w: 0.935, ys: 0.72, zs: 0.925, yb: 0.84, zbl: 0.845, h: 0.875, c: 1.0 }),
-        S(1.00, { b: 0.15, zb: 0.86, yw: 0.50, w: 0.94, ys: 0.78, zs: 0.93, yb: 0.89, zbl: 0.855, h: 0.93, c: 1.0 }),
+        S(0.96, { b: 0.15, zb: 0.86, yw: 0.50, w: 0.94, ys: 0.78, zs: 0.93, yb: 0.89, zbl: 0.855, h: 0.93, c: 1.0 }),
         S(0.58, { b: 0.15, zb: 0.86, yw: 0.50, w: 0.94, ys: 0.82, zs: 0.925, yb: 0.955, zbl: 0.85, h: 0.995, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
         S(-0.15, { b: 0.15, zb: 0.86, yw: 0.50, w: 0.94, ys: 0.86, zs: 0.92, yb: 1.01, zbl: 0.835, g: [1.03, 0.74], r: [1.31, 0.63], e: [1.345, 0.595], t: 1.355 }),
         S(-0.50, { b: 0.15, zb: 0.87, yw: 0.50, w: 0.945, ys: 0.87, zs: 0.925, yb: 1.03, zbl: 0.845, g: [1.05, 0.745], r: [1.355, 0.64], e: [1.385, 0.605], t: 1.397 }),
@@ -420,8 +424,8 @@
         S(-2.525, { b: 0.40, zb: 0.62, yw: 0.55, w: 0.72, ys: 0.84, zs: 0.70, yb: 0.93, zbl: 0.62, h: 0.95, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('roof'), row('rscreen'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('roof'), row('rscreen'), row('rscreen'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -443,7 +447,7 @@
         return [[z, yb], [z + 0.032, yb + 0.003], [z + 0.040, yt], [z + 0.008, yt - 0.003]];
       }), 'front', 'drl', 0.012, true),
       // corner intakes, chin
-      polys([[[0.58, 0.25], [0.80, 0.27], [0.82, 0.38], [0.62, 0.38]]], 'front', 'grille', 0.005, true),
+      tilt(polys([[[0.58, 0.25], [0.79, 0.265], [0.80, 0.37], [0.62, 0.38]]], 'front', 'grille', 0.005, true), 40),
       polys([rect(-0.86, 0.14, 0.86, 0.21)], 'front', 'black', 0.006, false),
       // GT bonnet heat extractors
       polys([[[1.20, 0.22], [1.52, 0.24], [1.52, 0.40], [1.20, 0.42]]], 'top', 'black', 0.004, true),
@@ -493,8 +497,8 @@
         S(-2.4425, { b: 0.38, zb: 0.62, yw: 0.55, w: 0.72, ys: 0.86, zs: 0.70, yb: 0.94, zbl: 0.62, h: 0.96, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('rscreen'), row('deck'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -503,19 +507,21 @@
       polys([[[0.50, 1.045], [-0.18, 1.255], [-0.60, 1.28], [-0.60, 1.055]]], 'side', 'glass', 0.006, true),
       polys([[[-0.65, 1.057], [-0.65, 1.28], [-0.82, 1.275], [-1.20, 1.085]]], 'side', 'glass', 0.006, true),
       polys([rect(-0.65, 1.05, -0.60, 1.28)], 'side', 'gloss', 0.007, true),
-      // two-tier face: thin upper slot with bowtie, huge lower grille split by a body-colour bar
-      polys([rect(-0.44, 0.70, 0.44, 0.755)], 'front', 'grille', 0.006, false),
-      polys([[[-0.065, 0.712], [0.065, 0.712], [0.065, 0.742], [-0.065, 0.742]]], 'front', 'badge', 0.01, false),
-      polys([[[-0.66, 0.25], [0.66, 0.25], [0.70, 0.63], [-0.70, 0.63]]], 'front', 'grille', 0.005, false),
-      polys([rect(-0.68, 0.475, 0.68, 0.505)], 'front', 'paint', 0.008, false),
+      // two-tier face: a full-height black band between the slit lamps, huge black lower grille with the bowtie
+      // on its top bar, body-colour corner frames carrying horizontal LED light guides
+      polys([[[-0.46, 0.672], [0.46, 0.672], [0.46, 0.788], [-0.46, 0.788]]], 'front', 'grille', 0.006, false),
+      polys([[[-0.66, 0.25], [0.66, 0.25], [0.70, 0.62], [0.46, 0.68], [-0.46, 0.68], [-0.70, 0.62]]], 'front', 'grille', 0.005, false),
+      polys([rect(-0.62, 0.575, 0.62, 0.592)], 'front', 'gloss', 0.008, false),
+      polys([[[-0.075, 0.565], [0.075, 0.565], [0.075, 0.60], [-0.075, 0.60]]], 'front', 'badge', 0.011, false),
       polys([rect(-0.15, 0.30, 0.15, 0.40)], 'front', 'plate', 0.009, false),
-      // slit lamps (flat top, angled bottom) with full-length light guide
+      // slit lamps (flat top, angled bottom): dark housing, small projector element outboard, light guide along the bottom
       polys([[[0.44, 0.665], [0.80, 0.672], [0.88, 0.70], [0.92, 0.785], [0.44, 0.79]]], 'front', 'gloss', 0.006, true),
-      polys([[[0.47, 0.70], [0.82, 0.705], [0.88, 0.735], [0.90, 0.775], [0.47, 0.778]]], 'front', 'light', 0.009, true),
-      polys([ell(0.58, 0.74, 0.04, 0.025, 8), ell(0.70, 0.742, 0.04, 0.025, 8)], 'front', 'chrome', 0.012, true),
-      polys([[[0.45, 0.675], [0.80, 0.682], [0.86, 0.705], [0.80, 0.692], [0.45, 0.687]]], 'front', 'drl', 0.012, true),
+      polys([[[0.60, 0.725], [0.84, 0.73], [0.88, 0.76], [0.89, 0.778], [0.60, 0.778]]], 'front', 'light', 0.009, true),
+      polys([ell(0.66, 0.75, 0.035, 0.022, 8), ell(0.76, 0.752, 0.035, 0.022, 8)], 'front', 'chrome', 0.012, true),
+      polys([[[0.45, 0.675], [0.80, 0.682], [0.87, 0.71], [0.80, 0.697], [0.45, 0.692]]], 'front', 'drl', 0.012, true),
+      tilt(polys([[[0.72, 0.505], [0.86, 0.51], [0.865, 0.528], [0.72, 0.522]]], 'front', 'drl', 0.012, true), 40),
       // corner brake ducts, carbon splitter, carbon bonnet extractor
-      polys([[[0.72, 0.28], [0.88, 0.30], [0.89, 0.50], [0.74, 0.50]]], 'front', 'grille', 0.006, true),
+      tilt(polys([[[0.72, 0.28], [0.86, 0.30], [0.87, 0.47], [0.74, 0.47]]], 'front', 'grille', 0.006, true), 40),
       polys([rect(-0.90, 0.11, 0.90, 0.17)], 'front', 'carbon', 0.006, false),
       polys([[[1.25, -0.30], [1.80, -0.34], [1.80, 0.34], [1.25, 0.30]]], 'top', 'carbon', 0.004, false),
       polys([0, 1, 2, 3].map(function (k) { var x = 1.33 + k * 0.12; return rect(x, -0.27, x + 0.05, 0.27); }), 'top', 'black', 0.007, false),
@@ -566,8 +572,8 @@
         S(-2.549, { b: 0.32, zb: 0.72, yw: 0.55, w: 0.86, ys: 0.93, zs: 0.85, yb: 1.055, zbl: 0.74, h: 1.07, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
-        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck'), row('deck', 'paint'), row('deck', 'paint')
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'),
+        row('screen'), row('roof'), row('roof'), row('rscreen'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
     },
@@ -592,9 +598,9 @@
       polys([[[1.45, -0.20], [1.75, -0.22], [1.75, 0.22], [1.45, 0.20]]], 'top', 'black', 0.004, false),
       polys([[[1.10, 0.42], [1.40, 0.44], [1.40, 0.62], [1.10, 0.60]]], 'top', 'black', 0.004, true),
       // full-width racetrack tail lamp around the gloss-black centre panel, plate, valence
-      polys([[[-0.86, 0.87], [0.86, 0.87], [0.90, 0.90], [0.90, 1.00], [0.86, 1.03], [-0.86, 1.03], [-0.90, 1.00], [-0.90, 0.90]]], 'rear', 'tail', 0.006, false),
-      polys([rect(-0.80, 0.915, 0.80, 0.985)], 'rear', 'gloss', 0.009, false),
-      polys([rect(0.66, 0.93, 0.74, 0.97)], 'rear', 'rev', 0.012, true),
+      tilt(polys([[[-0.86, 0.87], [0.86, 0.87], [0.90, 0.90], [0.90, 1.00], [0.86, 1.03], [-0.86, 1.03], [-0.90, 1.00], [-0.90, 0.90]]], 'rear', 'tail', 0.006, false), 45),
+      tilt(polys([rect(-0.80, 0.915, 0.80, 0.985)], 'rear', 'gloss', 0.009, false), 45),
+      tilt(polys([rect(0.66, 0.93, 0.74, 0.97)], 'rear', 'rev', 0.012, true), 45),
       polys([rect(-0.17, 0.58, 0.17, 0.70)], 'rear', 'plate', 0.008, false),
       polys([rect(-0.88, 0.20, 0.88, 0.40)], 'rear', 'black', 0.005, false),
       // side: round racing filler, amber / red markers, door handle
