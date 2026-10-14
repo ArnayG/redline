@@ -161,7 +161,13 @@ window.CB = window.CB || {};
       '.pp-model-badge{position:absolute;top:8px;right:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid var(--line,#333);color:var(--text-dim,#aaa)}',
       '.pp-model.is-selected .pp-model-badge.is-pick{border-color:var(--accent,#c8a46a);color:var(--accent,#c8a46a)}',
       '.pp-model-fit{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;color:var(--text-dim,#aaa)}',
-      '.pp-model-fit strong{color:var(--text,#eee);font-weight:600}'
+      '.pp-model-fit strong{color:var(--text,#eee);font-weight:600}',
+      /* Auto-config (stock spec) */
+      '.pp-stock-btn.is-stock{background:transparent;color:var(--accent,#c8a46a);border-color:var(--accent,#c8a46a)}',
+      '.pp-stock-chip{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid var(--accent,#c8a46a);',
+      'background:color-mix(in srgb,var(--accent,#c8a46a) 10%,transparent);font-size:12.5px;color:var(--text,#eee);width:max-content;max-width:100%}',
+      '.pp-stock-chip[hidden]{display:none}',
+      '.pp-stock-chip .cb-btn.sm{min-height:26px;padding:0 10px;font-size:12px}'
     ].join('\n');
     var s = document.createElement('style');
     s.id = 'pp-styles';
@@ -960,10 +966,40 @@ window.CB = window.CB || {};
       ? ui.button('Match real dimensions', { kind: 'ghost', title: 'Copy the real car\'s wheelbase, track, ride height and tyre sizes into this build', onClick: matchReal })
       : el('button', { type: 'button', class: 'cb-btn ghost', onclick: matchReal }, 'Match real dimensions');
     var devNote = el('div', { class: 'pp-note is-warning pp-model-dev', role: 'status', hidden: true });
+    /* Auto-config: the shown model's factory spec in every section (CB.stock, js/shapes/stock-specs.js) */
+    var Stk = CB.stock && typeof CB.stock.run === 'function' ? CB.stock : null;
+    function runStock() { if (Stk) { stockChip.hidden = true; Stk.run(); } }
+    var stockBtn = typeof ui.button === 'function'
+      ? ui.button('Auto-config: stock', { kind: 'primary', title: 'Set engine, gearbox, drivetrain, chassis, wheels, aero, weight, paint, cabin and tech to this car\'s factory spec (F). One undo step.', onClick: runStock })
+      : el('button', { type: 'button', class: 'cb-btn primary', onclick: runStock }, 'Auto-config: stock');
+    stockBtn.classList.add('pp-stock-btn');
+    var stockChip = el('div', { class: 'pp-stock-chip', role: 'status', hidden: true },
+      el('span', { class: 'pp-stock-chip-text' }, 'Apply stock spec for this car?'),
+      el('button', { type: 'button', class: 'cb-btn primary sm', onclick: runStock }, 'Apply'),
+      el('button', { type: 'button', class: 'cb-btn ghost sm', 'aria-label': 'Dismiss', onclick: function () { stockChip.hidden = true; } }, 'Not now'));
+    var lastModelId = null;
     P.watch(fitInfo, function (b) {
       var m = null;
       try { m = S.getModel(b, { strict: true }); } catch (e) { m = null; }
       U.clear(fitInfo);
+      var hasStock = !!(Stk && m && Stk.has(m.id));
+      var isStock = hasStock && Stk.isStock(b);
+      var title = hasStock ? Stk.title(m.id) : '';
+      stockBtn.hidden = !hasStock;
+      if (hasStock) {
+        var lbl = stockBtn.querySelector('span') || stockBtn;
+        lbl.textContent = (isStock ? 'Stock ✓ ' : 'Auto-config: stock ') + title;
+        stockBtn.classList.toggle('is-stock', isStock);
+        stockBtn.title = isStock ? 'This build is the factory-spec ' + title + '. Click to re-apply.' :
+          'Set every section to the factory ' + title + ' (F). One undo step.';
+      }
+      // offer the stock spec inline right after a model change (not on first render)
+      var mid = m ? m.id : null;
+      if (lastModelId !== null && mid !== lastModelId && hasStock && !isStock) {
+        stockChip.querySelector('.pp-stock-chip-text').textContent = 'Apply stock spec for the ' + title + '?';
+        stockChip.hidden = false;
+      } else if (isStock || !hasStock) stockChip.hidden = true;
+      lastModelId = mid;
       if (!m) { matchBtn.hidden = true; devNote.hidden = true; return; }
       matchBtn.hidden = false;
       var r = m.ref || {}, wbB = num(get(b, 'body.wheelbase_mm'), 0), wbR = Math.round(num(r.wheelbase, 0) * 1000);
@@ -987,7 +1023,8 @@ window.CB = window.CB || {};
       devNote.textContent = far || '';
     });
     wrap.appendChild(gridSlot);
-    wrap.appendChild(el('div', { class: 'pp-btnrow' }, fitInfo, matchBtn));
+    wrap.appendChild(el('div', { class: 'pp-btnrow' }, fitInfo, matchBtn, Stk ? stockBtn : null));
+    if (Stk) wrap.appendChild(stockChip);
     wrap.appendChild(devNote);
     return wrap;
   }

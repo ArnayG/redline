@@ -626,6 +626,9 @@ html.cb-booting *, html.cb-booting *::before, html.cb-booting *::after { transit
   min-width: 0;
 }
 .topbar-actions .cb-btn.ghost { color: var(--text-dim); }
+/* Auto-config (stock spec): accent outline while the build is exactly the selected car's factory spec */
+#btn-stock.is-stock { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+#btn-stock[disabled] { opacity: .45; }
 #btn-theme svg { transition: transform var(--dur-4) var(--ease-spring); }
 #btn-theme:hover svg { transform: rotate(28deg); }
 #btn-more[aria-expanded="true"], #btn-history[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); border-color: transparent; }

@@ -1177,11 +1177,34 @@ window.CB = window.CB || {};
     on('btn-share', function () { openGarage('openShare'); });
     on('btn-spec', function () { openGarage('openSpec'); });
     on('btn-presets', function () { openGarage('openPresets'); });
+    on('btn-stock', function () { applyStock(); });
     var badge = $('legality-badge');
     if (badge) badge.addEventListener('click', function () { if (summary.selectTab) summary.selectTab('issues'); });
     injectExtraButtons();
   }
   function on(id, fn) { var n = $(id); if (n) n.addEventListener('click', fn); return n; }
+
+  /** Auto-config: the selected model's factory (stock) spec in every section, one undo step (CB.stock, js/shapes/stock-specs.js). */
+  function stockAvailable() { return !!(CB.stock && typeof CB.stock.run === 'function'); }
+  function applyStock() {
+    if (!stockAvailable()) { toast('Auto-config is not available in this build of the Garage.', 'warning'); return null; }
+    closePop();
+    return safe(function () { return CB.stock.run(); }, null, 'stock.run');
+  }
+  function syncStockButton(build) {
+    var btn = $('btn-stock');
+    if (!btn) return;
+    if (!stockAvailable()) { btn.hidden = true; return; }
+    var ok = safe(function () { return CB.stock.has(build); }, false);
+    var name = ok ? safe(function () { return CB.stock.title(build); }, '') : '';
+    var stock = ok && safe(function () { return CB.stock.isStock(build); }, false);
+    btn.disabled = !ok;
+    btn.classList.toggle('is-stock', !!stock);
+    btn.setAttribute('aria-pressed', stock ? 'true' : 'false');
+    btn.title = !ok ? 'Auto-config: no factory spec is known for this model'
+      : stock ? 'This build is the stock ' + name + ' (F re-applies it)'
+      : 'Auto-config: stock ' + name + ' — engine, gearbox, drivetrain, chassis, wheels, aero, weight, paint, cabin and tech as the factory built it (F). One undo step.';
+  }
 
   function openGarage(fn) {
     if (CB.garage && typeof CB.garage[fn] === 'function') return safe(function () { return CB.garage[fn](); }, null, 'garage.' + fn);
@@ -1342,6 +1365,7 @@ window.CB = window.CB || {};
         { label: 'Surprise me', hint: 'Random, valid build', icon: 'spark', run: function () { openGarage('surprise'); } },
         { label: 'Save build', hint: 'Ctrl/⌘ S', icon: 'check', run: function () { if (CB.garage && CB.garage.save) CB.garage.save(); else { CB.state.saveLocal(); toast('Build saved', 'success'); } } },
         { label: 'New build', hint: 'Start from the default car', icon: 'reset', run: newBuild },
+        stockAvailable() ? { label: 'Auto-config: stock spec', hint: 'F', run: applyStock } : null,
         { sep: true },
         { label: 'Export JSON', hint: 'Download this build', run: function () { openGarage('exportJSON'); } },
         { label: 'Import JSON', hint: 'Load a build file', run: function () { openGarage('importJSON'); } },
@@ -1464,6 +1488,7 @@ window.CB = window.CB || {};
     var name = $('build-name');
     if (name && document.activeElement !== name && name.value !== build.meta.name) { name.value = build.meta.name; name.style.setProperty('--chars', Math.max(8, name.value.length + 1)); }
     syncTitle(build);
+    syncStockButton(build);
     if (change && change.type !== 'boot') setStatus('Autosaving…', 'busy');
   }
   /** Tab title: the build name only while the Atelier is on screen; every other routed screen reads 'Redline — <Label>'. */
@@ -1557,7 +1582,7 @@ window.CB = window.CB || {};
     ['Ctrl/⌘ Z', 'Undo'], ['Ctrl/⌘ Shift Z', 'Redo (also Ctrl Y)'], ['1 – 9', 'Jump to section'],
     ['[  ]', 'Previous / next section'], ['X', 'Toggle x-ray view'], ['S', 'Toggle wheel spin'],
     ['V', 'Cycle camera: side, front, rear, top'], ['T', 'Toggle light / dark theme'],
-    ['P', 'Presets gallery'], ['G', 'Saved builds'], ['C', 'Compare builds'], ['Ctrl/⌘ S', 'Save build'],
+    ['P', 'Presets gallery'], ['F', 'Auto-config: stock spec of the selected car'], ['G', 'Saved builds'], ['C', 'Compare builds'], ['Ctrl/⌘ S', 'Save build'],
     ['Ctrl/⌘ P', 'Spec sheet'], ['R', 'Race this build (when race mode is loaded)'], ['D', 'Drift this build'], ['A', 'Arcade with this build'], ['H', 'Career hub (when the game is loaded)'], ['M', 'Main menu (title screen, career, my cars)'], ['?', 'This help'], ['Esc', 'Close dialogs and menus']
   ];
   function showShortcuts() {
@@ -1618,6 +1643,7 @@ window.CB = window.CB || {};
       case '[': ev.preventDefault(); step(-1); break;
       case ']': ev.preventDefault(); step(1); break;
       case 'p': case 'P': ev.preventDefault(); openGarage('openPresets'); break;
+      case 'f': case 'F': if (stockAvailable()) { ev.preventDefault(); applyStock(); } break;
       case 'g': case 'G': ev.preventDefault(); openGarage('openSaved'); break;
       case 'c': case 'C': ev.preventDefault(); openGarage('openCompare'); break;
       case 'r': case 'R': if (raceAvailable()) { ev.preventDefault(); openRace(); } break;
@@ -2057,7 +2083,7 @@ window.CB = window.CB || {};
     setView: setView, toggleXray: toggleXray, toggleSpin: toggleSpin,
     finance: function () { return U.deepClone(fin); },
     financeFor: function (total) { return { finance: finance(total), lease: lease(total), settings: U.deepClone(fin) }; },
-    openAtelier: openAtelier, closeAtelier: closeAtelier, atelierMode: atelierMode, openHub: openHub,
+    openAtelier: openAtelier, closeAtelier: closeAtelier, atelierMode: atelierMode, openHub: openHub, applyStock: applyStock,
     showShortcuts: showShortcuts, openRace: openRace, drive: drive, openDriveMenu: openDriveMenu,
     fmtLap: fmtLap,
     _test: { mergeChange: mergeChange, isUserEdit: isUserEdit, autoFixable: autoFixable, onRaceFinished: onRaceFinished, recordFreeRace: recordFreeRace, ownedSession: ownedSession, keepPreSessionBuild: keepPreSessionBuild }
