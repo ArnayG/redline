@@ -242,10 +242,10 @@
       // pts: 0 bottom centre, 1 bottom edge, 2 lower flank, 3 waist, 4 upper flank, 5 shoulder,
       //      6 hood edge / bed-rail inner, 7 hood / bed wall, 8 centre (hood or bed floor)
       stations: [
-        { x: 2.805, pts: [[0.64, 0], [0.64, 0.86], [0.72, 0.95], [0.95, 0.97], [1.30, 0.97], [1.435, 0.93], [1.455, 0.70], [1.465, 0.40], [1.465, 0]] },
-        { x: 2.70, pts: [[0.56, 0], [0.56, 0.90], [0.62, 0.99], [0.95, 1.01], [1.32, 1.01], [1.465, 0.96], [1.485, 0.70], [1.495, 0.40], [1.495, 0]] },
-        { x: 2.40, pts: [[0.56, 0], [0.57, 0.95], [0.64, 1.035], [0.95, 1.055], [1.34, 1.055], [1.49, 1.00], [1.515, 0.72], [1.53, 0.40], [1.535, 0]] },
-        { x: 1.85, pts: [[0.56, 0], [0.57, 0.97], [0.66, 1.06], [0.95, 1.08], [1.33, 1.07], [1.48, 1.01], [1.51, 0.72], [1.525, 0.40], [1.53, 0]] },
+        { x: 2.805, pts: [[0.64, 0], [0.64, 0.86], [0.72, 0.95], [0.95, 0.97], [1.30, 0.97], [1.45, 0.93], [1.47, 0.70], [1.48, 0.40], [1.485, 0]] },
+        { x: 2.70, pts: [[0.56, 0], [0.56, 0.90], [0.62, 0.99], [0.95, 1.01], [1.32, 1.01], [1.48, 0.96], [1.50, 0.70], [1.515, 0.40], [1.53, 0]] },
+        { x: 2.40, pts: [[0.56, 0], [0.57, 0.95], [0.64, 1.035], [0.95, 1.055], [1.34, 1.055], [1.495, 1.00], [1.515, 0.72], [1.54, 0.40], [1.565, 0]] },
+        { x: 1.85, pts: [[0.56, 0], [0.57, 0.97], [0.66, 1.06], [0.95, 1.08], [1.33, 1.07], [1.48, 1.01], [1.51, 0.72], [1.53, 0.40], [1.555, 0]] },
         { x: 1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.33, 1.02], [1.49, 0.99], [1.51, 0.76], [1.52, 0.40], [1.52, 0]] },
         { x: -1.12, pts: [[0.53, 0], [0.54, 0.97], [0.62, 1.01], [0.95, 1.025], [1.33, 1.02], [1.49, 0.99], [1.51, 0.76], [1.52, 0.40], [1.52, 0]] },
         { x: -1.18, pts: [[0.70, 0], [0.70, 0.95], [0.75, 1.00], [0.95, 1.02], [1.36, 1.02], [1.47, 1.00], [1.47, 0.90], [0.97, 0.88], [0.97, 0]] },
@@ -278,7 +278,7 @@
         { x: -1.13, pts: [[1.51, 0.94], [1.545, 0.93], [1.95, 0.85], [1.99, 0.79], [2.005, 0]] }
       ],
       mats: [
-        ['paint', 'paint', 'glass', 'glass'],      // windscreen + A-pillar
+        ['paint', 'glass', 'glass', 'glass'],      // windscreen + front quarter glass up to the A-pillar
         ['paint', 'glass', 'paint', 'paint'],      // front door glass, roof
         ['paint', 'gloss', 'paint', 'paint'],      // B-pillar (gloss black)
         ['paint', 'glass', 'paint', 'paint'],      // rear door glass
@@ -287,26 +287,32 @@
       capF: null, capR: 'paint'
     },
     parts: [].concat(
-      // grille: full-width dark box, black frame, a gloss bar through the middle carrying the extended block FORD
-      // letters (they span most of the grille), three amber clearance lamps along the top edge
-      polys([rect(-0.67, 0.955, 0.67, 1.425)], 'front', 'black', 0.004, false),
-      polys([rect(-0.635, 0.985, 0.635, 1.395)], 'front', 'grille', 0.007, false),
-      polys([rect(-0.635, 1.115, 0.635, 1.235)], 'front', 'gloss', 0.009, false),
-      polys(word('FORD', 0, 1.175, 0.095, -1, 2.45), 'front', 'badge', 0.012, false),
+      // grille: grey-bezel frame round a dark inset with mesh bars, a gloss bar through the middle carrying the
+      // extended block FORD letters (they span most of the grille), three amber clearance lamps along the top edge
+      polys([rect(-0.67, 0.955, 0.67, 1.425)], 'front', 'chrome', 0.004, false),
+      polys([rect(-0.645, 0.978, 0.645, 1.402)], 'front', 'grille', 0.007, false),
+      polys([1.012, 1.05, 1.088, 1.262, 1.30, 1.338, 1.372].map(function (y) { return rect(-0.62, y, 0.62, y + 0.012); }), 'front', 'black', 0.009, false),
+      polys([-0.32, 0, 0.32].map(function (z) { return rect(z - 0.006, 0.99, z + 0.006, 1.39); }), 'front', 'black', 0.0085, false),
+      polys([rect(-0.635, 1.11, 0.635, 1.24)], 'front', 'gloss', 0.011, false),
+      polys(word('FORD', 0, 1.175, 0.10, -1, 2.45), 'front', 'badge', 0.014, false),
       polys([-0.16, 0, 0.16].map(function (zc) { return rect(zc - 0.045, 1.405, zc + 0.045, 1.42); }), 'front', 'indicator', 0.012, false),
-      // C-clamp headlamps: dark housing, twin stacked projector blocks, C-shaped light guide on the outboard side
+      // C-clamp headlamps: dark housing, a bright C-shaped LED guide wrapping the projector (open inboard), a
+      // small chrome-ringed dark lens pair inside, amber turn strip under the C
       polys([rect(0.66, 1.17, 1.0, 1.425)], 'front', 'gloss', 0.006, true),
-      polys([rect(0.69, 1.20, 0.86, 1.395)], 'front', 'chrome', 0.008, true),
-      polys([rect(0.725, 1.315, 0.825, 1.375), rect(0.725, 1.22, 0.825, 1.28)], 'front', 'light', 0.011, true),
-      polys([[[0.87, 1.405], [0.985, 1.405], [0.985, 1.19], [0.87, 1.19], [0.87, 1.215], [0.955, 1.215], [0.955, 1.38], [0.87, 1.38]]], 'front', 'drl', 0.011, true),
-      // lower bumper: dark bumper with a centre intake, fog pods, silver skid plate with black tow hooks
+      polys([[[0.72, 1.395], [0.985, 1.395], [0.985, 1.205], [0.72, 1.205], [0.72, 1.228], [0.958, 1.228], [0.958, 1.372], [0.72, 1.372]]], 'front', 'drl', 0.011, true),
+      polys([rect(0.745, 1.255, 0.925, 1.345)], 'front', 'chrome', 0.009, true),
+      polys([rect(0.76, 1.268, 0.83, 1.332), rect(0.845, 1.268, 0.912, 1.332)], 'front', 'grille', 0.011, true),
+      polys([ell(0.795, 1.30, 0.02, 0.02, 6), ell(0.878, 1.30, 0.02, 0.02, 6)], 'front', 'light', 0.013, true),
+      polys([rect(0.72, 1.18, 0.985, 1.195)], 'front', 'indicator', 0.011, true),
+      // lower bumper: black side sections with dark fog pods (small round lenses), grey/silver skid centre, tow hooks
       polys([rect(-1.0, 0.62, 1.0, 0.925)], 'front', 'black', 0.005, false),
-      polys([rect(-0.42, 0.69, 0.42, 0.865)], 'front', 'grille', 0.008, false),
-      polys([rect(0.58, 0.735, 0.88, 0.835)], 'front', 'gloss', 0.008, true),
-      polys([rect(0.62, 0.765, 0.70, 0.805), rect(0.74, 0.765, 0.82, 0.805)], 'front', 'light', 0.011, true),
-      polys([rect(-0.62, 0.565, 0.62, 0.665)], 'front', 'chrome', 0.009, false),
+      polys([[[-0.46, 0.665], [0.46, 0.665], [0.42, 0.875], [-0.42, 0.875]]], 'front', 'grille', 0.008, false),
+      polys([0.72, 0.775, 0.83].map(function (y) { return rect(-0.43, y, 0.43, y + 0.012); }), 'front', 'black', 0.010, false),
+      polys([rect(0.60, 0.74, 0.88, 0.83)], 'front', 'gloss', 0.008, true),
+      polys([ell(0.68, 0.785, 0.035, 0.03, 6), ell(0.80, 0.785, 0.035, 0.03, 6)], 'front', 'chrome', 0.010, true),
+      polys([[[-0.66, 0.555], [0.66, 0.555], [0.62, 0.67], [-0.62, 0.67]]], 'front', 'chrome', 0.009, false),
       // hood heat extractors on the leading corners
-      polys([rect(2.20, 0.50, 2.55, 0.68)], 'top', 'black', 0.004, true),
+      polys([rect(2.28, 0.50, 2.56, 0.555), rect(2.28, 0.595, 2.56, 0.65)], 'top', 'black', 0.004, true),
       // cab: rear window, third brake light, roof clearance lamps
       polys([rect(-0.64, 1.57, 0.64, 1.92)], 'rear', 'glass', 0.005, false),
       polys([rect(-0.14, 1.94, 0.14, 1.975)], 'rear', 'tail', 0.008, false),
@@ -332,9 +338,10 @@
         // roof clearance lamps, front tow hooks, hitch receiver
         { t: 'box', mat: 'black', mirror: true, c: [0.0, 0.47, 1.02], s: [2.25, 0.06, 0.16] },
         { t: 'box', mat: 'black', mirror: true, c: [-2.11, 1.48, 0.955], s: [1.86, 0.025, 0.12] },
-        { t: 'prism', mat: 'mirror', mirror: true, z0: 1.05, z1: 1.25, pts2d: [[0.97, 1.55], [0.72, 1.54], [0.72, 1.83], [0.93, 1.83]] },
-        { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.714, 1.565, 1.07], [0.714, 1.565, 1.235], [0.714, 1.81, 1.235], [0.714, 1.81, 1.07]] },
-        { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.585, 1.0], s: [0.14, 0.07, 0.12] },
+        { t: 'prism', mat: 'gloss', mirror: true, z0: 1.0, z1: 1.26, pts2d: [[1.03, 1.545], [0.80, 1.54], [0.80, 1.775], [0.99, 1.78]] },
+        { t: 'prism', mat: 'paint', mirror: true, z0: 1.0, z1: 1.26, pts2d: [[0.99, 1.78], [0.80, 1.775], [0.80, 1.80], [0.975, 1.805]] },
+        { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.794, 1.56, 1.02], [0.794, 1.56, 1.245], [0.794, 1.76, 1.245], [0.794, 1.76, 1.02]] },
+        { t: 'box', mat: 'black', mirror: true, c: [0.93, 1.555, 0.97], s: [0.12, 0.05, 0.08] },
         { t: 'box', mat: 'indicator', c: [0.37, 2.03, 0.0], s: [0.04, 0.016, 0.06] },
         { t: 'box', mat: 'indicator', c: [0.37, 2.03, 0.16], s: [0.04, 0.016, 0.06] },
         { t: 'box', mat: 'indicator', c: [0.37, 2.03, -0.16], s: [0.04, 0.016, 0.06] },
