@@ -477,13 +477,15 @@
     var yb = 0.165;
 
     // one continuous flyline from the header to the ducktail (no step on the engine lid)
-    var roofLine = [[0.70, 0.925, 'c'], [0.36, 1.098], [0.02, 1.258], [-0.40, H, 'h'], [-0.95, 1.250], [-1.45, 1.150], [-1.80, 1.060], [-2.10, 1.000], [-2.24, 0.975, 'c']];
+    // (roof peak over the front seats, then the flyline falls in one arc to a low ducktail lip at 0.87 m,
+    //  matched to a straight side photo of a 992 Carrera: the deck is ~0.9 m over the engine, not a GT tail)
+    var roofLine = [[0.70, 0.925, 'c'], [0.36, 1.098], [0.02, 1.258], [-0.40, H, 'h'], [-0.95, 1.244], [-1.25, 1.168], [-1.50, 1.088], [-1.75, 1.006], [-2.00, 0.924], [-2.19, 0.874, 'c']];
     var body = sideBody(aF, aR, yb, yb, [
-      [1.80, 0.165], [2.03, 0.142, 'c'], [2.155, 0.205], [XF, 0.40, 'v'], [2.190, 0.500], [2.130, 0.600], [1.995, 0.745], [1.90, 0.800],
+      [1.80, 0.165], [2.03, 0.142, 'c'], [2.150, 0.215], [XF, 0.380, 'v'], [2.182, 0.480], [2.110, 0.590], [1.990, 0.712], [1.870, 0.790],
       // wing line climbs from the headlamp crown to the scuttle
-      [1.60, 0.835], [1.20, 0.865], [0.90, 0.895]
+      [1.60, 0.830], [1.20, 0.862], [0.90, 0.893]
     ].concat(roofLine, [
-      [-2.314, 0.905], [XR, 0.700, 'v'], [-2.318, 0.450], [-2.308, 0.300], [-2.289, 0.200], [-2.24, yb, 'c'], [-1.95, yb, 'c']
+      [-2.262, 0.850], [-2.306, 0.790], [XR, 0.640, 'v'], [-2.316, 0.450], [-2.300, 0.310], [-2.270, 0.215], [-2.21, yb, 'c'], [-1.95, yb, 'c']
     ]), 0.160);
 
     var doorGlass = [[0.56, 0.950, 'c'], [0.30, 1.100], [0.065, 1.222], [-0.30, 1.252, 'h'], [-0.60, 1.240, 'c'], [-0.615, 0.960, 'c']];
@@ -501,15 +503,15 @@
       // 1.25 m frameless door: front edge follows the A-pillar base, rear edge just behind the B-pillar trim
       doorCuts: [loop([[0.722, 0.25, 'c'], [0.722, 0.55], [0.712, 0.80], [0.69, 0.915]].concat(doorGlass, [[-0.60, 0.935], [-0.558, 0.62], [-0.53, 0.252, 'c']]))],
       panelLines: [
-        curve([[1.90, 0.790], [1.74, 0.520], [1.596, 0.330]]),            // front bumper / wing seam
+        curve([[1.84, 0.640], [1.72, 0.500], [1.596, 0.330]]),            // front bumper / wing seam (from under the lamp)
         curve([[-1.66, 0.620], [-1.675, 0.46], [-1.70, 0.300]]),          // rear bumper seam just behind the arch
-        curve([[-1.98, 0.842], [-2.15, 0.841], [-2.315, 0.838]]),         // bumper top seam under the light bar
-        curve([[-1.62, 1.085], [-1.70, 1.065]]),                          // engine-lid front edge (under the backlight)
+        curve([[-1.98, 0.742], [-2.15, 0.746], [-2.312, 0.748]]),         // bumper top seam under the light bar
+        curve([[-1.58, 1.030], [-1.66, 1.004]]),                          // engine-lid front edge (under the backlight)
         rrect(0.86, 0.850, 1.00, 0.872, 0.01)                             // fuel filler flap (front left wing)
       ],
       characterLines: [
         curve([[1.90, 0.780], [1.55, 0.818], [1.20, 0.845], [0.85, 0.880]]),      // front lid / wing-crown shut line (0.02 under the wing line)
-        curve([[-0.55, 0.936], [-1.00, 0.920], [-1.45, 0.885], [-1.92, 0.830]]), // wide rear haunch shoulder
+        curve([[-0.55, 0.936], [-1.00, 0.912], [-1.45, 0.870], [-1.92, 0.800]]), // wide rear haunch shoulder
         curve([[0.70, 0.370], [0.00, 0.384], [-0.52, 0.398]])                    // lower door sculpt
       ],
       sill: rrect(-0.84, 0.160, 0.85, 0.185, 0.008),
@@ -570,14 +572,14 @@
         [0.924, 0.55], [0.92, 0.42], [0.89, 0.28], [0.84, 0.215, 'c'], [0.60, 0.17], [0, 0.16, 'h']], 0),
       greenhouse: sym([[0, 1.255, 'h'], [0.40, 1.24], [0.51, 1.17], [0.545, 1.105], [0.52, 1.086, 'c'], [0, 1.080, 'h']], 0),
       bumper: sym([[0, 0.62, 'h'], [0.60, 0.62], [0.88, 0.58], [0.92, 0.42], [0.89, 0.28], [0.84, 0.215, 'c'], [0.60, 0.17], [0, 0.16, 'h']], 0),
-      taillights: pair(loop([[0.60, 0.936, 'c'], [0.80, 0.938], [0.856, 0.924], [0.884, 0.880], [0.900, 0.846, 'c'], [0.80, 0.850], [0.62, 0.874, 'c']]), 0),
-      lightBar: sym([[0, 0.930, 'h'], [0.62, 0.930, 'c'], [0.62, 0.885, 'c'], [0, 0.885, 'h']], 0),   // 45 mm full-width bar
+      taillights: pair(loop([[0.60, 0.836, 'c'], [0.80, 0.838], [0.856, 0.824], [0.884, 0.780], [0.900, 0.746, 'c'], [0.80, 0.750], [0.62, 0.774, 'c']]), 0),
+      lightBar: sym([[0, 0.830, 'h'], [0.62, 0.830, 'c'], [0.62, 0.785, 'c'], [0, 0.785, 'h']], 0),   // 45 mm full-width bar
       diffuser: sym([[0, 0.30, 'h'], [0.45, 0.30], [0.72, 0.27, 'c'], [0.70, 0.19], [0, 0.17, 'h']], 0),
       exhaust: [{ shape: 'oval', cx: 0.48, cy: 0.28, w: 0.18, h: 0.08 }, { shape: 'oval', cx: -0.48, cy: 0.28, w: 0.18, h: 0.08 }],
       plateArea: rrect(-0.26, 0.43, 0.26, 0.545, 0.01),
-      badgeArea: rrect(-0.20, 0.838, 0.20, 0.866, 0.006),
+      badgeArea: rrect(-0.20, 0.738, 0.20, 0.766, 0.006),
       badgeText: 'PORSCHE',
-      spoiler: sym([[0, 0.985, 'h'], [0.55, 0.985], [0.64, 0.958, 'c'], [0, 0.950, 'h']], 0)
+      spoiler: sym([[0, 0.885, 'h'], [0.55, 0.885], [0.64, 0.858, 'c'], [0, 0.850, 'h']], 0)
     };
 
     var details = [
@@ -585,9 +587,9 @@
       D('side', 'trim', rpoly([[0.515, 0.950], [0.548, 0.950], [0.556, 0.980], [0.522, 0.980]], 0.004), 'body'),   // thin door-mounted mirror arm
       D('side', 'trim', rpoly([[-0.612, 0.950], [-0.598, 1.248], [-0.672, 1.244], [-0.678, 0.954]], 0.004), 'gloss-black'),   // B-pillar
       D('side', 'handle', rrect(-0.46, 0.80, -0.27, 0.824, 0.012), 'body'),
-      D('side', 'trim', rrect(-1.745, 1.064, -1.695, 1.076, 0.004), 'light-red'),   // third brake light on the engine lid
-      D('side', 'trim', teardrop(1.945, 0.712, 0.125, 0.048, -48), 'light'),
-      D('side', 'trim', loop([[-2.25, 0.935, 'c'], [-2.306, 0.926], [-2.316, 0.850, 'c'], [-2.25, 0.858, 'c']]), 'light-red'),
+      D('side', 'trim', rrect(-1.745, 0.968, -1.695, 0.980, 0.004), 'light-red'),   // third brake light on the engine lid
+      D('side', 'trim', teardrop(1.915, 0.705, 0.118, 0.046, -44), 'light'),   // lamp on the falling nose, ahead of the wing crown
+      D('side', 'trim', loop([[-2.22, 0.828, 'c'], [-2.290, 0.812], [-2.312, 0.762, 'c'], [-2.23, 0.774, 'c']]), 'light-red'),   // light-bar end wrapping the tail corner
       D('side', 'trim', rrect(-2.318, 0.40, -2.29, 0.42, 0.006), 'light-red'),
       D('top', 'fuelCap', rrect(0.86, -0.80, 1.00, -0.70, 0.012), 'body'),
             D('top', 'wiper', rrect(0.66, -0.05, 0.70, 0.55, 0.01), 'black'),
@@ -603,9 +605,9 @@
       }, []),
       [
         D('front', 'wiper', rpoly([[-0.05, 0.930], [0.55, 0.948], [0.55, 0.958], [-0.05, 0.942]], 0.004), 'black'),
-        D('rear', 'vent', sym([[0, 1.05, 'h'], [0.42, 1.045], [0.46, 0.995, 'c'], [0, 0.99, 'h']], 0), 'gloss-black'),
-        D('rear', 'trim', rrect(-0.10, 1.030, 0.10, 1.042, 0.005), 'light-red'),
-        D('rear', 'trim', sym([[0, 0.884, 'h'], [0.60, 0.884, 'c'], [0.60, 0.876, 'c'], [0, 0.876, 'h']], 0), 'gloss-black')   // shadow under the floating light bar
+        D('rear', 'vent', sym([[0, 0.96, 'h'], [0.42, 0.955], [0.46, 0.905, 'c'], [0, 0.90, 'h']], 0), 'gloss-black'),
+        D('rear', 'trim', rrect(-0.10, 0.940, 0.10, 0.952, 0.005), 'light-red'),
+        D('rear', 'trim', sym([[0, 0.784, 'h'], [0.60, 0.784, 'c'], [0.60, 0.776, 'c'], [0, 0.776, 'h']], 0), 'gloss-black')   // shadow under the floating light bar
       ],
       pairD('rear', 'trim', rrect(0.70, 0.40, 0.84, 0.42, 0.008), 'light-red', 0),
       // from behind only the outboard part of the mirror shows past the body
@@ -614,10 +616,10 @@
 
     var sections = buildSections({
       side: side, top: top, front: front, rear: rear, ref: ref, archF: aF, archR: aR, sillY: 0.160, xWS: 0.70, xBL: -1.62,
-      belt: [[0.70, 0.865], [0.56, 0.928], [0.10, 0.922], [-0.62, 0.950], [-0.95, 0.982], [-1.12, 1.026], [-1.25, 1.070], [-1.45, 1.080], [-1.62, 1.060]],
+      belt: [[0.70, 0.865], [0.56, 0.928], [0.10, 0.922], [-0.62, 0.950], [-0.95, 0.982], [-1.12, 1.026], [-1.25, 1.060], [-1.45, 1.050], [-1.62, 1.012]],
       // wing crowns stand proud of the front lid; the rear haunch crown sits wide and low
       crest: [[2.20, 0.40, 0.68], [2.10, 0.74, 0.84], [2.00, 0.80, 0.86], [1.80, 0.83, 0.83], [1.60, 0.835, 0.79], [1.20, 0.865, 0.76], [0.90, 0.895, 0.78], [0.70, 0.90, 0.82], [0.20, 0.91, 0.92],
-        [-0.60, 0.93, 0.92], [-1.20, 0.95, 0.84], [-1.80, 0.95, 0.70], [-2.10, 0.93, 0.58], [-2.32, 0.88, 0.50]],
+        [-0.60, 0.93, 0.92], [-1.20, 0.95, 0.84], [-1.80, 0.93, 0.70], [-2.10, 0.86, 0.58], [-2.32, 0.78, 0.50]],
       dip: [[2.21, 0.0], [2.14, 0.08], [2.04, 0.15], [1.80, 0.16], [1.60, 0.14], [1.20, 0.09], [0.80, 0.025], [0.70, 0.0]],
       NV: 40, stations: 120
     });
