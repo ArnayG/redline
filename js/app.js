@@ -1432,7 +1432,8 @@ window.CB = window.CB || {};
       if (ev.key === 'ArrowDown') { ev.preventDefault(); (list[i + 1] || list[0]).focus(); }
       else if (ev.key === 'ArrowUp') { ev.preventDefault(); (list[i - 1] || list[list.length - 1]).focus(); }
       else if (ev.key === 'Escape') { ev.preventDefault(); closePop(); anchor.focus(); }
-      else if (ev.key === 'Tab') closePop();
+      // the menu sits at the end of <body>: Tab from it used to leave the page; continue from its button instead
+      else if (ev.key === 'Tab') { closePop(); anchor.focus(); }
     });
   }
   document.addEventListener('mousedown', function (ev) { if (openPop && !openPop.node.contains(ev.target) && ev.target !== openPop.anchor && !openPop.anchor.contains(ev.target)) closePop(); });
@@ -2035,7 +2036,10 @@ window.CB = window.CB || {};
       if (ignoreHash) { ignoreHash = false; return; }
       var p = parseHash();
       if (p.p && p.p !== active.id && CB.panels && CB.panels[p.p]) goto(p.p);
-      if (p.b) { setTimeout(function () { bootStripped = true; writeHash({ p: active.id }); toast('Loaded shared build', 'success'); }, 0); }
+      if (p.b) {
+        var okCode = shareCodeValid(p.b);
+        setTimeout(function () { bootStripped = true; writeHash({ p: active.id }); toast(okCode ? 'Loaded shared build' : BAD_SHARE_MSG, okCode ? 'success' : 'warning'); }, 0);
+      }
     });
     document.addEventListener('cb:panel-registered', U.debounce(function () {
       buildNav();
@@ -2055,6 +2059,12 @@ window.CB = window.CB || {};
     var msg = src === 'url' ? 'Loaded a shared build' : src === 'autosave' ? 'Restored your last session' : 'New build';
     setStatus(msg, src === 'url' ? 'ok' : '');
     if (src === 'url') toast('Loaded a shared build. Edits are autosaved on this device.', 'success');
+    else if (params.b) { stripShareParam(); toast(BAD_SHARE_MSG, 'warning', { duration: 6000 }); }   // corrupt / truncated #b= link
+  }
+  var BAD_SHARE_MSG = 'That share link is broken or incomplete, so your own build was kept. Ask for the full link again.';
+  function shareCodeValid(code) {
+    if (!CB.state || typeof CB.state.decode !== 'function') return true;
+    return !!safe(function () { return CB.state.decode(code); }, null, 'state.decode');
   }
 
   /**

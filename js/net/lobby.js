@@ -293,6 +293,14 @@ CB.net = CB.net || {};
     function emit(ev, a) { (listeners[ev] || []).slice().forEach(function (fn) { try { fn(a); } catch (e) { if (typeof console !== 'undefined') console.error('[CB.net.lobby] ' + ev, e); } }); }
     function changed() { emit('change', st); }
 
+    /** Two drivers with the same name (everyone starts as "Driver") would be indistinguishable on the grid, the
+        name tags and the results: the host numbers a clash ("Driver 2"). */
+    function uniqueName(name, id) {
+      var taken = function (n) { return st.players.some(function (x) { return x.id !== id && x.name.toLowerCase() === n.toLowerCase(); }); };
+      if (!taken(name)) return name;
+      for (var k = 2; k < 100; k++) { var sfx = ' ' + k, n = name.slice(0, NAME_MAX - sfx.length).trim() + sfx; if (!taken(n)) return n; }
+      return name;
+    }
     function player(id) { for (var i = 0; i < st.players.length; i++) if (st.players[i].id === id) return st.players[i]; return null; }
     function pub(p) { return { id: p.id, name: p.name, build: p.build, ready: !!p.ready, ping: Math.round(p.ping || 0), host: !!p.host, late: !!p.late, link: p.link === 'reconnecting' ? 'reconnecting' : 'open' }; }
     function pushChat(m) {
@@ -340,9 +348,10 @@ CB.net = CB.net || {};
           var pid = String(msg.pid || id).slice(0, 40);
           if (banned[pid]) { reject(id, 'kicked'); return; }
           var name = cleanName(msg.name), build = sanitizeBuild(msg.build);
-          if (p) { p.name = name; if (build) p.build = build; pushRoster(); return; }  // profile / car update
+          if (p) { p.name = uniqueName(name, id); if (build) p.build = build; pushRoster(); return; }  // profile / car update
           // a rejoin with the same persistent id replaces the stale entry
           st.players.filter(function (x) { return !x.host && x.pid === pid; }).forEach(function (x) { dropPlayer(x.id, null, true); });
+          name = uniqueName(name, id);
           if (st.players.length >= MAX_PLAYERS) { reject(id, 'full'); return; }
           pe.joined = true; pe.pid = pid;
           st.players.push({ id: id, pid: pid, name: name, build: build, ready: false, ping: 0, host: false, late: st.phase !== 'lobby', joinedAt: joinSeq++ });

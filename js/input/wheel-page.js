@@ -76,7 +76,7 @@ CB.input = CB.input || {};
     '.pwp-sheet input[type=range]{width:100%;min-height:40px}.pwp-sheet .row{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#ecebe6}',
     '.pwp-rot{position:absolute;inset:0;z-index:8;display:none;place-items:center;padding:24px;text-align:center;background:rgba(5,5,7,.86);font-weight:700;font-size:16px;pointer-events:none}',
     '@media (orientation:portrait){.pwp-rot{display:grid}}',
-    '.pwp-state{position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:4;padding:6px 14px;border-radius:999px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#e7cd9a;pointer-events:none;max-width:min(560px,52vw);text-align:center}'
+    '.pwp-state{position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:4;padding:6px 14px;border-radius:999px;background:rgba(8,8,10,.9);border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#e7cd9a;pointer-events:none;max-width:min(560px,52vw);text-align:center}'
   ].join('\n')
     // safe-area insets through CSS variables: CB.input.orient re-maps them when it counter-rotates the page
     .replace(/env\(safe-area-inset-(top|right|bottom|left)\)/g, 'var(--pw-sa-$1,env(safe-area-inset-$1))');

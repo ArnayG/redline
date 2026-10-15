@@ -3194,10 +3194,15 @@ CB.game.replay = (function () {
         // start the free 3D camera on exactly the shot that was on screen (the subject stays the followed car)
         P.view = 'free3d';
         P.extCam = { chase: 'chase', cockpit: 'cockpit', tv: 'tv', trackside: 'tv', helicopter: 'helicopter', 'orbit-car': 'chase' }[player.effectiveCamera] || 'chase';
-        P.f3 = seedFree3d(player.cameraState3d(), poseFor(P.focus), true); S.entryF3 = Object.assign({}, P.f3);
+        // the renderer's camera is only meaningful once it has drawn the subject (photo mode opened straight from the
+        // results screen has not rendered a frame yet: its default camera looks at the world origin, far from the car)
+        var cs0 = player.cameraState3d(), pz0 = poseFor(P.focus);
+        if (cs0 && cs0.target && pz0 && Math.hypot(cs0.target[0] - pz0.x, -cs0.target[2] - pz0.y) > 8) cs0 = null;   // every 3D view aims at the car
+        P.f3 = seedFree3d(cs0, pz0, true); S.entryF3 = Object.assign({}, P.f3);
         if (P.focus) player.followCar(P.focus);
       } else P.extCam = { chase: 'chase', north: 'north', tv: 'tv', trackside: 'tv', helicopter: 'north' }[player.effectiveCamera] || 'chase';
-      if (!S.panel) buildPanel(); else { if (S.fillCam) S.fillCam(); syncSliders(); }
+      if (!S.panel) buildPanel(); else if (S.fillCam) S.fillCam();
+      syncSliders();   // the Subject picker and sliders show this opening's focus and camera (a new panel starts on car #1)
       root.classList.add('photo'); root.classList.remove('pp-hidden', 'idle');
       notifyAchievement({ type: 'photo', action: 'open' });
       S.dirty = true; S.lastCompose = 0;

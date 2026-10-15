@@ -373,6 +373,19 @@ CB.input = CB.input || {};
 
   /* ---------------------------------------------------------------- dialog */
   var dlg = null;
+  function focusables(root) {
+    return Array.prototype.filter.call(root.querySelectorAll('button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'), function (n) {
+      return !n.disabled && n.getClientRects().length > 0;
+    });
+  }
+  /** keep Tab / Shift+Tab inside the dialog */
+  function trapTab(e, root) {
+    var f = focusables(root);
+    if (!f.length) { e.preventDefault(); return; }
+    var a = document.activeElement, i = f.indexOf(a);
+    if (e.shiftKey && (i <= 0)) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (i < 0 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+  }
   function close() {
     if (!dlg) return;
     var d = dlg; dlg = null;
@@ -381,6 +394,7 @@ CB.input = CB.input || {};
     if (d.countT) clearInterval(d.countT);
     window.removeEventListener('keydown', d.key, true);
     if (d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
+    if (d.opener && d.opener.focus && document.contains(d.opener)) { try { d.opener.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
     var cw = CW();
     if (cw && !cw.enabled()) cw.stop();                  // never switched on: camera off again
     refreshPicker();
@@ -416,7 +430,8 @@ CB.input = CB.input || {};
     ensureCss();
     if (dlg) close();
     var P = cw.prefs;
-    var ov = el('div', 'cw-ov'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Use webcam as wheel');
+    var opener = document.activeElement;
+    var ov = el('div', 'cw-ov'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Use webcam as wheel');
     var card = el('div', 'cw-card'), left = el('div', 'cw-left'), right = el('div', 'cw-right');
     var view = el('div', 'cw-view'), cv = el('canvas'), msg = el('div', 'cw-msg', 'Starting the camera…'), count = el('div', 'cw-count', '');
     cv.width = 640; cv.height = 480;
@@ -502,7 +517,7 @@ CB.input = CB.input || {};
     [head, flowEl, steps, go, status, warn, opts, btns].forEach(function (n) { right.appendChild(n); });
     card.appendChild(left); card.appendChild(right); card.appendChild(x); ov.appendChild(card);
     document.body.appendChild(ov);
-    var D = dlg = { ov: ov, offs: [], raf: 0, mask: false, counting: false, result: null, key: null, flow: null };
+    var D = dlg = { ov: ov, offs: [], raf: 0, mask: false, counting: false, result: null, key: null, flow: null, opener: opener };
     hudSync();
     peds.addEventListener('change', function (e) {
       if (e.target.name !== 'cw-ped') return;
@@ -700,9 +715,13 @@ CB.input = CB.input || {};
       if (e.key === 'Escape') { e.preventDefault(); if (cw.countdown()) { cw.cancelCentre(); if (D.flow) setStep(null); } else if (D.flow) { setStep(null); showWarn('Start cancelled.'); } else close(); }
       else if ((e.code === 'Space' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'SELECT' && tag !== 'SUMMARY' && tag !== 'INPUT') { e.preventDefault(); startFlow(); }
       else if ((e.key === 'c' || e.key === 'C') && tag !== 'INPUT') { calibrate('centre'); }
+      else if (e.key === 'Tab') trapTab(e, ov);
       e.stopPropagation();
     };
     window.addEventListener('keydown', D.key, true);
+    // modal: focus starts on Start (or the first control) and Tab stays inside; close() hands focus back to the opener
+    var first = ov.querySelector('[data-k="go"]') || focusables(ov)[0];
+    if (first) { try { first.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
 
     // live preview: the camera picture (mirrored) + landmarks / virtual wheel (or marker boxes), once per camera frame
     D.offs.push(cw.on('frame', function () {

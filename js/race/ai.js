@@ -1856,6 +1856,14 @@ CB.race = CB.race || {};
       var latRef = hasCorr ? corrClamp(A.lineOff[idx] + devTot, idx) : clamp(A.lineOff[idx] + devTot, -usableHalf(idx, -1), usableHalf(idx, 1));
       S.refPrev = latRef;
       var eLat = lat - latRef;                                     // + = we are left of where we want to be
+      // Arcade edge guard: with the reference pinned to the inside edge of a corner (a lane / squeeze against the
+      // inside), the line's curvature feed-forward keeps turning the car in past the edge and the weak feedback
+      // never wins (Shuto Night Loop: cars cut 1.5–2 m beyond the inside kerb). Past the usable edge, fade the
+      // feed-forward that points further out of the track so the feedback brings the car back.
+      if (L.arcade && !recovering && kFF * eLat > 0 && sign(lat) === sign(eLat)) {
+        var edgeOver = Math.abs(lat) - usableHalf(idx, sign(lat));
+        if (edgeOver > 0.3) kFF *= 1 - smoothstep(0.3, 1.0, edgeOver);
+      }
       // Reference heading from the actual (clamped) reference path a few metres ahead: the racing line's own
       // slope, the deviation's rate (lane changes lead instead of lag) and the track-edge clamp all included —
       // when an overtaking lane is pinned against the edge, the reference runs parallel to the edge, not to

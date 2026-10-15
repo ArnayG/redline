@@ -1091,6 +1091,7 @@ background:var(--gh-panel2);border:1px solid var(--gh-line);color:var(--gh-dim);
 #game-hub .gh-pi{display:inline-flex;align-items:stretch;height:22px;font:800 11px var(--gh-mono);border-radius:6px;overflow:hidden;border:1px solid var(--gh-line2)}
 #game-hub .gh-pi b{background:var(--c);color:#0b0b0b;padding:0 6px;display:grid;place-items:center}
 #game-hub .gh-pi span{padding:0 6px;display:grid;place-items:center;background:var(--gh-panel2);color:var(--gh-text)}
+#game-hub .gh-pi i{font:700 10px var(--gh-font);font-style:normal;letter-spacing:.06em;text-transform:uppercase;padding:0 7px;display:grid;place-items:center;background:var(--gh-panel2);color:var(--gh-dim);border-right:1px solid var(--gh-line2)}
 #game-hub .gh-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px}
 #game-hub .gh-kv dt{color:var(--gh-dim)}#game-hub .gh-kv dd{margin:0;text-align:right;font-family:var(--gh-mono);font-variant-numeric:tabular-nums}
 #game-hub .gh-bar{position:relative;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
@@ -1532,7 +1533,18 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var t = e.target.closest && e.target.closest('[data-nav]');
       if (t && H.main.contains(t)) setFocusEl(t, true);
     });
+    // Tab / click focus moves the highlight too, so arrows and Enter continue from where the keyboard focus is
+    listen(root, 'focusin', function (e) {
+      var t = e.target;
+      if (H && t && t.hasAttribute && t.hasAttribute('data-nav') && t !== H.focusEl) setFocusEl(t, true, true);
+    });
     var pm = prof();
+    // storage blocked (private mode, disabled site data) or full: say once that progress only lasts for this tab
+    if (!storageWarned && pm && typeof pm.isPersistent === 'function') later(function () {
+      if (!H || storageWarned || safe(function () { return pm.isPersistent(); }, true)) return;
+      storageWarned = true;
+      if (H.root.querySelector('.gh-toasts')) toast('Progress can’t be saved in this browser (storage blocked or full). It lasts until you close this tab.', 'warn');
+    }, 1500);
     if (pm && typeof pm.subscribe === 'function') H.unsub = pm.subscribe(onProfileChange);
     else { localListeners.push(onProfileChange); H.unsub = function () { localListeners.splice(localListeners.indexOf(onProfileChange), 1); }; }
     var A = achv();
@@ -1837,7 +1849,10 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     var row = el.closest && el.closest('.gh-row');
     $$('.gh-row.is-focus-row').forEach(function (r) { if (r !== row) r.classList.remove('is-focus-row'); });
     if (row) row.classList.add('is-focus-row');
-    if (document.activeElement !== el && (el.tagName === 'INPUT' || el.tagName === 'BUTTON' || el.tabIndex >= 0)) {
+    // automatic / hover focus never puts the caret in a text field (that pops the phone keyboard on every Profile visit);
+    // the field is only highlighted, and Enter / A (activateFocus) or a tap focuses it.
+    var textField = el.tagName === 'INPUT' && /^(text|search|email|number|)$/.test(el.type || '');
+    if (document.activeElement !== el && !(silent && textField) && (el.tagName === 'INPUT' || el.tagName === 'BUTTON' || el.tabIndex >= 0)) {
       try { el.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }
     if (!noScroll) {
@@ -1876,7 +1891,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
   /** A dialog that isn't the hub's own (achievements gallery, garage/atelier modals) is open on top of the hub. */
   function foreignModal() {
     if (!H || typeof document === 'undefined') return false;
-    var list = document.querySelectorAll('[aria-modal="true"], .gach-overlay');
+    // .cw-ov: the webcam-wheel setup dialog (role=dialog without aria-modal); without it Esc there also ran the hub's back()
+    var list = document.querySelectorAll('[aria-modal="true"], .gach-overlay, .cw-ov');
     for (var i = 0; i < list.length; i++) {
       var el = list[i];
       if (H.root && H.root.contains(el)) continue;
@@ -1902,11 +1918,33 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       return;
     }
     var k = e.key;
+    // Tab stays inside an open hub dialog (it used to walk out to the top nav behind the scrim)
+    if (k === 'Tab' && H.modal && H.modal.card) {
+      var foc = $$('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])', H.modal.card)
+        .filter(function (el) { return el.getClientRects().length > 0; });
+      if (!foc.length) { e.preventDefault(); return; }
+      var at = foc.indexOf(document.activeElement), nx;
+      if (at < 0) nx = e.shiftKey ? foc.length - 1 : 0;
+      else if (e.shiftKey && at === 0) nx = foc.length - 1;
+      else if (!e.shiftKey && at === foc.length - 1) nx = 0;
+      if (nx != null) { e.preventDefault(); foc[nx].focus(); if (foc[nx].hasAttribute('data-nav')) setFocusEl(foc[nx], true, true); }
+      return;
+    }
     if (typing) {
       if (k === 'Escape' || k === 'Enter') { t.blur(); e.preventDefault(); }
       return;
     }
     var isRange = t && t.tagName === 'INPUT' && t.type === 'range';
+    // Enter / Space on a control the keyboard focused with Tab (or the top nav, outside the hub) must activate *that*
+    // control, not the stale gamepad highlight (it used to click H.focusEl: Enter on "Buy a car" opened the race screen).
+    if (k === 'Enter' || k === ' ') {
+      var ae = document.activeElement;
+      if (ae && ae !== H.focusEl && ae !== document.body && ae !== document.documentElement && ae.matches &&
+          ae.matches('button,a[href],select,input,textarea,summary,[role=button],[role=tab],[role=menuitem],[tabindex]:not([tabindex="-1"])')) {
+        if (H.root.contains(ae) && ae.hasAttribute('data-nav')) setFocusEl(ae, true, true);
+        else return;   // native activation (click on Enter / Space) of the focused control
+      }
+    }
     var handled = true;
     switch (k) {
       case 'ArrowUp': case 'w': case 'W': moveFocus('up'); break;
@@ -1997,10 +2035,13 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     closeModal(undefined, true);
     var wrap = div('gh-modal');
     var card = div('gh-modal-card');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-label', String(o.title || o.kicker || 'Dialog'));
     if (o.wide) card.style.width = 'min(860px,94vw)';
     card.innerHTML = (o.kicker ? '<div class="gh-kicker">' + esc(o.kicker) + '</div>' : '') + '<h2>' + esc(o.title || '') + '</h2>' + (o.body || '') +
       '<div class="gh-btns">' + (o.actions || [{ label: 'OK', kind: 'primary', value: true }]).map(function (a, i) {
-        return '<button class="gh-btn ' + (a.kind || '') + '" data-nav data-mval="' + i + '"' + (a.disabled ? ' disabled' : '') + (a.autofocus ? ' data-autofocus' : '') + '>' + esc(a.label) + '</button>';
+        return '<button class="gh-btn ' + (a.kind || '') + '" data-nav data-mval="' + i + '"' + (a.disabled ? ' disabled' : '') + (a.title ? ' title="' + esc(a.title) + '"' : '') + (a.autofocus ? ' data-autofocus' : '') + '>' + esc(a.label) + '</button>';
       }).join('') + '</div>';
     wrap.appendChild(card);
     H.root.appendChild(wrap);
@@ -2441,9 +2482,11 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
   /* ======================================================================
      Shared view fragments
      ====================================================================== */
-  function piBadge(build) {
-    var pi = performanceIndex(metricsFor(build)), c = piClass(pi);
-    return '<span class="gh-pi" style="--c:' + c.color + '" title="Performance index"><b>' + c.id + '</b><span>' + pi + '</span></span>';
+  function piBadge(build, label) {
+    var pi = performanceIndex(metricsFor(build)), c = piClass(pi), what = 'Class ' + c.id + ', performance index ' + pi;
+    // label: optional visible text ("Your car") so the chip is not just a letter and a number
+    return '<span class="gh-pi" style="--c:' + c.color + '" role="img" aria-label="' + esc((label ? label + ': ' : '') + what) + '" title="' + esc(what) + '">' +
+      (label ? '<i aria-hidden="true">' + esc(label) + '</i>' : '') + '<b aria-hidden="true">' + c.id + '</b><span aria-hidden="true">' + pi + ' PI</span></span>';
   }
   function carStatsStrip(build) {
     var m = metricsFor(build) || {}, u = setting('units', 'kph');
@@ -3284,7 +3327,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var out = '<div class="gh-head"><div><div class="gh-kicker">Career mode</div><h1 class="gh-h1">The road to the <em>Masters</em></h1>' +
         '<p class="gh-sub">Five tiers, from club racing to the hypercar summit. Win trophies to unlock the next tier, keep your car eligible, and manage your credits between rounds.</p></div>' +
         '<div class="gh-btns"><span class="gh-chip gold">' + icon('cup', 12) + ' ' + trophies.length + ' trophies</span><span class="gh-chip">' + champsDone + ' / ' + champsTotal + ' championships</span>' +
-        (build ? piBadge(build) : '<span class="gh-chip warn">No car</span>') + '</div></div>';
+        (build ? piBadge(build, 'Your car') : '<span class="gh-chip warn">No car</span>') + '</div></div>';
       out += tabsHTML([{ id: 'tiers', name: 'Championships', count: champsTotal }, { id: 'events', name: 'Special events', count: model.events.length }, { id: 'trophies', name: 'Trophy cabinet', count: trophies.length }], tab);
       if (!build) out += '<div style="margin-bottom:18px">' + needCarNotice() + '</div>';
       if (tab === 'tiers') {
@@ -3699,7 +3742,10 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
   function switchHTML(key, on, label) {
     return '<button class="gh-switch' + (on ? ' is-on' : '') + '" role="switch" aria-checked="' + !!on + '" aria-label="' + esc(label || key) + '" data-nav data-key="sw-' + esc(key) + '" data-act="toggle" data-k="' + esc(key) + '"></button>';
   }
+  var storageWarned = false;
   function rowHTML(label, hint, control) {
+    // a slider has no visible text of its own: name it after its row so screen readers announce "Master volume, 80%"
+    control = String(control).replace(/<input type="range"(?![^>]*aria-label)/g, '<input type="range" aria-label="' + esc(label) + '"');
     return '<div class="gh-row"><div class="lbl"><b>' + esc(label) + '</b>' + (hint ? '<small>' + esc(hint) + '</small>' : '') + '</div>' + control + '</div>';
   }
   function trackLocked(id) {
@@ -4003,7 +4049,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     var car = carById(id); if (!car) return;
     var val = car.name;
     modal({
-      kicker: 'My Cars', title: 'Rename car', body: '<input class="gh-input" data-nav maxlength="40" style="width:100%" value="' + esc(car.name) + '">',
+      kicker: 'My Cars', title: 'Rename car', body: '<input class="gh-input" data-nav maxlength="40" style="width:100%" aria-label="Car name" value="' + esc(car.name) + '">',
       actions: [{ label: 'Cancel', kind: 'ghost', value: false }, { label: 'Save', kind: 'primary', value: true, handler: function (m) { val = m.card.querySelector('input').value; } }],
       mount: function (card) {
         var i = card.querySelector('input');
@@ -4155,9 +4201,11 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       body: '<div style="margin:6px 0 10px">' + carArt(build, { uid: 'buy' }) + '</div>' + carStatsStrip(build) +
         '<dl class="gh-kv" style="margin-top:14px">' + (q && q.msrp ? '<dt>List price (MSRP)</dt><dd>$' + fmtInt(q.msrp) + '</dd><dt>Career price (×' + q.factor + ')</dt><dd>' + esc(fmtCredits(price)) + '</dd>' : '<dt>Price</dt><dd>' + esc(fmtCredits(price)) + '</dd>') +
         '<dt>Balance after</dt><dd style="color:' + (bal - price < 0 ? 'var(--gh-bad)' : 'inherit') + '">' + esc(fmtCredits(bal - price)) + '</dd></dl>' +
-        (locks.length ? '<ul class="gh-reasons">' + locks.slice(0, 6).map(function (l) { return '<li>' + icon('lock', 12) + ' ' + esc((l.category ? l.category + ': ' : '') + l.name) + ' — level ' + l.level + '</li>'; }).join('') + '</ul>' : '') +
+        (locks.length ? '<p class="gh-reasons-head" style="margin:12px 0 -6px;font-weight:700;color:var(--gh-bad)">' + icon('lock', 12) + ' Buy is locked: ' + locks.length + ' part' + (locks.length === 1 ? ' needs' : 's need') + ' a higher driver level (you are level ' + fmtInt(num(P().level, 1)) + '). Customise or pick the Club-spec version.</p>' +
+          '<ul class="gh-reasons">' + locks.slice(0, 6).map(function (l) { return '<li>' + icon('lock', 12) + ' ' + esc((l.category ? l.category + ': ' : '') + l.name) + ' — level ' + l.level + '</li>'; }).join('') + (locks.length > 6 ? '<li>…and ' + (locks.length - 6) + ' more</li>' : '') + '</ul>' : '') +
         (price > bal ? '<ul class="gh-reasons"><li>You need ' + esc(fmtCredits(price - bal)) + ' more.</li></ul>' : ''),
-      actions: [{ label: 'Cancel', kind: 'ghost', value: false }].concat(locks.length && opts.canCustomise !== false && appMod() ? [{ label: 'Customise', value: 'custom' }] : []).concat(locks.length ? [{ label: 'Club-spec version', value: 'legal' }] : []).concat([{ label: 'Buy · ' + fmtCredits(price), kind: 'primary', value: true, disabled: !!locks.length || price > bal }]),
+      actions: [{ label: 'Cancel', kind: 'ghost', value: false }].concat(locks.length && opts.canCustomise !== false && appMod() ? [{ label: 'Customise', value: 'custom' }] : []).concat(locks.length ? [{ label: 'Club-spec version', value: 'legal' }] : []).concat([{ label: 'Buy · ' + fmtCredits(price), kind: 'primary', value: true, disabled: !!locks.length || price > bal,
+        title: locks.length ? 'Locked: ' + locks.map(function (l) { return l.name; }).slice(0, 6).join(', ') + (locks.length > 6 ? '…' : '') : price > bal ? 'You need ' + fmtCredits(price - bal) + ' more' : '' }]),
       onClose: function (v) {
         if (v === 'custom') { customBuy(build); return; }
         if (v === 'legal') { var lb = legalBuild(build); later(function () { buyFlow(lb.build, Object.assign({}, opts, { name: name + ' Club Spec' })); }, 40); return; }
@@ -4402,7 +4450,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
             '<button class="gh-btn small" data-nav data-act="pin" data-id="' + esc(r.id) + '">' + (r.pinned ? 'Unpin' : 'Pin') + '</button>' +
             '<button class="gh-btn small" data-nav data-act="export" data-id="' + esc(r.id) + '">' + icon('download', 12) + '</button>' +
             '<button class="gh-btn small danger" data-nav data-act="del" data-id="' + esc(r.id) + '">' + icon('trash', 12) + '</button></div></div>';
-        }).join('') + '</div>' : '<div class="gh-empty"><b>No saved replays</b>Finish a race and press “Save replay” on the results screen to keep it here.</div>');
+        }).join('') + '</div>' : '<div class="gh-empty"><b>No saved replays</b>Finish a race, press “Watch replay” on the results screen, then “Save” to keep it here.</div>');
       onAct(host, {
         last: function () { watchReplay(null); },
         watch: function (d) { watchReplay(d.id); },
@@ -4443,7 +4491,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var cstats = getPath(p, 'career.stats') || {};
       var tile = function (label, value, sub) { return '<div class="gh-tile"><small>' + esc(label) + '</small><b>' + value + '</b>' + (sub ? '<span>' + sub + '</span>' : '') + '</div>'; };
       host.innerHTML = '<div class="gh-head"><div><div class="gh-kicker">Profile</div><h1 class="gh-h1">' + esc(p.driverName || 'Driver') + '</h1><p class="gh-sub">Level ' + li.level + ' · ' + esc(levelTitle(li.level)) + ' · racing since ' + fmtDate(p.createdAt) + '</p></div>' +
-        '<div class="gh-panel" style="min-width:340px"><div class="gh-row" style="padding:0;background:none;min-height:0;border:0"><div class="lbl"><b>Driver name</b></div><input class="gh-input" data-nav data-key="name" maxlength="24" value="' + esc(p.driverName || '') + '"></div>' +
+        '<div class="gh-panel" style="min-width:340px"><div class="gh-row" style="padding:0;background:none;min-height:0;border:0"><div class="lbl"><b>Driver name</b></div><input class="gh-input" data-nav data-key="name" maxlength="24" aria-label="Driver name" autocomplete="nickname" value="' + esc(p.driverName || '') + '"></div>' +
         '<div class="gh-colors" style="margin-top:12px">' + AVATAR_COLORS.map(function (c) { return '<button class="gh-color' + (String(p.avatarColor).toLowerCase() === c ? ' is-on' : '') + '" style="background:' + c + '" data-nav data-key="col-' + c + '" data-act="color" data-c="' + c + '" aria-label="Avatar colour ' + c + '"></button>'; }).join('') + '</div>' +
         '<div class="gh-bar" style="margin-top:14px"><i style="width:' + (li.progress * 100).toFixed(1) + '%"></i></div><small style="color:var(--gh-dim)">' + fmtInt(p.xp) + ' XP · ' + (li.maxed ? 'max level' : fmtInt(li.remaining) + ' to level ' + (li.level + 1)) + '</small></div></div>' +
         '<div class="gh-tiles">' +
@@ -4848,7 +4896,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       replayList: replayList, carSVG: carSVG, carArt: carArt, estimateMetrics: estimateMetrics, metricsFor: metricsFor,
       performanceIndex: performanceIndex, piClass: piClass, trackPreview: trackPreview, trackList: trackList,
       fmtTime: fmtTime, fmtCredits: fmtCredits, fmtInt: fmtInt, fmtCompact: fmtCompact, fmtDuration: fmtDuration, fmtDist: fmtDist, fmtSpeed: fmtSpeed,
-      staleOverlays: staleOverlays, ordinal: ordinal, conditionLabel: conditionLabel, titleCase: titleCase, shade: shade, medalThresholds: medalThresholds,
+      staleOverlays: staleOverlays, rowHTML: rowHTML, ordinal: ordinal, conditionLabel: conditionLabel, titleCase: titleCase, shade: shade, medalThresholds: medalThresholds,
       buyCar: buyCar, sellCar: sellCar, repairCar: repairCar, applyUpgrade: applyUpgrade, upgradeQuote: upgradeQuote, priceOf: priceOf,
       chSaveRecord: chSaveRecord, challengeList: challengeList, driverInfo: driverInfo, calendarFor: calendarFor, standingsFor: standingsFor,
       fallbackProfile: fallbackProfile, steerAssistLevel: steerAssistLevel, setSteerAssistLevel: setSteerAssistLevel, raceSettings: raceSettings,

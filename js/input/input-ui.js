@@ -76,6 +76,7 @@ CB.input = CB.input || {};
     '.pw-ta{width:100%;min-height:62px;resize:vertical;border-radius:10px;border:1px solid var(--line,#2b2c33);background:var(--bg-2,#111114);color:var(--text,#ecebe6);font:12px var(--mono,ui-monospace,monospace);padding:8px}',
     '@media (max-width:720px){.pw-card{grid-template-columns:1fr}.pw-left{border-right:0;border-bottom:1px solid var(--line,#2b2c33)}}',
     /* status chip + toast */
+    'html.cb-modal-open .pw-chip{display:none}',   /* the chip sat on top of every dialog's footer (Close / Done) */
     '.pw-chip{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147482000;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border-radius:999px;background:rgba(8,9,11,.78);border:1px solid var(--line-2,#3a3b44);color:var(--text,#ecebe6);font:600 11.5px var(--font,system-ui);font-variant-numeric:tabular-nums;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
     '.pw-chip .pw-dot{width:8px;height:8px;box-shadow:none}',
     '.pw-toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:2147483001;padding:10px 16px;border-radius:10px;background:rgba(8,9,11,.92);border:1px solid var(--line-2,#3a3b44);color:var(--text,#ecebe6);font:600 13px var(--font,system-ui);max-width:min(92vw,560px);text-align:center;pointer-events:none;transition:opacity .4s}',
@@ -100,6 +101,8 @@ CB.input = CB.input || {};
     '#race-root .pw-steerind{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom));width:120px;height:6px;margin-left:-60px;border-radius:3px;background:rgba(255,255,255,.12);pointer-events:none}',
     '#race-root .pw-steerind i{position:absolute;top:-3px;left:50%;width:4px;height:12px;margin-left:-2px;border-radius:2px;background:#fff}',
     '#race-root .pw-enable{position:absolute;left:50%;top:max(52px,calc(env(safe-area-inset-top) + 44px));transform:translateX(-50%);z-index:4;padding:9px 16px;border-radius:999px;border:1px solid var(--accent,#c9a56b);background:rgba(8,9,11,.82);color:var(--text-strong,#fff);font:700 12.5px var(--font,system-ui);display:flex;align-items:center;gap:8px;pointer-events:auto}',
+    '#race-root .pw-enable.in-qb{position:relative;left:auto;top:auto;transform:none;z-index:auto;padding:0;justify-content:center;border-color:var(--accent,#c9a56b);color:var(--accent,#c9a56b);gap:0}',
+    '#race-root .pw-enable.in-qb svg{width:20px;height:20px}',
     '#race-root .pw-rotate{position:absolute;inset:0;z-index:6;display:none;place-items:center;text-align:center;padding:24px;background:rgba(5,5,7,.88);color:#fff;font:700 16px var(--font,system-ui);pointer-events:auto}',
     '@media (orientation:portrait){html.pw-tilt-on #race-root .pw-rotate{display:grid}}',
     /* phone-friendly driving: no scroll / zoom / overscroll / selection */
@@ -113,6 +116,8 @@ CB.input = CB.input || {};
     '.pw-x{width:44px;justify-content:center;padding:0}',
     '.pw-chip{min-height:40px;bottom:max(12px,env(safe-area-inset-bottom))}',
     '#race-root .pw-enable{min-height:44px;animation:pw-en-fade .5s ease 12s forwards}',
+    '#race-root .pw-enable.in-qb{animation:pw-qb-pulse 1.4s ease 4}',
+    '@keyframes pw-qb-pulse{50%{box-shadow:0 0 0 6px rgba(201,165,107,.35)}}',
     '@keyframes pw-en-fade{to{opacity:0;visibility:hidden}}',
     '#race-root .pw-tb.cal{height:44px}',
     '#race-root .pw-tb.hb{left:calc(26% + 10px + env(safe-area-inset-left))} #race-root .pw-tb.cal,#race-root .pw-tb.up,#race-root .pw-tb.dn{right:calc(26% + 10px + env(safe-area-inset-right))}',
@@ -164,13 +169,19 @@ CB.input = CB.input || {};
     if (modalRaf) cancelAnimationFrame(modalRaf); modalRaf = 0;
     if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
     if (modal && modal._key) window.removeEventListener('keydown', modal._key, true);
+    var prev = modal && modal._prev;
     modal = null;
+    // back to the opener (the steering-source picker re-renders its buttons: find the same one again)
+    if (prev && !prev.isConnected && prev.getAttribute && prev.getAttribute('data-ss-pick')) prev = document.querySelector('[data-ss-pick="' + prev.getAttribute('data-ss-pick') + '"]');
+    if (prev && prev.isConnected && prev.focus) { try { prev.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
   }
   function openPairing(opts) {
     opts = opts || {};
     ensureCss();
     closePairing();
-    var ov = el('div', 'pw-overlay'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Use phone as wheel');
+    var prevFocus = document.activeElement;
+    var ov = el('div', 'pw-overlay'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Use phone as wheel');
+    ov._prev = prevFocus && prevFocus !== document.body ? prevFocus : null;
     var card = el('div', 'pw-card'); card.style.position = 'relative';
     var left = el('div', 'pw-left'), right = el('div', 'pw-right');
     var qr = el('div', 'pw-qr', '<span>Creating a pairing code…</span>'), code = el('div', 'pw-code', '·····'), url = el('div', 'pw-url', '');
@@ -261,8 +272,21 @@ CB.input = CB.input || {};
     x.addEventListener('click', closePairing);
     stop.addEventListener('click', function () { var S = W().session(); if (S) S.close(); closePairing(); toast('Phone wheel disconnected'); });
     ov.addEventListener('click', function (e) { if (e.target === ov) closePairing(); });
-    ov._key = function (e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closePairing(); } else e.stopPropagation(); };
+    ov._key = function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closePairing(); return; }
+      if (e.key === 'Tab') {   // keep keyboard focus inside the dialog
+        var f = Array.prototype.filter.call(card.querySelectorAll('button:not([disabled]),textarea:not([disabled]),input:not([disabled]),a[href]'),
+          function (n) { return n.getClientRects().length > 0; });
+        if (f.length) {
+          var i = f.indexOf(document.activeElement);
+          if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === f.length - 1)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+        }
+      }
+      e.stopPropagation();
+    };
     window.addEventListener('keydown', ov._key, true);
+    card.tabIndex = -1;
+    try { card.focus({ preventScroll: true }); } catch (e0) { /* ignore */ }
     renderSeg(viaNow === 'auto' ? 'online' : viaNow);
     var existing = W().session();
     if (existing && (viaNow === 'auto' || viaNow === existing.via)) showSession(existing); else start(viaNow);
@@ -392,7 +416,15 @@ CB.input = CB.input || {};
     pad.appendChild(el('div', 'pw-rotate', '<div>' + ICON.phone.replace('width="16" height="16"', 'width="40" height="40"') + '<p>Turn your phone sideways (landscape) and hold it like a steering wheel.</p></div>'));
     var en = el('button', 'pw-enable', ICON.wheel + '<span>Enable tilt steering</span>'); en.type = 'button';
     en.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); enableTilt(); });
-    layer.appendChild(pad); layer.appendChild(en);
+    layer.appendChild(pad);
+    // the button lives in the race quick-button column (camera / mute / pause) when there is one: centred at the top it
+    // covered the start lights, the lap timer and the sector boxes on phones
+    var qb = layer.querySelector('.rx-quickbar') || (layer.closest && layer.closest('#race-root') && layer.closest('#race-root').querySelector('.rx-quickbar'));
+    if (qb) {
+      en.className = 'cb-btn rx-btn icon pw-enable in-qb';
+      en.innerHTML = ICON.wheel; en.title = 'Enable tilt steering'; en.setAttribute('aria-label', 'Enable tilt steering');
+      qb.insertBefore(en, qb.firstChild);
+    } else layer.appendChild(en);
     tlayer = pad; tlayer._en = en; tlayer._gears = [up, dn]; tlayer._ind = ind.firstChild; tlayer._R = R;
     updateTouchLayer();
     if (!tlayer._loop) {

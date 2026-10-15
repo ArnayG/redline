@@ -891,7 +891,8 @@ CB.race = CB.race || {};
               lapsDown = Math.floor((ap - cp2) / L);
             }
           }
-          gapStr = fmtGap(g, lapsDown);
+          // right after the start every gap reads exactly 0 until the cars reach a timing point: or have no gap yet (null): show a dash, not "+0.000" / the race clock
+          gapStr = lapsDown < 1 && (!isNum(g) || Math.abs(g) < 0.0005) ? '\u2014' : fmtGap(g, lapsDown);
           if (snap.phase !== 'racing' && snap.phase !== 'finished') gapStr = '';
         }
         if (car.finished && pos !== 1 && !car.dnf && mode === 'race') {
@@ -1522,7 +1523,23 @@ CB.race = CB.race || {};
     }
 
     // --- countdown lights --------------------------------------------------
-    function drawCountdown(ctx, snap, W, H, k) {
+    /** Top of the lights gantry: H * 0.12, pushed below every `avoid` rect it would overlap. */
+    function countdownTop(W, H, k, avoid) {
+      var podH = 108 * k, totalW = 5 * 46 * k + 4 * 12 * k, x0 = W / 2 - totalW / 2;
+      var y0 = Math.max(18 * k, H * 0.12), L = x0 - 20 * k, Rr = x0 + totalW + 20 * k;
+      for (var pass = 0; pass < 3; pass++) {
+        var moved = false;
+        (avoid || []).forEach(function (r) {
+          if (!r || !(r.w > 0) || !(r.h > 0)) return;
+          if (r.x >= Rr || r.x + r.w <= L) return;                      // no horizontal overlap
+          if (r.y >= y0 + podH || r.y + r.h <= y0 - 14 * k) return;      // no vertical overlap
+          y0 = r.y + r.h + 18 * k; moved = true;
+        });
+        if (!moved) break;
+      }
+      return y0;
+    }
+    function drawCountdown(ctx, snap, W, H, k, avoid) {
       var cd = snap.countdown || {};
       var tnow = now();
       var phase = snap.phase;
@@ -1537,7 +1554,7 @@ CB.race = CB.race || {};
       var podW = 46 * k, podH = 108 * k, gap = 12 * k;
       var totalW = pods * podW + (pods - 1) * gap;
       var x0 = W / 2 - totalW / 2;
-      var y0 = Math.max(18 * k, H * 0.12);
+      var y0 = countdownTop(W, H, k, avoid);
       // drop-in / lift-out animation
       var enter = S.cdEnterAt == null ? (S.cdEnterAt = tnow) : S.cdEnterAt;
       var ein = easeOutBack(clamp((tnow - enter) / 450, 0, 1));
@@ -1820,7 +1837,11 @@ CB.race = CB.race || {};
       }
 
       // --- countdown, wrong way, banners (centre)
-      drawCountdown(ctx, snap, W, H, compact ? clamp(W / 640, 0.5, 1) : k);
+      // the lights drop below any top block they would cover (phone portrait: the tower, timing + sectors and minimap)
+      var avoid = [{ x: tx, y: M, w: timingW, h: stripY - M }];
+      if (towerH) avoid.push({ x: M, y: M, w: (compact ? 150 : 262) * k, h: towerH });
+      if (mmW > 0 && opts.minimap !== false) avoid.push({ x: mmX, y: mmY, w: mmW, h: mmH });
+      drawCountdown(ctx, snap, W, H, compact ? clamp(W / 640, 0.5, 1) : k, avoid);
       drawWrongWay(ctx, snap, player, W, H, compact ? clamp(W / 520, 0.6, 1) : k);
       var bannerTop = (snap.phase === 'countdown' || snap.phase === 'grid') ? H * 0.5 : H * (compact ? 0.2 : 0.16);
       drawBanners(ctx, W, H, compact ? clamp(W / 520, 0.62, 1) : k, bannerTop);

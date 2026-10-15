@@ -472,8 +472,27 @@ CB.game = CB.game || {};
       downforce: num(m.downforce_kg_200), latG: num(m.lateralG), ratings: m.ratings || {},
       engineType: engType, isEV: engType === 'ev', isHybrid: engType === 'hybrid',
       layout: engType === 'ev' ? 'ev' : get(b, 'engine.layout'),
-      style: get(b, 'body.style'), presetId: get(b, 'meta.presetId')
+      style: get(b, 'body.style'), presetId: get(b, 'meta.presetId'),
+      // a build loaded straight from a preset or set by Auto-config (stock spec) was not built by the player:
+      // it pays no "built a car" reward until it differs from what it was loaded from
+      unmodified: typeof ev.unmodified === 'boolean' ? ev.unmodified : isUncustomised(b)
     };
+  }
+
+  function stripMeta(b) { var c = {}; for (var k in b) if (k !== 'meta' && Object.prototype.hasOwnProperty.call(b, k)) c[k] = b[k]; return c; }
+  function sameSpec(a, b) {
+    var St = CB.state, n = function (x) { return St && typeof St.normalize === 'function' ? (safeCompute(St, 'normalize', [x]) || x) : x; };
+    try { return JSON.stringify(stripMeta(n(a))) === JSON.stringify(stripMeta(n(b))); } catch (e) { return false; }
+  }
+  /** True when the build is exactly its preset (meta.presetId) or its model's factory spec (CB.stock.isStock). */
+  function isUncustomised(b) {
+    if (!b || typeof b !== 'object') return false;
+    var pid = get(b, 'meta.presetId');
+    if (pid && CB.data && typeof CB.data.presetBuild === 'function') {
+      var p = safeCompute(CB.data, 'presetBuild', [pid]);
+      if (p && sameSpec(b, p)) return true;
+    }
+    return !!(CB.stock && typeof CB.stock.isStock === 'function' && safeCompute(CB.stock, 'isStock', [b]));
   }
 
   function carsOf(res) {
@@ -594,10 +613,11 @@ CB.game = CB.game || {};
     return {
       res: res, cfg: cfg, player: player, cars: cars, fieldSize: fieldSize,
       position: position, grid: grid, finished: finished, dnf: dnf,
-      won: finished && position === 1 && fieldSize >= 2,
-      podium: finished && position <= 3 && fieldSize >= 3,
-      last: finished && fieldSize >= 2 && position === fieldSize,
-      pole: !!(st.pole || player.pole || grid === 1), fastestLap: fastestLap, ledEveryLap: ledEveryLap, lapsLed: lapsLed,
+      // a Practice session is ranked by best lap and starts in grid order: no win, podium or pole there
+      won: finished && position === 1 && fieldSize >= 2 && mode0 !== 'practice',
+      podium: finished && position <= 3 && fieldSize >= 3 && mode0 !== 'practice',
+      last: finished && fieldSize >= 2 && position === fieldSize && mode0 !== 'practice',
+      pole: !!(st.pole || player.pole || grid === 1) && mode0 !== 'practice', fastestLap: fastestLap, ledEveryLap: ledEveryLap, lapsLed: lapsLed,
       collisions: collisions, wallHits: wallHits, penalties: penalties, trackLimits: trackLimits, clean: clean,
       margin: margin, topSpeed: topSpeed, laps: laps, trackId: trackId, mode: mode0,
       weather: cfg.weather || res.weather || st.weather || 'dry', timeOfDay: cfg.timeOfDay || res.timeOfDay || st.timeOfDay || 'day',
@@ -745,7 +765,7 @@ CB.game = CB.game || {};
     return def(d);
   }
   function buildIs(id, name, desc, tier, glyph, fn, extra) {
-    return when(id, name, desc, tier, glyph, 'atelier', 'build', function (ctx) { return !!ctx.b && !!ctx.b.build && !!fn(ctx.b, ctx.b.build, ctx.b.metrics); }, extra);
+    return when(id, name, desc, tier, glyph, 'atelier', 'build', function (ctx) { return !!ctx.b && !!ctx.b.build && !ctx.b.unmodified && !!fn(ctx.b, ctx.b.build, ctx.b.metrics); }, extra);
   }
   function raceIs(id, name, desc, tier, glyph, fn, extra) {
     return when(id, name, desc, tier, glyph, (extra && extra.category) || 'racing', 'race', function (ctx) { return !!ctx.r && !!fn(ctx.r, ctx); }, extra);
@@ -848,9 +868,9 @@ CB.game = CB.game || {};
   function presetUniverse() { var L = CB.data && CB.data.presets; return Array.isArray(L) && L.length ? L.map(function (x) { return x.id; }) : null; }
 
   collect('body-collector', 'Coachbuilder', 'Design a car in every body style.', 'gold', 'garage', 'atelier', 'build',
-    function (ctx) { return ctx.b && ctx.b.style; }, function () { return bodyUniverse().length; }, { universe: bodyUniverse });
+    function (ctx) { return ctx.b && !ctx.b.unmodified && ctx.b.style; }, function () { return bodyUniverse().length; }, { universe: bodyUniverse });
   collect('engine-sommelier', 'Engine Sommelier', 'Try every engine layout — and an electric drivetrain.', 'gold', 'piston', 'atelier', 'build',
-    function (ctx) { return ctx.b && ctx.b.layout; }, function () { return engineUniverse().length; }, { universe: engineUniverse });
+    function (ctx) { return ctx.b && !ctx.b.unmodified && ctx.b.layout; }, function () { return engineUniverse().length; }, { universe: engineUniverse });
   collect('showroom-tour', 'Showroom Tour', 'Load eight different factory presets.', 'silver', 'key', 'atelier', 'build',
     function (ctx) { return ctx.b && ctx.b.presetId; }, 8);
   counter('tinkerer', 'Tinkerer', 'Make 100 changes in the Garage.', 'bronze', 'wrench', 'atelier', null, 100, 'build', function () { return 1; });
@@ -1753,7 +1773,7 @@ CB.game = CB.game || {};
     var ic = unlocked ? icon(d.glyph, d.tier, { label: d.label, uid: d.id + '-big' }) : icon(d.glyph, 'locked', { label: d.label, hidden: concealed, uid: d.id + '-bigl' });
     var status = unlocked ? 'Unlocked ' + fmtDate(P.achievements[id].unlockedAt)
       : (pr && d.measure && pr.max > 1 && !concealed ? 'Progress ' + fmtInt(pr.cur) + ' / ' + fmtInt(pr.max) + ' (' + Math.round(pr.pct * 100) + '%)' : 'Not yet unlocked');
-    return '<div class="gach-detail" data-act="detail-close"><div class="gach-detail-card tier-' + d.tier + '" role="dialog" aria-label="' + esc(concealed ? 'Hidden achievement' : d.name) + '">' + ic +
+    return '<div class="gach-detail" data-act="detail-close"><div class="gach-detail-card tier-' + d.tier + '" role="dialog" aria-modal="true" aria-label="' + esc(concealed ? 'Hidden achievement' : d.name) + '">' + ic +
       '<div class="gach-kicker" style="justify-content:center;color:var(--tc)"><i></i>' + TIERS[d.tier].name + ' · ' + esc(cat ? cat.name : d.category) + (d.hidden ? ' · Secret' : '') + '</div>' +
       '<h4>' + esc(concealed ? 'Hidden achievement' : d.name) + '</h4><p>' + esc(concealed ? (d.hint || 'Keep playing to discover this one.') : d.desc) + '</p>' +
       (pr && d.measure && pr.max > 1 && !unlocked && !concealed ? '<div class="gach-bar" style="height:8px"><i style="width:' + (pr.pct * 100).toFixed(1) + '%"></i></div>' : '') +
@@ -1791,10 +1811,20 @@ CB.game = CB.game || {};
     function refresh() { renderHead(); renderBar(); renderBody(); }
     function showDetail(id) {
       var old = wrap.querySelector('.gach-detail'); if (old) old.parentNode.removeChild(old);
+      else detailReturn = document.activeElement;
       wrap.insertAdjacentHTML('beforeend', detailHTML(getP(), id));
       var btn = wrap.querySelector('.gach-detail .gach-btn'); if (btn) btn.focus();
     }
-    function hideDetail() { var old = wrap.querySelector('.gach-detail'); if (old) { old.parentNode.removeChild(old); return true; } return false; }
+    var detailReturn = null;
+    function hideDetail() {
+      var old = wrap.querySelector('.gach-detail');
+      if (!old) return false;
+      old.parentNode.removeChild(old);
+      // focus goes back to the tile that opened the card
+      if (detailReturn && detailReturn.isConnected && detailReturn.focus) { try { detailReturn.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+      detailReturn = null;
+      return true;
+    }
 
     var searchT = null;
     overlay.addEventListener('click', function (e) {
@@ -1828,11 +1858,14 @@ CB.game = CB.game || {};
         if (inline && !wrap.querySelector('.gach-detail')) { if (opts.closeOnEscape) { e.preventDefault(); close(); } return; }   // screen mode: Esc belongs to the router
         e.stopPropagation(); e.preventDefault(); if (!hideDetail()) close();
       }
-      else if (e.key === 'Tab' && !inline) {
-        var f = modal.querySelectorAll('button,input,select,[tabindex="0"]');
-        if (!f.length) return;
+      else if (e.key === 'Tab' && (!inline || wrap.querySelector('.gach-detail'))) {
+        // an open detail card traps Tab inside itself (it used to walk on into the tiles behind it)
+        var scope = wrap.querySelector('.gach-detail-card') || modal;
+        var f = scope.querySelectorAll('button,input,select,[tabindex="0"]');
+        if (!f.length) { e.preventDefault(); return; }
         var firstEl = f[0], lastEl = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+        if (!scope.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? lastEl : firstEl).focus(); }
+        else if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
         else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
       }
     }

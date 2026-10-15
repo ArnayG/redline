@@ -1375,6 +1375,10 @@ CB.race = CB.race || {};
       if (a === b) return 0;
       var dB = b.finished && b.finishDist !== null ? b.finishDist : b.raceDist;
       var tB = b.finished && b.finishT !== null ? b.finishT : sess.t;
+      // no real gap yet: the car ahead was already past this point when the lights went out (the grid at the start),
+      // so the "gap" would just be the race clock. null = unknown; the HUD shows a dash until a timing point gives one
+      var k = (dB + GAP_OFFSET) / GAP_BUCKET, P = a.pass, ki = Math.floor(k);
+      if (!b.finished && (k < 0 || P[ki] === -Infinity || (ki + 1 < P.length && P[ki + 1] === -Infinity))) return null;
       var tA = timeAt(a, dB);
       if (tA === null) return 0;
       return Math.max(0, tB - tA);

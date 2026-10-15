@@ -1623,7 +1623,8 @@ CB.race.renderer3d = (function () {
       gl = ctx.gl || ctx;
       isGL2 = !!(ctx.isWebGL2 || (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext));
       shaders = G.shaders(ctx) || {};
-      if (S.gpuTimer) safe('gpuTimer.destroy', function () { S.gpuTimer.destroy(); });
+      // after a context restore the old timer queries belong to the lost context: drop them (deleting them only warns)
+      if (S.gpuTimer && !reuse) safe('gpuTimer.destroy', function () { S.gpuTimer.destroy(); });
       S.gpuTimer = isGL2 && !G.lite && opts.gpuTimer !== false ? safe('gpuTimer', function () { return createGpuTimer(gl); }, null) : null;
       colorSize = num(G.COLOR_SIZE, num(ctx.colorSize, 4));
       if (!shaders.standard && !G.lite) throw new Error('CB.gl.shaders() returned no standard program');
@@ -3229,9 +3230,13 @@ CB.race.renderer3d = (function () {
       // distances + LOD assignment
       var order = S.carOrder;
       order.length = 0;
+      // LOD by on-screen size, not raw distance: a zoomed TV / replay camera (narrow fov) far from the field still
+      // shows the cars large, so they get the full model (the generic low LOD looked like a wedge there)
+      var fovY = num(camera.fovY, num(camera.fov, 0)), lodScale = fovY > 0 ? clamp(Math.tan(fovY / 2) / Math.tan(65 * DEG / 2), 0.2, 1) : 1;
       for (i = 0; i < cars.length; i++) {
         var ce = S.cars[cars[i].id];
         ce.dist = Math.hypot(ce.pose.x - camPos[0], ce.pose.y + camPos[2], ce.elev - camPos[1]);
+        ce.lodDist = ce.dist * lodScale;
         order.push(cars[i]);
       }
       order.sort(byCarDist);
@@ -3253,7 +3258,7 @@ CB.race.renderer3d = (function () {
       var drawnCars = 0;
       for (i = 0; i < order.length; i++) {
         var oc = order[i], oe = S.cars[oc.id];
-        var wantHigh = oc === player || (oe.dist < S.Q.lodNear && highCount < S.Q.maxHigh);
+        var wantHigh = oc === player || (oe.lodDist < S.Q.lodNear && highCount < S.Q.maxHigh);
         var model = null;
         if (wantHigh) {
           model = getModel(oe, oc, 'high', oc === player || built < 1);

@@ -511,6 +511,8 @@ CB.gl.post = (function () {
     var post = {};
 
     function lost() { return !!(ctx.lost || (gl.isContextLost && gl.isContextLost())); }
+    /** objects made before a context loss belong to the old context: deleting them after the restore only warns */
+    function stale() { return lost() || num(ctx.generation, 0) !== S.gen; }
     function ext(n) { try { return gl.getExtension(n); } catch (e) { return null; } }
     function detectCaps() {
       var c = { isGL2: isGL2 };
@@ -601,7 +603,7 @@ CB.gl.post = (function () {
       return t;
     }
     function freeTarget(t) {
-      if (!t || lost()) return;
+      if (!t || stale()) return;
       if (t.fb) gl.deleteFramebuffer(t.fb);
       if (t.msFb) gl.deleteFramebuffer(t.msFb);
       if (t.tex) gl.deleteTexture(t.tex);
@@ -966,7 +968,7 @@ CB.gl.post = (function () {
       };
     };
     post.destroy = function () {
-      if (!lost()) {
+      if (!stale()) {
         freeAll();
         if (S.progs) for (var k in S.progs) gl.deleteProgram(S.progs[k].program);
         if (S.vbo) gl.deleteBuffer(S.vbo);

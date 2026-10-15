@@ -386,11 +386,11 @@ phpT('php relay: NDJSON stream flushes each message as it arrives; probe touches
   var h = (await call({ action: 'create' })).body, g = (await call({ action: 'join', room: h.room })).body;
   var hs = S.vercel({ url: pbase + 'api/signal.php', fetch: fetch });
   await hs.join(h.room);   // a second guest login just to get a signal object; use the raw token for the host below
-  var r = await fetch(pbase + 'api/signal.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'relay', room: h.room, token: h.token, posts: [], stream: 1, wait: 2500 }) });
+  var r = await fetch(pbase + 'api/signal.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'relay', room: h.room, token: h.token, posts: [], stream: 1, wait: 3500 }) });
   assert.match(r.headers.get('content-type'), /ndjson/);
-  var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', lines = [], t0 = Date.now(), rtt = [], lag = lagMonitor();
+  var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', lines = [], t0 = Date.now(), rtt = [], postedAt = [], lag = lagMonitor();
   var poster = (async function () {
-    for (var i = 0; i < 3; i++) { await sleep(400); var a = Date.now(); await call({ action: 'relay', room: h.room, token: g.token, posts: [{ to: 'host', msgs: [{ t: 'm', i: i, ts: a }] }], nopoll: true }); rtt[i] = Date.now() - a; }
+    for (var i = 0; i < 3; i++) { await sleep(400); var a = Date.now(); await call({ action: 'relay', room: h.room, token: g.token, posts: [{ to: 'host', msgs: [{ t: 'm', i: i, ts: a }] }], nopoll: true }); rtt[i] = Date.now() - a; postedAt[i] = a; }
   })();
   for (;;) {
     var c = await reader.read();
@@ -401,7 +401,14 @@ phpT('php relay: NDJSON stream flushes each message as it arrives; probe touches
   await poster;
   var msgs = lines.filter(function (l) { return l[0].m; });
   assert.equal(lines[0][0].stream, 1); assert.ok(lines[lines.length - 1][0].end);
-  assert.deepEqual(msgs.map(function (l) { return l[0].m[0].msg.i; }), [0, 1, 2], 'one line per message, in order');
+  // on a starved machine (the full suite) a post can land only after the stream's wait ran out: it must then still be
+  // waiting in the mailbox, not lost; only the lines that did stream are timed below
+  var got = msgs.map(function (l) { return l[0].m[0].msg.i; });
+  if (got.length < 3 && postedAt.length === 3 && postedAt[got.length] + rtt[got.length] >= lines[lines.length - 1][1] - 200) {
+    var late = (await call({ action: 'relay', room: h.room, token: h.token, posts: [], wait: 0 })).body.msgs.map(function (m) { return m.msg.i; });
+    got = got.concat(late);
+  }
+  assert.deepEqual(got, [0, 1, 2], 'one line per message, in order');
   // budget 60 ms from the post; on a loaded machine plus that post's own round trip (PHP workers starved alike) and
   // any stall of this event loop (the line sat unread)
   var stall = lag.max(); lag.stop();

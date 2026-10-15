@@ -909,10 +909,13 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (openModals[openModals.length - 1] !== api) return;
       if (ev.key === 'Escape' && opts.dismissible !== false) { ev.stopPropagation(); api.close(); }
       else if (ev.key === 'Tab') {
-        var f = card.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
-        if (!f.length) return;
-        var first = f[0], last = f[f.length - 1];
-        if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+        var f = Array.prototype.filter.call(card.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
+          function (n) { return !n.getClientRects || n.getClientRects().length > 0; });
+        if (!f.length) { ev.preventDefault(); return; }
+        var first = f[0], last = f[f.length - 1], act = document.activeElement;
+        // Focus on the card itself (dialogs without a primary button) or outside it: wrap instead of escaping
+        if (act === card || !card.contains(act)) { ev.preventDefault(); (ev.shiftKey ? last : first).focus(); }
+        else if (ev.shiftKey && act === first) { ev.preventDefault(); last.focus(); }
         else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
       }
     }

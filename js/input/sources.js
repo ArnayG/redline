@@ -186,7 +186,16 @@ CB.input = CB.input || {};
     var d = defs[S.selected()];
     if (d && typeof d.bindDetail === 'function') { try { d.bindDetail(root.querySelector('[data-ss-detail]'), root); } catch (e) { /* ignore */ } }
   }
-  function renderInto(root) { if (!root) return; root.innerHTML = pickerInner(); bindRoot(root); }
+  function renderInto(root) {
+    if (!root) return;
+    // keep keyboard focus on the same button across the re-render (picking a source with Enter used to drop focus to <body>)
+    var ae = document.activeElement, keep = null;
+    if (ae && root.contains(ae)) keep = ['data-ss-pick', 'data-ss-gp'].filter(function (a) { return ae.hasAttribute(a); }).map(function (a) { return '[' + a + '="' + ae.getAttribute(a) + '"]'; })[0];
+    root.innerHTML = pickerInner(); bindRoot(root);
+    var n = keep && root.querySelector(keep);
+    var dialogOpen = Array.prototype.some.call(document.querySelectorAll('[aria-modal="true"],[role="dialog"]'), function (d) { return !d.contains(root) && d.getClientRects().length > 0; });
+    if (n && !n.disabled && !dialogOpen) { try { n.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }   // a dialog the pick opened keeps focus
+  }
   function rerenderAll() { if (!hasDOM) return; Array.prototype.forEach.call(document.querySelectorAll('[data-ss-root]'), renderInto); }
   S._rerender = function () { if (hasDOM && document.body) rerenderAll(); };
 

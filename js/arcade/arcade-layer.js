@@ -81,7 +81,7 @@ CB.arcade = CB.arcade || {};
       var down = e.type === 'keydown', c = e.code;
       if (down && sfx) sfx.unlock();
       if (NITRO_KEYS[c] && gp.options.nitro) { L.keys.nitro = down ? (L.keys.nitro | 0) | (c === 'KeyN' ? 1 : 2) : (L.keys.nitro | 0) & ~(c === 'KeyN' ? 1 : 2); e.preventDefault(); e.stopImmediatePropagation(); }
-      else if (ITEM_KEYS[c]) { L.keys.item = down; e.preventDefault(); e.stopImmediatePropagation(); }
+      else if (ITEM_KEYS[c]) { L.keys.item = down; if (down && !e.repeat) L.keys.itemT = nowMs(); e.preventDefault(); e.stopImmediatePropagation(); }
       if (BACK_KEYS[c]) L.keys.back = down;
       if (c === 'KeyW' || c === 'ArrowUp') L.keys.gas = down;   // read only (never consumed): rocket-start rev gauge
     }
@@ -126,7 +126,9 @@ CB.arcade = CB.arcade || {};
       var g = pollGamepad(), t = nowMs(), T = L.touch || {};
       pin.nitro = !!(L.keys.nitro || g.nitro || T.nitro || L.keys.phoneNitro);
       var phoneItem = L.keys.phoneItemT && t - L.keys.phoneItemT < 120;
-      pin.item = !!(L.keys.item || g.item || T.item || phoneItem);
+      // a press shorter than one frame still fires (keys and the touch button latch for 120 ms, like the phone's)
+      var tapItem = (L.keys.itemT && t - L.keys.itemT < 120) || (T.itemT && t - T.itemT < 120);
+      pin.item = !!(L.keys.item || g.item || T.item || phoneItem || tapItem);
       pin.aimBack = !!(L.keys.back || g.back || T.back || (L.keys.phoneBackT && t - L.keys.phoneBackT < 120));
       var ext = 0, hb2 = CB.input && CB.input.hub;
       if (hb2 && typeof hb2.status === 'function' && typeof hb2.read === 'function') { try { var hr = hb2.read(); if (hr && hr.active) ext = +hr.throttle || 0; } catch (eH) { /* ignore */ } }
@@ -158,7 +160,7 @@ CB.arcade = CB.arcade || {};
         var id = null, y0 = 0;
         // y in the button's own frame (CB.input.orient may counter-rotate the race view while tilt-steering)
         function py(e) { var O = CB.input && CB.input.orient; return O && O.point ? O.point(el, e).y : e.clientY; }
-        el.addEventListener('pointerdown', function (e) { id = e.pointerId; y0 = py(e); try { el.setPointerCapture(id); } catch (x) { /* ignore */ } T[key] = true; T.back = false; el.classList.add('is-down'); if (sfx) sfx.unlock(); e.preventDefault(); e.stopPropagation(); });
+        el.addEventListener('pointerdown', function (e) { id = e.pointerId; y0 = py(e); try { el.setPointerCapture(id); } catch (x) { /* ignore */ } T[key] = true; T[key + 'T'] = nowMs(); T.back = false; el.classList.add('is-down'); if (sfx) sfx.unlock(); e.preventDefault(); e.stopPropagation(); });
         el.addEventListener('pointermove', function (e) { if (e.pointerId === id && key === 'item') T.back = py(e) - y0 > 28; });   // swipe down on ITEM = fire backwards
         function end(e) { if (e.pointerId !== id) return; id = null; T[key] = false; el.classList.remove('is-down'); }
         el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);

@@ -1557,6 +1557,8 @@ CB.race = CB.race || {};
     'background:var(--rx-bg);overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}',
     '#race-root *,#race-root *::before,#race-root *::after{box-sizing:border-box}',
     '#race-root button{font-family:inherit;color:inherit}',
+    // the id rule above outranks .cb-btn.primary's dark ink: gold buttons (Take the grid, Resume) showed pale text on gold
+    '#race-root .cb-btn.primary{color:var(--btn-color,var(--accent-ink))}',
     '#race-root .rx-ico{display:block;flex:none}',
     '#race-root .rx-icon{display:inline-flex;align-items:center;justify-content:center}',
     /* carbon fibre + vignette */
@@ -1675,7 +1677,7 @@ CB.race = CB.race || {};
     '#race-root .rx-stepper .rx-btn{width:36px;height:36px;padding:0;justify-content:center;font-size:18px}',
     '#race-root .rx-stepper-val{min-width:56px;text-align:center;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}',
     '#race-root .rx-quick{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto;min-width:0}',
-    '#race-root .rx-quick button{appearance:none;border:1px solid var(--rx-line);background:transparent;border-radius:6px;padding:4px 7px;font-size:11px;color:var(--rx-dim);cursor:pointer}',
+    '#race-root .rx-quick button{appearance:none;border:1px solid var(--rx-line);background:transparent;border-radius:6px;padding:4px 7px;min-width:28px;min-height:28px;font-size:11px;color:var(--rx-dim);cursor:pointer}',
     '#race-root .rx-quick button:hover,#race-root .rx-quick button.is-active{color:var(--rx-text);border-color:var(--rx-accent)}',
     '#race-root .rx-toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
     '#race-root .rx-toggle{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm,9px);border:1px solid var(--rx-line);background:var(--rx-panel-2);cursor:pointer;text-align:left;appearance:none;width:100%;font:inherit;color:inherit}',
@@ -1744,6 +1746,9 @@ CB.race = CB.race || {};
     '#race-root .rx-net-list{display:flex;flex-direction:column;gap:4px}',
     '#race-root .rx-net-row{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.04);font-size:12.5px}',
     '#race-root .rx-net-row.is-me{border-left:3px solid var(--rx-accent)}#race-root .rx-net-row.is-off{opacity:.5}',
+    // portrait phones: the top centre is taken by the leaderboard and the position box (the pill covered P2/3 and
+    // LEADER); park it bottom-left, above the pedals and the steering pad
+    '@media (orientation:portrait) and (max-width:600px){#race-root .rx-net{top:auto;bottom:calc(214px + env(safe-area-inset-bottom,0px));left:12px;right:auto;transform:none}}',
     '#race-root .rx-quickbar .rx-btn{background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}',
     '#race-root .rx-lights{position:absolute;left:50%;top:14%;transform:translateX(-50%);display:flex;gap:10px;padding:14px 18px;border-radius:14px;',
     'background:linear-gradient(180deg,#141414,#050505);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 40px rgba(0,0,0,.7);pointer-events:none;transition:opacity .4s}',
@@ -1752,6 +1757,9 @@ CB.race = CB.race || {};
     '#race-root .rx-light i{display:block;width:30px;height:30px;border-radius:50%;background:#2a0b0b;box-shadow:inset 0 2px 6px rgba(0,0,0,.8)}',
     '#race-root .rx-light.on i{background:radial-gradient(circle at 40% 35%,#ff8a80,#ff1a1a 45%,#a00000);box-shadow:0 0 18px #ff2a2a,0 0 40px rgba(255,0,0,.5)}',
     '#race-root .rx-lights.go .rx-light i{background:radial-gradient(circle at 40% 35%,#b9ffd0,#22e06b 45%,#0a8a3a);box-shadow:0 0 18px #22e06b}',
+    /* phone portrait: the canvas HUD's tower, timing + sector boxes and minimap fill the top third, so the start
+       lights sit smaller, below them (they used to cover the sector boxes) */
+    '@media (orientation:portrait) and (max-width:600px){#race-root .rx-lights{top:31%;transform:translateX(-50%) scale(.72);transform-origin:50% 0}}',
     '#race-root .rx-go{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);font-size:clamp(60px,12vw,150px);color:#fff;text-shadow:0 0 40px rgba(34,224,107,.8);pointer-events:none;animation:rx-go .9s ease-out forwards}',
     '#race-root .rx-feed{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;gap:6px;pointer-events:none;width:min(560px,90vw)}',
     '#race-root .rx-feed-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:9px;background:rgba(8,9,11,.82);border:1px solid var(--rx-line-2);',
@@ -1832,6 +1840,7 @@ CB.race = CB.race || {};
     '#race-root .rx-legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}',
     '#race-root .rx-res-foot{display:flex;align-items:center;gap:12px;padding:14px 32px;border-top:1px solid var(--rx-line);background:var(--glass,rgba(0,0,0,.5));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
     '#race-root .rx-res-foot .rx-spacer{flex:1}',
+    '#race-root .rx-res-foot .rx-res-keys{white-space:nowrap}@media (max-width:1360px){#race-root .rx-res-foot .rx-res-keys{display:none}}',   // keyboard hint: never wraps into a 3-line column
     /* error */
     '#race-root .rx-error{width:min(620px,100%);padding:26px}',
     '#race-root .rx-error pre{max-height:180px;overflow:auto;font-family:var(--rx-mono);font-size:11px;color:var(--rx-dim);background:rgba(0,0,0,.4);padding:10px;border-radius:8px;white-space:pre-wrap}',
@@ -1953,6 +1962,8 @@ CB.race = CB.race || {};
     'html body .cw-hud{top:auto;transform:none;right:max(16px,env(safe-area-inset-right));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 128px);min-width:0;flex-direction:row;gap:6px;padding:6px 12px;border-radius:12px}',
     'html body .cw-hud b{font-size:22px}html body .cw-hud b.is-rev{font-size:26px}html body .cw-hud small{display:none}html body .cw-hud .cw-hand svg{width:22px;height:22px}',
     'html body:has(#race-root .arc-touch) .cw-hud{right:calc(max(16px,env(safe-area-inset-right)) + 130px)}}',
+    // the Arcade ITEM / NITRO buttons belong to the driving screen only (they stayed over the results table)
+    '#race-root:not([data-screen="race"]) .arc-touch{display:none}',
   ].join('\n');
 
   /* ----------------------------------------------------------- canvas utils */
@@ -2193,6 +2204,14 @@ CB.race = CB.race || {};
     listen(document, 'visibilitychange', function () {
       if (document.hidden && U && U.race && U.screen === 'race' && U.race.simActive && !U.race.paused && !U.race.forced && !U.race.net) pauseRace();
     });
+    // touch driving enters fullscreen; the browser then eats Esc (and Android's back gesture) to leave fullscreen, so
+    // the keydown never arrives: leaving fullscreen mid-race opens the pause menu, as Esc does everywhere else
+    var onFsChange = function () {
+      var fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (!fs && !document.hidden && U && U.race && U.screen === 'race' && U.race.simActive && !U.race.paused && !U.race.forced && !U.pauseRefs) pauseRace();
+    };
+    listen(document, 'fullscreenchange', onFsChange);
+    listen(document, 'webkitfullscreenchange', onFsChange);
     listen(window, 'gamepadconnected', function (e) { toast(icon('gamepad', 14), 'Controller connected' + (e && e.gamepad && e.gamepad.id ? ' · ' + String(e.gamepad.id).split('(')[0].trim() : '')); });
     listen(window, 'gamepaddisconnected', function () { toast('Controller disconnected'); if (U && U.race && U.screen === 'race' && !U.race.paused && U.race.simActive) pauseRace(); });
 
@@ -2461,6 +2480,9 @@ CB.race = CB.race || {};
     e.stopPropagation();
     // the replay viewer / photo mode (CB.game.replay, mounted inside #race-root) owns the keyboard while it is open
     if (document.getElementById('game-replay')) return;
+    // so does a dialog opened on top (phone-wheel pairing, webcam setup, a ui-kit modal): Esc there used to also resume the
+    // race from the pause menu (or leave the setup screen) underneath the dialog
+    if (document.querySelector('body > .pw-overlay, body > .cw-ov, #modal-root > .cb-modal.is-open')) return;
     if (scr === 'race' && R && R.input) {
       if (R.paused) {
         if (code === 'Escape' || code === 'KeyP') { e.preventDefault(); resumeRace(); }
@@ -2528,6 +2550,13 @@ CB.race = CB.race || {};
     var f = h('div', { class: 'rx-field' + (opts.disabled ? ' is-disabled' : '') },
       h('div', { class: 'rx-field-head' }, h('span', { class: 'rx-label', text: label }), val, opts.headExtra || null),
       control, desc);
+    // accessible names: a bare slider / select gets the field label; stepper buttons say what they change
+    if (control && control.nodeType === 1 && typeof label === 'string') {
+      if (/^(INPUT|SELECT)$/.test(control.tagName) && !control.hasAttribute('aria-label')) control.setAttribute('aria-label', label);
+      if (control.querySelectorAll) Array.prototype.forEach.call(control.querySelectorAll('.rx-stepper > [aria-label="Decrease"], .rx-stepper > [aria-label="Increase"]'), function (b) {
+        b.setAttribute('aria-label', b.getAttribute('aria-label') + ' ' + label.toLowerCase());
+      });
+    }
     f._desc = desc; f._val = val;
     return f;
   }
@@ -2625,7 +2654,7 @@ CB.race = CB.race || {};
 
     /* top bar */
     var top = h('header', { class: 'rx-topbar' },
-      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'F' }),
+      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: drifting ? 'Drift Mode' : 'Race Mode' }))),
       isGameLaunch() ? null : disciplineTabs(S.discipline),
       h('nav', { class: 'rx-steps' },
@@ -2720,7 +2749,7 @@ CB.race = CB.race || {};
     if (!S.trackId || !list.some(function (e) { return e.id === S.trackId; })) S.trackId = arcadeDefaultTrack(list);
     var refs = U.setupRefs = { cards: {}, fields: {} };
     var top = h('header', { class: 'rx-topbar' },
-      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'F' }),
+      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: 'Arcade Mode' }))),
       h('nav', { class: 'rx-steps' },
         h('span', { class: 'rx-step is-on', html: '<b>01</b>Arcade' }),
@@ -2913,7 +2942,7 @@ CB.race = CB.race || {};
     clear(U.host);
     var S = U.settings, hasDrift = !!driftMod();
     var top = h('header', { class: 'rx-topbar' },
-      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'F' }),
+      h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: 'Choose your discipline' }))),
       h('nav', { class: 'rx-steps', 'aria-hidden': 'true' },
         h('span', { class: 'rx-step is-on', html: '<b>01</b>Discipline' }),
@@ -3406,7 +3435,7 @@ CB.race = CB.race || {};
           laps: R.settings.mode === 'practice' ? 50 : R.settings.laps,
           opponents: R.opponents, opponentCount: R.opponents.length,
           playerBuild: U.build, playerMetrics: mi.estimated ? null : mi.m,
-          playerName: (U.build.meta && U.build.meta.name) || 'You',
+          playerName: playerDriverName(),
           weather: R.settings.weather, timeOfDay: R.settings.timeOfDay, mode: R.settings.mode,
           assists: deepClone(R.settings.assists),
           difficulty: R.settings.difficulty, field: R.settings.field, rubberBanding: R.settings.rubberBanding,
@@ -3839,7 +3868,13 @@ CB.race = CB.race || {};
     }
     if (!R.renderer || typeof R.renderer.render !== 'function') { R.renderer = createFallbackRenderer(U.canvas, R.geom, def); R.fallbackRenderer = true; }
     R.cameraIdx = camIndexFor(R);
-    try { if (R.renderer.setCamera) R.renderer.setCamera(camList(R)[R.cameraIdx].id); } catch (e) { /* ignore */ }
+    try {
+      // the renderer may refuse the saved camera (no cockpit on stunt tracks / without an interior model): show the
+      // camera it actually uses (pause menu, C cycling) without overwriting the saved preference
+      var camGot = R.renderer.setCamera ? R.renderer.setCamera(camList(R)[R.cameraIdx].id) : null;
+      var camGotIdx = typeof camGot === 'string' ? ids(camList(R)).indexOf(camGot) : -1;
+      if (camGotIdx >= 0) R.cameraIdx = camGotIdx;
+    } catch (e) { /* ignore */ }
     if (R.challenge && typeof R.challenge.setRenderer === 'function') { try { R.challenge.setRenderer(R.renderer); } catch (e5) { /* ignore */ } }
     attachDriftCamera(R);
     R.lookBack = false;
@@ -4054,10 +4089,15 @@ CB.race = CB.race || {};
     if (a === 'menuUp' || a === 'menuDown') { if (R.paused) movePauseFocus(a === 'menuDown' ? 1 : -1); return; }
     if (U.screen !== 'race' || R.paused) return;
     if (a === 'camera') {
-      var cl = camList(R);
-      R.cameraIdx = (R.cameraIdx + 1) % cl.length;
-      var cam = cl[R.cameraIdx];
-      try { if (R.renderer.setCamera) R.renderer.setCamera(cam.id); else if (R.renderer.cycleCamera) R.renderer.cycleCamera(); } catch (e) { /* ignore */ }
+      var cl = camList(R), cam = null;
+      // skip the cameras this renderer does not take (stunt tracks: no bumper / heli / map), so no C press is dead
+      for (var ci = 0; ci < cl.length; ci++) {
+        R.cameraIdx = (R.cameraIdx + 1) % cl.length;
+        cam = cl[R.cameraIdx];
+        var gotCam;
+        try { if (R.renderer.setCamera) gotCam = R.renderer.setCamera(cam.id); else if (R.renderer.cycleCamera) R.renderer.cycleCamera(); } catch (e) { /* ignore */ }
+        if (typeof gotCam !== 'string' || gotCam === cam.id) break;
+      }
       if (R.is3d) { var ck = cam3dKey(R.settings); U.settings[ck] = R.settings[ck] = cam.id; }
       else U.settings.camera = R.settings.camera = cam.id;
       persist();
@@ -4164,6 +4204,22 @@ CB.race = CB.race || {};
     }
   }
 
+  /** The player's row name in the grid / HUD / results: the profile's driver name (the car shows in the subtitle);
+      the build name only when there is no profile (it used to read "Untitled Build (you)"). */
+  function playerDriverName() {
+    var P = CB.game && CB.game.profile, pr = null;
+    try { pr = P && typeof P.get === 'function' ? P.get() : null; } catch (e) { pr = null; }
+    var n = pr && typeof pr.driverName === 'string' ? pr.driverName.trim() : '';
+    if (n) return n.slice(0, 24);
+    var b = U && U.build && U.build.meta && U.build.meta.name;
+    return b && b !== 'Untitled Build' ? b : 'You';
+  }
+  /** Results subtitle name: the build's own name, or its real model when it still has the default "Untitled Build" name (career cars). */
+  function resultBuildName() {
+    var n = U && U.build && U.build.meta && U.build.meta.name;
+    if (!n || n === 'Untitled Build') n = realCarName({ build: U && U.build }) || n;
+    return n || 'Your build';
+  }
   /** Real manufacturer model name ("Honda Civic Type R") for a grid car / result row, or ''. */
   function realCarName(c) {
     if (!c) return '';
@@ -4752,9 +4808,14 @@ CB.race = CB.race || {};
     if (!rows.length) tbody.appendChild(h('tr', null, h('td', { colspan: '6', class: 'rx-dim', text: 'No classification was received.' })));
     tbl.appendChild(tbody);
     var main = h('div', { class: 'rx-res-main', style: { 'grid-template-columns': '1fr' } }, h('div', { class: 'rx-panel rx-table-wrap rx-scroll' }, tbl));
-    var back = h('button', { class: 'cb-btn rx-btn primary big', type: 'button', 'data-act': 'net-lobby', onclick: netLeave }, icon('back', 16), 'Back to lobby · rematch');
+    // the host is gone (lost, left, closed the room) or we were removed: there is no lobby to rematch in
+    var lob = null;
+    try { lob = CB.net && CB.net.lobby && typeof CB.net.lobby.state === 'function' ? CB.net.lobby.state() : null; } catch (eL) { lob = null; }
+    var noRoom = !!(ended && !final && (/^(host-timeout|kicked|version)$/.test(String(ended.reason || '')) ||
+      (lob && (lob.view === 'closed' || (lob.core && lob.core.phase === 'closed')))));
+    var back = h('button', { class: 'cb-btn rx-btn primary big', type: 'button', 'data-act': 'net-lobby', onclick: netLeave }, icon('back', 16), noRoom ? 'Back to multiplayer' : 'Back to lobby · rematch');
     var foot = h('footer', { class: 'rx-res-foot' }, h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), ' back to lobby'), back);
+      h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), noRoom ? ' back to multiplayer' : ' back to lobby'), back);
     U.host.appendChild(h('div', { class: 'rx-results', 'data-net': final ? 'final' : 'pending' }, head, main, foot));
     U.resultsRedraw = null;
     try { back.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
@@ -5005,7 +5066,7 @@ CB.race = CB.race || {};
     }
   }
   /** Career rounds and events count once: the race UI never offers a re-run of the same round. */
-  function oneShotLaunch() { var k = U && U.opts && U.opts.context && U.opts.context.kind; return k === 'career' || k === 'event'; }
+  function oneShotLaunch() { var k = U && U.opts && U.opts.context && U.opts.context.kind; return k === 'career' || k === 'event' || k === 'challenge'; }
 
   /** Hand the classification to the launcher (hub / career) once per finished session. */
   function reportFinish(raw, res, snap) {
@@ -5079,6 +5140,9 @@ CB.race = CB.race || {};
     /* header */
     var title = mode === 'race' ? (myRow && myRow.dnf ? 'Did not finish' : (myRow && myRow.position === 1 ? 'Victory' : 'Race classification')) :
       mode === 'time-trial' ? 'Time trial complete' : 'Practice summary';
+    // a Driving School challenge runs as a time trial on its own course: name the challenge and its outcome instead
+    var chEval = R.challenge && R.challengeEval, chName = chEval && chEval.result && chEval.result.name;
+    if (chName) title = chName + ' · ' + (chEval.failed ? 'not completed' : chEval.medal ? chEval.medal.charAt(0).toUpperCase() + chEval.medal.slice(1) + ' medal' : 'complete');
     var badges = h('div', { class: 'rx-badges' });
     var delay = 0;
     function badge(text, cls, ico) { badges.appendChild(h('span', { class: 'rx-badge ' + (cls || ''), style: { 'animation-delay': (delay += 120) + 'ms' } }, icon(ico || 'star', 14), text)); }
@@ -5096,10 +5160,10 @@ CB.race = CB.race || {};
       h('div', { class: 'rx-res-pos rx-display rx-num' }, mode === 'race' && myRow && !myRow.dnf ? 'P' : null, posText,
         mode === 'race' && myRow && !myRow.dnf ? h('small', { text: '/' + total }) : null),
       h('div', { class: 'rx-res-title' },
-        h('div', { class: 'rx-eyebrow accent', text: (R.def.name || '') + ' · ' + pick(MODES, mode).name + (mode === 'practice' ? '' : ' · ' + plural(S.laps, 'lap')) }),
+        h('div', { class: 'rx-eyebrow accent', text: (R.def.name || '') + (chName ? ' · ' + (chEval.text || 'Challenge') : ' · ' + pick(MODES, mode).name + (mode === 'practice' ? '' : ' · ' + plural(S.laps, 'lap'))) }),
         R.isArcade ? h('span', { class: 'rx-chip arcade rx-res-arcade', title: 'Arcade handling: separate best laps' }, icon('bolt', 12), 'ARCADE') : null,
         h('h2', { class: 'rx-display', text: title }),
-        h('div', { class: 'rx-dim', text: ((U.build.meta && U.build.meta.name) || 'Your build') + ' · ' + pick(WEATHERS, S.weather).name + ' · ' + pick(TIMES, S.timeOfDay).name })),
+        h('div', { class: 'rx-dim', text: resultBuildName() + ' · ' + pick(WEATHERS, S.weather).name + ' · ' + pick(TIMES, S.timeOfDay).name })),
       badges);
 
     /* table */
@@ -5181,7 +5245,7 @@ CB.race = CB.race || {};
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'replay', title: 'Broadcast replay with timeline, cameras and event markers', onclick: function () { openReplay(R, false); } }, icon('film', 16), 'Watch replay') : null,
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'photo', title: 'Free camera, filters and PNG export', onclick: function () { openReplay(R, true); } }, icon('camera', 16), 'Photo mode') : null,
       h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' race again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
+      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' race again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
       again);
 
     U.host.appendChild(h('div', { class: 'rx-results' }, head, main, foot));
@@ -5289,7 +5353,7 @@ CB.race = CB.race || {};
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'replay', onclick: function () { openReplay(R, false); } }, icon('film', 16), 'Watch replay') : null,
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'photo', onclick: function () { openReplay(R, true); } }, icon('camera', 16), 'Photo mode') : null,
       h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' go again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
+      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' go again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
       again);
     U.host.appendChild(h('div', { class: 'rx-results' }, head, main, foot));
     U.resultsRedraw = null;

@@ -450,10 +450,29 @@ if (typeof window !== 'undefined') window.CB = CB;
         else if (d.k === 'closed' && sig.role === 'peer') { sig._deliver('host', { t: '_closed' }); sig._closed('host-closed'); shut(); }
       };
     }
-    function shut() { if (ch) { try { ch.close(); } catch (e) { /* ignore */ } ch = null; } }
+    // closing / reloading a tab says goodbye at once (the online backends do this with a beacon); without it the other
+    // tab only noticed after the WebRTC consent timeout plus the 15 s reconnect grace
+    var unload = null;
+    function bye() {
+      if (!ch || sig.state === 'closed') return;
+      try {
+        if (sig.role === 'host') ch.postMessage({ k: 'closed', room: sig.room });
+        else ch.postMessage({ k: 'msg', room: sig.room, from: sig.peer, to: 'host', msg: { t: '_leave' } });
+      } catch (e) { /* ignore */ }
+    }
+    function shut() {
+      if (unload && hasWin && window.removeEventListener) window.removeEventListener('pagehide', unload);
+      unload = null;
+      if (ch) { try { ch.close(); } catch (e) { /* ignore */ } ch = null; }
+    }
+    function watchUnload() {
+      if (unload || !hasWin || !window.addEventListener) return;
+      unload = function (ev) { if (ev && ev.persisted) return; bye(); };   // a page kept in the back/forward cache may come back
+      window.addEventListener('pagehide', unload);
+    }
     sig.create = async function () {
       sig.room = rand(5); sig.peer = 'host'; sig.role = 'host';
-      open(); sig._setState('open');
+      open(); watchUnload(); sig._setState('open');
       return { room: sig.room, peer: 'host', role: 'host' };
     };
     sig.join = async function (code) {
@@ -467,6 +486,7 @@ if (typeof window !== 'undefined') window.CB = CB;
         ch.postMessage({ k: 'probe', room: room, from: sig.peer });
       });
       if (!ok) { shut(); sig.room = null; throw err('not-found', 'No room ' + room + ' open in another tab'); }
+      watchUnload();
       sig._setState('open');
       return { room: room, peer: sig.peer, role: 'peer', host: 'host' };
     };
@@ -478,10 +498,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     sig.close = async function () {
       if (sig.state === 'closed') return;
-      if (ch) {
-        if (sig.role === 'host') ch.postMessage({ k: 'closed', room: sig.room });
-        else ch.postMessage({ k: 'msg', room: sig.room, from: sig.peer, to: 'host', msg: { t: '_leave' } });
-      }
+      bye();
       sig._closed('closed');
       shut();
     };

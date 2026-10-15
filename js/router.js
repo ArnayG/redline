@@ -422,7 +422,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
   function enterAtelier(t) {
     var A = app();
     if (A && t.sub && CB.panels && CB.panels[t.sub] && typeof A.activePanel === 'function' && A.activePanel() !== t.sub) safe(function () { A.goto(t.sub); }, 'app.goto');
-    if (A && typeof A.activePanel === 'function' && !t.sub) {
+    // an unknown panel (#/garage/notapanel) shows the first panel: normalise the URL to it as well
+    var unknownSub = !!(t.sub && CB.panels && Object.keys(CB.panels).length && !CB.panels[t.sub]);
+    if (A && typeof A.activePanel === 'function' && (!t.sub || unknownSub)) {
       var p = A.activePanel();
       if (p) { t.sub = p; writeUrl(format('atelier', p, t.params), true); }
     }
