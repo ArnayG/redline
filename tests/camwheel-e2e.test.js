@@ -293,7 +293,8 @@ async function recordSession(video, fps, seconds) {
       " function r4(v){ return Math.round(v*1e5)/1e5; } function flat(a){ var o=[]; (a||[]).forEach(function(p){ o.push(r4(p.x), r4(p.y), r4(p.z||0)); }); return o; }" +
       " cw.on('frame', function(f){ window.__idx=dec(cw); window.__at[Math.round(f.t)]=window.__idx; });" +
       " cw.on('hands', function(e){ var i=window.__at[Math.round(e.t)]; if(i==null) return; var p=cw._b.pedals.read(performance.now(), 'fist');" +
-      "   window.__s.push({i:i, t:Math.round(e.t), st:p.state, open:(e.meas.pts||[]).map(function(q){ return q.open==null?null:Math.round(q.open*1000)/1000; }), mode:e.meas.mode, a:e.meas.ok?Math.round(e.meas.angle*10)/10:null," +
+      "   window.__s.push({i:i, t:Math.round(e.t), st:p.state, open:(e.meas.pts||[]).map(function(q){ return q.open==null?null:Math.round(q.open*1000)/1000; }), mode:e.meas.mode, a:e.meas.ok?Math.round(e.meas.angle*10)/10:null, held:!!e.meas.held," +
+      "     r:e.meas.ok?(e.meas.mode==='two'&&e.meas.pts.length===2?Math.hypot(e.meas.pts[1].x-e.meas.pts[0].x,e.meas.pts[1].y-e.meas.pts[0].y)/2:(e.meas.wheelR||null)):null," +
       "     hd:(e.meas.hands||[]).map(function(c){ return { lm:flat(c.h.lm), wl:c.h.wl?flat(c.h.wl):null, s:c.h.score, l:c.h.label }; }) }); });" +
       " return cw.start().then(function(r){ return r.ok; }); })()");
     for (var i = 0; i < 300; i++) { var ms = await b.eval('CB.input.camwheel.model().state'); if (ms === 'ready' || ms === 'error') break; await sleep(100); }
@@ -348,3 +349,48 @@ t('camwheel e2e: fist = go, open hand = brake on real hand photos (zero false br
     });
   } finally { cleanup(); }
 });
+
+// the reported glitch ("the wheel goes really small and glitches out when I make a fist pointing at the screen"): the
+// left fist turns towards the camera (seen foreshortened along its length to 45 %, as the flat photo sprite allows: at 30 % the detector no longer finds it)
+// while steering, then the right one, then both; the wheel's size (half the hands' distance, or the one-hand wheelR)
+// must stay put, the angle must follow, and it is gas throughout (never a brake)
+var POINT_SCRIPT = [
+  [0, 1.5, function () { return {}; }],
+  [1.5, 4.5, function (u) { var k = Math.sin((u - 1.5) / 3 * Math.PI); return { pitch: [1 - 0.55 * k, 1] }; }],
+  [4.5, 7.5, function (u) { var k = Math.sin((u - 4.5) / 3 * Math.PI); return { pitch: [1, 1 - 0.55 * k] }; }],
+  [7.5, 10.5, function (u) { var k = Math.sin((u - 7.5) / 3 * Math.PI); return { pitch: 1 - 0.55 * k }; }],
+  [10.5, 12, function () { return {}; }]
+];
+function pointTruth(tt) { return tt < 1.5 || tt > 10.5 ? 0 : 25 * Math.sin((tt - 1.5) * 1.4); }
+t('camwheel e2e: a fist pointed at the screen keeps the wheel size and the steering (no small wheel, no glitch)', async function () {
+  tmp = fs.mkdtempSync(path.join(process.env.REDLINE_E2E_TMP || os.tmpdir(), 'redline-campoint-'));
+  var srv = cp.spawn(process.execPath, [path.join(root, 'tools/dev-server.js'), '--port', String(PS)], { stdio: 'ignore', cwd: root });
+  procs.push(srv);
+  try {
+    await sleep(800);
+    var HS = require('./camwheel-hands-synth.js'), fps = 30, sec = 12;
+    var v = path.join(tmp, 'point.y4m');
+    HS.writeY4m(v, { w: 640, h: 360, fps: fps, seconds: sec, truth: pointTruth,
+      per: function (i, tt) { return seg(POINT_SCRIPT, tt)[2](tt); } });
+    var r = await recordSession(v, fps, sec);
+    var seen = r.S.filter(function (x) { return x.r != null; });
+    var base = seen.filter(function (x) { return x.i / fps < 1.4; }).map(function (x) { return x.r; }).sort(function (a, b) { return a - b; });
+    var r0 = base[base.length >> 1], worstR = 0, errs = [], brakes = 0, small = 0, held = 0, lost = 0;
+    seen.forEach(function (x) {
+      var d = Math.abs(x.r / r0 - 1); worstR = Math.max(worstR, d); if (x.r < 0.8 * r0) small++;
+      if (x.held) held++;
+      if (x.a != null) errs.push(Math.abs(((x.a - pointTruth(x.i / fps)) % 360 + 540) % 360 - 180));
+    });
+    r.S.forEach(function (x) { if (x.st === 'brake') brakes++; if (x.st === 'lost') lost++; });
+    if (process.env.REDLINE_E2E_VERBOSE) r.S.forEach(function (x) { console.log('      ' + [x.i, x.st, x.mode, x.a, x.r && Math.round(x.r), x.held, JSON.stringify(x.open), x.hd.length].join(' ')); });
+    errs.sort(function (a, b) { return a - b; });
+    var p95 = errs[Math.floor(errs.length * 0.95)] || 0;
+    console.log('    fist pointed at the screen: ' + JSON.stringify({ results: r.S.length, seen: seen.length, r0: Math.round(r0), worstR: Math.round(worstR * 1000) / 10 + ' %', small: small, held: held, errP95: Math.round(p95 * 10) / 10, errMax: Math.round(errs[errs.length - 1] * 10) / 10, brake: brakes, lost: lost }));
+    assert.ok(r.cal.ok, 'calibrated ' + JSON.stringify(r.cal));
+    assert.ok(seen.length > 250, 'hands seen in ' + seen.length + ' results');
+    assert.ok(small <= seen.length * 0.02, 'the wheel never goes small: ' + small + ' frames < 80 %');
+    assert.ok(p95 < 8, 'steering follows (95th percentile error ' + p95.toFixed(1) + ' deg)');
+    assert.equal(brakes, 0, 'no brakes with fists');
+  } finally { cleanup(); }
+});
+

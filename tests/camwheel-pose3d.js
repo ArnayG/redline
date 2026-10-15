@@ -10,7 +10,9 @@
        roll deg (each hand about its wrist -> middle-MCP axis; mirrored for the left hand so both roll "with" the wheel),
        pitch deg (fingers towards / away from the camera), dist (1 = calibrated distance, 1.2 = 20 % farther),
        dx / dy px offsets of the whole wheel, k1 barrel distortion at the frame corner (-0.1 typical webcam), wlGain: the
-       world landmarks' share of the true roll / pitch (MediaPipe's 3D guess under-estimates out-of-plane rotation)
+       world landmarks' share of the true roll / pitch (MediaPipe's 3D guess under-estimates out-of-plane rotation),
+       wristJitter px (number or [left, right]): extra noise on the wrist landmark alone (hidden behind a fist pointed at
+       the camera, the detector guesses it)
      P3.W, P3.H, P3.rng(seed), P3.gauss(R) */
 'use strict';
 var FIX = require('./fixtures/hands/landmarks.json');
@@ -52,7 +54,7 @@ function openHand(p, g) {
 function palmC(p) { var c = [0, 0, 0]; [0, 5, 9, 13, 17].forEach(function (i) { c = add(c, mul(p[i], 0.2)); }); return c; }
 
 function hands(o) {
-  o = Object.assign({ grip: 1, turn: 0, roll: 0, pitch: 0, dist: 1, dx: 0, dy: 0, k1: 0, jitter: 0, wjitter: 0, wlGain: 1, clip: false, rng: null, only: null }, o || {});
+  o = Object.assign({ grip: 1, turn: 0, roll: 0, pitch: 0, dist: 1, dx: 0, dy: 0, k1: 0, jitter: 0, wjitter: 0, wristJitter: 0, wlGain: 1, clip: false, rng: null, only: null }, o || {});
   var R = o.rng || rng(1);
   var cs = BASE.map(function (h) { return palmC(h.p); });
   var hub = [(cs[0][0] + cs[1][0]) / 2, (cs[0][1] + cs[1][1]) / 2, 0];
@@ -85,6 +87,8 @@ function hands(o) {
       var Q = add(Cc, q), u = W / 2 + F * Q[0] / Q[2], v = H / 2 + F * Q[1] / Q[2];
       if (o.k1) { var nx = (u - W / 2) / (W / 2), ny = (v - H / 2) / (W / 2), r2 = (nx * nx + ny * ny) / (1 + (H / W) * (H / W)); var k = 1 + o.k1 * r2; u = W / 2 + (u - W / 2) * k; v = H / 2 + (v - H / 2) * k; }
       if (o.jitter) { u += gauss(R) * o.jitter; v += gauss(R) * o.jitter; }
+      var wj = i === 0 ? (typeof o.wristJitter === 'number' ? o.wristJitter : o.wristJitter[hi]) : 0;
+      if (wj) { u += gauss(R) * wj; v += gauss(R) * wj; }
       if (o.clip) { u = Math.max(0, Math.min(W, u)); v = Math.max(0, Math.min(H, v)); }
       var z = (q[2] * F / Q[2]) / W;
       if (zw == null) zw = z;

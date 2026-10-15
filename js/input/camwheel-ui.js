@@ -273,7 +273,7 @@ CB.input = CB.input || {};
         cx = (m.pts[0].x + m.pts[1].x) / 2 * sx; cy = (m.pts[0].y + m.pts[1].y) / 2 * sy;
         r = Math.hypot((m.pts[1].x - m.pts[0].x) * sx, (m.pts[1].y - m.pts[0].y) * sy) / 2;
       } else {
-        var p = m.pts[0]; r = Math.max(W * 0.12, p.size * sx * 1.6);
+        var p = m.pts[0]; r = m.wheelR > 0 ? m.wheelR * sx : Math.max(W * 0.12, p.size * sx * 1.6);   // (the two-hand wheel's size)
         // one hand on the rim at 9 or 3 o'clock: the hub is beside it
         var side = B.solver && B.solver.tracks && B.solver.tracks.a ? 1 : -1;
         cx = p.x * sx + side * Math.cos(a) * r; cy = p.y * sy + side * Math.sin(a) * r;

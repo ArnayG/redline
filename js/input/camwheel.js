@@ -569,7 +569,7 @@ CB.input = CB.input || {};
         var was = S.read(t), relock = S.unwrapped === null || t - S.lastOk > relockMs || !!m.fresh, gap = t - S.lastOk;
         if (gap > 0 && gap < 200) S.dtAvg = S.dtAvg ? lerp(S.dtAvg, gap, 0.1) : gap;
         var dropped = gap > Math.max(90, 2.5 * (S.dtAvg || 33));
-        if (S.everOk && (was.lost || m.fresh || S._seeded || dropped)) S.blend = { steer: was.steer, angle: was.angleShown, t0: t };
+        if (S.everOk && (was.lost || m.fresh || S._seeded || dropped || m.snap)) S.blend = { steer: was.steer, angle: was.angleShown, t0: t };
         S.everOk = true; S._seeded = false;
         if (relock) { u = S.centre + wrapP(m.angle - S.centre, p); f.reset(); S._fa = null; S._t = null; }
         else u = S.unwrapped + wrapP(m.angle - S.unwrapped, p);
@@ -658,7 +658,7 @@ CB.input = CB.input || {};
     if (!c || typeof c !== 'object') return null;
     var ok = [c.x, c.y, c.L, c.q].every(function (v) { return typeof v === 'number' && isFinite(v); }) && c.L > 0 && c.q > 0;
     if (!ok || !c.roll0 || !isFinite(c.roll0.a) || !isFinite(c.roll0.b)) return null;
-    return { x: clamp(c.x, -0.5, 1.5), y: clamp(c.y, -0.5, 1.5), L: c.L, q: c.q, side: c.side === 'L' ? 'L' : c.side === 'R' ? 'R' : null, roll0: { a: +c.roll0.a, b: +c.roll0.b } };
+    return { x: clamp(c.x, -0.5, 1.5), y: clamp(c.y, -0.5, 1.5), L: c.L, q: c.q, qv: c.qv === 2 ? 2 : undefined, side: c.side === 'L' ? 'L' : c.side === 'R' ? 'R' : null, roll0: { a: +c.roll0.a, b: +c.roll0.b } };
   }
   function normPedalCal(c) {
     if (!c || typeof c !== 'object') return null;
