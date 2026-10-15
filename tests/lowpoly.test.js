@@ -327,4 +327,78 @@ test('lowpoly: rear side glass on the hypercars / C 63 has no pale up-facing fac
   assert.strictEqual(c63.body.mats[10][7], 'paint'); assert.strictEqual(c63.body.mats[11][7], 'paint');
 });
 
+test('lowpoly: wellGrid — an arch end snapped near an authored ring never lands inboard of the next arch vertex (no flank wedge)', function () {
+  var ring = function () { return [[0.15, 0], [0.15, 0.8], [0.6, 0.9], [0.9, 0.75], [1.2, 0.5], [1.25, 0]]; };
+  var A = { x: 1.3, cy: 0.33, r: 0.37, zIn: 0.6 };
+  // authored rings within 3 cm of both arch ends, but inboard of the neighbouring arch vertex (the ends wrap below the axle)
+  var e = A.r * Math.cos(-0.3) - 0.026;
+  [5, 2].forEach(function (K) {
+    var st = [2.2, A.x + e, 0.5, A.x - e, -2.2].map(function (x) { return { x: x, pts: ring() }; });
+    var g = LP._.wellGrid(st, [A], K).grid;
+    for (var i = 1; i < g.length; i++) assert.ok(g[i].x <= g[i - 1].x + 1e-9, 'rings stay in x order');
+    // inside the arch span every ring is cut (well), outside none: one open -> well -> open run, no open ring between wells
+    var seq = g.map(function (r) { return r.well == null ? 'o' : 'w'; }).join('').replace(/(.)\1+/g, '$1');
+    assert.strictEqual(seq, 'owo', 'K=' + K + ' well sequence ' + g.map(function (r) { return r.x.toFixed(3) + (r.well == null ? 'o' : 'w'); }).join(' '));
+  });
+});
+
+test('lowpoly: stacked maxTilt decals — the lamp sits on (coplanar with, proud of) its surround; mirrored copies symmetric', function () {
+  var def = JSON.parse(JSON.stringify(LP.get('mclaren-p1')));
+  def.parts.forEach(function (p) { if (p.t === 'poly' && p.view === 'front' && p.mirror) p.maxTilt = 35; });
+  var C = LP._.compile('test-p1-tilt', def);
+  var head = C.parts.filter(function (p) { return p.t === 'poly3' && p.mat === 'light'; });
+  var surround = C.parts.filter(function (p) { return p.t === 'poly3' && p.mat === 'gloss' && p.pts[0][0] > 1; });
+  assert.ok(head.length >= 2 && surround.length >= 2);
+  [1, -1].forEach(function (sg) {
+    var h = head.filter(function (p) { return p.pts[0][2] * sg > 0; })[0], s = surround.filter(function (p) { return p.pts[0][2] * sg > 0 && Math.abs(p.pts[0][1] - h.pts[0][1]) < 0.15; })[0];
+    assert.ok(h && s, 'lamp + surround on side ' + sg);
+    assert.ok(Math.abs(h.n[0] * s.n[0] + h.n[1] * s.n[1] + h.n[2] * s.n[2] - 1) < 1e-6, 'coplanar stack');
+    var dh = h.pts[0][0] * h.n[0] + h.pts[0][1] * h.n[1] + h.pts[0][2] * h.n[2], ds = s.pts[0][0] * s.n[0] + s.pts[0][1] * s.n[1] + s.pts[0][2] * s.n[2];
+    assert.ok(dh > ds + 1e-4, 'lamp in front of its surround');
+  });
+  var R = head.filter(function (p) { return p.pts[0][2] > 0; }), L = head.filter(function (p) { return p.pts[0][2] < 0; });
+  assert.strictEqual(R.length, L.length);
+  R.forEach(function (r, k) {
+    var l = L[k];
+    assert.ok(Math.abs(r.n[0] - l.n[0]) + Math.abs(r.n[1] - l.n[1]) + Math.abs(r.n[2] + l.n[2]) < 1e-6, 'mirrored normal');
+    r.pts.forEach(function (q, i) { var m = l.pts[i]; assert.ok(Math.abs(q[0] - m[0]) + Math.abs(q[1] - m[1]) + Math.abs(q[2] + m[2]) < 1e-6, 'mirrored vertex'); });
+  });
+});
+
+test('lowpoly: per-def stock wheel look (wheels.stock) applies only while the build keeps the generic default', function () {
+  var id = 'mclaren-p1', def = LP.get(id), saved = def.wheels;
+  try {
+    def.wheels = Object.assign({}, saved, { stock: { rim: '#c0c2c5', material: 'steel', caliper: '#2a2a2a' } });
+    assert.ok(LP.validate(def).ok, LP.validate(def).errors.join('; '));
+    assert.deepStrictEqual(LP.stockWheels(id), { finish: '#c0c2c5', material: 'steel', caliper: '#2a2a2a' });
+    function rimCal(extra) {
+      var b = refBuild(SH.models[id]);
+      if (extra) Object.keys(extra).forEach(function (s) { b[s] = Object.assign({}, b[s] || {}, extra[s]); });
+      var r = LP.build(b, { lod: 'high' }), cal = r.parts.filter(function (p) { return p.kind === 'caliper-fl'; })[0];
+      var rim = r.parts.filter(function (p) { return p.kind === 'wheel-fl'; })[0];
+      return { cal: [cal.colors[0], cal.colors[1], cal.colors[2]], rim: rim };
+    }
+    var a = rimCal(), x = rimCal({ exterior: { caliperColor: '#d40000' }, wheels: { finish: '#111111' } });
+    assert.ok(Math.abs(a.cal[0] - a.cal[2]) < 0.02 && a.cal[0] < 0.1, 'stock dark calliper on the default build');
+    assert.ok(x.cal[0] > 0.3 && x.cal[2] < 0.1, 'explicit red calliper wins');
+    def.wheels = Object.assign({}, saved, { stock: { rim: 'silver' } });
+    assert.ok(!LP.validate(def).ok, 'bad hex rejected');
+  } finally { def.wheels = saved; LP.clearCache(); }
+  assert.strictEqual(LP.stockWheels('no-such-car'), null);
+});
+
+test('lowpoly: Garage stock spec (CB.stock) uses a def\'s wheels.stock when the model has no wheel signature', function () {
+  ['js/util.js', 'js/shapes/stock-specs.js', 'js/state.js', 'js/physics.js', 'js/rules.js'].forEach(function (f) { var p = path.join(ROOT, f); if (fs.existsSync(p)) require(p); });
+  var ST = globalThis.CB.stock;
+  if (!ST || typeof ST.build !== 'function') return;
+  var id = 'ford-transit-hr', def = LP.get(id), saved = def.wheels;
+  assert.ok(!SH.models[id].wheel, 'fixture model has no wheel signature');
+  try {
+    def.wheels = Object.assign({}, saved, { stock: { rim: '#b1b4b8', caliper: '#202020' } });
+    var b = ST.build(id).build;
+    assert.strictEqual(b.wheels.finish, '#b1b4b8');
+    assert.strictEqual(b.exterior.caliperColor, '#202020');
+  } finally { def.wheels = saved; LP.clearCache(); }
+});
+
 if (standalone && require.main === module) console.log(process.exitCode ? 'FAILED' : 'all lowpoly tests passed');

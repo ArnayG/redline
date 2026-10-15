@@ -30,13 +30,18 @@ CB.lowpoly.register('porsche-911-992', {
     { t:'prism', mat:'trim',  pts2d:[[x,y],...], z0, z1 },                     // extrude a side-profile polygon across z
     { t:'poly', view:'front', mat:'light', pts:[[z,y],...], offset, mirror, maxTilt:40 }, // projected decal; maxTilt
                                    // (deg, opt-in): one flat polygon facing the view within maxTilt, just proud of the
-                                   // skin (lamps / grilles straddling a bonnet or deck edge stay unsquashed)
+                                   // skin (lamps / grilles straddling a bonnet or deck edge stay unsquashed). Layers
+                                   // stack in authoring order: a maxTilt decal whose centre lies on an earlier decal of
+                                   // the same view (lamp on its gloss surround) takes that plane and sits proud of it
   ],
   // flare() arch bands (4-point radial prisms round an arch) must start AT the arch cut radius (the fitted arch r the
   // well is cut at, >= wheel r + 25 mm, ~ wheel r x 1.1): the generator pushes any inner edge inside it out to it.
   exhaust: [{ cx, cy, w, h, shape:'round'|'oval'|'trapezoid', mirror }],   // optional: replaces the base model's
                                    // rear.exhaust tips (rear-view z / y; mirror adds the twin at -cx; [] = none visible)
-  wheels: { spokes: 5, style:'star'|'mesh'|'disc'|'split'|'turbine', inset:0.02 }, // low-poly 12–16 sided tyre + rim polygon
+  wheels: { spokes: 5, style:'star'|'mesh'|'disc'|'split'|'turbine', inset:0.02, // low-poly 12–16 sided tyre + rim polygon
+            stock: { rim:'#b9bcc0', material:'steel', caliper:'#2a2a2a' } },     // optional factory wheel look: used only
+                                   // while the build keeps the generic default (dark #2b2b2b rim / cast / yellow
+                                   // calliper); CB.lowpoly.stockWheels(id) feeds the Garage stock spec (CB.stock)
   notes: 'reference photos used: …'
 });
 ```

@@ -89,6 +89,20 @@
     return p;
   }
   function S(x, o) { return { x: x, pts: ring(o) }; }
+  /** thin oval shut-line (top view [x, z]) as two simple half-strips */
+  function lidLine(cx, cz, rx, rz, w) {
+    var out = [];
+    [0, 1].forEach(function (h) {
+      var a = [], b = [];
+      for (var k = 0; k <= 8; k++) {
+        var t = (h + k / 8) * Math.PI;
+        a.push([cx + Math.cos(t) * rx, cz + Math.sin(t) * rz]);
+        b.unshift([cx + Math.cos(t) * (rx - w), cz + Math.sin(t) * (rz - w)]);
+      }
+      out.push(a.concat(b));
+    });
+    return out;
+  }
   /** material row for an interval: kind sets columns 6..9, sill = c1 colour */
   var TOP = {
     deck: ['paint', 'paint', 'paint', 'paint'],
@@ -267,9 +281,11 @@
       stations: [
         // blunt rounded nose (lamps down), bonnet sunk between tall front-wing humps peaking over the front wheel,
         // waist dipping at the door, then the rear haunch swelling up over the rear wheel into a short round tail
-        S(2.167, { b: 0.22, zb: 0.46, yw: 0.30, w: 0.56, ys: 0.36, zs: 0.53, yb: 0.39, zbl: 0.45, h: 0.40, c: 0.1 }),
-        S(2.10, { b: 0.15, zb: 0.64, yw: 0.32, w: 0.76, ys: 0.44, zs: 0.745, yb: 0.51, zbl: 0.66, h: 0.475, c: 0.4 }),
-        S(1.90, { b: 0.14, zb: 0.73, yw: 0.37, w: 0.84, ys: 0.565, zs: 0.825, yb: 0.65, zbl: 0.735, h: 0.545, c: 0.5 }),
+        // broad, rounded bumper face (round in plan, rolled over into the bonnet), not a pointed wedge
+        S(2.167, { b: 0.21, zb: 0.52, yw: 0.32, w: 0.62, ys: 0.41, zs: 0.60, yb: 0.45, zbl: 0.50, h: 0.465, c: 0.1 }),
+        S(2.125, { b: 0.15, zb: 0.67, yw: 0.32, w: 0.785, ys: 0.475, zs: 0.77, yb: 0.54, zbl: 0.69, h: 0.53, c: 0.4 }),
+        S(2.03, { b: 0.14, zb: 0.73, yw: 0.34, w: 0.835, ys: 0.545, zs: 0.815, yb: 0.615, zbl: 0.73, h: 0.565, c: 0.5 }),
+        S(1.90, { b: 0.14, zb: 0.75, yw: 0.37, w: 0.85, ys: 0.585, zs: 0.835, yb: 0.665, zbl: 0.745, h: 0.57, c: 0.5 }),
         S(1.585, { b: 0.15, zb: 0.74, lf: [0.26, 0.84], yw: 0.45, w: 0.875, ys: 0.71, zs: 0.85, yb: 0.785, zbl: 0.73, h: 0.60, c: 0.9 }),
         S(1.21, { b: 0.15, zb: 0.74, lf: [0.25, 0.815], yw: 0.45, w: 0.877, ys: 0.715, zs: 0.855, yb: 0.795, zbl: 0.74, h: 0.635, c: 0.9 }),
         S(0.76, { b: 0.15, zb: 0.73, lf: [0.25, 0.80], yw: 0.44, w: 0.865, ys: 0.655, zs: 0.855, yb: 0.745, zbl: 0.755, h: 0.675, c: 0.9 }),
@@ -285,7 +301,7 @@
         S(-2.117, { b: 0.34, zb: 0.53, yw: 0.48, w: 0.64, ys: 0.715, zs: 0.60, yb: 0.81, zbl: 0.50, h: 0.835, c: 0.2 })
       ],
       mats: [
-        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
+        row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint'), row('deck'), row('deck'), row('deck'),
         row('screen'), row('roof'), row('roof'), row('hatch'), row('hatch'), row('hatch'), row('deck', 'paint'), row('deck', 'paint'), row('deck', 'paint')
       ],
       capF: 'paint', capR: 'paint'
@@ -295,13 +311,21 @@
       polys([[[0.32, 0.885], [-0.17, 1.12], [-0.60, 1.16], [-0.98, 1.10], [-1.16, 0.96], [-1.04, 0.925]]], 'side', 'glass', 0.006, true),
       polys([rect(-0.60, 0.905, -0.55, 1.16)], 'side', 'gloss', 0.007, true),
       // nose: oval smile mouth with plate, slim wrap-round corner lamps, pop-up lamp lid shut-lines
-      polys([ell(0, 0.25, 0.42, 0.075, 16)], 'front', 'grille', 0.005, false),
-      polys([rect(-0.17, 0.27, 0.17, 0.355)], 'front', 'plate', 0.009, false),
-      polys([[[0.52, 0.305], [0.76, 0.31], [0.79, 0.325], [0.53, 0.322]]], 'front', 'light', 0.008, true),
-      polys([[[0.76, 0.31], [0.80, 0.312], [0.815, 0.33], [0.80, 0.335]]], 'front', 'indicator', 0.01, true),
-      tilt(polys([[[0.55, 0.20], [0.70, 0.20], [0.72, 0.25], [0.57, 0.25]]], 'front', 'grille', 0.005, true), 35),
-      polys([ell(0, 0.37, 0.025, 0.012, 6)], 'front', 'badge', 0.008, false),
-      polys([rect(1.64, 0.46, 1.92, 0.467), rect(1.64, 0.715, 1.92, 0.722), rect(1.64, 0.46, 1.647, 0.722)], 'top', 'black', 0.004, true),
+      // JDM Type R face: plate on the bumper, wide low trapezoid mouth under it, a lamp cluster at each upper
+      // corner (slim oval lens + round projector), round fog in a black pocket below it, amber marker outboard
+      polys([[[-0.36, 0.205], [0.36, 0.205], [0.42, 0.29], [-0.42, 0.29]]], 'front', 'grille', 0.005, false),
+      polys([rect(-0.40, 0.205, 0.40, 0.214)], 'front', 'gloss', 0.007, false),
+      polys([rect(-0.16, 0.30, 0.16, 0.385)], 'front', 'plate', 0.009, false),
+      tilt(polys([ell(0.62, 0.392, 0.125, 0.032, 12, -0.12)], 'front', 'gloss', 0.007, true), 40),
+      tilt(polys([ell(0.61, 0.393, 0.10, 0.022, 10, -0.12)], 'front', 'light', 0.009, true), 40),
+      tilt(polys([ell(0.67, 0.388, 0.022, 0.018, 8)], 'front', 'chrome', 0.011, true), 40),
+      tilt(polys([[[0.52, 0.215], [0.74, 0.225], [0.76, 0.305], [0.53, 0.30]]], 'front', 'grille', 0.006, true), 40),
+      tilt(polys([ell(0.64, 0.262, 0.03, 0.026, 8)], 'front', 'light', 0.009, true), 40),
+      tilt(polys([[[0.76, 0.30], [0.80, 0.305], [0.81, 0.34], [0.77, 0.335]]], 'front', 'indicator', 0.01, true), 45),
+      polys([rect(-0.03, 0.40, 0.03, 0.42)], 'front', 'badge', 0.008, false),
+      polys([rect(-0.20, 0.135, 0.20, 0.15)], 'front', 'black', 0.004, false),
+      // pop-up lamp lids: oval shut-line on each front corner of the bonnet
+      polys(lidLine(1.87, 0.61, 0.15, 0.15, 0.007), 'top', 'black', 0.004, true),
       // '99 tail: smoked full-width band with three round lamps a side (amber inboard), plate in the bumper
       polys([[[-0.74, 0.69], [0.74, 0.69], [0.82, 0.715], [0.85, 0.76], [0.82, 0.805], [0.74, 0.83], [-0.74, 0.83], [-0.82, 0.805], [-0.85, 0.76], [-0.82, 0.715]]], 'rear', 'gloss', 0.006, false),
       polys([ell(0.72, 0.76, 0.05, 0.045, 10), ell(0.59, 0.76, 0.05, 0.045, 10)], 'rear', 'tail', 0.009, true),
@@ -310,8 +334,9 @@
       polys([rect(0.40, 0.42, 0.56, 0.45)], 'rear', 'tail', 0.008, true),
       polys([rect(-0.72, 0.22, 0.72, 0.30)], 'rear', 'black', 0.004, false),
       polys([ell(0, 0.79, 0.025, 0.018, 6)], 'rear', 'badge', 0.011, false),
-      // side: amber marker
+      // side: amber marker, the sculpted scoop recess at the front of the door
       polys([rect(1.52, 0.46, 1.58, 0.48)], 'side', 'indicator', 0.004, true),
+      polys([[[0.93, 0.33], [0.97, 0.34], [0.985, 0.52], [0.955, 0.56], [0.935, 0.50]]], 'side', 'gloss', 0.005, true),
       mirrorParts(0.12, 0.30, 0.87, 0.97, 0.74, 0.92, [0.24, 0.88, 0.74], [0.07, 0.03, 0.06]),
       [
         // Type R hoop wing: blade on two swept uprights
@@ -326,7 +351,11 @@
       'https://commons.wikimedia.org/wiki/File:Mazda_RX-7_SPIRIT_R_Type_A_(GF-FD3S)_(10).jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Mazda-rx7-3rd-generation01.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Mazda_RX-7_(FD3S)_rear_(cropped).JPG (rear 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:1992_Mazda_RX-7.jpg (front 3/4, wing humps / sunk bonnet).'
+      'https://commons.wikimedia.org/wiki/File:1992_Mazda_RX-7.jpg (front 3/4, wing humps / sunk bonnet), ' +
+      'https://commons.wikimedia.org/wiki/File:1994_Mazda_RX-7_R2_in_Vintage_Red,_front_left_(Lime_Rock).jpg (front 3/4 / profile), ' +
+      'https://commons.wikimedia.org/wiki/File:Mazda_RX-7_(FD)_Washington_DC_Metro_Area,_USA_(1).jpg (front 3/4: lamp lids, bumper face), ' +
+      'https://commons.wikimedia.org/wiki/File:Mazda_GF-FD3S_RX-7_Type_RS_(23021116282).jpg (front: plate, mouth, lamp clusters, fogs), ' +
+      'https://commons.wikimedia.org/wiki/File:Mazda_RX-7_(FD)_Washington_DC_Metro_Area,_USA_(1.1).jpg (rear 3/4).'
   };
   reg('mazda-rx7-fd3s', FD);
 
@@ -482,16 +511,18 @@
   var CAM = {
     body: {
       stations: [
-        S(2.34, { b: 0.24, zb: 0.56, yw: 0.40, w: 0.68, ys: 0.62, zs: 0.69, yb: 0.745, zbl: 0.62, h: 0.765, c: 0.2 }),
-        S(2.29, { b: 0.13, zb: 0.73, yw: 0.40, w: 0.86, ys: 0.66, zs: 0.855, yb: 0.79, zbl: 0.77, h: 0.81, c: 0.4 }),
+        // nose: the lower bumper (huge grille, splitter) juts forward; the upper face with the slit lamps leans
+        // back ~20 deg up to the bonnet's leading edge (shark nose), not an upright wall
+        S(2.34, { b: 0.17, zb: 0.62, yw: 0.32, w: 0.76, ys: 0.52, zs: 0.74, yb: 0.60, zbl: 0.66, h: 0.615, c: 0.2 }),
+        S(2.215, { b: 0.13, zb: 0.77, yw: 0.38, w: 0.89, ys: 0.69, zs: 0.87, yb: 0.795, zbl: 0.79, h: 0.805, c: 0.4 }),
         S(2.06, { b: 0.12, zb: 0.84, yw: 0.42, w: 0.915, ys: 0.66, zs: 0.905, yb: 0.80, zbl: 0.83, h: 0.825, c: 0.5 }),
         S(1.55, { b: 0.13, zb: 0.87, yw: 0.48, w: 0.94, ys: 0.74, zs: 0.93, yb: 0.85, zbl: 0.86, h: 0.875, c: 1.0 }),
         S(1.00, { b: 0.13, zb: 0.87, yw: 0.50, w: 0.945, ys: 0.80, zs: 0.935, yb: 0.90, zbl: 0.87, h: 0.92, c: 1.0 }),
         S(0.60, { b: 0.13, zb: 0.87, yw: 0.50, w: 0.945, ys: 0.86, zs: 0.93, yb: 0.96, zbl: 0.86, h: 0.99, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
         S(-0.20, { b: 0.13, zb: 0.87, yw: 0.52, w: 0.945, ys: 0.90, zs: 0.925, yb: 1.02, zbl: 0.83, g: [1.04, 0.745], r: [1.27, 0.66], e: [1.305, 0.625], t: 1.32 }),
         S(-0.60, { b: 0.13, zb: 0.87, yw: 0.52, w: 0.945, ys: 0.91, zs: 0.93, yb: 1.04, zbl: 0.84, g: [1.06, 0.75], r: [1.30, 0.665], e: [1.33, 0.63], t: 1.344 }),
-        S(-1.00, { b: 0.13, zb: 0.87, yw: 0.52, w: 0.95, ys: 0.92, zs: 0.935, yb: 1.07, zbl: 0.845, g: [1.09, 0.755], r: [1.28, 0.665], e: [1.305, 0.63], t: 1.31 }),
-        S(-1.75, { b: 0.13, zb: 0.88, yw: 0.50, w: 0.95, ys: 0.93, zs: 0.93, yb: 1.06, zbl: 0.82, h: 1.10, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
+        S(-1.00, { b: 0.13, zb: 0.87, yw: 0.55, w: 0.965, ys: 0.92, zs: 0.935, yb: 1.07, zbl: 0.845, g: [1.09, 0.755], r: [1.28, 0.665], e: [1.305, 0.63], t: 1.31 }),
+        S(-1.75, { b: 0.13, zb: 0.88, yw: 0.56, w: 0.968, ys: 0.93, zs: 0.925, yb: 1.06, zbl: 0.82, h: 1.10, c: 0.3, fr: [0.12, 0.24, 0.32, 0.66] }),
         S(-2.25, { b: 0.18, zb: 0.86, yw: 0.55, w: 0.93, ys: 0.92, zs: 0.90, yb: 1.04, zbl: 0.78, h: 1.07, c: 0.3 }),
         S(-2.40, { b: 0.26, zb: 0.78, yw: 0.55, w: 0.87, ys: 0.90, zs: 0.84, yb: 1.00, zbl: 0.73, h: 1.03, c: 0.3 }),
         S(-2.4425, { b: 0.38, zb: 0.62, yw: 0.55, w: 0.72, ys: 0.86, zs: 0.70, yb: 0.94, zbl: 0.62, h: 0.96, c: 0.2 })
@@ -509,20 +540,21 @@
       polys([rect(-0.65, 1.05, -0.60, 1.28)], 'side', 'gloss', 0.007, true),
       // two-tier face: a full-height black band between the slit lamps, huge black lower grille with the bowtie
       // on its top bar, body-colour corner frames carrying horizontal LED light guides
-      polys([[[-0.46, 0.672], [0.46, 0.672], [0.46, 0.788], [-0.46, 0.788]]], 'front', 'grille', 0.006, false),
-      polys([[[-0.66, 0.25], [0.66, 0.25], [0.70, 0.62], [0.46, 0.68], [-0.46, 0.68], [-0.70, 0.62]]], 'front', 'grille', 0.005, false),
-      polys([rect(-0.62, 0.575, 0.62, 0.592)], 'front', 'gloss', 0.008, false),
-      polys([[[-0.075, 0.565], [0.075, 0.565], [0.075, 0.60], [-0.075, 0.60]]], 'front', 'badge', 0.011, false),
-      polys([rect(-0.15, 0.30, 0.15, 0.40)], 'front', 'plate', 0.009, false),
+      // thin upper slot between the lamps (badge on it), body-colour bar, then the huge trapezoid lower grille
+      polys([[[-0.46, 0.69], [0.46, 0.69], [0.46, 0.775], [-0.46, 0.775]]], 'front', 'grille', 0.006, false),
+      polys([[[-0.50, 0.22], [0.50, 0.22], [0.58, 0.40], [0.62, 0.575], [-0.62, 0.575], [-0.58, 0.40]]], 'front', 'grille', 0.005, false),
+      polys([0, 1, 2].map(function (k) { var y = 0.30 + k * 0.085; return [[-0.52 - k * 0.03, y], [0.52 + k * 0.03, y], [0.52 + k * 0.03, y + 0.012], [-0.52 - k * 0.03, y + 0.012]]; }), 'front', 'gloss', 0.008, false),
+      polys([[[-0.07, 0.715], [0.07, 0.715], [0.07, 0.75], [-0.07, 0.75]]], 'front', 'badge', 0.011, false),
+      polys([rect(-0.08, 0.50, 0.08, 0.53)], 'front', 'badge', 0.009, false),
       // slit lamps (flat top, angled bottom): dark housing, small projector element outboard, light guide along the bottom
-      polys([[[0.44, 0.665], [0.80, 0.672], [0.88, 0.70], [0.92, 0.785], [0.44, 0.79]]], 'front', 'gloss', 0.006, true),
-      polys([[[0.60, 0.725], [0.84, 0.73], [0.88, 0.76], [0.89, 0.778], [0.60, 0.778]]], 'front', 'light', 0.009, true),
-      polys([ell(0.66, 0.75, 0.035, 0.022, 8), ell(0.76, 0.752, 0.035, 0.022, 8)], 'front', 'chrome', 0.012, true),
-      polys([[[0.45, 0.675], [0.80, 0.682], [0.87, 0.71], [0.80, 0.697], [0.45, 0.692]]], 'front', 'drl', 0.012, true),
-      tilt(polys([[[0.72, 0.505], [0.86, 0.51], [0.865, 0.528], [0.72, 0.522]]], 'front', 'drl', 0.012, true), 40),
-      // corner brake ducts, carbon splitter, carbon bonnet extractor
-      tilt(polys([[[0.72, 0.28], [0.86, 0.30], [0.87, 0.47], [0.74, 0.47]]], 'front', 'grille', 0.006, true), 40),
-      polys([rect(-0.90, 0.11, 0.90, 0.17)], 'front', 'carbon', 0.006, false),
+      polys([[[0.46, 0.685], [0.78, 0.69], [0.86, 0.715], [0.89, 0.79], [0.46, 0.792]]], 'front', 'gloss', 0.006, true),
+      polys([[[0.60, 0.735], [0.82, 0.738], [0.86, 0.76], [0.87, 0.782], [0.60, 0.782]]], 'front', 'light', 0.009, true),
+      polys([ell(0.66, 0.758, 0.032, 0.02, 8), ell(0.76, 0.76, 0.032, 0.02, 8)], 'front', 'chrome', 0.012, true),
+      polys([[[0.47, 0.69], [0.78, 0.695], [0.85, 0.72], [0.78, 0.708], [0.47, 0.703]]], 'front', 'drl', 0.012, true),
+      // tall black corner brake ducts with the vertical LED strip on their outer edge, carbon splitter, bonnet extractor
+      tilt(polys([[[0.66, 0.22], [0.84, 0.25], [0.86, 0.47], [0.70, 0.49], [0.64, 0.40]]], 'front', 'grille', 0.006, true), 40),
+      tilt(polys([[[0.83, 0.27], [0.86, 0.27], [0.875, 0.46], [0.845, 0.46]]], 'front', 'drl', 0.011, true), 40),
+      polys([rect(-0.92, 0.10, 0.92, 0.165)], 'front', 'carbon', 0.006, false),
       polys([[[1.25, -0.30], [1.80, -0.34], [1.80, 0.34], [1.25, 0.30]]], 'top', 'carbon', 0.004, false),
       polys([0, 1, 2, 3].map(function (k) { var x = 1.33 + k * 0.12; return rect(x, -0.27, x + 0.05, 0.27); }), 'top', 'black', 0.007, false),
       // rear: black housing with two rectangular lamps a side, bowtie, plate, black diffuser
@@ -542,7 +574,10 @@
     wheels: { style: 'split', spokes: 5 },
     notes: 'Chevrolet Camaro ZL1 (2019) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2019_Chevrolet_Camaro_2SS,_front_11.9.19.jpg (front 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:2019_Chevrolet_Camaro_2SS,_rear_11.9.19.jpg (rear 3/4).'
+      'https://commons.wikimedia.org/wiki/File:2019_Chevrolet_Camaro_2SS,_rear_11.9.19.jpg (rear 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:Chevrolet_Camaro_ZL1.jpg (front 3/4: raked upper face, lower grille), ' +
+      'https://commons.wikimedia.org/wiki/File:Chevrolet_Camaro_ZL1_(68283).jpg (front 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:Chevrolet_Camaro_ZL1_(SMT03).jpg (rear 3/4).'
   };
   reg('chevrolet-camaro-zl1-2019', CAM);
 

@@ -105,9 +105,9 @@
       // pts: 0 bottom centre, 1 bottom edge, 2 lower flank, 3 waist, 4 upper flank, 5 shoulder,
       //      6 hood edge / bed-rail inner, 7 hood / bed wall, 8 centre (hood or bed floor)
       stations: [
-        { x: 2.555, pts: [[0.66, 0], [0.66, 0.78], [0.74, 0.84], [0.95, 0.865], [1.20, 0.865], [1.285, 0.82], [1.30, 0.60], [1.305, 0.32], [1.305, 0]] },
-        { x: 2.50, pts: [[0.58, 0], [0.58, 0.84], [0.64, 0.90], [0.95, 0.925], [1.23, 0.925], [1.325, 0.88], [1.34, 0.62], [1.345, 0.33], [1.345, 0]] },
-        { x: 2.30, pts: [[0.55, 0], [0.555, 0.90], [0.63, 0.945], [0.95, 0.968], [1.24, 0.968], [1.35, 0.922], [1.365, 0.66], [1.372, 0.34], [1.372, 0]] },
+        { x: 2.555, pts: [[0.50, 0], [0.50, 0.76], [0.60, 0.84], [0.95, 0.865], [1.20, 0.865], [1.285, 0.82], [1.30, 0.60], [1.305, 0.32], [1.305, 0]] },
+        { x: 2.50, pts: [[0.47, 0], [0.47, 0.82], [0.57, 0.90], [0.95, 0.925], [1.23, 0.925], [1.325, 0.88], [1.34, 0.62], [1.345, 0.33], [1.345, 0]] },
+        { x: 2.30, pts: [[0.49, 0], [0.50, 0.88], [0.60, 0.945], [0.95, 0.968], [1.24, 0.968], [1.35, 0.922], [1.365, 0.66], [1.372, 0.34], [1.372, 0]] },
         { x: 1.80, pts: [[0.55, 0], [0.555, 0.92], [0.64, 0.955], [0.95, 0.972], [1.25, 0.972], [1.365, 0.93], [1.385, 0.67], [1.395, 0.34], [1.395, 0]] },
         { x: 0.92, pts: [[0.50, 0], [0.51, 0.92], [0.59, 0.955], [0.86, 0.972], [1.27, 0.972], [1.40, 0.935], [1.425, 0.70], [1.44, 0.34], [1.44, 0]] },
         { x: -1.10, pts: [[0.50, 0], [0.51, 0.92], [0.59, 0.955], [0.86, 0.972], [1.27, 0.972], [1.405, 0.935], [1.425, 0.72], [1.44, 0.34], [1.44, 0]] },
@@ -167,19 +167,24 @@
       polys(word('TOYOTA', 0, 1.170, 0.072, -1, 1.4), 'front', 'badge', 0.011, false),
       polys([rect(-0.32, 1.060, 0.32, 1.085)], 'front', 'drl', 0.009, false),
       // slim lamps on the upper grille corners (amber tip) + vertical vent slots under them
-      polys([[[0.62, 1.190], [0.89, 1.200], [0.915, 1.270], [0.66, 1.280]]], 'front', 'gloss', 0.006, true),
-      polys([[[0.65, 1.210], [0.85, 1.217], [0.875, 1.260], [0.67, 1.267]]], 'front', 'light', 0.009, true),
-      polys([[[0.62, 1.185], [0.90, 1.195], [0.902, 1.203], [0.62, 1.195]]], 'front', 'drl', 0.010, true),
-      polys([rect(0.86, 1.215, 0.905, 1.263)], 'front', 'indicator', 0.011, true),
-      polys([rect(0.77, 0.950, 0.90, 1.130)], 'front', 'black', 0.006, true),
-      polys([0, 1, 2, 3].map(function (k) { var y = 0.97 + k * 0.042; return rect(0.78, y, 0.89, y + 0.016); }), 'front', 'gloss', 0.009, true),
+      // big wedge headlamps on the outer corners (top at the hood line, white DRL bar along the bottom) and the
+      // stacked vent slots under them beside the grille
+      polys([[[0.665, 1.145], [0.695, 1.272], [0.905, 1.290], [0.915, 1.195], [0.875, 1.125]]], 'front', 'gloss', 0.006, true),
+      polys([[[0.705, 1.180], [0.725, 1.255], [0.885, 1.268], [0.892, 1.205], [0.86, 1.168]]], 'front', 'light', 0.009, true),
+      polys([[[0.675, 1.132], [0.875, 1.122], [0.885, 1.145], [0.685, 1.158]]], 'front', 'drl', 0.010, true),
+      polys([[[0.885, 1.205], [0.905, 1.195], [0.902, 1.262], [0.888, 1.262]]], 'front', 'indicator', 0.011, true),
+      polys([rect(0.71, 0.945, 0.835, 1.105)], 'front', 'black', 0.006, true),
+      polys([0, 1, 2, 3].map(function (k) { var y = 0.962 + k * 0.036; return rect(0.72, y, 0.825, y + 0.014); }), 'front', 'gloss', 0.009, true),
       // lower bumper: black centre, fog / LED pods, silver skid plate with dark cut-outs
-      polys([[[-0.56, 0.745], [0.56, 0.745], [0.70, 0.905], [-0.70, 0.905]]], 'front', 'black', 0.005, false),
-      polys([[[-0.50, 0.77], [0.50, 0.77], [0.60, 0.88], [-0.60, 0.88]]], 'front', 'grille', 0.008, false),
-      polys([rect(-0.16, 0.79, 0.16, 0.86)], 'front', 'black', 0.010, false),
-      polys([[[0.47, 0.80], [0.60, 0.80], [0.655, 0.845], [0.50, 0.845]]], 'front', 'indicator', 0.011, true),
-      polys([[[-0.58, 0.62], [0.58, 0.62], [0.62, 0.735], [-0.62, 0.735]]], 'front', 'chrome', 0.008, false),
-      polys([-0.36, -0.12, 0.12, 0.36].map(function (z) { return rect(z - 0.07, 0.64, z + 0.07, 0.67); }), 'front', 'black', 0.011, false),
+      // body-colour bumper bar under the grille, black lower intake (amber LED fog bars at its outer ends,
+      // plate box), grey skid plate with dark teeth along the bottom
+      polys([[[-0.54, 0.69], [0.54, 0.69], [0.64, 0.845], [-0.64, 0.845]]], 'front', 'black', 0.005, false),
+      polys([[[-0.48, 0.71], [0.48, 0.71], [0.58, 0.83], [-0.58, 0.83]]], 'front', 'grille', 0.008, false),
+      polys([rect(-0.13, 0.76, 0.13, 0.83)], 'front', 'black', 0.010, false),
+      polys([[[0.40, 0.785], [0.56, 0.785], [0.585, 0.81], [0.42, 0.81]]], 'front', 'indicator', 0.011, true),
+      polys([[[-0.54, 0.47], [0.54, 0.47], [0.64, 0.64], [-0.64, 0.64]]], 'front', 'chrome', 0.008, false),
+      polys([[[-0.62, 0.615], [0.62, 0.615], [0.63, 0.63], [-0.63, 0.63]]], 'front', 'white', 0.011, false),
+      polys([-0.40, -0.20, 0, 0.20, 0.40].map(function (z) { return rect(z - 0.07, 0.49, z + 0.07, 0.53); }), 'front', 'black', 0.011, false),
       // cab rear window + 3rd brake light
       polys([rect(-0.62, 1.56, 0.62, 1.84)], 'rear', 'glass', 0.005, false),
       polys([rect(-0.14, 1.865, 0.14, 1.89)], 'rear', 'tail', 0.008, false),
@@ -188,7 +193,7 @@
       polys([rect(0.89, 1.04, 0.925, 1.30)], 'rear', 'gloss', 0.009, true),
       polys([rect(-0.11, 1.28, 0.11, 1.32)], 'rear', 'black', 0.006, false),
       polys(word('TACOMA', 0, 1.105, 0.085, 1, 2.05), 'rear', 'gloss', 0.006, false),
-      polys([rect(-0.98, 0.68, 0.98, 0.86)], 'rear', 'black', 0.005, false),
+      polys([rect(-0.62, 0.68, 0.62, 0.86)], 'rear', 'black', 0.005, false),
       polys([rect(-0.16, 0.89, 0.16, 0.97)], 'rear', 'plate', 0.008, false),
       // door handles, TACOMA door badge
       polys([rect(0.34, 1.29, 0.48, 1.32), rect(-0.56, 1.29, -0.42, 1.32)], 'side', 'black', 0.004, true),
@@ -208,14 +213,22 @@
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.95, z1: 1.16, pts2d: [[0.93, 1.47], [0.71, 1.465], [0.715, 1.69], [0.89, 1.70]] },
         { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.705, 1.485, 0.98], [0.705, 1.485, 1.145], [0.705, 1.675, 1.145], [0.705, 1.675, 0.98]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.455, 0.95], s: [0.13, 0.05, 0.09] },
-        { t: 'box', mat: 'black', c: [-2.90, 0.70, 0], s: [0.10, 0.12, 1.70] }
+        { t: 'box', mat: 'black', c: [-2.90, 0.70, 0], s: [0.10, 0.12, 1.24] },
+        // rear bumper: black centre step, body-colour corner caps (photos)
+        { t: 'box', mat: 'paint', mirror: true, c: [-2.87, 0.73, 0.78], s: [0.14, 0.15, 0.30] }
       ]
     ),
-    wheels: { style: 'star', spokes: 6, tyre: 'at' },
+    // TRD Pro: matte black 18 in forged wheels, red TRD callipers (photos)
+    wheels: { style: 'star', spokes: 6, tyre: 'at', stock: { rim: '#1c1d1f', material: 'forged', caliper: '#c01818' } },
     notes: 'Toyota Tacoma TRD Pro (N400, 2024) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2024_Cleveland_Auto_Show_(53571764732).jpg (front, TRD Pro), ' +
       'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_IMG_9727.jpg (front 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_IMG_9735.jpg (rear 3/4).'
+      'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_IMG_9735.jpg (rear 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:2024_Cleveland_Auto_Show_(53573068825).jpg (front 3/4, TRD Pro: wheels / red callipers), ' +
+      'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_DSC_7353.jpg (rear 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_N400_Double_Cab.jpg (front). Final check 2026-10: deeper ' +
+      'front fascia (bumper to ~0.47 m), big wedge corner headlamps with DRL bar, body-colour bumper bar over the black ' +
+      'lower intake + grey skid plate, body-colour rear bumper corners, factory TRD Pro wheel look (wheels.stock).'
   };
   // shoulder crease: the flank leans out to a sharp horizontal crease a hand below the belt and tucks back in
   // above it (both trucks carry one along the doors and the bed), so the light splits the slab side in two
@@ -306,7 +319,7 @@
           { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.865, 1.225, 0.93], [0.865, 1.225, 1.075], [0.865, 1.315, 1.075], [0.865, 1.315, 0.93]] }
         ]
       ),
-      wheels: { style: 'split', spokes: 6, tyre: 'at' },   // black 20 in twin-spoke (covers off) on 35 in all-terrains
+      wheels: { style: 'split', spokes: 6, tyre: 'at', stock: { rim: '#2b2d30', material: 'flow-formed', caliper: '#262628' } },   // dark grey wheels, black callipers (photos)   // black 20 in twin-spoke (covers off) on 35 in all-terrains
       notes: 'Tesla Cybertruck (2024) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Cybertruck_supercharging_at_Bravoland.jpg (side 3/4), ' +
@@ -433,7 +446,7 @@
           { t: 'box', mat: 'black', mirror: true, c: [1.19, 1.50, 1.02], s: [0.08, 0.05, 0.08] }
         ]
       ),
-      wheels: { style: 'star', spokes: 5 },
+      wheels: { style: 'star', spokes: 5, stock: { rim: '#b9bcc0', material: 'steel', caliper: '#2a2a2a' } },   // silver steel wheels, black callipers (photos)
       notes: 'Mercedes-Benz Sprinter (VS30) 144" high roof — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2019_Mercedes-Benz_Sprinter_314_CDi_2.1.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Front.jpg (front 3/4), ' +
@@ -549,7 +562,7 @@
           { t: 'box', mat: 'black', mirror: true, c: [1.26, 1.55, 1.04], s: [0.08, 0.05, 0.08] }
         ]
       ),
-      wheels: { style: 'star', spokes: 8 },
+      wheels: { style: 'star', spokes: 8, stock: { rim: '#b4b7bb', material: 'steel', caliper: '#2a2a2a' } },   // silver steel wheels, black callipers (photos)
       notes: 'Ford Transit (gen 4, 2020 facelift) 350 148" high roof — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Front.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Rear.jpg (rear 3/4), ' +
@@ -673,7 +686,7 @@
           { t: 'box', mat: 'black', mirror: true, c: [1.18, 1.18, 0.97], s: [0.08, 0.04, 0.08] }
         ]
       ),
-      wheels: { style: 'turbine', spokes: 5 },   // 5-blade 'turbine' aero wheel of the 1st Edition / Pro S
+      wheels: { style: 'turbine', spokes: 5, stock: { rim: '#a7abb0', material: 'cast', caliper: '#2a2a2a' } },   // silver / two-tone alloys, dark callipers (photos)   // 5-blade 'turbine' aero wheel of the 1st Edition / Pro S
       notes: 'Volkswagen ID. Buzz (2022) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID.Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_front_left,_2025-03-14.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID._Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_rear_right,_2025-05-18.jpg (rear 3/4), ' +

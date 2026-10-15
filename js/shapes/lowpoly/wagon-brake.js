@@ -32,6 +32,7 @@
     }
     return out;
   }
+  function tilt(deg) { return function (p) { p.maxTilt = deg; return p; }; }
   function rect(a0, b0, a1, b1) { return [[a0, b0], [a1, b0], [a1, b1], [a0, b1]]; }
   function polys(list, view, mat, off, mirror) {
     return list.map(function (p) { return { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: p }; });
@@ -56,18 +57,12 @@
     }
     return parts;
   }
-  /** Audi four rings: chrome discs with dark centres (view coordinates) */
+  /** plain oval badge (text badges only, no logo artwork): chrome oval with a dark / paint inset, sized to the
+      width the old four-ring badge spanned (r: ring radius, gap: ring spacing; view coordinates) */
   function rings(view, zc, yc, r, gap, off, back) {
-    var out = [];
-    for (var i = 0; i < 4; i++) {
-      var z = zc + (i - 1.5) * gap;
-      out.push({ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(z, yc, r, r, 10) });
-    }
-    for (i = 0; i < 4; i++) {
-      z = zc + (i - 1.5) * gap;
-      out.push({ t: 'poly', view: view, mat: back ? 'paint' : 'grille', offset: off + 0.002, pts: ell(z, yc, r * 0.74, r * 0.74, 10) });
-    }
-    return out;
+    var ra = gap * 1.5 + r, rb = r * 0.9;
+    return [{ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(zc, yc, ra, rb, 12) },
+      { t: 'poly', view: view, mat: back ? 'paint' : 'grille', offset: off + 0.002, pts: ell(zc, yc, ra - r * 0.25, rb - r * 0.25, 12) }];
   }
 
   // block capitals on a 3x5 grid: [col0, row0, col1, row1] (rows from the bottom)
@@ -95,16 +90,11 @@
     }
     return out;
   }
-  /** Mercedes star: chrome ring disc, dark field, three chrome spokes (view coordinates) */
-  function star(view, zc, yc, r, off, field) {
-    var out = [{ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(zc, yc, r, r, 12) },
-      { t: 'poly', view: view, mat: field || 'grille', offset: off + 0.002, pts: ell(zc, yc, r * 0.82, r * 0.82, 12) }];
-    for (var i = 0; i < 3; i++) {
-      var a = Math.PI / 2 + i * Math.PI * 2 / 3, b = a + Math.PI / 2, w = r * 0.12;
-      out.push({ t: 'poly', view: view, mat: 'chrome', offset: off + 0.004, pts: [
-        [zc + Math.cos(b) * w, yc + Math.sin(b) * w], [zc + Math.cos(a) * r * 0.82, yc + Math.sin(a) * r * 0.82], [zc - Math.cos(b) * w, yc - Math.sin(b) * w]] });
-    }
-    return out;
+  /** plain round badge (text badges only, no logo artwork): chrome ring, dark / paint field, small chrome centre disc */
+  function badge(view, zc, yc, r, off, field) {
+    return [{ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(zc, yc, r, r, 12) },
+      { t: 'poly', view: view, mat: field || 'grille', offset: off + 0.002, pts: ell(zc, yc, r * 0.82, r * 0.82, 12) },
+      { t: 'poly', view: view, mat: 'chrome', offset: off + 0.004, pts: ell(zc, yc, r * 0.22, r * 0.22, 8) }];
   }
 
   /* ---------------------------------------------------------------- ring builder
@@ -279,7 +269,7 @@
   //   front 3/4: https://commons.wikimedia.org/wiki/File:Mercedes-AMG_E63_Estate_S_(S213)_Washington_DC_Metro_Area,_USA.jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:Mercedes-AMG_E63_S_Estate_(S213)_Greater_Toronto_Area,_Canada_(1).jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2017_Mercedes-Benz_E220d_AMG_Line_Premium_Estate_2.0_Rear.jpg
-  // Signature: AMG Panamericana grille (vertical chrome slats, big star), flat angular LED lamps, AMG A-wing
+  // Signature: AMG Panamericana grille (vertical chrome slats, big round badge), flat angular LED lamps, AMG A-wing
   // bumper with large outer intakes, chrome DLO surround, raked estate tailgate under a roof spoiler, wide
   // horizontal tail lamps running into the tailgate with a chrome strip between, quad square tips in a diffuser.
   (function () {
@@ -306,11 +296,11 @@
     defs['mercedes-amg-e63s-estate-s213'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // Panamericana grille: chrome frame, dark field, vertical chrome slats, big star
+        // Panamericana grille: chrome frame, dark field, vertical chrome slats, big round badge
         polys([[[-0.31, 0.70], [0.31, 0.70], [0.38, 0.385], [-0.38, 0.385]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.29, 0.685], [0.29, 0.685], [0.355, 0.40], [-0.355, 0.40]]], 'front', 'grille', 0.008, false),
         polys([-4, -3, -2, 2, 3, 4].map(function (k) { var z = k * 0.07; return rect(z - 0.007, 0.41, z + 0.007, 0.675); }), 'front', 'chrome', 0.011, false),
-        star('front', 0, 0.545, 0.095, 0.012),
+        badge('front', 0, 0.545, 0.095, 0.012),
         // flat angular LED lamps with the eyebrow DRL
         polys([[[0.40, 0.665], [0.47, 0.71], [0.82, 0.765], [0.885, 0.735], [0.82, 0.685], [0.55, 0.625]]], 'front', 'gloss', 0.006, true),
         polys([[[0.46, 0.66], [0.50, 0.69], [0.80, 0.735], [0.83, 0.715], [0.78, 0.69], [0.56, 0.645]]], 'front', 'light', 0.009, true),
@@ -320,14 +310,14 @@
         polys([[[0.52, 0.355], [0.86, 0.37], [0.865, 0.395], [0.53, 0.38]]], 'front', 'paint', 0.009, true),
         polys([rect(-0.44, 0.19, 0.44, 0.30)], 'front', 'grille', 0.006, false),
         polys([rect(-0.26, 0.29, 0.26, 0.385)], 'front', 'plate', 0.009, false),
-        // rear: wide two-piece lamps into the tailgate, chrome strip, star, plate, diffuser, quad tips
+        // rear: wide two-piece lamps into the tailgate, chrome strip, round badge, plate, diffuser, quad tips
         polys([[[0.47, 0.985], [0.84, 0.99], [0.89, 1.06], [0.84, 1.105], [0.47, 1.10]]], 'rear', 'tail', 0.008, true),
         polys([[[0.30, 1.01], [0.47, 0.995], [0.47, 1.09], [0.30, 1.07]]], 'rear', 'tail', 0.008, true),
         polys([[[-2.47, 0.995], [-2.48, 1.10], [-2.535, 1.09], [-2.575, 1.0], [-2.54, 0.985]]], 'side', 'tail', 0.006, true),
         // chrome DLO surround curling round the rounded rear end of the quarter glass onto the D-pillar
         polys([[[-2.215, 1.118], [-2.25, 1.125], [-2.275, 1.21], [-2.255, 1.305], [-2.225, 1.30], [-2.245, 1.21], [-2.228, 1.135]]], 'side', 'chrome', 0.006, true),
         polys([rect(-0.30, 1.03, 0.30, 1.045)], 'rear', 'chrome', 0.008, false),
-        star('rear', 0, 1.075, 0.04, 0.008, 'paint'),
+        badge('rear', 0, 1.075, 0.04, 0.008, 'paint'),
         polys([rect(-0.26, 0.86, 0.26, 0.97)], 'rear', 'plate', 0.008, false),
         polys([rect(-0.84, 0.22, 0.84, 0.42)], 'rear', 'grille', 0.006, false),
         polys([rect(-0.84, 0.42, 0.84, 0.435)], 'rear', 'chrome', 0.008, false),
@@ -352,7 +342,7 @@
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:Volvo_V60_Polestar_Engineered_(SPA)_Washington_DC_Metro_Area,_USA.jpg
   //   front 3/4: https://commons.wikimedia.org/wiki/File:Volvo_V60_T8_IMG_0976.jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2018_Volvo_V60_Momentum_PRO_D4_Automatic_2.0_Rear.jpg
-  // Signature: upright concave grille with the diagonal iron-mark bar, "Thor's hammer" T-shaped DRLs, long
+  // Signature: upright concave grille with the diagonal chrome bar, "Thor's hammer" T-shaped DRLs, long
   // bonnet with the cowl set well back, flat roof, short hockey-stick DLO kick, tall L-shaped tail lamps running
   // up the D-pillars, widely spaced VOLVO letters on the tailgate, gold Brembo calipers (Polestar Engineered).
   (function () {
@@ -381,14 +371,13 @@
     defs['volvo-v60-polestar-engineered'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // upright grille: chrome frame, dark field, vertical bars, iron-mark ring + diagonal bar
+        // upright grille: chrome frame, dark field, vertical bars, plain round badge + diagonal bar
         polys([[[-0.36, 0.42], [0.36, 0.42], [0.40, 0.46], [0.40, 0.70], [0.36, 0.745], [-0.36, 0.745], [-0.40, 0.70], [-0.40, 0.46]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.34, 0.44], [0.34, 0.44], [0.375, 0.47], [0.375, 0.69], [0.34, 0.725], [-0.34, 0.725], [-0.375, 0.69], [-0.375, 0.47]]], 'front', 'grille', 0.008, false),
         polys([-4, -3, -2, -1, 1, 2, 3, 4].map(function (k) { var z = k * 0.075; return rect(z - 0.006, 0.45, z + 0.006, 0.715); }), 'front', 'gloss', 0.010, false),
         polys([diag], 'front', 'chrome', 0.013, false),
         polys([ell(0, 0.57, 0.062, 0.062, 12)], 'front', 'chrome', 0.014, false),
         polys([ell(0, 0.57, 0.046, 0.046, 12)], 'front', 'grille', 0.016, false),
-        polys([[[0.04, 0.63], [0.075, 0.635], [0.07, 0.60]]], 'front', 'chrome', 0.016, false),
         // headlamps with Thor's-hammer DRL (horizontal bar + inboard head)
         polys([[[0.42, 0.685], [0.86, 0.715], [0.905, 0.81], [0.47, 0.805], [0.41, 0.75]]], 'front', 'gloss', 0.006, true),
         polys([[[0.68, 0.716], [0.84, 0.728], [0.872, 0.79], [0.68, 0.792]]], 'front', 'light', 0.009, true),
@@ -574,39 +563,41 @@
   //   front 3/4: https://commons.wikimedia.org/wiki/File:Mercedes_CLS_Shooting_Brake_X218_silver_(1).jpg
   //   rear:      https://commons.wikimedia.org/wiki/File:Mercedes-Benz_X218_CLS_250_CDI_Shooting_Brake_Diamond_White_Bright_(5).jpg
   // Signature: long coupe-like roof that keeps falling to a small spoiler, frameless chrome-edged DLO tapering to
-  // a long point, twin-blade grille with a big star, swept Multibeam lamps with the eyebrow DRL, AMG-line bumper
+  // a long point, twin-blade grille with a big round badge, swept Multibeam lamps with the eyebrow DRL, AMG-line bumper
   // intakes, wide sweeping tail lamps wrapping into the flanks with a chrome strip across the tailgate.
   (function () {
     // waist (pt 3) carries the CLS "dropping line": high over the front wheel, falling along the doors, rising
     // again into the rear haunch; roof arched with its peak over the B-pillar and falling hard to the spoiler.
+    // From 1.50 to -1.30 the dropping line (yw), the max width (hw) and the shoulder crease (ysh / zsh) are kept
+    // linear in x so each band between them is one even strip of facets (no zig-zag shading along the doors).
     var S = [
       { x: 2.393, k: 'h', m: 'nose', yb: 0.30, hw: 0.40, yw: 0.52, ybl: 0.60, zbl: 0.36, yc: 0.64, zb: 0.34, ys: 0.36 },
       { x: 2.36, k: 'h', m: 'nose', yb: 0.20, hw: 0.72, yw: 0.50, ybl: 0.69, zbl: 0.66, yc: 0.715, zb: 0.64, ys: 0.27 },
       { x: 2.25, k: 'h', m: 'hood', yb: 0.175, hw: 0.82, yw: 0.56, ybl: 0.75, zbl: 0.78, yc: 0.765, zb: 0.74, ys: 0.25 },
-      { x: 1.95, k: 'h', m: 'hood', yb: 0.20, hw: 0.885, yw: 0.76, ybl: 0.815, zbl: 0.83, yc: 0.835, ysh: 0.80, zsh: 0.86 },
-      { x: 1.50, k: 'h', m: 'hood', yb: 0.22, hw: 0.923, yw: 0.82, ybl: 0.885, zbl: 0.84, yc: 0.905, ysh: 0.86, zsh: 0.885 },
-      { x: 0.88, k: 'h', m: 'screen', yb: 0.22, hw: 0.92, yw: 0.80, ybl: 0.965, zbl: 0.81, yc: 0.985, ysh: 0.90, zsh: 0.87 },
+      { x: 1.95, k: 'h', m: 'hood', yb: 0.20, hw: 0.885, yw: 0.755, ybl: 0.815, zbl: 0.83, yc: 0.835, ysh: 0.795, zsh: 0.865 },
+      { x: 1.50, k: 'h', m: 'hood', yb: 0.22, hw: 0.918, yw: 0.79, ybl: 0.885, zbl: 0.84, yc: 0.905, ysh: 0.855, zsh: 0.878 },
+      { x: 0.88, k: 'h', m: 'screen', yb: 0.22, hw: 0.920, yw: 0.757, ybl: 0.965, zbl: 0.81, yc: 0.985, ysh: 0.878, zsh: 0.876 },
       { x: 0.30, k: 'w', m: 'screen' },
-      { x: -0.20, k: 'c', m: 'cab', yb: 0.22, hw: 0.907, yw: 0.73, ybl: 0.995, zbl: 0.72, yg: 1.355, zg: 0.53, yr: 1.375, zr: 0.47, yq: 1.385, zq: 0.25, yc: 1.39, ysh: 0.90, zsh: 0.85 },
-      { x: -0.62, k: 'c', m: 'cab', yb: 0.22, hw: 0.918, yw: 0.71, ybl: 1.0, zbl: 0.715, yg: 1.385, zg: 0.53, yr: 1.405, zr: 0.475, yc: 1.416, ysh: 0.91, zsh: 0.86 },
-      { x: -1.30, k: 'c', m: 'cab', yb: 0.22, hw: 0.935, yw: 0.68, ybl: 1.015, zbl: 0.685, yg: 1.345, zg: 0.52, yr: 1.368, zr: 0.465, yc: 1.375, ysh: 0.92, zsh: 0.885 },
+      { x: -0.20, k: 'c', m: 'cab', yb: 0.22, hw: 0.922, yw: 0.699, ybl: 0.995, zbl: 0.72, yg: 1.355, zg: 0.53, yr: 1.375, zr: 0.47, yq: 1.385, zq: 0.25, yc: 1.39, ysh: 0.894, zsh: 0.874 },
+      { x: -0.62, k: 'c', m: 'cab', yb: 0.22, hw: 0.925, yw: 0.676, ybl: 1.0, zbl: 0.715, yg: 1.385, zg: 0.53, yr: 1.405, zr: 0.475, yc: 1.416, ysh: 0.906, zsh: 0.874 },
+      { x: -1.30, k: 'c', m: 'cab', yb: 0.22, hw: 0.932, yw: 0.64, ybl: 1.015, zbl: 0.685, yg: 1.345, zg: 0.52, yr: 1.368, zr: 0.465, yc: 1.375, ysh: 0.925, zsh: 0.876 },
       { x: -1.90, k: 'c', m: 'cab', yb: 0.221, hw: 0.932, yw: 0.80, ybl: 1.06, zbl: 0.63, ygb: 1.085, zgb: 0.60, yg: 1.275, zg: 0.505, yr: 1.31, zr: 0.445, yc: 1.318, ysh: 0.96, zsh: 0.86 },
       { x: -2.13, k: 'c', m: 'dpil', yb: 0.226, hw: 0.90, yw: 0.82, ybl: 1.10, zbl: 0.58, ygb: 1.17, zgb: 0.54, yg: 1.18, zg: 0.535, yr: 1.275, zr: 0.44, yc: 1.282, ysh: 0.99, zsh: 0.80 },
       { x: -2.222, k: 'c', m: 'hatch', yb: 0.228, hw: 0.88, yw: 0.80, ybl: 1.08, zbl: 0.60, ygb: 1.09, zgb: 0.58, yg: 1.10, zg: 0.57, yr: 1.255, zr: 0.44, yq: 1.262, yc: 1.265, ysh: 0.98, zsh: 0.80 },
       { x: -2.47, k: 'c', m: 'tail', yb: 0.235, hw: 0.78, yw: 0.74, ybl: 1.0, zbl: 0.66, yg: 1.015, zg: 0.62, yr: 1.025, zr: 0.53, yc: 1.03 },
       { x: -2.535, k: 'c', m: 'tail', yb: 0.25, hw: 0.70, yw: 0.70, ybl: 0.905, zbl: 0.62, yg: 0.91, zg: 0.58, yr: 0.915, zr: 0.52, yc: 0.92, ys: 0.32 },
-      { x: -2.564, k: 'c', m: 'tail', yb: 0.42, hw: 0.58, yw: 0.64, ybl: 0.78, zbl: 0.54, yg: 0.79, zg: 0.50, yr: 0.795, zr: 0.45, yc: 0.80, ys: 0.46, ysh: 0.73 }
+      { x: -2.564, k: 'c', m: 'tail', yb: 0.31, hw: 0.58, yw: 0.64, ybl: 0.78, zbl: 0.54, yg: 0.79, zg: 0.50, yr: 0.795, zr: 0.45, yc: 0.80, ys: 0.46, ysh: 0.73 }
     ];
     pillar(pillar(S, -0.36, -0.44), -1.38, -1.46);   // B-pillar, C-pillar ahead of the quarter glass
-    var M = matTable({ trim: 'chrome', topTrim: 'gloss', dPillar: 'gloss', roof: 'paint2', sill: 'black' });   // frameless doors: no chrome over the glass
+    var M = matTable({ trim: 'chrome', topTrim: 'gloss', dPillar: 'paint', roof: 'paint2', sill: 'black' });   // frameless doors: no chrome over the glass; body-colour D-pillar
     defs['mercedes-cls-shooting-brake-x218'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // wide forward-raked grille: chrome frame, dark field, twin chrome blades through a big star
+        // wide forward-raked grille: chrome frame, dark field, twin chrome blades through a big round badge
         polys([[[-0.38, 0.64], [0.38, 0.64], [0.42, 0.60], [0.40, 0.43], [0.36, 0.40], [-0.36, 0.40], [-0.40, 0.43], [-0.42, 0.60]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.365, 0.625], [0.365, 0.625], [0.40, 0.592], [0.385, 0.44], [0.35, 0.415], [-0.35, 0.415], [-0.385, 0.44], [-0.40, 0.592]]], 'front', 'grille', 0.008, false),
         polys([rect(-0.39, 0.49, 0.39, 0.512), rect(-0.39, 0.545, 0.39, 0.567)], 'front', 'chrome', 0.011, false),
-        star('front', 0, 0.528, 0.095, 0.013),
+        badge('front', 0, 0.528, 0.095, 0.013),
         // long swept lamps reaching back into the wings, three-stroke eyebrow DRL
         polys([[[0.42, 0.635], [0.48, 0.685], [0.86, 0.75], [0.91, 0.72], [0.80, 0.665], [0.56, 0.60]]], 'front', 'gloss', 0.006, true),
         polys([[[0.47, 0.635], [0.51, 0.67], [0.84, 0.725], [0.87, 0.71], [0.79, 0.675], [0.57, 0.62]]], 'front', 'light', 0.009, true),
@@ -618,12 +609,13 @@
         polys([rect(-0.44, 0.19, 0.44, 0.30)], 'front', 'grille', 0.006, false),
         polys([rect(-0.26, 0.30, 0.26, 0.395)], 'front', 'plate', 0.009, false),
         polys([rect(-0.84, 0.165, 0.84, 0.18)], 'front', 'chrome', 0.008, false),
-        // rear: big wedge lamps wrapping deep into the flanks, chrome strip, star, plate, diffuser, 3rd brake light
-        polys([[[0.34, 0.925], [0.62, 0.895], [0.86, 0.835], [0.935, 0.875], [0.88, 1.0], [0.34, 1.0]]], 'rear', 'tail', 0.008, true),
-        polys([[[0.48, 0.945], [0.70, 0.93], [0.84, 0.895], [0.87, 0.915], [0.74, 0.96], [0.48, 0.97]]], 'rear', 'gloss', 0.011, true),
+        // rear: big wedge lamps wrapping deep into the flanks, chrome strip, round badge, plate, diffuser, 3rd brake light
+        // (maxTilt: the lamps straddle the tailgate's shoulder, flat decals keep their full wedge from behind)
+        polys([[[0.31, 0.93], [0.52, 0.905], [0.69, 0.855], [0.755, 0.885], [0.715, 0.99], [0.31, 0.995]]], 'rear', 'tail', 0.008, true).map(tilt(40)),
+        polys([[[0.42, 0.948], [0.58, 0.932], [0.685, 0.895], [0.71, 0.91], [0.62, 0.958], [0.42, 0.968]]], 'rear', 'gloss', 0.011, true).map(tilt(40)),
         polys([[[-2.22, 0.995], [-2.32, 0.845], [-2.50, 0.83], [-2.53, 0.935], [-2.40, 1.0]]], 'side', 'tail', 0.006, true),
-        polys([rect(-0.36, 0.935, 0.36, 0.95)], 'rear', 'chrome', 0.008, false),
-        star('rear', 0, 0.99, 0.034, 0.008, 'paint'),
+        polys([rect(-0.31, 0.935, 0.31, 0.95)], 'rear', 'chrome', 0.008, false),
+        badge('rear', 0, 0.99, 0.034, 0.008, 'paint'),
         polys([rect(-0.26, 0.80, 0.26, 0.91)], 'rear', 'plate', 0.008, false),
         polys([rect(-0.80, 0.23, 0.80, 0.37)], 'rear', 'grille', 0.006, false),
         polys([rect(-0.30, 1.245, 0.30, 1.257)], 'rear', 'tail', 0.008, false),
@@ -631,13 +623,17 @@
         polys([rect(0.30, 0.925, 0.44, 0.948), rect(-0.85, 0.95, -0.71, 0.972)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.70, 0.54, 1.0, 1.09, 0.76, 0.94)
       ),
-      exhaust: [{ cx: 0.56, cy: 0.29, w: 0.24, h: 0.06, shape: 'trapezoid', mirror: true }],
-      wheels: { style: 'mesh', spokes: 10 },
+      exhaust: [{ cx: 0.56, cy: 0.335, w: 0.24, h: 0.055, shape: 'trapezoid', mirror: true }],
+      wheels: { style: 'mesh', spokes: 10, stock: { rim: '#c3c6ca', material: 'cast', caliper: '#3a3d41' } },   // factory silver 10-spoke, grey callipers
       notes: 'Mercedes-Benz CLS Shooting Brake (X218, facelift) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_CLS_550_4MATIC_Shooting_Brake_(X218)_front.JPG (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_CLS_550_4MATIC_Shooting_Brake_(X218)_rear.JPG (rear 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Mercedes_CLS_Shooting_Brake_X218_silver_(1).jpg (front 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_X218_CLS_250_CDI_Shooting_Brake_Diamond_White_Bright_(5).jpg (rear).'
+        'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_X218_CLS_250_CDI_Shooting_Brake_Diamond_White_Bright_(5).jpg (rear). ' +
+        'Shoulder / tail-lamp pass: https://commons.wikimedia.org/wiki/File:Mercedes_CLS_Shooting_Brake_X218_silver_(2).jpg (rear 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:MERCEDES-BENZ_CLS-CLASS_SHOOTING_BRAKE_(X218)_China.jpg (rear 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_X218_CLS_250_CDI_Shooting_Brake_Diamond_White_Bright_(4).jpg (rear), ' +
+        'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_X218_CLS_250_CDI_Shooting_Brake_Diamond_White_Bright_(3).jpg (front).'
     };
   })();
 

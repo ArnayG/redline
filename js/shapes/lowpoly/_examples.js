@@ -357,7 +357,8 @@
     ),
     // twin tips under the rear bumper ends (rap-r34 photo)
     exhaust: [{ cx: 0.52, cy: 0.6, w: 0.11, shape: 'round', mirror: true }],
-    wheels: { style: 'star', spokes: 6, tyre: 'at' },
+    // factory look (Commons: 2021 Ford F-150 Raptor front / rear): matte black-grey 17" wheels, black callipers
+    wheels: { style: 'star', spokes: 6, tyre: 'at', stock: { rim: '#26282b', material: 'cast', caliper: '#1c1c1e' } },
     notes: 'Ford F-150 Raptor (gen 3) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2021_Ford_F-150_Raptor,_front.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2021_Ford_F-150_Raptor,_rear.jpg (rear 3/4).'

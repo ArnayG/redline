@@ -503,7 +503,8 @@
         { t: 'box', mat: 'black', mirror: true, c: [0.56, 1.42, 0.92], s: [0.06, 0.04, 0.10] }
       ]
     ),
-    wheels: { style: 'star', spokes: 5 },
+    // factory look (Commons: Jeep Wrangler Rubicon (JL) 4xe 1X7A0285/0287): gunmetal 17" Rubicon alloys, black callipers
+    wheels: { style: 'star', spokes: 5, stock: { rim: '#5d6166', material: 'cast', caliper: '#1c1c1e' } },
     notes: 'Jeep Wrangler Unlimited Rubicon (JL) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2026_Jeep_Wrangler_4-door_Rubicon_Whitecap,_front_left,_09-12-2026.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2026_Jeep_Wrangler_4-door_Rubicon_Whitecap,_rear_left,_09-12-2026.jpg (rear 3/4), ' +

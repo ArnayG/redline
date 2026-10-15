@@ -19,8 +19,11 @@
                                          profile graphics.carStyle > 'lowpoly')
      CB.lowpoly.materials(S)             gl-core material descriptors per bucket (body, roof, trim, gloss, chrome,
                                          carbon, glass, head, drl, tail, rev, wing, tyre, rim, caliper, low)
-   Authoring extras handled here: projected-decal option maxTilt (planeDecal), def.exhaust tip override
-   (exhaustTips), flare() bands clamped to the arch cut radius (clampFlare), mirror stalks (planMirrors).
+   Authoring extras handled here: projected-decal option maxTilt (planeDecal; stacked layers share the plane of the
+   decal under them and sit proud of it, so mirrored lamp-on-surround pairs stay symmetric), def.exhaust tip override
+   (exhaustTips), flare() bands clamped to the arch cut radius (clampFlare), mirror stalks (planMirrors), per-def
+   factory wheel look def.wheels.stock = {rim:'#hex', material?, caliper:'#hex'} (applyStockWheels: used only while
+   the build keeps the generic default rim / material / calliper; CB.lowpoly.stockWheels(id) feeds CB.stock).
    Geometry: car-local metres, +x forward, +y up (ground 0), +z right, origin = centre of the overall length
    (shape origin - fitted dims.centerX), same as CB.gl.car. Flat shading: every triangle has its own unwelded
    vertices and face normal; colours are per-face vertex colours (materials carry the PBR parameters only).
@@ -436,7 +439,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       leans like the skin under it (area-weighted normal of the draped pieces) but at most maxTilt (rad) away from
       facing the view, and sits just proud of the skin under every vertex / edge midpoint / the centre, so it is never
       hidden behind the sloping facet. Returns [] when nothing is hit (caller falls back to the default). */
-  function planeDecal(tris, view, outline, offset, maxTilt) {
+  function planeDecal(tris, view, outline, offset, maxTilt, under) {
     var V = VIEWS[view];
     if (!V) return [];
     var pcs = projectOutline(tris, view, outline, 0);
@@ -454,7 +457,21 @@ var CB = (globalThis.CB = globalThis.CB || {});
     O.forEach(function (p, k) { var q = O[(k + 1) % O.length]; smp.push([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]); cx += p[0]; cy += p[1]; });
     smp.push([cx / O.length, cy / O.length]);
     function from(p) { var o = V.at(p[0], p[1], 0); return [o[0] - V.dir[0] * far, o[1] - V.dir[1] * far, o[2] - V.dir[2] * far]; }
-    smp.forEach(function (p) { var h = castRay(tris, from(p), V.dir); if (h) D = Math.max(D, dot(h.p, n)); });
+    // stacked decals (under: the decals already placed for this view, e.g. a lamp's gloss surround): a lamp whose
+    // centre lies on an earlier decal takes that decal's plane (coplanar stack: same shading on both mirrored sides,
+    // no intersecting layers) and every layer sits proud of the ones below it. Without this each layer leaned its own
+    // way and a bigger surround could end up IN FRONT of its lamp (the lamp vanished on one side, the bare gloss
+    // surround caught the studio reflection on the other: asymmetric, flat-looking P1 / 918 lamps)
+    var sk = under && under.length ? under : null;
+    if (sk) {
+      var hc = castRay(sk, from(smp[smp.length - 1]), V.dir), hs = castRay(tris, from(smp[smp.length - 1]), V.dir);
+      if (hc && (!hs || hc.t <= hs.t + 0.03) && dot(hc.tri.n, toV) > 0.2) n = hc.tri.n.slice();
+    }
+    smp.forEach(function (p) {
+      var h = castRay(tris, from(p), V.dir);
+      if (h) D = Math.max(D, dot(h.p, n));
+      if (sk) { var h2 = castRay(sk, from(p), V.dir); if (h2) D = Math.max(D, dot(h2.p, n)); }
+    });
     if (!isFinite(D)) return [];
     var den = dot(V.dir, n);
     if (Math.abs(den) < 1e-6) return [];
@@ -508,18 +525,24 @@ var CB = (globalThis.CB = globalThis.CB || {});
       // authored ring is kept exactly — no slivers, no lost creases — and every inserted ring stays a pure
       // interpolation of the authored rings above the arch, which lets emitShell skip them there)
       var ov = K > 2 ? 0.3 : 0;   // the arch wraps a little below the axle line (tighter opening round the tyre)
-      var used = [];
-      for (var k = 0; k <= K; k++) {
+      var used = [], xs = [], xPrev = Infinity;
+      for (var k = 0; k <= K; k++) xs.push(A.x + A.r * Math.cos(-ov + (PI + 2 * ov) * k / K));
+      for (k = 0; k <= K; k++) {
         var th = -ov + (PI + 2 * ov) * k / K, x = A.x + A.r * Math.cos(th), y = A.cy + A.r * Math.sin(th);
         if (x >= x0 - 1e-6 || x <= x1 + 1e-6) continue;
+        // a snap must keep the arch vertices in x order: with the arch wrapping below the axle the end vertices sit
+        // ~2 cm INBOARD of their neighbours, and an end ring snapped past its neighbour sorted to the wrong side of
+        // it (open ring between two well rings -> a sloped wedge on the flank)
+        var xHi = xPrev > x ? xPrev - 2e-3 : Infinity, xLo = k < K && xs[k + 1] < x ? xs[k + 1] + 2e-3 : -Infinity;
         var D = null, bd = 0.03;
-        list.forEach(function (s) { if (s.auth && !s.end && used.indexOf(s) < 0 && Math.abs(s.x - x) < bd) { bd = Math.abs(s.x - x); D = s; } });
+        list.forEach(function (s) { if (s.auth && !s.end && used.indexOf(s) < 0 && Math.abs(s.x - x) < bd && s.x < xHi && s.x > xLo) { bd = Math.abs(s.x - x); D = s; } });
         if (D) {
           used.push(D);
           var ddx = D.x - A.x;
           if (k > 0 && k < K && Math.abs(ddx) < A.r) y = A.cy + (Math.sin(th) < 0 ? -1 : 1) * Math.sqrt(A.r * A.r - ddx * ddx);
           x = D.x;
         }
+        xPrev = x;
         var E = k === 0 || k === K;
         if (D && !E) { D.well = y; D.A = A; continue; }
         if (D) {   // arch end on an authored ring: the authored ring is the open side, a clamped copy closes the well
@@ -916,6 +939,14 @@ var CB = (globalThis.CB = globalThis.CB || {});
       if (!Array.isArray(def.exhaust)) errs.push('exhaust must be an array of {cx, cy, w?, h?, shape?, mirror?}');
       else def.exhaust.forEach(function (t, i) { if (!t || !isFinite(+t.cx) || !isFinite(+t.cy)) errs.push('exhaust[' + i + ']: cx / cy required'); });
     }
+    var sw = def.wheels && def.wheels.stock;
+    if (sw != null) {
+      if (typeof sw !== 'object') errs.push('wheels.stock must be {rim?, material?, caliper?}');
+      else {
+        ['rim', 'caliper'].forEach(function (k) { if (sw[k] != null && !/^#[0-9a-fA-F]{6}$/.test(sw[k])) errs.push('wheels.stock.' + k + ' must be #rrggbb'); });
+        if (sw.material != null && STOCK_MAT.indexOf(sw.material) < 0) errs.push('wheels.stock.material unknown: ' + sw.material);
+      }
+    }
     (def.parts || []).forEach(function (p, i) {
       if (!p || ['poly', 'box', 'prism', 'cyl', 'mirrorAuto'].indexOf(p.t) < 0) { errs.push('parts[' + i + ']: unknown type ' + (p && p.t)); return; }
       if (p.mat && MATS.indexOf(p.mat) < 0) errs.push('parts[' + i + ']: unknown material ' + p.mat);
@@ -1181,7 +1212,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       emitShell(Bq, sh.stations, function (i, j) { return matAt(sh.mats, i, j, 'paint') || 'paint'; }, { capF: sh.capF, capR: sh.capR, jitter: 0 });
     }
     grab(body); grab(cabin);
-    var parts = [];
+    var parts = [], placed = {};   // placed[view]: decal pieces already emitted (stacking for maxTilt decals)
     (def.parts || []).forEach(function (p) {
       if (p.t === 'poly' && p.view) {
         var off = num(p.offset, 0.006);
@@ -1194,11 +1225,19 @@ var CB = (globalThis.CB = globalThis.CB || {});
           var view = p.view;
           if (li === 1 && p.view === 'side') view = 'left';
           if (li === 1 && p.view === 'top') ol = ol.map(function (q) { return [q[0], -q[1]]; });
-          var pcs = maxTilt !== null ? planeDecal(all, view, ol, off, maxTilt) : [];
+          var pcs = maxTilt !== null ? planeDecal(all, view, ol, off, maxTilt, placed[view]) : [];
           if (!pcs.length) pcs = projectOutline(all, view, ol, off);
           // small details on steep faces only (badge on a raked nose, repeater on a curved fender): loose limit
           if (!pcs.length) pcs = projectOutline(all, view, ol, off, 0.03);
-          pcs.forEach(function (pc) { parts.push({ t: 'poly3', mat: p.mat || 'black', pts: pc.pts, n: pc.n, kind: p.kind }); });
+          var pl = placed[view] || (placed[view] = []);
+          pcs.forEach(function (pc) {
+            parts.push({ t: 'poly3', mat: p.mat || 'black', pts: pc.pts, n: pc.n, kind: p.kind });
+            for (var k = 1; k < pc.pts.length - 1; k++) {   // stacking record (decal plane, facing the view)
+              var tr = triRec(pc.pts[0], pc.pts[k], pc.pts[k + 1], p.mat);
+              if (dot(tr.n, pc.n) < 0) tr = triRec(pc.pts[0], pc.pts[k + 1], pc.pts[k], p.mat);
+              if (isFinite(tr.n[0])) pl.push(tr);
+            }
+          });
         });
       } else parts.push(p);
     });
@@ -1243,8 +1282,43 @@ var CB = (globalThis.CB = globalThis.CB || {});
     S.roofColor = S.roof === 'contrast' ? lhex(ex.roofColor, '#111111') : S.roof === 'black' ? [0.006, 0.006, 0.007] : S.paint;
     return S;
   }
+  /** per-def factory wheel look (def.wheels.stock = { rim:'#hex', material?:'cast'|'steel'|'forged'|..., caliper:'#hex' }):
+      -> a copy or null. Garage stock specs (CB.stock) read it through LP.stockWheels(id). */
+  var STOCK_MAT = ['cast', 'flow-formed', 'forged', 'magnesium', 'steel', 'carbon'];
+  function stockWheels(id) {
+    var d = defs[id], w = d && d.wheels && d.wheels.stock;
+    if (!w || typeof w !== 'object') return null;
+    var o = {};
+    if (/^#[0-9a-fA-F]{6}$/.test(w.rim || '')) o.finish = w.rim;
+    if (STOCK_MAT.indexOf(w.material) >= 0) o.material = w.material;
+    if (/^#[0-9a-fA-F]{6}$/.test(w.caliper || '')) o.caliper = w.caliper;
+    return Object.keys(o).length ? o : null;
+  }
+  /** the build made no wheel / calliper choice of its own: the value is missing or still the generic default build's
+      (dark '#2b2b2b' rims, yellow callipers) — only then does a def's stock wheel look apply (opt-in per def) */
+  var GENERIC_WHEELS = null;
+  function genericWheels() {
+    if (GENERIC_WHEELS) return GENERIC_WHEELS;
+    var g = { finish: '#2b2b2b', material: 'cast', caliper: '#f2c200' };
+    try {
+      var b = CB.data && typeof CB.data.defaultBuild === 'function' ? CB.data.defaultBuild() : null;
+      if (b && b.wheels) { g.finish = b.wheels.finish || g.finish; g.material = b.wheels.material || g.material; }
+      if (b && b.exterior && b.exterior.caliperColor) g.caliper = b.exterior.caliperColor;
+    } catch (e) { /* data not loaded: literal defaults */ }
+    return (GENERIC_WHEELS = g);
+  }
+  function applyStockWheels(S, build, id) {
+    var sw = stockWheels(id);
+    if (!sw) return S;
+    var wh = (build && build.wheels) || {}, ex = (build && build.exterior) || {}, g = genericWheels();
+    function unset(v, dv) { return v == null || v === '' || String(v).toLowerCase() === String(dv).toLowerCase(); }
+    if (sw.finish && unset(wh.finish, g.finish)) S.wheelFinish = lhex(sw.finish);
+    if (sw.material && unset(wh.material, g.material)) S.wheelMaterial = sw.material;
+    if (sw.caliper && unset(ex.caliperColor, g.caliper)) S.caliper = lhex(sw.caliper);
+    return S;
+  }
   function specFor(build, opts, model) {
-    if (opts.S) return opts.S;
+    if (opts.S) return model && stockWheels(model.id) ? applyStockWheels(Object.assign({}, opts.S), build, model.id) : opts.S;
     var S = null;
     try { if (CB.gl && CB.gl.car && typeof CB.gl.car.resolve === 'function') S = CB.gl.car.resolve(build, { lod: opts.lod, color: opts.color, accent: opts.accent, number: opts.number, isPlayer: opts.isPlayer }); }
     catch (e) { S = null; }
@@ -1256,7 +1330,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       S.wheelDesign = model.style === 'van' || model.powertrain === 'ev' ? { id: 'aero-disc', style: 'aero-disc', spokes: 0 } : { id: 'beadlock', style: 'dish', spokes: 8 };
     }
     if (model && model.twoTone && !S.twoToneColor) S.twoToneColor = S.roof === 'contrast' ? S.roofColor : [0.86, 0.86, 0.84];
-    return S;
+    return model ? applyStockWheels(S, build, model.id) : S;
   }
 
   /* ================================================================ build */
@@ -1885,6 +1959,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   LP.build = build;
   LP.carStyle = carStyle;
   LP.materials = materials;
+  LP.stockWheels = stockWheels;
   LP.PAL = PAL;
   LP.MATS = MATS.slice();
   LP.clearCache = function () { compiled = {}; autoCache = {}; };

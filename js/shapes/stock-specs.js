@@ -345,7 +345,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (flat['brakes.rearPistons'] == null) flat['brakes.rearPistons'] = hp >= 600 ? 4 : hp >= 450 ? 4 : 1;
 
     // looks: the model's own colour / wheel / calliper signature, else the spec's factory colour
-    var wh = m.wheel || {};
+    // (no model signature: the low-poly def's factory wheel look, CB.lowpoly.stockWheels — e.g. silver van steels)
+    var wh = m.wheel || (CB.lowpoly && typeof CB.lowpoly.stockWheels === 'function' && CB.lowpoly.stockWheels(m.id)) || {};
     flat['exterior.paint'] = m.color || (sp.p && sp.p[0]) || '#c5c8cc';
     flat['exterior.finish'] = (sp.p && sp.p[1]) || (m.color ? 'metallic' : 'metallic');
     flat['exterior.caliperColor'] = wh.caliper || (flat['brakes.material'] === 'carbon-ceramic' ? '#e8b100' : '#3a3d41');
