@@ -92,7 +92,8 @@ CB.game.economy = (function () {
 
   /* Fallback mapping build path -> collection (mirrors CB.data.pathCollections). */
   var DEFAULT_PATH_COLLECTIONS = {
-    'body.style': 'bodyStyles', 'body.chassisMaterial': 'chassisMaterials',
+    'body.style': 'bodyStyles', 'body.chassisMaterial': 'chassisMaterials', 'body.construction': 'constructions',
+    'engine.speedLimiter_kph': 'speedLimiters', 'tires.speedRating': 'tireSpeedRatings',
     'engine.type': 'engineTypes', 'engine.layout': 'engineLayouts', 'engine.aspiration': 'aspirations',
     'engine.fuel': 'fuels', 'engine.position': 'enginePositions', 'engine.tune': 'tunes',
     'engine.exhaust': 'exhausts', 'engine.cooling': 'coolings', 'engine.chemistry': 'batteryChemistries',
@@ -263,6 +264,7 @@ CB.game.economy = (function () {
     chassisMaterials: {
       steel: 1, 'high-strength-steel': 3, aluminum: 7, 'carbon-tub': 11, 'carbon-monocoque': 15
     },
+    constructions: { classic: 1, standard: 1, lightweight: 2, reinforced: 2, armoured: 6 },
     engineTypes: { ice: 1, ev: 4, hybrid: 6 },
     enginePositions: { front: 1, rear: 5, mid: 8 },
     engineLayouts: {
@@ -278,6 +280,7 @@ CB.game.economy = (function () {
     coolings: { standard: 1, uprated: 4, race: 8 },
     batteryChemistries: { lfp: 1, nmc: 3, nca: 7, 'solid-state': 14 },
     voltages: { '400': 1, '800': 8 },
+    speedLimiters: { '0': 1, '150': 1, '160': 1, '170': 1, '180': 1, '190': 1, '200': 1, '210': 1, '230': 1, '240': 1, '250': 1, '260': 1, '270': 1, '280': 1, '290': 1, '305': 1, '320': 1, '350': 1, '420': 1 },
     transmissions: { manual: 1, auto: 1, cvt: 1, 'single-speed': 1, dct: 5, sequential: 11 },
     differentials: {
       none: 1, open: 1, 'lsd-viscous': 2, locking: 3, 'lsd-torsen': 4, 'lsd-clutch': 5, 'e-diff': 9
@@ -297,6 +300,7 @@ CB.game.economy = (function () {
     tireCompounds: {
       eco: 1, 'all-season': 1, touring: 1, winter: 2, performance: 3, 'super-sport': 5, track: 6, slick: 8
     },
+    tireSpeedRatings: { compound: 1, H: 1, V: 1, W: 1, Y: 1, 'Y+': 6, hyper: 14 },
     'aero.splitters': { none: 1, lip: 2, carbon: 7, race: 11 },
     'aero.wings': { none: 1, 'lip-spoiler': 2, ducktail: 3, 'gt-wing': 7, 'swan-neck': 10, biplane: 13, active: 15 },
     'aero.diffusers': { none: 1, mild: 2, carbon: 7, race: 11 },
@@ -498,12 +502,12 @@ CB.game.economy = (function () {
   }
 
   var COLLECTION_LABELS = {
-    bodyStyles: 'Body style', chassisMaterials: 'Chassis', engineTypes: 'Powertrain', enginePositions: 'Engine position',
+    bodyStyles: 'Body style', chassisMaterials: 'Chassis', constructions: 'Body construction', engineTypes: 'Powertrain', enginePositions: 'Engine position',
     engineLayouts: 'Engine', aspirations: 'Induction', fuels: 'Fuel', tunes: 'ECU tune', exhausts: 'Exhaust',
-    coolings: 'Cooling', batteryChemistries: 'Battery chemistry', voltages: 'Voltage', transmissions: 'Gearbox',
+    coolings: 'Cooling', batteryChemistries: 'Battery chemistry', voltages: 'Voltage', speedLimiters: 'Speed limiter', transmissions: 'Gearbox',
     differentials: 'Differential', drivetrainLayouts: 'Drivetrain', suspensionTypes: 'Suspension',
     brakeMaterials: 'Brakes', absModes: 'ABS', wheelDesigns: 'Wheel design', wheelMaterials: 'Wheel material',
-    tireCompounds: 'Tyres', 'aero.splitters': 'Splitter', 'aero.wings': 'Wing', 'aero.diffusers': 'Diffuser',
+    tireCompounds: 'Tyres', tireSpeedRatings: 'Tyre speed rating', 'aero.splitters': 'Splitter', 'aero.wings': 'Wing', 'aero.diffusers': 'Diffuser',
     glassTypes: 'Glazing', batteryTypes: '12V battery', rollCages: 'Roll cage', ballastPositions: 'Ballast',
     paintFinishes: 'Paint finish', stripes: 'Stripes', roofTypes: 'Roof', lightTypes: 'Lights', mirrorTypes: 'Mirrors',
     badgeTypes: 'Badges', seatTypes: 'Seats', upholsteries: 'Upholstery', trims: 'Trim', steeringTypes: 'Steering wheel',

@@ -157,6 +157,17 @@ if (typeof window !== 'undefined') window.CB = CB;
     { id: 'carbon-monocoque', name: 'Full Carbon Monocoque', desc: 'Autoclaved one-piece carbon chassis with integrated roof — Le Mans prototype construction.', price: 120000, weight_kg: 0, weightFactor: 0.60, stiffness: 0.97 }
   ];
 
+  /* Body construction: gauge / insulation / reinforcement of the shell on top of the chassis material. weightFactor
+     scales the glider (BIW + closures) mass; stiffness adds to the chassis material's; comfort / noise nudge the cabin
+     (comfort index points, cabin dB). 'standard' is neutral — builds saved before this option existed load as it. */
+  var constructions = [
+    { id: 'classic', name: 'Period Construction', desc: 'Pre-2000 thin-gauge shell — no side-impact beams, airbag structure or crash cans. Feather-light, period-correct, rattly.', price: 0, weightFactor: 0.66, stiffness: -0.06, comfort: -4, noise: 3, unlockLevel: 1 },
+    { id: 'lightweight', name: 'Lightweight', desc: 'Thin-gauge steel, minimal sound deadening, lightweight closures and carpets — the clubsport recipe.', price: 2500, weightFactor: 0.82, stiffness: -0.02, comfort: -2, noise: 2, unlockLevel: 2 },
+    { id: 'standard', name: 'Standard', desc: 'Modern crash structure, full insulation and trim — the factory norm.', price: 0, weightFactor: 1.0, stiffness: 0, comfort: 0, noise: 0, unlockLevel: 1 },
+    { id: 'reinforced', name: 'Reinforced / Luxury', desc: 'Thicker gauges, laminated acoustic glass, double-skin floors and soft-close everything — heavy, solid and silent.', price: 3000, weightFactor: 1.15, stiffness: 0.03, comfort: 3, noise: -2, unlockLevel: 2 },
+    { id: 'armoured', name: 'Armoured Exoskeleton', desc: 'Ultra-hard cold-rolled stainless exoskeleton or heavy-duty ladder frame — dent-proof and enormously heavy.', price: 9000, weightFactor: 1.45, stiffness: 0.06, comfort: -1, noise: 0, unlockLevel: 6 }
+  ];
+
   /* ======================================================================
      ENGINE
      ====================================================================== */
@@ -371,6 +382,43 @@ if (typeof window !== 'undefined') window.CB = CB;
     { id: 'super-sport', name: 'Super Sport', desc: 'Bespoke OE supercar tyre — two-compound tread, track capable.', price: 380, mu: 1.12, wetMu: 0.82, snowMu: 0.05, rollingResistance: 0.0110, treadwear: 200, noise: 72, streetLegal: true },
     { id: 'track', name: 'Semi-Slick Cup', desc: 'DOT-legal R-compound with minimal tread — needs heat to work.', price: 450, mu: 1.28, wetMu: 0.65, snowMu: 0.0, rollingResistance: 0.0120, treadwear: 100, noise: 75, streetLegal: true },
     { id: 'slick', name: 'Racing Slick', desc: 'Treadless race tyre — sensational dry grip, lethal in the wet. Track use only.', price: 600, mu: 1.55, wetMu: 0.25, snowMu: 0.0, rollingResistance: 0.0130, treadwear: 40, noise: 78, streetLegal: false }
+  ];
+
+  /* Tyre speed rating (top-speed certification). 'compound' = the compound's own rating (TYRE_SPEED_RATING in
+     CB.physics: eco / all-season 210, winter 240, touring 270, performance & track 300, super-sport 360, slick 420).
+     Prices are per vehicle. Builds saved before this option existed load as 'compound'. */
+  var tireSpeedRatings = [
+    { id: 'compound', name: 'Compound default', desc: 'The rating the chosen compound is normally sold with.', price: 0, kph: null, unlockLevel: 1 },
+    { id: 'H', name: 'H — 210 km/h', desc: 'Comfort-oriented sidewall for family cars and vans.', price: 0, kph: 210, unlockLevel: 1 },
+    { id: 'V', name: 'V — 240 km/h', desc: 'Everyday sporty saloons and SUVs.', price: 0, kph: 240, unlockLevel: 1 },
+    { id: 'W', name: 'W — 270 km/h', desc: 'Fast GTs and hot hatches.', price: 0, kph: 270, unlockLevel: 1 },
+    { id: 'Y', name: 'Y — 300 km/h', desc: 'Autobahn-proof ultra-high-performance construction.', price: 0, kph: 300, unlockLevel: 1 },
+    { id: 'Y+', name: '(Y) — 360 km/h', desc: 'Manufacturer-certified above 300 km/h — supercar OE fitment.', price: 900, kph: 360, unlockLevel: 6 },
+    { id: 'hyper', name: 'Hypercar — 450 km/h', desc: 'Cup-style bespoke construction validated beyond 400 km/h (Chiron / Jesko class). Needs a Super Sport or Cup compound.', price: 9000, kph: 450, unlockLevel: 14 }
+  ];
+
+  /* Electronic speed limiter (ECU top-speed cap). 0 = off. German makers' 250 km/h agreement, Japan's 180, van / truck
+     governors. Builds saved before this option existed load with the limiter off. */
+  var speedLimiters = [
+    { id: 0, name: 'Off', desc: 'No electronic cap — drag, gearing or tyres decide the top speed.', price: 0 },
+    { id: 150, name: '150 km/h', desc: 'Range-saving cap of an electric van.', price: 0 },
+    { id: 160, name: '160 km/h', desc: 'Fleet / van governor.', price: 0 },
+    { id: 170, name: '170 km/h', desc: 'Off-road-tyre pickup governor.', price: 0 },
+    { id: 180, name: '180 km/h', desc: 'Japanese-market cap and off-roader governor.', price: 0 },
+    { id: 190, name: '190 km/h', desc: 'Utility cap.', price: 0 },
+    { id: 200, name: '200 km/h', desc: 'All-terrain-tyre governor.', price: 0 },
+    { id: 210, name: '210 km/h', desc: 'Electric-truck cap.', price: 0 },
+    { id: 230, name: '230 km/h', desc: 'Hot-hatch cap.', price: 0 },
+    { id: 240, name: '240 km/h', desc: 'Electric GT cap.', price: 0 },
+    { id: 250, name: '250 km/h', desc: 'The German manufacturers\' gentlemen\'s agreement.', price: 0 },
+    { id: 260, name: '260 km/h', desc: 'Sports-car cap.', price: 0 },
+    { id: 270, name: '270 km/h', desc: 'Raised limiter of a driver\'s package.', price: 0 },
+    { id: 280, name: '280 km/h', desc: 'AMG / M driver\'s package.', price: 0 },
+    { id: 290, name: '290 km/h', desc: 'Raised super-saloon limiter.', price: 0 },
+    { id: 305, name: '305 km/h', desc: 'Track-package limiter.', price: 0 },
+    { id: 320, name: '320 km/h', desc: 'Supercar cap.', price: 0 },
+    { id: 350, name: '350 km/h', desc: 'Hybrid-hypercar cap.', price: 0 },
+    { id: 420, name: '420 km/h', desc: 'Hypercar "speed key" cap.', price: 0 }
   ];
 
   var aero = {
@@ -648,7 +696,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   };
 
   var batteryRanges = { ev: [30, 200], hybrid: [1, 30] };
-  var motorRanges = { ev: [1, 4], hybrid: [1, 2] };
+  var motorRanges = { ev: [1, 4], hybrid: [1, 3] };   // hybrid: P2 motor + up to two front e-axle motors (SF90 / NSX)
 
   var constants = {
     airDensity: 1.225, g: 9.81, fuelTank_l: 60, idleRpm: 850, evMaxRpm: 16000,
@@ -665,10 +713,10 @@ if (typeof window !== 'undefined') window.CB = CB;
     return {
       version: 1,
       meta: { name: 'Untitled Build', id: uid('b'), created: now, modified: now, presetId: null },
-      body: { style: 'coupe', model: null, chassisMaterial: 'steel', wheelbase_mm: 2450, trackWidth_mm: 1590, doors: 2, seats: 4 },   // model: CB.shapes id (null = style default, bodyStyles[].defaultModel); state.normalize keeps it valid
+      body: { style: 'coupe', model: null, chassisMaterial: 'steel', construction: 'standard', modelPhysics: false, wheelbase_mm: 2450, trackWidth_mm: 1590, doors: 2, seats: 4 },   // model: CB.shapes id (null = style default, bodyStyles[].defaultModel); state.normalize keeps it valid
       engine: {
         type: 'ice', layout: 'flat-6', displacement_l: 3.0, aspiration: 'twin-turbo', boost_bar: 0.7, compression: 10.0,
-        fuel: 'premium', redline_rpm: 7500, position: 'rear', tune: 'stock', exhaust: 'sport', cooling: 'standard',
+        fuel: 'premium', redline_rpm: 7500, position: 'rear', tune: 'stock', exhaust: 'sport', cooling: 'standard', speedLimiter_kph: 0,
         motors: 2, motorPower_kw: 200, battery_kwh: 85, chemistry: 'nmc', voltage: 800, regen: 2
       },
       transmission: { type: 'dct', gears: 8, ratios: [4.89, 3.17, 2.15, 1.56, 1.18, 0.94, 0.78, 0.64], finalDrive: 3.62, launchControl: true },
@@ -679,7 +727,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       },
       brakes: { material: 'iron', frontRotor_mm: 360, rearRotor_mm: 330, frontPistons: 6, rearPistons: 4, abs: 'sport' },
       wheels: { design: 'y-spoke', material: 'cast', diameter_in: 19, widthFront_in: 9.0, widthRear_in: 10.5, finish: '#2b2b2b', staggered: true },
-      tires: { compound: 'performance', widthFront_mm: 255, widthRear_mm: 295, profileFront: 35, profileRear: 30 },
+      tires: { compound: 'performance', speedRating: 'compound', widthFront_mm: 255, widthRear_mm: 295, profileFront: 35, profileRear: 30 },
       aero: { splitter: 'lip', wing: 'none', wingAngle_deg: 6, diffuser: 'mild', canards: false, sideSkirts: true, activeAero: false },
       weight: { soundDeadening: true, rearSeats: true, spareTire: false, glass: 'standard', battery: 'lead', rollCage: 'none', ballast_kg: 0, ballastPosition: 'center' },
       exterior: {
@@ -1212,14 +1260,14 @@ if (typeof window !== 'undefined') window.CB = CB;
    * Map from build path -> catalog collection, used by normalize() and the rules/pricing modules.
    */
   var pathCollections = {
-    'body.style': 'bodyStyles', 'body.chassisMaterial': 'chassisMaterials',
+    'body.style': 'bodyStyles', 'body.chassisMaterial': 'chassisMaterials', 'body.construction': 'constructions',
     'engine.type': 'engineTypes', 'engine.layout': 'engineLayouts', 'engine.aspiration': 'aspirations', 'engine.fuel': 'fuels',
     'engine.position': 'enginePositions', 'engine.tune': 'tunes', 'engine.exhaust': 'exhausts', 'engine.cooling': 'coolings',
-    'engine.chemistry': 'batteryChemistries', 'engine.voltage': 'voltages',
+    'engine.chemistry': 'batteryChemistries', 'engine.voltage': 'voltages', 'engine.speedLimiter_kph': 'speedLimiters',
     'transmission.type': 'transmissions',
     'drivetrain.layout': 'drivetrainLayouts', 'drivetrain.frontDiff': 'differentials', 'drivetrain.rearDiff': 'differentials', 'drivetrain.centerDiff': 'differentials',
     'suspension.type': 'suspensionTypes', 'brakes.material': 'brakeMaterials', 'brakes.abs': 'absModes',
-    'wheels.design': 'wheelDesigns', 'wheels.material': 'wheelMaterials', 'tires.compound': 'tireCompounds',
+    'wheels.design': 'wheelDesigns', 'wheels.material': 'wheelMaterials', 'tires.compound': 'tireCompounds', 'tires.speedRating': 'tireSpeedRatings',
     'aero.splitter': 'aero.splitters', 'aero.wing': 'aero.wings', 'aero.diffuser': 'aero.diffusers',
     'weight.glass': 'glassTypes', 'weight.battery': 'batteryTypes', 'weight.rollCage': 'rollCages', 'weight.ballastPosition': 'ballastPositions',
     'exterior.finish': 'paintFinishes', 'exterior.roof': 'roofTypes', 'exterior.stripe': 'stripes', 'exterior.lights': 'lightTypes',
@@ -1240,8 +1288,71 @@ if (typeof window !== 'undefined') window.CB = CB;
   };
   bodyStyles.forEach(function (s) { if (!s.defaultModel && styleDefaultModels[s.id]) s.defaultModel = styleDefaultModels[s.id]; });
 
+  /**
+   * Real-car reference figures per CB.shapes model id: [body style, length m, width m, height m, Cd, kerb kg] — a copy of each
+   * model's `ref` (js/shapes/models/*; tests/stock-specs.test.js keeps the two in sync) so CB.physics can scale the
+   * glider mass, frontal area and Cd by the real model a build names (build.body.model) without depending on CB.shapes
+   * being loaded (only when build.body.modelPhysics is on). body.model null = the generic style car (no scaling).
+   */
+  var modelRefs = {
+    'porsche-911-992': ['coupe', 4.519, 1.852, 1.298, 0.29, 1505],
+    'bmw-m4-g82': ['coupe', 4.794, 1.887, 1.393, 0.34, 1725],
+    'toyota-gr-supra-a90': ['coupe', 4.379, 1.854, 1.292, 0.31, 1520],
+    'vw-golf-gti-mk8': ['hatchback', 4.287, 1.789, 1.457, 0.3, 1463],
+    'honda-civic-type-r-fl5': ['hatchback', 4.594, 1.89, 1.405, 0.31, 1446],
+    'toyota-gr-yaris': ['hatchback', 3.995, 1.805, 1.455, 0.33, 1280],
+    'ferrari-sf90-stradale': ['hypercar', 4.71, 1.972, 1.186, 0.32, 1770],
+    'mclaren-p1': ['hypercar', 4.588, 1.946, 1.188, 0.34, 1490],
+    'bugatti-chiron': ['hypercar', 4.544, 2.038, 1.212, 0.36, 1995],
+    'lamborghini-huracan-evo': ['hypercar', 4.52, 1.933, 1.165, 0.36, 1600],
+    'ferrari-296-gtb': ['hypercar', 4.565, 1.958, 1.187, 0.34, 1600],
+    'porsche-918-spyder': ['roadster', 4.643, 1.94, 1.167, 0.36, 1674],
+    'koenigsegg-jesko': ['hypercar', 4.61, 2.03, 1.21, 0.38, 1420],
+    'audi-r8-v10-gen2': ['hypercar', 4.426, 1.94, 1.24, 0.36, 1640],
+    'nissan-silvia-s15': ['coupe', 4.445, 1.695, 1.285, 0.3, 1250],
+    'nissan-skyline-gtr-r34': ['coupe', 4.6, 1.785, 1.36, 0.34, 1560],
+    'toyota-sprinter-trueno-ae86': ['hatchback', 4.205, 1.625, 1.335, 0.35, 940],
+    'mazda-rx7-fd3s': ['coupe', 4.285, 1.76, 1.23, 0.31, 1270],
+    'nissan-gtr-r35': ['coupe', 4.71, 1.895, 1.37, 0.26, 1752],
+    'bmw-m2-g87': ['coupe', 4.58, 1.887, 1.403, 0.35, 1725],
+    'bmw-m3-e46': ['coupe', 4.492, 1.78, 1.372, 0.32, 1495],
+    'alpine-a110': ['coupe', 4.18, 1.798, 1.252, 0.32, 1103],
+    'aston-martin-vantage-2018': ['coupe', 4.465, 1.942, 1.273, 0.34, 1630],
+    'lotus-emira': ['coupe', 4.413, 1.895, 1.226, 0.37, 1458],
+    'subaru-wrx-sti-va': ['sedan', 4.595, 1.795, 1.475, 0.32, 1540],
+    'mitsubishi-lancer-evo-x': ['sedan', 4.505, 1.81, 1.48, 0.36, 1560],
+    'ford-mustang-gt-s650': ['coupe', 4.81, 1.915, 1.397, 0.33, 1738],
+    'chevrolet-camaro-zl1-2019': ['coupe', 4.783, 1.897, 1.344, 0.35, 1760],
+    'dodge-challenger-srt-hellcat': ['coupe', 5.017, 1.923, 1.454, 0.382, 2002],
+    'chevrolet-corvette-c8': ['hypercar', 4.63, 1.934, 1.234, 0.35, 1604],
+    'ford-gt-2017': ['hypercar', 4.779, 2.003, 1.109, 0.35, 1385],
+    'jeep-wrangler-rubicon-jl': ['suv', 4.785, 1.894, 1.848, 0.454, 2018],
+    'ford-f150-raptor-gen3': ['pickup', 5.908, 2.2, 2.027, 0.55, 2590],
+    'toyota-tacoma-trdpro-2024': ['pickup', 5.441, 2.035, 1.943, 0.47, 2345],
+    'tesla-cybertruck': ['pickup', 5.682, 2.032, 1.791, 0.39, 2995],
+    'mazda-mx5-nd': ['roadster', 3.915, 1.735, 1.235, 0.33, 1058],
+    'bmw-z4-g29': ['roadster', 4.324, 1.864, 1.304, 0.31, 1535],
+    'porsche-718-boxster-982': ['roadster', 4.379, 1.801, 1.281, 0.31, 1335],
+    'bmw-m3-g80': ['sedan', 4.794, 1.903, 1.433, 0.34, 1730],
+    'mercedes-amg-c63-w206': ['sedan', 4.842, 1.9, 1.458, 0.3, 2111],
+    'tesla-model-s-2021': ['sedan', 5.021, 1.964, 1.431, 0.208, 2069],
+    'porsche-taycan-cross-turismo': ['shooting-brake', 4.974, 1.967, 1.409, 0.26, 2245],
+    'ferrari-gtc4lusso': ['shooting-brake', 4.922, 1.98, 1.383, 0.32, 1920],
+    'mercedes-cls-shooting-brake-x218': ['shooting-brake', 4.956, 1.881, 1.416, 0.29, 2005],
+    'porsche-cayenne-e3': ['suv', 4.93, 1.983, 1.698, 0.36, 2122],
+    'range-rover-sport-l461': ['suv', 4.946, 2.047, 1.82, 0.29, 2310],
+    'lamborghini-urus': ['suv', 5.112, 2.016, 1.638, 0.33, 2200],
+    'mercedes-sprinter-vs30': ['van', 5.932, 2.02, 2.73, 0.31, 2650],
+    'vw-id-buzz': ['van', 4.712, 1.985, 1.938, 0.285, 2471],
+    'ford-transit-hr': ['van', 5.982, 2.065, 2.804, 0.37, 2540],
+    'audi-rs6-avant-c8': ['wagon', 4.995, 1.951, 1.46, 0.35, 2075],
+    'mercedes-amg-e63s-estate-s213': ['wagon', 4.995, 1.907, 1.465, 0.32, 2070],
+    'volvo-v60-polestar-engineered': ['wagon', 4.761, 1.85, 1.432, 0.29, 2078]
+  };
+
   data = {
-    bodyStyles: bodyStyles, chassisMaterials: chassisMaterials,
+    bodyStyles: bodyStyles, chassisMaterials: chassisMaterials, constructions: constructions,
+    tireSpeedRatings: tireSpeedRatings, speedLimiters: speedLimiters,
     engineTypes: engineTypes, enginePositions: enginePositions, engineLayouts: engineLayouts, aspirations: aspirations,
     fuels: fuels, tunes: tunes, exhausts: exhausts, coolings: coolings, batteryChemistries: batteryChemistries, voltages: voltages,
     transmissions: transmissions, differentials: differentials, drivetrainLayouts: drivetrainLayouts,
@@ -1253,7 +1364,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     seatTypes: seatTypes, upholsteries: upholsteries, trims: trims, steeringTypes: steeringTypes, headliners: headliners,
     screenSizes: screenSizes, audioSystems: audioSystems, adasLevels: adasLevels,
     options: options, optionWeights: optionWeights, ranges: ranges, batteryRanges: batteryRanges, motorRanges: motorRanges,
-    constants: constants, presets: presets, pathCollections: pathCollections,
+    constants: constants, presets: presets, pathCollections: pathCollections, modelRefs: modelRefs,
     defaultBuild: defaultBuild, referenceBuild: referenceBuild, find: find, list: list_, swatchName: swatchName, preset: preset, presetBuild: presetBuild,
     effectiveCompression: effectiveCompression
   };

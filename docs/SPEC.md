@@ -43,6 +43,8 @@ Option-type fields store the catalog option `id` string.
   body: {
     style: 'coupe',            // CB.data.bodyStyles[].id
     chassisMaterial: 'steel',  // CB.data.chassisMaterials[].id
+    construction: 'standard',  // CB.data.constructions[].id: 'classic'|'lightweight'|'standard'|'reinforced'|'armoured' (glider mass ×0.66..×1.45)
+    modelPhysics: false,       // true: glider mass, frontal area and Cd follow the real model (CB.data.modelRefs); stock specs set it
     wheelbase_mm: 2650,        // clamp to bodyStyle.wheelbaseRange
     trackWidth_mm: 1600,       // 1450..1750
     doors: 2,                  // must be in bodyStyle.doorOptions
@@ -61,8 +63,9 @@ Option-type fields store the catalog option `id` string.
     tune: 'stock',             // CB.data.tunes[].id
     exhaust: 'sport',          // CB.data.exhausts[].id
     cooling: 'standard',       // CB.data.coolings[].id
+    speedLimiter_kph: 0,       // CB.data.speedLimiters[].id: 0 = off, else the ECU top-speed cap (150..420)
     // electric / hybrid part (used when type is 'ev' or 'hybrid'):
-    motors: 2,                 // 1..4 (hybrid: 1..2)
+    motors: 2,                 // 1..4 (hybrid: 1..3 — P2 at the crank + front e-axle motors)
     motorPower_kw: 200,        // per motor, 50..500
     battery_kwh: 85,           // ev 30..200; hybrid 1..30
     chemistry: 'nmc',          // CB.data.batteryChemistries[].id
@@ -110,6 +113,7 @@ Option-type fields store the catalog option `id` string.
   },
   tires: {
     compound: 'performance',   // CB.data.tireCompounds[].id
+    speedRating: 'compound',   // CB.data.tireSpeedRatings[].id: 'compound' (the compound's own) | 'H'|'V'|'W'|'Y'|'Y+' (360)|'hyper' (450)
     widthFront_mm: 255, widthRear_mm: 295,   // 175..355 step 10 (ends in 5)
     profileFront: 35, profileRear: 30,       // 25..70 step 5
   },
@@ -225,6 +229,7 @@ in `normalize` only when the length mismatches.
   cd, frontalArea_m2, cda, downforce_kg_200, downforce_kg_at(kph) fn NOT included (keep JSON-serializable) — instead downforceCurve: [{kph, kg}] 0..topSpeed step 20,
   gripFront, gripRear (effective mu), lateralG, brakingDist_100_0_m, brakingDist_60_0_ft,
   zeroTo60_s, zeroTo100_s, zeroTo200_s (null if unreachable), quarterMile_s, quarterMileTrap_mph, topSpeed_kph, topSpeed_mph, topSpeedLimitedBy: 'drag'|'redline'|'governor',
+  topSpeedGovernor: 'limiter'|'tyres'|'eco'|null (which governor), tyreSpeedRating_kph, speedLimiter_kph (0 = none),
   accelCurve: [{t, kph, gear}] (time-stepped sim, dt 0.05s, until topSpeed*0.98 or 60s),
   gearSpeeds: [{gear, ratio, maxKph}],
   fuelEconomy_l100, fuelEconomy_mpg, range_km (ICE: tank 60L; EV/hybrid: battery-based), co2_gkm,
@@ -241,6 +246,15 @@ EV flat torque then constant power), drivetrain losses, traction limit (mu * nor
 transfer), aero drag 0.5ρCdAv², rolling resistance, downforce increases grip, gear-shift time loss, launch control.
 Real-world sanity: a ~1500 kg 500 hp RWD coupe should do 0-60 ≈ 3.8–4.3 s; a 2200 kg 1000 kW AWD EV ≈ 2.0–2.4 s; a
 1300 kg 150 hp FWD hatch ≈ 7.5–9 s. Include `tests/physics.test.js` asserting these bands.
+
+Real-model scaling (opt-in with `body.modelPhysics`, which every stock spec sets; from `CB.data.modelRefs`, a copy of
+the CB.shapes model refs, so it needs no CB.shapes; `body.model` null is the generic style car and is never scaled): the
+glider (BIW + closures) mass scales with the shell area of the named real model relative to the style's nominal car
+(×0.85..1.2); independently the glider always scales with `body.construction` (period ×0.66 … armoured ×1.45); the frontal area scales with the model's width × height (×0.85..1.45)
+and the body Cd is blended half-way to the model's real Cd. Top speed is governed by the lowest of the tyres' speed
+rating, the eco map and `engine.speedLimiter_kph`. Launch: the longitudinal tyre μ map gives summer UHP / supercar
+OE tyres a little more drive force and is tempered for cold Cup / slick compounds; modern 8–10-speed automatics carry
+more torque through a shift and lose a little to converter slip in 1st / 2nd.
 
 ## CB.rules — rules/pricing
 

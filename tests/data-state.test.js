@@ -235,7 +235,7 @@ test('normalize: engine invariants (na boost, diesel redline, hybrid/ev limits, 
   n = S.normalize(U.deepMerge(b, { engine: { fuel: 'diesel', redline_rpm: 8000 } }));
   assert.equal(n.engine.redline_rpm, 5200);
   n = S.normalize(U.deepMerge(b, { engine: { type: 'hybrid', motors: 4, battery_kwh: 85 } }));
-  assert.equal(n.engine.motors, 2);
+  assert.equal(n.engine.motors, 3);   // P2 + twin-motor front e-axle (SF90)
   assert.equal(n.engine.battery_kwh, 30);
   n = S.normalize(U.deepMerge(b, { engine: { type: 'ev', motors: 6, battery_kwh: 10, motorPower_kw: 900 } }));
   assert.equal(n.engine.motors, 4);

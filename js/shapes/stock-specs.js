@@ -20,8 +20,10 @@
      t     trim appended to the model's name for the title ('' = model name already is the trim)
      hp    peak (system) power, mechanical hp       nm   peak torque, Nm
      kg    kerb weight (EU-style, no driver)        s    0–100 km/h, s        v   top speed, km/h (governed if so)
+           (US muscle cars quote 0–60 mph with a 1-ft rollout; their s is that figure + 0.3 s ≈ a true 0–100 km/h)
+     lim   electronic speed limiter, km/h (engine.speedLimiter_kph; omitted = none)
      e     ICE: 'layout displacement aspiration redline [fuel]'   (fuel defaults to premium)
-     hy    hybrid: [motors (1–2 at the crank / front e-axle), total motor kW, battery kWh]   (with e)
+     hy    hybrid: [motors (1–3: P2 at the crank + front e-axle motors), total motor kW, battery kWh]   (with e)
      ev    electric: [motors, total kW, battery kWh, volts, chemistry]
      g     gearbox 'type gears'                     d   drivetrain 'rwd' | 'fwd' | 'awd <front torque %>' | '4wd'
      c     equipment class (CLASS below) — suspension / brakes / tyres / cabin defaults
@@ -32,8 +34,11 @@
    own reference (CB.state.realDims); layout / displacement / aspiration / gearbox / drivetrain are copied;
    the engine's free parameters (boost, or compression for NA engines; motor kW for EVs) are then solved against
    CB.physics so the configurator's power lands on the real figure, the final drive is set so the redline in top
-   gear sits just above the real top speed, and a little ballast (max 100 kg) brings a too-light build up to the
-   real kerb weight. Everything is snapped to valid catalog options and normalized (CB.state.normalize).
+   gear sits just above the real top speed (or the 0–100 alone when an electronic limiter caps the car), the tyres get
+   the speed rating the top speed needs ((Y) 360 / hypercar 450 km/h), the body construction (period / lightweight /
+   standard / reinforced, or the spec's own e.g. armoured) whose mass lands nearest the real kerb weight is picked and a
+   little ballast (max 100 kg) trims a too-light build up to it. Everything is snapped to valid catalog options and
+   normalized (CB.state.normalize).
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
 if (typeof window !== 'undefined') window.CB = CB;
@@ -46,9 +51,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     /* coupés */
     'porsche-911-992': { t: 'S', hp: 443, nm: 530, kg: 1515, s: 3.5, v: 308, e: 'flat-6 3.0 twin-turbo 7500', g: 'dct 8', d: 'rwd', c: 'sport',
       x: { 'aero.wing': 'ducktail', 'suspension.type': 'magnetic', 'interior.trim': 'piano-black' } },
-    'bmw-m4-g82': { t: '', hp: 503, nm: 650, kg: 1725, s: 3.9, v: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
+    'bmw-m4-g82': { t: '', hp: 503, nm: 650, kg: 1725, s: 3.9, v: 250, lim: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
       p: ['#e3c300', 'metallic'], x: { 'exterior.roof': 'carbon', 'suspension.type': 'magnetic', 'interior.seatType': 'bucket' } },
-    'toyota-gr-supra-a90': { t: '3.0', hp: 382, nm: 500, kg: 1520, s: 4.1, v: 250, e: 'I6 3.0 turbo 6500', g: 'auto 8', d: 'rwd', c: 'sport',
+    'toyota-gr-supra-a90': { t: '3.0', hp: 382, nm: 500, kg: 1520, s: 4.1, v: 250, lim: 250, e: 'I6 3.0 turbo 6500', g: 'auto 8', d: 'rwd', c: 'sport',
       p: ['#c4161c', 'metallic'], x: { 'aero.wing': 'ducktail', 'body.seats': 2 } },
     'nissan-silvia-s15': { t: '', hp: 247, nm: 275, kg: 1250, s: 5.5, v: 240, e: 'I4 2.0 turbo 7200', g: 'manual 6', d: 'rwd', c: 'classic',
       x: { 'aero.wing': 'lip-spoiler' } },
@@ -58,28 +63,28 @@ if (typeof window !== 'undefined') window.CB = CB;
       x: { 'aero.wing': 'lip-spoiler', 'drivetrain.rearDiff': 'lsd-torsen' } },
     'nissan-gtr-r35': { t: '', hp: 565, nm: 633, kg: 1752, s: 2.9, v: 315, e: 'V6 3.8 twin-turbo 7100', g: 'dct 6', d: 'awd 20', c: 'sport',
       x: { 'aero.wing': 'lip-spoiler', 'suspension.type': 'magnetic', 'brakes.material': 'two-piece', 'drivetrain.rearDiff': 'lsd-clutch' } },
-    'bmw-m2-g87': { t: '', hp: 453, nm: 550, kg: 1725, s: 4.1, v: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
+    'bmw-m2-g87': { t: '', hp: 453, nm: 550, kg: 1725, s: 4.1, v: 250, lim: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
       p: ['#2a6fb5', 'metallic'], x: { 'suspension.type': 'magnetic' } },
     'bmw-m3-e46': { t: '', hp: 338, nm: 365, kg: 1495, s: 5.2, v: 250, e: 'I6 3.2 na 8000', g: 'manual 6', d: 'rwd', c: 'classic',
       p: ['#1f8ac0', 'metallic'], x: { 'drivetrain.rearDiff': 'lsd-viscous', 'interior.upholstery': 'leather', 'tech.screen_in': 0 } },
-    'alpine-a110': { t: '', hp: 249, nm: 320, kg: 1103, s: 4.5, v: 250, e: 'I4 1.8 turbo 6750', g: 'dct 7', d: 'rwd', c: 'sport',
+    'alpine-a110': { t: '', hp: 249, nm: 320, kg: 1103, s: 4.5, v: 250, lim: 250, e: 'I4 1.8 turbo 6750', g: 'dct 7', d: 'rwd', c: 'sport',
       p: ['#1f5aa6', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'suspension.type': 'double-wishbone', 'brakes.material': 'iron', 'drivetrain.rearDiff': 'open', 'interior.seatType': 'bucket', 'body.seats': 2 } },
     'aston-martin-vantage-2018': { t: '', hp: 503, nm: 685, kg: 1630, s: 3.6, v: 314, e: 'V8 4.0 twin-turbo 7000', g: 'auto 8', d: 'rwd', c: 'gt',
-      p: ['#004225', 'metallic'], x: { 'drivetrain.rearDiff': 'e-diff', 'body.seats': 2 } },
+      p: ['#004225', 'metallic'], x: { 'tires.compound': 'super-sport', 'drivetrain.rearDiff': 'e-diff', 'body.seats': 2 } },
     'lotus-emira': { t: 'V6', hp: 400, nm: 420, kg: 1458, s: 4.3, v: 290, e: 'V6 3.5 supercharged 6800', g: 'manual 6', d: 'rwd', c: 'sport',
       p: ['#e9c400', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'suspension.type': 'double-wishbone', 'aero.wing': 'ducktail', 'body.seats': 2 } },
-    'ford-mustang-gt-s650': { t: '', hp: 480, nm: 567, kg: 1738, s: 4.3, v: 250, e: 'V8 5.0 na 7500', g: 'manual 6', d: 'rwd', c: 'muscle',
+    'ford-mustang-gt-s650': { t: '', hp: 480, nm: 567, kg: 1738, s: 4.3, v: 250, lim: 250, e: 'V8 5.0 na 7500', g: 'manual 6', d: 'rwd', c: 'muscle',
       x: { 'aero.wing': 'lip-spoiler' } },
-    'chevrolet-camaro-zl1-2019': { t: '', hp: 650, nm: 881, kg: 1760, s: 3.5, v: 318, e: 'V8 6.2 supercharged 6500', g: 'auto 10', d: 'rwd', c: 'muscle',
-      x: { 'aero.wing': 'lip-spoiler', 'aero.splitter': 'lip', 'suspension.type': 'magnetic', 'brakes.material': 'two-piece', 'drivetrain.rearDiff': 'e-diff' } },
-    'dodge-challenger-srt-hellcat': { t: '', hp: 717, nm: 889, kg: 2002, s: 3.6, v: 320, e: 'V8 6.2 supercharged 6200', g: 'auto 8', d: 'rwd', c: 'muscle',
+    'chevrolet-camaro-zl1-2019': { t: '', hp: 650, nm: 881, kg: 1760, s: 3.9, v: 318, e: 'V8 6.2 supercharged 6500', g: 'auto 10', d: 'rwd', c: 'muscle',
+      x: { 'tires.compound': 'super-sport', 'aero.wing': 'lip-spoiler', 'aero.splitter': 'lip', 'suspension.type': 'magnetic', 'brakes.material': 'two-piece', 'drivetrain.rearDiff': 'e-diff' } },
+    'dodge-challenger-srt-hellcat': { t: '', hp: 717, nm: 889, kg: 2002, s: 3.9, v: 320, e: 'V8 6.2 supercharged 6200', g: 'auto 8', d: 'rwd', c: 'muscle',
       x: { 'brakes.material': 'two-piece', 'aero.wing': 'lip-spoiler', 'exterior.stripe': 'none' } },
     /* hot hatches & sports saloons */
-    'vw-golf-gti-mk8': { t: '', hp: 241, nm: 370, kg: 1463, s: 6.3, v: 250, e: 'I4 2.0 turbo 6500', g: 'dct 7', d: 'fwd', c: 'hot',
+    'vw-golf-gti-mk8': { t: '', hp: 241, nm: 370, kg: 1463, s: 6.3, v: 250, lim: 250, e: 'I4 2.0 turbo 6500', g: 'dct 7', d: 'fwd', c: 'hot',
       p: ['#b1131c', 'solid'], x: { 'interior.upholstery': 'tartan', 'drivetrain.frontDiff': 'e-diff' } },
     'honda-civic-type-r-fl5': { t: '', hp: 315, nm: 420, kg: 1446, s: 5.4, v: 275, e: 'I4 2.0 turbo 7000', g: 'manual 6', d: 'fwd', c: 'hot',
       p: ['#f4f3ef', 'solid'], x: { 'aero.wing': 'gt-wing', 'aero.wingAngle_deg': 4, 'aero.splitter': 'lip', 'aero.diffuser': 'mild', 'brakes.material': 'two-piece', 'drivetrain.frontDiff': 'lsd-clutch', 'interior.seatType': 'bucket', 'interior.upholstery': 'alcantara', 'interior.primaryColor': '#b3121f' } },
-    'toyota-gr-yaris': { t: '', hp: 268, nm: 370, kg: 1280, s: 5.5, v: 230, e: 'I3 1.6 turbo 7000', g: 'manual 6', d: 'awd 40', c: 'hot',
+    'toyota-gr-yaris': { t: '', hp: 268, nm: 370, kg: 1280, s: 5.5, v: 230, lim: 230, e: 'I3 1.6 turbo 7000', g: 'manual 6', d: 'awd 40', c: 'hot',
       p: ['#f2f1ec', 'pearl'], x: { 'aero.wing': 'lip-spoiler', 'drivetrain.frontDiff': 'lsd-torsen', 'drivetrain.rearDiff': 'lsd-torsen', 'drivetrain.centerDiff': 'e-diff', 'body.chassisMaterial': 'high-strength-steel' } },
     'toyota-sprinter-trueno-ae86': { t: '', hp: 128, nm: 149, kg: 940, s: 8.5, v: 195, e: 'I4 1.6 na 7600', g: 'manual 5', d: 'rwd', c: 'classic',
       x: { 'suspension.type': 'macpherson', 'brakes.frontPistons': 1, 'brakes.rearPistons': 1, 'tires.compound': 'touring', 'interior.seatType': 'sport', 'drivetrain.rearDiff': 'lsd-clutch', 'exterior.roof': 'black', 'body.seats': 4 } },
@@ -87,18 +92,18 @@ if (typeof window !== 'undefined') window.CB = CB;
       p: ['#1a4fa0', 'pearl'], x: { 'aero.wing': 'gt-wing', 'aero.wingAngle_deg': 4, 'aero.splitter': 'lip', 'wheels.finish': '#c9b37e', 'drivetrain.frontDiff': 'lsd-torsen', 'drivetrain.rearDiff': 'lsd-torsen', 'drivetrain.centerDiff': 'e-diff', 'brakes.material': 'drilled-slotted' } },
     'mitsubishi-lancer-evo-x': { t: 'GSR', hp: 291, nm: 407, kg: 1560, s: 5.0, v: 242, e: 'I4 2.0 turbo 7000', g: 'manual 5', d: 'awd 50', c: 'hot',
       p: ['#c8102e', 'solid'], x: { 'aero.wing': 'gt-wing', 'aero.wingAngle_deg': 3, 'drivetrain.frontDiff': 'lsd-clutch', 'drivetrain.rearDiff': 'e-diff', 'drivetrain.centerDiff': 'e-diff', 'brakes.material': 'two-piece', 'interior.seatType': 'bucket' } },
-    'bmw-m3-g80': { t: '', hp: 503, nm: 650, kg: 1730, s: 3.9, v: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
+    'bmw-m3-g80': { t: '', hp: 503, nm: 650, kg: 1730, s: 3.9, v: 250, lim: 250, e: 'I6 3.0 twin-turbo 7200', g: 'auto 8', d: 'rwd', c: 'sport',
       p: ['#1f6b4f', 'metallic'], x: { 'exterior.roof': 'carbon', 'suspension.type': 'magnetic' } },
-    'mercedes-amg-c63-w206': { t: '', hp: 671, nm: 1020, kg: 2111, s: 3.4, v: 280, e: 'I4 2.0 electric-turbo 7200', hy: [1, 150, 6.1], g: 'auto 9', d: 'awd 35', c: 'gt',
+    'mercedes-amg-c63-w206': { t: '', hp: 671, nm: 1020, kg: 2111, s: 3.4, v: 280, lim: 280, e: 'I4 2.0 electric-turbo 7200', hy: [1, 150, 6.1], g: 'auto 9', d: 'awd 35', c: 'gt',
       p: ['#6e7175', 'metallic'], x: { 'suspension.type': 'magnetic', 'drivetrain.rearDiff': 'e-diff', 'drivetrain.torqueVectoring': true } },
-    'tesla-model-s-2021': { t: 'Long Range', hp: 670, nm: 1000, kg: 2069, s: 3.2, v: 250, ev: [2, 500, 100, 400, 'nca'], g: 'single-speed 1', d: 'awd 45', c: 'ev',
+    'tesla-model-s-2021': { t: 'Long Range', hp: 670, nm: 1000, kg: 2069, s: 3.2, v: 250, lim: 250, ev: [2, 500, 100, 400, 'nca'], g: 'single-speed 1', d: 'awd 45', c: 'ev',
       p: ['#f2f1ec', 'pearl'], x: { 'interior.steering': 'yoke', 'tech.screen_in': 17 } },
     /* exotics & hypercars */
-    'ferrari-sf90-stradale': { t: '', hp: 986, nm: 800, kg: 1770, s: 2.5, v: 340, e: 'V8 4.0 twin-turbo 8000', hy: [2, 220, 7.9], g: 'dct 8', d: 'awd 30', c: 'hyper',
+    'ferrari-sf90-stradale': { t: '', hp: 986, nm: 800, kg: 1770, s: 2.5, v: 340, e: 'V8 4.0 twin-turbo 8000', hy: [3, 162, 7.9], g: 'dct 8', d: 'awd 30', c: 'hyper',
       p: ['#d40000', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'aero.wing': 'none', 'aero.activeAero': true, 'engine.chemistry': 'nca' } },
-    'mclaren-p1': { t: '', hp: 903, nm: 900, kg: 1490, s: 2.8, v: 350, e: 'V8 3.8 twin-turbo 8500', hy: [1, 132, 4.7], g: 'dct 7', d: 'rwd', c: 'hyper',
+    'mclaren-p1': { t: '', hp: 903, nm: 900, kg: 1490, s: 2.8, v: 350, lim: 350, e: 'V8 3.8 twin-turbo 8500', hy: [1, 132, 4.7], g: 'dct 7', d: 'rwd', c: 'hyper',
       p: ['#ff6a13', 'metallic'], x: { 'aero.wing': 'active', 'aero.activeAero': true, 'suspension.type': 'pushrod', 'engine.chemistry': 'nca' } },
-    'bugatti-chiron': { t: '', hp: 1479, nm: 1600, kg: 1995, s: 2.4, v: 420, e: 'W16 8.0 quad-turbo 6800', g: 'auto 7', d: 'awd 40', c: 'hyper',
+    'bugatti-chiron': { t: '', hp: 1479, nm: 1600, kg: 1995, s: 2.4, v: 420, lim: 420, e: 'W16 8.0 quad-turbo 6800', g: 'auto 7', d: 'awd 40', c: 'hyper',
       p: ['#1b3d8f', 'metallic'], x: { 'body.chassisMaterial': 'carbon-monocoque', 'aero.wing': 'active', 'aero.activeAero': true, 'interior.seatType': 'comfort', 'interior.upholstery': 'nappa', 'cooling': 'race' } },
     'lamborghini-huracan-evo': { t: '', hp: 631, nm: 600, kg: 1600, s: 2.9, v: 325, e: 'V10 5.2 na 8500', g: 'dct 7', d: 'awd 30', c: 'hyper',
       p: ['#6dbf2c', 'pearl'], x: { 'body.chassisMaterial': 'aluminum', 'aero.wing': 'lip-spoiler', 'suspension.type': 'magnetic', 'drivetrain.torqueVectoring': true } },
@@ -118,44 +123,44 @@ if (typeof window !== 'undefined') window.CB = CB;
     /* roadsters */
     'mazda-mx5-nd': { t: '2.0', hp: 181, nm: 205, kg: 1058, s: 6.5, v: 220, e: 'I4 2.0 na 7500', g: 'manual 6', d: 'rwd', c: 'sport',
       p: ['#9b111e', 'metallic'], x: { 'suspension.type': 'double-wishbone', 'brakes.material': 'iron', 'brakes.frontPistons': 1, 'brakes.rearPistons': 1, 'drivetrain.rearDiff': 'lsd-torsen', 'interior.upholstery': 'cloth', 'tech.screen_in': 8, 'engine.exhaust': 'stock' } },
-    'bmw-z4-g29': { t: '', hp: 382, nm: 500, kg: 1535, s: 4.1, v: 250, e: 'I6 3.0 turbo 7000', g: 'auto 8', d: 'rwd', c: 'gt',
+    'bmw-z4-g29': { t: '', hp: 382, nm: 500, kg: 1535, s: 4.1, v: 250, lim: 250, e: 'I6 3.0 turbo 7000', g: 'auto 8', d: 'rwd', c: 'gt',
       p: ['#1f5fbf', 'metallic'], x: { 'suspension.type': 'magnetic', 'drivetrain.rearDiff': 'e-diff' } },
     'porsche-718-boxster-982': { t: '', hp: 296, nm: 380, kg: 1335, s: 4.9, v: 275, e: 'flat-4 2.0 turbo 7500', g: 'dct 7', d: 'rwd', c: 'sport',
       p: ['#f9d71c', 'solid'], x: { 'suspension.type': 'double-wishbone', 'brakes.material': 'iron', 'drivetrain.rearDiff': 'open', 'aero.wing': 'ducktail' } },
     /* utility */
-    'jeep-wrangler-rubicon-jl': { t: '', hp: 285, nm: 353, kg: 2018, s: 7.5, v: 180, e: 'V6 3.6 na 6600 regular', g: 'auto 8', d: '4wd', c: 'utility',
+    'jeep-wrangler-rubicon-jl': { t: '', hp: 285, nm: 353, kg: 2018, s: 7.5, v: 180, lim: 180, e: 'V6 3.6 na 6600 regular', g: 'auto 8', d: '4wd', c: 'utility',
       x: { 'drivetrain.frontDiff': 'locking', 'drivetrain.rearDiff': 'locking', 'drivetrain.centerDiff': 'locking', 'wheels.design': 'beadlock', 'weight.spareTire': true, 'exterior.roof': 'black', 'tech.screen_in': 8 } },
-    'ford-f150-raptor-gen3': { t: '', hp: 450, nm: 691, kg: 2590, s: 5.8, v: 172, e: 'V6 3.5 twin-turbo 6000 regular', g: 'auto 10', d: '4wd', c: 'utility',
+    'ford-f150-raptor-gen3': { t: '', hp: 450, nm: 691, kg: 2590, s: 5.8, v: 172, lim: 170, e: 'V6 3.5 twin-turbo 6000 regular', g: 'auto 10', d: '4wd', c: 'utility',
       x: { 'wheels.design': 'beadlock', 'drivetrain.rearDiff': 'locking', 'tech.screen_in': 12, 'exterior.roof': 'black' } },
-    'toyota-tacoma-trdpro-2024': { t: '', hp: 326, nm: 630, kg: 2345, s: 7.0, v: 170, e: 'I4 2.4 turbo 6000 regular', hy: [1, 36, 1.9], g: 'auto 8', d: '4wd', c: 'utility',
+    'toyota-tacoma-trdpro-2024': { t: '', hp: 326, nm: 630, kg: 2345, s: 7.0, v: 170, lim: 170, e: 'I4 2.4 turbo 6000 regular', hy: [1, 36, 1.9], g: 'auto 8', d: '4wd', c: 'utility',
       x: { 'drivetrain.rearDiff': 'locking', 'tech.screen_in': 15, 'engine.chemistry': 'nmc' } },
-    'tesla-cybertruck': { t: 'Cyberbeast', hp: 845, nm: 1389, kg: 3104, s: 2.9, v: 209, ev: [3, 630, 123, 800, 'nca'], g: 'single-speed 1', d: 'awd 35', c: 'ev',
-      x: { 'exterior.finish': 'satin', 'suspension.type': 'air', 'tires.compound': 'all-season', 'wheels.design': 'aero-blade', 'tech.screen_in': 17, 'body.seats': 5, 'body.doors': 4 } },
+    'tesla-cybertruck': { t: 'Cyberbeast', hp: 845, nm: 1389, kg: 3104, s: 2.9, v: 209, lim: 210, ev: [3, 630, 123, 800, 'nca'], g: 'single-speed 1', d: 'awd 35', c: 'ev',
+      x: { 'body.chassisMaterial': 'high-strength-steel', 'body.construction': 'armoured', 'exterior.finish': 'satin', 'suspension.type': 'air', 'tires.compound': 'all-season', 'wheels.design': 'aero-blade', 'tech.screen_in': 17, 'body.seats': 5, 'body.doors': 4 } },
     'porsche-cayenne-e3': { t: '', hp: 348, nm: 500, kg: 2122, s: 6.0, v: 248, e: 'V6 3.0 turbo 6500', g: 'auto 8', d: 'awd 40', c: 'lux',
       p: ['#f2f1ec', 'solid'], x: { 'suspension.type': 'multilink', 'tires.compound': 'touring', 'exterior.lights': 'matrix' } },
-    'range-rover-sport-l461': { t: 'P400', hp: 395, nm: 550, kg: 2310, s: 5.9, v: 242, e: 'I6 3.0 turbo 6500', g: 'auto 8', d: 'awd 50', c: 'lux',
+    'range-rover-sport-l461': { t: 'P400', hp: 395, nm: 550, kg: 2310, s: 5.9, v: 242, lim: 250, e: 'I6 3.0 turbo 6500', g: 'auto 8', d: 'awd 50', c: 'lux',
       p: ['#3a3d41', 'metallic'], x: { 'drivetrain.centerDiff': 'e-diff' } },
     'lamborghini-urus': { t: '', hp: 641, nm: 850, kg: 2200, s: 3.6, v: 305, e: 'V8 4.0 twin-turbo 6800', g: 'auto 8', d: 'awd 40', c: 'lux',
       p: ['#f6c200', 'pearl'], x: { 'brakes.material': 'carbon-ceramic', 'tires.compound': 'super-sport', 'drivetrain.rearDiff': 'e-diff', 'drivetrain.torqueVectoring': true, 'interior.seatType': 'sport', 'interior.upholstery': 'alcantara', 'engine.exhaust': 'valvetronic' } },
     /* vans */
-    'mercedes-sprinter-vs30': { t: '2.0 diesel', hp: 211, nm: 450, kg: 2650, s: 12.0, v: 160, e: 'I4 2.0 turbo 5000 diesel', g: 'auto 9', d: 'rwd', c: 'van',
+    'mercedes-sprinter-vs30': { t: '2.0 diesel', hp: 211, nm: 450, kg: 2650, s: 12.0, v: 160, lim: 160, e: 'I4 2.0 turbo 5000 diesel', g: 'auto 9', d: 'rwd', c: 'van',
       p: ['#f4f3ef', 'solid'] },
-    'vw-id-buzz': { t: 'Pro', hp: 201, nm: 310, kg: 2471, s: 10.2, v: 145, ev: [1, 150, 77, 400, 'nmc'], g: 'single-speed 1', d: 'rwd', c: 'ev',
+    'vw-id-buzz': { t: 'Pro', hp: 201, nm: 310, kg: 2471, s: 10.2, v: 145, lim: 150, ev: [1, 150, 82, 400, 'nmc'], g: 'single-speed 1', d: 'rwd', c: 'ev',
       p: ['#e8d12a', 'metallic'], x: { 'exterior.roof': 'contrast', 'exterior.roofColor': '#f4f3ef', 'suspension.type': 'macpherson', 'tires.compound': 'eco', 'body.seats': 7 } },
-    'ford-transit-hr': { t: '3.5 V6', hp: 275, nm: 355, kg: 2540, s: 9.5, v: 160, e: 'V6 3.5 na 6000 regular', g: 'auto 10', d: 'rwd', c: 'van',
+    'ford-transit-hr': { t: '3.5 V6', hp: 275, nm: 355, kg: 2540, s: 9.5, v: 160, lim: 160, e: 'V6 3.5 na 6000 regular', g: 'auto 10', d: 'rwd', c: 'van',
       p: ['#f4f3ef', 'solid'] },
     /* wagons & shooting brakes */
-    'audi-rs6-avant-c8': { t: '', hp: 591, nm: 800, kg: 2075, s: 3.6, v: 250, e: 'V8 4.0 twin-turbo 6800', g: 'auto 8', d: 'awd 40', c: 'gt',
+    'audi-rs6-avant-c8': { t: '', hp: 591, nm: 800, kg: 2075, s: 3.6, v: 250, lim: 250, e: 'V8 4.0 twin-turbo 6800', g: 'auto 8', d: 'awd 40', c: 'gt',
       x: { 'suspension.type': 'air', 'drivetrain.centerDiff': 'lsd-torsen', 'drivetrain.rearDiff': 'e-diff', 'exterior.lights': 'laser', 'tech.adas': 'plus' } },
-    'mercedes-amg-e63s-estate-s213': { t: '', hp: 604, nm: 850, kg: 2070, s: 3.5, v: 250, e: 'V8 4.0 twin-turbo 7000', g: 'auto 9', d: 'awd 35', c: 'gt',
+    'mercedes-amg-e63s-estate-s213': { t: '', hp: 604, nm: 850, kg: 2070, s: 3.5, v: 250, lim: 250, e: 'V8 4.0 twin-turbo 7000', g: 'auto 9', d: 'awd 35', c: 'gt',
       x: { 'suspension.type': 'air', 'drivetrain.rearDiff': 'e-diff', 'tech.adas': 'plus' } },
-    'volvo-v60-polestar-engineered': { t: '', hp: 405, nm: 670, kg: 2078, s: 4.6, v: 250, e: 'I4 2.0 twincharged 6000', hy: [1, 65, 11.6], g: 'auto 8', d: 'awd 50', c: 'lux',
+    'volvo-v60-polestar-engineered': { t: '', hp: 405, nm: 670, kg: 2078, s: 4.6, v: 250, lim: 250, e: 'I4 2.0 twincharged 6000', hy: [1, 65, 11.6], g: 'auto 8', d: 'awd 50', c: 'lux',
       x: { 'suspension.type': 'multilink', 'brakes.material': 'drilled-slotted', 'brakes.frontPistons': 6, 'tires.compound': 'performance', 'interior.upholstery': 'nappa', 'interior.stitchColor': '#c9a227' } },
-    'porsche-taycan-cross-turismo': { t: '', hp: 483, nm: 640, kg: 2245, s: 4.1, v: 240, ev: [2, 360, 79.2, 800, 'nmc'], g: 'single-speed 1', d: 'awd 40', c: 'ev',
+    'porsche-taycan-cross-turismo': { t: '', hp: 483, nm: 640, kg: 2245, s: 4.1, v: 240, lim: 240, ev: [2, 360, 93.4, 800, 'nmc'], g: 'single-speed 1', d: 'awd 40', c: 'ev',
       p: ['#6e7175', 'metallic'], x: { 'tires.compound': 'all-season', 'brakes.material': 'iron', 'interior.seatType': 'sport' } },
     'ferrari-gtc4lusso': { t: '', hp: 680, nm: 697, kg: 1920, s: 3.4, v: 335, e: 'V12 6.3 na 8250', g: 'dct 7', d: 'awd 15', c: 'gt',
       p: ['#d40000', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'brakes.material': 'carbon-ceramic', 'suspension.type': 'magnetic', 'tires.compound': 'super-sport', 'drivetrain.rearDiff': 'e-diff' } },
-    'mercedes-cls-shooting-brake-x218': { t: '', hp: 402, nm: 600, kg: 2005, s: 5.2, v: 250, e: 'V8 4.7 twin-turbo 6300', g: 'auto 7', d: 'awd 45', c: 'lux',
+    'mercedes-cls-shooting-brake-x218': { t: '', hp: 402, nm: 600, kg: 2005, s: 5.2, v: 250, lim: 250, e: 'V8 4.7 twin-turbo 6300', g: 'auto 7', d: 'awd 45', c: 'lux',
       p: ['#0d0d0f', 'metallic'], x: { 'tires.compound': 'touring' } }
   };
 
@@ -217,6 +222,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     'aero.splitter': 'none', 'aero.wing': 'none', 'aero.wingAngle_deg': 6, 'aero.diffuser': 'none', 'aero.canards': false, 'aero.sideSkirts': false, 'aero.activeAero': false,
     'weight.soundDeadening': true, 'weight.spareTire': false, 'weight.glass': 'standard', 'weight.battery': 'lead', 'weight.rollCage': 'none',
     'weight.ballast_kg': 0, 'weight.ballastPosition': 'center',
+    'body.construction': 'standard', 'body.modelPhysics': true, 'engine.speedLimiter_kph': 0, 'tires.speedRating': 'compound',
     'exterior.roof': 'body', 'exterior.roofColor': '#111111', 'exterior.stripe': 'none', 'exterior.stripeColor': '#ffffff', 'exterior.windowTint_pct': 10,
     'exterior.mirrors': 'body', 'exterior.badge': 'chrome', 'exterior.livery_number': '',
     'interior.primaryColor': '#1a1a1a', 'interior.accentColor': '#3a3d41', 'interior.stitchColor': '#3a3d41', 'interior.trim': 'aluminum',
@@ -355,6 +361,16 @@ if (typeof window !== 'undefined') window.CB = CB;
 
     put(sp.x || {});
     if (sp.x && sp.x.cooling) { flat['engine.cooling'] = sp.x.cooling; delete flat.cooling; }
+
+    // top speed: the factory's electronic limiter, and tyres rated for what the car can reach (compound default when
+    // it suffices, else the lowest rating at or above the needed speed — (Y) 360, hypercar 450 km/h)
+    flat['engine.speedLimiter_kph'] = num(sp.lim, 0);
+    var needKph = num(sp.lim, 0) > 0 ? sp.lim : num(sp.v, 250);
+    var compKph = CB.physics && typeof CB.physics.tyreSpeedRating === 'function' ? CB.physics.tyreSpeedRating(flat['tires.compound']) : 300;
+    if (!(sp.x && sp.x['tires.speedRating']) && compKph < needKph) {
+      var ratings = (D().tireSpeedRatings || []).filter(function (o) { return o.kph >= needKph; }).sort(function (x, y) { return x.kph - y.kph; });
+      if (ratings.length) flat['tires.speedRating'] = ratings[0].id;
+    }
     if (flat['brakes.material'] === 'carbon-ceramic' && wheel < 19) flat['brakes.material'] = 'two-piece';
     if (flat['brakes.material'] === 'two-piece' && wheel < 17) flat['brakes.material'] = 'iron';
     var seats = flat['body.seats'];
@@ -423,32 +439,38 @@ if (typeof window !== 'undefined') window.CB = CB;
       var c = U().deepClone(b); c.transmission.finalDrive = Math.round(fd * 100) / 100;
       var mx = physics(norm(c));
       if (!mx) continue;
-      var err = Math.abs(mx.zeroTo100_s - t100) / t100 + 0.6 * Math.abs(mx.topSpeed_kph - vmax) / vmax;
+      // falling short of the real (or governed) top speed weighs more than overshooting it
+      var dv = (mx.topSpeed_kph - vmax) / vmax;
+      var err = Math.abs(mx.zeroTo100_s - t100) / t100 + (dv < 0 ? 2.0 : 0.6) * Math.abs(dv);
       if (!best || err < best.err - 1e-6) best = { fd: c.transmission.finalDrive, err: err };
     }
     return best ? best.fd : b.transmission.finalDrive;
   }
 
-  /** Mass: a lighter structure (one or two steps, never past aluminium unless the real car is carbon) when the
-   *  configurator's mass model comes out heavier than the real car; ballast (5 kg steps, ≤ 100 kg) when lighter. */
-  var LADDER = ['steel', 'high-strength-steel', 'aluminum', 'carbon-tub', 'carbon-monocoque'];
+  /** Mass: the body construction (period / lightweight / standard / reinforced — or the one the spec names, e.g. the
+   *  Cybertruck's armoured exoskeleton) whose mass lands nearest the real kerb weight, then ballast (5 kg steps,
+   *  ≤ 100 kg) when the build is still lighter. Non-standard constructions must beat standard by more than 1.5 %. */
+  var CONSTRUCTIONS = ['standard', 'lightweight', 'reinforced'];
   function massFor(b, sp) {
-    var mx = physics(norm(b));
-    if (!mx) return b;
-    var kg = num(sp.kg, 0), c = b;
-    var i = LADDER.indexOf(b.body.chassisMaterial), stop = Math.max(i, LADDER.indexOf('aluminum'));
-    while (mx.weight_kg - kg > 50 && i >= 0 && i < stop) {
-      var t = U().deepClone(c); t.body.chassisMaterial = LADDER[++i];
-      var tm = physics(norm(t));
-      if (!tm || Math.abs(tm.weight_kg - kg) >= Math.abs(mx.weight_kg - kg)) break;
-      c = t; mx = tm;
-    }
-    var short = kg - mx.weight_kg;
-    if (short < 15) return c;
-    c = U().deepClone(c);
-    c.weight.ballast_kg = clamp(Math.round(short / 5) * 5, 0, 100);
-    c.weight.ballastPosition = 'center';
-    return c;
+    var kg = num(sp.kg, 0);
+    if (!kg) return b;
+    var fixed = sp.x && sp.x['body.construction'];
+    var list = fixed ? [fixed] : CONSTRUCTIONS.concat(sp.c === 'classic' ? ['classic'] : []);
+    var best = null;
+    list.forEach(function (id) {
+      var t = U().deepClone(b); t.body.construction = id; t.weight.ballast_kg = 0;
+      var mx = physics(norm(t));
+      if (!mx) return;
+      var w = mx.weight_kg, short = kg - w;
+      if (short >= 15) {
+        t.weight.ballast_kg = clamp(Math.round(short / 5) * 5, 0, 100);
+        t.weight.ballastPosition = 'center';
+        w += t.weight.ballast_kg;
+      }
+      var err = Math.abs(w - kg) / kg + (id === 'standard' ? 0 : 0.015);
+      if (!best || err < best.err) best = { b: t, err: err };
+    });
+    return best ? best.b : b;
   }
 
   function build(id, base) {

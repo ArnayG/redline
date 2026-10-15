@@ -1035,6 +1035,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     return { message: 'Racing slicks are not street legal and aquaplane in standing water (wet μ ' + c.compound.wetMu + ').',
       fixes: [F('Semi-slick Cup tyres (DOT legal)', P('tires.compound', 'track'))] };
   });
+  rule('tires.hyper-rating', 'wheels', 'warning', 'tires.speedRating', 'Hypercar speed rating needs a hypercar compound', function (c) {
+    if (c.b.tires.speedRating !== 'hyper' || oneOf(c.compound.id, ['super-sport', 'track', 'slick'])) return null;
+    return { message: 'The 450 km/h hypercar construction is only made in Super Sport and Cup compounds — not as ' + c.compound.name + ' tyres.',
+      fixes: [F('Super Sport tyres', P('tires.compound', 'super-sport')), F('(Y) 360 km/h rating', P('tires.speedRating', 'Y+'))] };
+  });
   rule('tires.grip-power', 'wheels', 'warning', 'tires.compound', 'Low-grip tyres on a powerful car', function (c) {
     if (!oneOf(c.compound.id, ['eco', 'all-season', 'touring', 'winter']) || c.hp <= 550) return null;
     return { message: c.compound.name + ' tyres (μ ' + c.compound.mu + ') cannot transmit ' + fmt(c.hp) + ' hp — and many carry a speed rating below this car’s top speed.',

@@ -60,8 +60,18 @@ if (typeof window !== 'undefined') window.CB = CB;
   var LHV_GASOLINE_MJ_L = 32.0; // lower heating value of pump gasoline (energyFactor 1.0)
   var KWH_PER_L_GASOLINE_EQ = 8.9;
   var PI = Math.PI;
-  // longitudinal peak μ (at optimum slip ratio) is higher than the quoted lateral peak, proportionally more so for hard compounds
-  function longMu(mu) { return mu * 1.1 + 0.12; }
+  // longitudinal peak μ (at optimum slip ratio) vs the quoted lateral peak. Piecewise-linear map (lateral → drive):
+  //  * eco / touring / summer tyres (μ ≤ 1.0): μ·1.1 + 0.12, as before;
+  //  * summer UHP / supercar OE tyres (μ ≈ 1.05–1.15) put down a little more drive force than that linear map gave;
+  //  * Cup / slick compounds (μ ≥ 1.3) are launched cold and are slip-peaky — lowered (−5 % at 1.3, −10 % at 1.5), which
+  //    keeps RWD hypercars on Cup tyres from out-launching the AWD ones.
+  var LONG_MU = [[0.5, 0.67], [0.9, 1.11], [1.0, 1.22], [1.1, 1.36], [1.2, 1.44], [1.3, 1.48], [1.5, 1.6], [1.8, 1.95], [2.2, 2.38]];
+  function longMu(mu) {
+    var T = LONG_MU;
+    if (mu <= T[0][0]) return mu * 1.1 + 0.12;
+    for (var i = 1; i < T.length; i++) if (mu <= T[i][0]) return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (mu - T[i - 1][0]) / (T[i][0] - T[i - 1][0]);
+    return T[T.length - 1][1] + (mu - T[T.length - 1][0]) * 1.08;
+  }
   function brakeMu(mu) { return mu * 1.06 + 0.1; }
 
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
@@ -126,7 +136,7 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   /* Nominal ride height (mm) at which bodyStyles[].cgHeight_mm is quoted. */
   var NOMINAL_RIDE = { coupe: 120, sedan: 130, hatchback: 130, wagon: 135, suv: 200, roadster: 115, pickup: 230, hypercar: 95, 'shooting-brake': 120, van: 160 };
-  /* Tyre speed ratings (km/h) by compound. */
+  /* Tyre speed ratings (km/h) by compound (tires.speedRating 'compound'; an explicit rating overrides it). */
   var TYRE_SPEED_RATING = { eco: 210, 'all-season': 210, winter: 240, touring: 270, performance: 300, 'super-sport': 360, track: 300, slick: 420 };
   /* Sound character bonus by layout sound profile. */
   var SOUND_CHARACTER = {
@@ -276,7 +286,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     var hybridKw = 0, hybMotorKw = 0, battLimitKw = 0;
     if (type === 'hybrid') {
       var chem = opt('batteryChemistries', e.chemistry, 'nmc');
-      var nm = clamp(Math.round(num(e.motors, 1)), 1, 2);
+      var nm = clamp(Math.round(num(e.motors, 1)), 1, 3);
       hybMotorKw = nm * clamp(num(e.motorPower_kw, 100), 10, 500);
       var kwh = clamp(num(e.battery_kwh, 10), 0.5, 40);
       battLimitKw = kwh * num(chem.cRate, 4) * 6 * 0.95;
@@ -410,9 +420,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     var baseW = num(bs.baseWeight_kg, 1450);
     var cgBody = num(bs.cgHeight_mm, 500);
 
-    /* --- body / glider (BIW scales with chassis material; closures, glass, wiring, HVAC do not) */
-    var structure = baseW * 0.29 * num(cm.weightFactor, 1);
-    var closures = baseW * 0.35;
+    /* --- body / glider (BIW scales with chassis material; closures, glass, wiring, HVAC do not). Both scale with the
+       real model's size (shell area vs the style's nominal car) and the construction (gauge / insulation / armour). */
+    var gF = num(geo.scale && geo.scale.mass, 1) * clamp(num(geo.con && geo.con.weightFactor, 1), 0.5, 2);
+    var structure = baseW * 0.29 * num(cm.weightFactor, 1) * gF;
+    var closures = baseW * 0.35 * gF;
     add('body', structure, xBody, cgBody + 40 + dz);
     add('body', closures, xBody, cgBody + 120 + dz);
     add('body', (wb - num(bs.defaultWheelbase, wb)) * 0.22, 0.5, cgBody + dz);
@@ -451,16 +463,17 @@ if (typeof window !== 'undefined') window.CB = CB;
       var kwh = E.type === 'ev' ? E.kwh : clamp(num(e.battery_kwh, 10), 0.5, 40);
       var packKg = kwh * 1000 / whkg * (E.type === 'ev' ? 1.0 : 1.45) + (E.type === 'ev' ? 28 : 12);
       add('battery', packKg, E.type === 'ev' ? 0.5 : (ePos === 'mid' ? 0.42 : 0.74), (E.type === 'ev' ? 330 : 430) + dz * 0.9);
-      var nMot = E.type === 'ev' ? E.motors : clamp(Math.round(num(e.motors, 1)), 1, 2);
+      var nMot = E.type === 'ev' ? E.motors : clamp(Math.round(num(e.motors, 1)), 1, 3);
       var per = E.type === 'ev' ? E.perKw : clamp(num(e.motorPower_kw, 100), 10, 500);
       var motKg = 24 + per * 0.17; // motor + inverter
       var split = num(b.drivetrain.torqueSplitFront_pct, dl === 'fwd' ? 100 : 0) / 100;
       var nFront = dl === 'fwd' ? nMot : dl === 'rwd' ? 0 : (nMot >= 2 ? clamp(Math.round(nMot * split), 1, nMot - 1) : 0);
       if (E.type === 'hybrid') {
-        // P2 motor sits at the gearbox bell-housing; a second motor on an AWD car becomes a front e-axle
+        // P2 motor sits at the gearbox bell-housing; further motors on an AWD car form a front e-axle (one per wheel
+        // with three motors, SF90 / NSX style)
         var xP2 = ePos === 'mid' ? 0.95 : ePos === 'rear' ? 0.9 : transverse ? 0.0 : 0.22;
         add('motors', motKg, xP2, 380 + dz);
-        if (nMot > 1) add('motors', motKg, dl === 'awd' ? 0.0 : xP2, 350 + dz);
+        for (var hm = 1; hm < nMot; hm++) add('motors', motKg, dl === 'awd' ? 0.0 : xP2, 350 + dz);
         add('motors', 14, 0.5, 400 + dz); // power electronics, HV cabling
         if (dl === 'awd' && nMot > 1) unsprung.front += 0;
       } else {
@@ -581,8 +594,35 @@ if (typeof window !== 'undefined') window.CB = CB;
   /* ======================================================================
      GEOMETRY, TYRES, AERO
      ====================================================================== */
+  /** Reference figures of the real car a build names (CB.data.modelRefs[body.model]: length / width / height m, Cd,
+   *  kerb kg — a copy of the CB.shapes model refs, so the physics never depends on CB.shapes being loaded). null for a
+   *  generic style car (body.model null), an unknown id or a model of another body style. */
+  function modelRef(b) {
+    if (!b.body || b.body.modelPhysics !== true) return null;   // opt-in (Body → Model "Real-car mass & aero"; stock specs)
+    var d = D(), id = b.body && b.body.model, t = d && d.modelRefs && typeof id === 'string' && Object.prototype.hasOwnProperty.call(d.modelRefs, id) ? d.modelRefs[id] : null;
+    if (!Array.isArray(t) || t[0] !== b.body.style) return null;
+    return { length: t[1], width: t[2], height: t[3], cd: t[4], curbWeight_kg: t[5] };
+  }
+
+  /** Model-size scale factors vs the body style's nominal (svg) car: shell area → glider mass (×0.85..1.2),
+   *  width·height → frontal area (×0.85..1.45), the real car's Cd blended half-way into the style's. All 1 / style Cd
+   *  without a real model or with body.modelPhysics off (the default, so builds saved before it keep their physics). */
+  function modelScale(bs, ref) {
+    var out = { mass: 1, area: 1, cd: num(bs.cd, 0.32) };
+    var sv = bs.svg || {};
+    if (!ref || !isNum(ref.length) || !isNum(ref.width) || !isNum(ref.height)) return out;
+    var L0 = num(sv.length_mm, 4600) / 1000, W0 = num(sv.width_mm, 1900) / 1000, H0 = num(sv.height_mm, 1400) / 1000;
+    var L = clamp(ref.length, 3, 7), W = clamp(ref.width, 1.4, 2.6), H = clamp(ref.height, 0.9, 3.2);
+    var shell = (L * W + L * H + W * H) / (L0 * W0 + L0 * H0 + W0 * H0);
+    out.mass = clamp(shell, 0.85, 1.2);
+    out.area = clamp((W * H) / (W0 * H0), 0.85, 1.45);
+    if (isNum(ref.cd) && ref.cd > 0.15 && ref.cd < 0.7) out.cd = out.cd + 0.5 * (ref.cd - out.cd);
+    return out;
+  }
+
   function geometry(b) {
     var bs = opt('bodyStyles', b.body.style, 'coupe');
+    var ref = modelRef(b), scale = modelScale(bs, ref);
     var wr = Array.isArray(bs.wheelbaseRange) ? bs.wheelbaseRange : [2300, 3700];
     var wb = clamp(num(b.body.wheelbase_mm, num(bs.defaultWheelbase, 2650)), Math.min(2200, wr[0]), Math.max(3800, wr[1]));
     var track = clamp(num(b.body.trackWidth_mm, 1600), 1350, 1850);
@@ -597,7 +637,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       bs: bs, wb: wb, track: track, rh: rh, nominal: nominal, dz: (rh - nominal) * 0.9, d: d,
       twF: twF, twR: twR, pF: pF, pR: pR, rF: rF, rR: rR,
       comp: opt('tireCompounds', b.tires.compound, 'performance'),
-      ow: (D_ && D_.optionWeights) || {}, mass0: num(bs.baseWeight_kg, 1450)
+      ow: (D_ && D_.optionWeights) || {}, mass0: num(bs.baseWeight_kg, 1450),
+      ref: ref, scale: scale, con: opt('constructions', b.body.construction, 'standard')
     };
   }
 
@@ -611,7 +652,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     var drAng = adjustable ? 0.45 + 0.09 * ang : 1;
     var dRide = geo.rh - geo.nominal;
     var avgTw = (geo.twF + geo.twR) / 2;
-    var cd = num(bs.cd, 0.32) + num(sp.dragDelta, 0) + num(wg.dragDelta, 0) * drAng + num(df.dragDelta, 0) +
+    var sc = geo.scale || { cd: num(bs.cd, 0.32), area: 1 };
+    var cd = num(sc.cd, num(bs.cd, 0.32)) + num(sp.dragDelta, 0) + num(wg.dragDelta, 0) * drAng + num(df.dragDelta, 0) +
       (a.canards ? 0.006 : 0) + (a.sideSkirts ? -0.002 : 0) + num(wd.dragDelta, 0) +
       dRide * 0.00015 + (avgTw - 245) * 0.00012 + (b.exterior && b.exterior.mirrors === 'carbon' ? -0.001 : 0) +
       Math.abs(num(b.suspension.toeFront_deg, 0)) * 0.004;
@@ -620,7 +662,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (wg.active) cdLow -= num(wg.dragDelta, 0) * drAng * 0.7;   // flat wing on the straights
     if (a.activeAero) cdLow -= 0.008;                              // cooling shutters, active diffuser flaps
     cdLow = clamp(cdLow, 0.17, cd);
-    var area = num(bs.frontalArea_m2, 2.1) + (geo.track - 1600) * 0.0011 + dRide * 0.0016 + (avgTw - 245) * 0.0008 +
+    var area = num(bs.frontalArea_m2, 2.1) * num(sc.area, 1) + (geo.track - 1600) * 0.0011 + dRide * 0.0016 + (avgTw - 245) * 0.0008 +
       (num(wg.downforce_kg_at_200, 0) >= 100 ? 0.04 : 0);
     area = clamp(area, 1.4, 4.2);
     // ground effect: lower → more underbody downforce (diffuser & splitter)
@@ -648,7 +690,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     var st = opt('suspensionTypes', s.type, 'multilink');
     var cm = opt('chassisMaterials', b.body.chassisMaterial, 'steel');
     var cage = opt('rollCages', b.weight.rollCage, 'none');
-    var stiff = clamp(num(cm.stiffness, 0.6) + num(cage.stiffnessGain, 0) * 0.8, 0, 1.1);
+    var stiff = clamp(num(cm.stiffness, 0.6) + num(cage.stiffnessGain, 0) * 0.8 + num(geo.con && geo.con.stiffness, 0), 0, 1.1);
     function camberLat(c) { return 1 + 0.045 * (1 - sq((c + 2.5) / 2.5)) - (c > 0 ? 0.03 * c : 0); }
     function camberLong(c) { return 1 - 0.012 * Math.abs(c + 0.3); }
     var cF = clamp(num(s.camberFront_deg, -1.5), -6, 2), cR = clamp(num(s.camberRear_deg, -1), -6, 2);
@@ -729,7 +771,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     var effDl = layout === 'awd' ? 0.955 : layout === 'fwd' ? 0.99 : 0.98;
     var eff = effTr * effDl;
     var shift = Math.max(0, num(tr.shiftTime_s, 0.2));
-    var carry = tr.id === 'dct' ? 0.55 : tr.id === 'auto' ? 0.35 : 0;
+    // torque carried through a shift: DCT overlap; modern 8–10-speed automatics fill torque far better than old 6-speeds
+    var carry = tr.id === 'dct' ? 0.55 : tr.id === 'auto' ? (ratios.length >= 8 ? 0.5 : 0.35) : 0;
     var lockOf = function (id) { return num(opt('differentials', id, 'open').lockFactor, 0); };
     var lockF = lockOf(dt.frontDiff), lockR = lockOf(dt.rearDiff), lockC = dt.centerDiff === 'none' || !dt.centerDiff ? 0.35 : lockOf(dt.centerDiff);
     var drivenLock = layout === 'fwd' ? lockF : layout === 'rwd' ? lockR : (lockF + lockR) / 2;
@@ -901,6 +944,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       } else bs = 1;
       T = Math.min(E.torque(rpm, bs), dl.torqueLimit) * tcMult;
       var Fe = T * Gt * dl.eff / dl.r;
+      // torque converter not yet locked up in 1st / 2nd: a few % slip loss on top of the gearbox efficiency
+      if (stall && gi <= 1 && tcMult === 1) Fe *= 0.95;
       if (t < driverRamp) Fe *= lerp(0.55, 1, t / driverRamp);
       if (shiftT > 0) Fe *= dl.carry;
       var Ft = tractionLimit(ctx, v, a, t < 2.5);
@@ -1246,6 +1291,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     c += ({ comfort: 7, lounge: 10, sport: 2, bucket: -3, 'carbon-bucket': -6, 'race-shell': -10 }[seat.id] || 0);
     c += num(opt('upholsteries', b.interior.upholstery, 'leather').luxury, 0.5) * 4;
     if (b.weight.soundDeadening === false) c -= 6;
+    c += num(ctx.geo.con && ctx.geo.con.comfort, 0);
     if (b.weight.rollCage === 'full') c -= 6; else if (b.weight.rollCage === 'half') c -= 3;
     if (b.interior.harness) c -= 3;
     c += (clamp(num(b.tech.climateZones, 2), 1, 4) - 2) * 1.5;
@@ -1271,7 +1317,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       (ctx.geo.bs.id === 'roadster' ? 5 : 0) + (b.weight.glass === 'polycarbonate' ? 3 : b.weight.glass === 'thin' ? 1 : 0) +
       ((ctx.geo.twF + ctx.geo.twR) / 2 - 245) * 0.01 + (ctx.geo.d - 18) * 0.3 + (b.transmission.type === 'sequential' ? 3 : 0) +
       (b.suspension.type === 'coilover-track' || b.suspension.type === 'pushrod' ? 1.5 : 0) + (ctx.aero.wingDf > 120 ? 1 : 0) +
-      (b.exterior.roof === 'glass' ? 0.5 : 0) + (b.tech.audio === 'concert' ? -2 : 0);
+      (b.exterior.roof === 'glass' ? 0.5 : 0) + (b.tech.audio === 'concert' ? -2 : 0) + num(ctx.geo.con && ctx.geo.con.noise, 0);
     return { exhaust: clamp(exhaust, 40, 135), cabin: clamp(cabin, 52, 95) };
   }
 
@@ -1334,7 +1380,14 @@ if (typeof window !== 'undefined') window.CB = CB;
     var bd = mass.breakdown;
     var wheelInertia = 0.75 * num(bd.wheels, 90) * sq((geo.rF + geo.rR) / 2) * 0.85 + 0.5 * (geo.rotorKgF * 2 + geo.rotorKgR * 2) * sq(0.16);
     var latAssist = 1 + (b.drivetrain.torqueVectoring ? 0.025 : 0) + (dl.drivenLock > 0.5 ? 0.008 : 0) + (b.aero.activeAero ? 0.005 : 0);
-    var gov = Math.min(num(TYRE_SPEED_RATING[comp.id], 300), E.tune && E.tune.id === 'eco' ? 180 : 1e9) / 3.6;
+    // top-speed governors: the tyres' speed rating (explicit, else the compound's), the eco map, the ECU speed limiter
+    var rating = opt('tireSpeedRatings', b.tires.speedRating, 'compound');
+    var tyreKph = isNum(rating.kph) && rating.kph > 0 ? rating.kph : num(TYRE_SPEED_RATING[comp.id], 300);
+    var limKph = num(b.engine.speedLimiter_kph, 0) > 0 ? clamp(num(b.engine.speedLimiter_kph, 0), 60, 500) : 1e9;
+    var ecoKph = E.tune && E.tune.id === 'eco' ? 180 : 1e9;
+    var govKph = Math.min(tyreKph, ecoKph, limKph);
+    var govBy = govKph === limKph ? 'limiter' : govKph === ecoKph ? 'eco' : 'tyres';
+    var gov = govKph / 3.6;
     var ctx = {
       b: b, E: E, geo: geo, aero: aero, grip: grip, dl: dl, mass: mass.mass, wf: mass.wf, cgH: mass.cgH,
       wb: geo.wb, track: geo.track, crr: crr, wheelInertia: wheelInertia, latAssist: latAssist, governor: gov, heatDerate: 1
@@ -1399,7 +1452,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (peakT > dl.torqueLimit) warnings.push('Engine torque (' + Math.round(peakT) + ' Nm) exceeds the ' + dl.tr.name + ' rating (' + Math.round(dl.torqueLimit) + ' Nm) — torque is electronically limited');
     if (heat > 1.02) warnings.push('Cooling marginal: ' + Math.round(E.icePower_kw) + ' kW exceeds the ' + E.cool.name + ' capacity — expect heat-soak power loss on track');
     if (top.by === 'redline') warnings.push('Top speed is redline-limited at ' + Math.round(topKph) + ' km/h — a taller final drive or top gear would go faster');
-    if (top.by === 'governor') warnings.push('Top speed governed at ' + Math.round(topKph) + ' km/h (' + (E.tune && E.tune.id === 'eco' && gov * 3.6 <= 180 ? 'eco map' : comp.name + ' speed rating') + ')');
+    if (top.by === 'governor') warnings.push('Top speed governed at ' + Math.round(topKph) + ' km/h (' + (govBy === 'limiter' ? 'electronic speed limiter' : govBy === 'eco' ? 'eco map' : (b.tires.speedRating && b.tires.speedRating !== 'compound' ? rating.name + ' tyre' : comp.name) + ' speed rating') + ')');
     if (dl.layout === 'fwd' && peakT > 420) warnings.push('Torque steer: ' + Math.round(peakT) + ' Nm through the front wheels');
     if (E.boosted && E.lag > 0.35 && E.tau > 0.5) warnings.push('Noticeable turbo lag — full boost only above ' + Math.round(E.peakTorqueRpm) + ' rpm');
     if (grip.bottom < 0.99) warnings.push('Ride height too low for the spring rates — the chassis will bottom out over bumps');
@@ -1438,6 +1491,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       zeroTo200_s: sim.t200 == null ? null : r(sim.t200, 2),
       quarterMile_s: sim.tQM == null ? null : r(sim.tQM, 2), quarterMileTrap_mph: sim.trapQM == null ? null : r(sim.trapQM / MPH, 1),
       topSpeed_kph: r(topKph, 1), topSpeed_mph: r(topKph / 1.609344, 1), topSpeedLimitedBy: top.by,
+      topSpeedGovernor: top.by === 'governor' ? govBy : null, tyreSpeedRating_kph: tyreKph,
+      speedLimiter_kph: limKph < 1e9 ? limKph : 0,
       accelCurve: sim.curve, gearSpeeds: gearSpeeds, shiftTime_s: dl.shift, finalDrive: dl.fd,
       wheelRadius_m: r(dl.r, 3),
       fuelEconomy_l100: r(energy.l100, 2), fuelEconomy_mpg: r(235.215 / Math.max(0.1, energy.l100), 1),
@@ -1489,6 +1544,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     compute: safeCompute,
     _computeUnsafe: compute,
     downforceAt: downforceAt,
+    tyreSpeedRating: function (compoundId) { return num(TYRE_SPEED_RATING[compoundId], 300); },
     track: {
       name: 'Redline Ring', length_m: 5800,
       segments: TRACK_SEGMENTS.map(function (s) { return { name: s.name, len: s.len, radius: s.radius, sector: s.sector }; })

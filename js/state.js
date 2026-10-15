@@ -328,6 +328,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     body.style = optId('bodyStyles', body.style, def.body.style);
     var style = data.find('bodyStyles', body.style);
     body.chassisMaterial = optId('chassisMaterials', body.chassisMaterial, def.body.chassisMaterial);
+    body.construction = optId('constructions', body.construction, 'standard');
+    body.modelPhysics = bool(body.modelPhysics, false);
     if (changed(ctx, 'body.style') && !changed(ctx, 'body.wheelbase_mm') && prevVal(ctx, 'body.style') !== body.style) {
       body.wheelbase_mm = style.defaultWheelbase;
     }
@@ -388,6 +390,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     e.tune = optId('tunes', e.tune, 'stock');
     e.exhaust = optId('exhausts', e.exhaust, 'stock');
     e.cooling = optId('coolings', e.cooling, 'standard');
+    e.speedLimiter_kph = num(e.speedLimiter_kph, 0) > 0 ? U.nearest(data.speedLimiters.map(function (o) { return o.id; }).filter(Boolean), num(e.speedLimiter_kph, 0)) : 0;
     e.chemistry = optId('batteryChemistries', e.chemistry, 'nmc');
     e.voltage = Number(e.voltage) >= 600 ? 800 : 400;
     e.regen = rng(e.regen, 'engine.regen', 2);
@@ -500,6 +503,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     wh.widthRear_in = rng(wh.widthRear_in, 'wheels.widthRear_in', 10.5);
     wh.finish = hex(wh.finish, '#2b2b2b');
     ti.compound = optId('tireCompounds', ti.compound, 'performance');
+    ti.speedRating = optId('tireSpeedRatings', ti.speedRating, 'compound');
     ti.widthFront_mm = rng(ti.widthFront_mm, 'tires.widthFront_mm', 255);
     ti.widthRear_mm = rng(ti.widthRear_mm, 'tires.widthRear_mm', 295);
     ti.profileFront = rng(ti.profileFront, 'tires.profileFront', 35);

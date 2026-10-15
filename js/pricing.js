@@ -173,6 +173,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     /* ---- base & body */
     add('base', style.name + ' — base vehicle', num(style.basePrice), 'body.style', 'base');
     opt('body', 'body.chassisMaterial', 'chassisMaterials', 'Chassis');
+    opt('body', 'body.construction', 'constructions', 'Construction');
     var wbDelta = Math.abs(num(b.body.wheelbase_mm, style.defaultWheelbase) - num(style.defaultWheelbase));
     add('body', wbDelta ? 'Bespoke wheelbase (' + fmtN(b.body.wheelbase_mm) + ' mm, ' + (b.body.wheelbase_mm > style.defaultWheelbase ? '+' : '−') + fmtN(wbDelta) + ' mm)' : 'Wheelbase ' + fmtN(b.body.wheelbase_mm) + ' mm (standard)',
       wbDelta * C.customWheelbasePerMm, 'body.wheelbase_mm', 'size');
@@ -213,6 +214,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       notes.push('Electric drivetrain: exhaust and fuel selections are ignored and not charged.');
     }
     opt('engine', 'engine.cooling', 'coolings', type === 'ev' ? 'Thermal management' : 'Cooling');
+    if (num(e.speedLimiter_kph) > 0) opt('engine', 'engine.speedLimiter_kph', 'speedLimiters', 'Electronic speed limiter');
     if (type !== 'ice') {
       var motors = Math.max(1, Math.round(num(e.motors, 1)));
       var kw = num(e.motorPower_kw);
@@ -299,6 +301,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     tyreLine('front', t.widthFront_mm, t.profileFront, tf);
     tyreLine('rear', t.widthRear_mm, t.profileRear, trr);
+    opt('wheels', 'tires.speedRating', 'tireSpeedRatings', 'Tyre speed rating');
 
     /* ---- aero */
     opt('aero', 'aero.splitter', 'aero.splitters', 'Splitter');

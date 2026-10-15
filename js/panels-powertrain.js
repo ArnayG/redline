@@ -1073,7 +1073,9 @@ window.CB = window.CB || {};
     /* ---- real manufacturer model (CB.shapes): looks only, physics still come from the build's numbers */
     if (shapesApi()) {
       root.appendChild(ui.section('Model', 'Real production-car coachwork for this body style. The shape is fitted to your wheelbase, track, ride height and tyres; picking one changes the look only.',
-        modelPicker(P)));
+        modelPicker(P),
+        ui.toggle({ path: 'body.modelPhysics', label: 'Real-car mass & aero',
+          hint: 'Scale the shell mass to the real model’s size and use its frontal area and drag (a small AE86 shell is lighter than a Challenger’s; a high-roof van catches more air). Auto-config switches it on.' })));
     }
 
     /* ---- chassis material (rebuilt per style so weight-saving figures are exact) */
@@ -1093,7 +1095,19 @@ window.CB = window.CB || {};
       });
       return cards;
     });
-    root.appendChild(ui.section('Structure', 'The skeleton everything else bolts to.', chassisSlot));
+    var conSlot = slot(function (b) { return styleOf(b).id; }, function (b) {
+      var st = styleOf(b), glider = num(st.baseWeight_kg, 1450) * 0.64;
+      return ui.cards({
+        path: 'body.construction', label: 'Body construction', columns: 3, compact: true,
+        hint: 'Gauge, insulation and reinforcement of the shell on top of the material: period thin-gauge and lightweight shells shed mass (and refinement); reinforced and armoured bodies add it. The real model’s size scales the shell too.',
+        options: (D.constructions || []).map(function (c) {
+          var dKg = glider * (num(c.weightFactor, 1) - 1);
+          return { id: c.id, name: c.name, desc: c.desc, price: c.price, badge: c.id === 'armoured' ? 'Exoskeleton' : c.id === 'classic' ? 'Pre-2000' : null,
+            specs: [['Shell mass', '×' + fmt(c.weightFactor, 2)], ['Mass', Math.abs(dKg) < 1 ? 'Baseline' : (dKg > 0 ? '+' : '−') + fmt(Math.abs(dKg)) + ' kg'], ['Comfort', (c.comfort > 0 ? '+' : c.comfort < 0 ? '−' : '±') + fmt(Math.abs(num(c.comfort, 0)))]] };
+        })
+      });
+    });
+    root.appendChild(ui.section('Structure', 'The skeleton everything else bolts to.', chassisSlot, conSlot));
 
     /* ---- proportions */
     var wbR = R('body.wheelbase_mm'), tR = R('body.trackWidth_mm');
@@ -1399,7 +1413,12 @@ window.CB = window.CB || {};
       var lay = layoutOf(b);
       redKv.set([['Layout typical', fmt(lay.typicalRedline) + ' rpm'], ['Fuel cap', fuelOf(b).redlineCap_rpm ? fmt(fuelOf(b).redlineCap_rpm) + ' rpm' : 'none']]);
     });
-    out.push(ui.section('Fuel, revs & placement', null, ui.grid(2, fuelSel, redWrap), position));
+    var limiterSel = ui.select({
+      path: 'engine.speedLimiter_kph', label: 'Electronic speed limiter',
+      options: (D.speedLimiters || []).map(function (o) { return { id: o.id, name: o.id ? o.name + ' — ' + o.desc : 'Off — no electronic cap' }; }),
+      hint: 'ECU top-speed cap (German makers’ 250 km/h, van and truck governors, hypercar speed keys). Gearing, drag and the tyres’ speed rating can still stop the car sooner.'
+    });
+    out.push(ui.section('Fuel, revs & placement', null, ui.grid(2, fuelSel, redWrap), position, limiterSel));
 
     /* tune, exhaust, cooling */
     var tune = ui.cards({
@@ -1438,7 +1457,7 @@ window.CB = window.CB || {};
     var mpR = R('engine.motorPower_kw');
     var motorOpts = [];
     var motorNames = { 1: 'Single', 2: 'Dual', 3: 'Tri', 4: 'Quad' };
-    for (var i = mr[0]; i <= mr[1]; i++) motorOpts.push({ id: i, name: motorNames[i] + ' motor' + (i > 1 ? 's' : ''), desc: i === 4 ? 'One motor per wheel — true torque vectoring' : i === 3 ? 'One front, two rear' : i === 2 ? (type === 'hybrid' ? 'Crank-integrated + axle motor' : 'One per axle') : 'Single axle' });
+    for (var i = mr[0]; i <= mr[1]; i++) motorOpts.push({ id: i, name: motorNames[i] + ' motor' + (i > 1 ? 's' : ''), desc: i === 4 ? 'One motor per wheel — true torque vectoring' : i === 3 ? (type === 'hybrid' ? 'Crank motor + twin-motor front e-axle' : 'One front, two rear') : i === 2 ? (type === 'hybrid' ? 'Crank-integrated + axle motor' : 'One per axle') : 'Single axle' });
     var motors = ui.segmented({ path: 'engine.motors', label: 'Motor count', options: motorOpts,
       hint: type === 'hybrid' ? 'A second motor on the non-engine axle gives through-the-road all-wheel drive.' : 'More motors = more power and torque-vectoring authority, at +45 kg and cost each.' });
     var power = ui.slider({
@@ -1471,9 +1490,14 @@ window.CB = window.CB || {};
       options: [{ id: 0, name: 'Off', desc: 'Free-wheeling coast' }, { id: 1, name: 'Low', desc: 'Gentle, ICE-like engine braking' }, { id: 2, name: 'Medium', desc: 'Recovers most braking energy' }, { id: 3, name: 'One-pedal', desc: 'Strong regen — stops the car without the brake pedal' }],
       hint: 'Stronger regen recovers more energy (range) and spares the friction brakes, but alters balance on corner entry.'
     });
+    var evLimiter = type === 'ev' ? ui.select({
+      path: 'engine.speedLimiter_kph', label: 'Electronic speed limiter',
+      options: (D.speedLimiters || []).map(function (o) { return { id: o.id, name: o.id ? o.name + ' — ' + o.desc : 'Off — no electronic cap' }; }),
+      hint: 'Inverter / ECU top-speed cap. Motor rpm, drag and the tyres’ speed rating can still stop the car sooner.'
+    }) : null;
     return [
       ui.section(type === 'hybrid' ? 'Hybrid electric system' : 'Electric drive units', type === 'hybrid' ? 'Motor and buffer battery that work alongside the engine.' : 'Motors, inverters and the traction battery.',
-        motors, power),
+        motors, power, evLimiter),
       ui.section('Energy storage', null, ui.grid(2, ui.group(null, battery, volt, regen), electricWidget()), chem)
     ];
   }

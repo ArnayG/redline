@@ -2168,7 +2168,12 @@ if (typeof window !== 'undefined') window.CB = CB;
       patchState(patch, 'Tyre widths matched to rims');
       toast('Tyre widths set to ' + patch.tires.widthFront_mm + ' / ' + patch.tires.widthRear_mm + ' mm for an ideal rim fit', 'success');
     } });
-    root.appendChild(ui.section('Tyres', null, compCards, ui.grid(2, tf, tr), ui.grid(2, pf, pr), el('div', { class: 'pc-btnrow' }, matchBtn)));
+    var ratingSel = ui.select({
+      path: 'tires.speedRating', label: 'Speed rating',
+      options: (Dt.tireSpeedRatings || []).map(function (r) { return { id: r.id, name: r.name, price: r.price }; }),
+      hint: 'The tyres’ certified top speed caps the car’s. “Compound default”: Eco / All-Season 210, Winter 240, Touring 270, Max Performance & Cup 300, Super Sport 360, Slick 420 km/h. Hypercars need the 450 km/h construction.'
+    });
+    root.appendChild(ui.section('Tyres', null, compCards, ratingSel, ui.grid(2, tf, tr), ui.grid(2, pf, pr), el('div', { class: 'pc-btnrow' }, matchBtn)));
 
     /* ---- size, fit and calibration */
     root.appendChild(ui.section('Size, fit & calibration', 'Tyre size strings, ETRTO-style rim approval and speedometer calibration versus the factory fitment.',

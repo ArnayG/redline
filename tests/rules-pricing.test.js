@@ -126,6 +126,7 @@ const SCENARIOS = [
   ['engine.diesel-redline', () => raw({ engine: { fuel: 'diesel', redline_rpm: 7000, compression: 14 } })],
   ['engine.e85-low-compression', () => nb({ engine: { fuel: 'e85', aspiration: 'na', boost_bar: 0, compression: 10 } })],
   ['tires.slicks', () => nb({ tires: { compound: 'slick' } })],
+  ['tires.hyper-rating', () => nb({ tires: { compound: 'touring', speedRating: 'hyper' } })],
   ['suspension.macpherson-ride-height', () => raw({ suspension: { type: 'macpherson', rideHeight_mm: 60 } })],
   ['brakes.material-wheel', () => nb({ brakes: { material: 'carbon-ceramic', frontRotor_mm: 330, rearRotor_mm: 300 }, wheels: { diameter_in: 18, widthFront_in: 9, widthRear_in: 10.5 } })],
   ['brakes.front-rotor-fit', () => nb({ brakes: { frontRotor_mm: 400, rearRotor_mm: 300 }, wheels: { diameter_in: 17 }, tires: { profileFront: 45, profileRear: 40 } })],
