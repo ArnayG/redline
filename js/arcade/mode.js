@@ -231,6 +231,12 @@ CB.arcade = CB.arcade || {};
       }
       return r;
     });
+    // tearing the session down must also destroy the extensions: their window key listeners run in the capture phase and
+    // stop propagation, so a stale layer from the previous race would swallow N / F (nitro, item) in the next one
+    def(s, 'destroy', function () {
+      A.destroy();
+      return typeof inner.destroy === 'function' ? inner.destroy.apply(inner, arguments) : undefined;
+    });
     if (typeof inner.restart === 'function') def(s, 'restart', function () { var v = inner.restart.apply(inner, arguments); insts.forEach(function (i) { call(i, 'reset'); }); return v; });
     return s;
   }
