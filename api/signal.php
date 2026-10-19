@@ -22,6 +22,9 @@
                                                            cannot connect. Delivers posts first, then (unless nopoll)
                                                            drains the caller's mailbox, waiting up to min(wait, 5000) ms
                                                            (mailbox checked every 10 ms). Own rate bucket (relayPerIp).
+                                                           A peer may also post to another peer when every message
+                                                           is a fast-only relay frame {t:'_r', x:1, f:[…]} (fan-out:
+                                                           car states skip the host hop); status says fanout:true.
        + stream:1 -> 200 application/x-ndjson, one JSON object per line, flushed as mail arrives (streamed downlink):
             {"ok":true,"stream":1,"max":ms,"st":ms} {"m":[msg…],"st":ms} {"hb":1,"st":ms} … {"end":1,"st":ms}
           open for at most min(wait, streamMax); st = server clock (the client detects a buffering proxy from it).
@@ -341,6 +344,15 @@ function fg_wait_pop($P, $room, $peer, $deadline, $step) {
   return $got;
 }
 
+/** fan-out: peer -> peer posts may only carry fast-only relay frames (car states), never signalling or rel data */
+function fg_fast_only($list) {
+  if (!is_array($list) || !count($list)) return false;
+  foreach ($list as $m) {
+    if (!is_object($m) || fg_prop($m, 't') !== '_r' || fg_prop($m, 'x') !== 1 || property_exists($m, 'r') || !is_array(fg_prop($m, 'f'))) return false;
+  }
+  return true;
+}
+
 /* ------------------------------------------------------------------ streamed relay downlink (NDJSON) */
 function fg_stream_begin($max) {
   @ini_set('zlib.output_compression', '0');
@@ -534,7 +546,7 @@ function fg_main() {
 
   if ($action === 'status') {
     fg_send(200, array('ok' => true, 'backend' => 'php', 'version' => FG_VERSION, 'storage' => $dd[1], 'php' => PHP_VERSION,
-      'relay' => true, 'stream' => true, 'ice' => true, 'limits' => array('maxPlayers' => $L['maxPlayers'], 'pollMaxWait' => $L['pollMaxWait'])));
+      'relay' => true, 'stream' => true, 'fanout' => true, 'ice' => true, 'limits' => array('maxPlayers' => $L['maxPlayers'], 'pollMaxWait' => $L['pollMaxWait'])));
   }
 
   $ip = fg_client_ip();
@@ -658,7 +670,8 @@ function fg_main() {
       $to = fg_prop($p, 'to'); $pm = fg_prop($p, 'msgs');
       if (!count($pm)) continue;
       // a peer that left (or a host-only rule) drops just that destination, never the whole request
-      if ($to === $a['peer'] || (!$a['isHost'] && $to !== 'host') || ($to !== 'host' && !isset($a['room']['peers'][$to]))) { $dropped[] = $to; continue; }
+      // peers may message the host, and (fan-out) another peer with fast-only relay frames: {t:'_r', x:1, f:[…]}
+      if ($to === $a['peer'] || (!$a['isHost'] && $to !== 'host' && !fg_fast_only($pm)) || ($to !== 'host' && !isset($a['room']['peers'][$to]))) { $dropped[] = $to; continue; }
       $items = array();
       foreach ($pm as $m) $items[] = fg_enc_msg($a['peer'], $m);
       $r = fg_push($P, $room, $to, $items, $L);

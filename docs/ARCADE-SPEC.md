@@ -291,7 +291,10 @@ same-device tabs all work; online rooms fall back to the server relay (`relay: t
   Heavy" rule is gone; the lobby shows "Arcade handling — no assist needed" instead of Max steering assist).
 * **Client = predicted mirror.** Same seed / track / grid; only the own car is simulated. Other cars are puppets (stunt:
   `car.external = true`, the session skips AI + physics and calls the `externalStep` hook; circuit: frozen engine cars posed
-  in `postStep`), interpolated ~2 snapshots behind (adaptive, 60–400 ms; relay 300–1000 ms). The gameplay layer is a
+  in `postStep`), interpolated ~2 snapshots behind (adaptive, 60–400 ms; relay 300–1000 ms; also never less than the measured
+  age of the newest snapshot when the next one lands, slewed per frame, extrapolated ≤0.35 s instead of freezing). Every
+  session feeds its sim `raceNow − (time() + alpha·STEP)`: without the alpha term the remainder counted twice and
+  clients ran 3,1,2,2 substeps per frame (visible judder on every car). The gameplay layer is a
   **follower** (`setNet({ role: 'follower' })`): no rolls, no hits; it predicts only the own car's nitro burn, powerslide
   turbo, landing / trick boosts and pads / rings, and merges the host's `gp.netPack()` (`gp.netApply`) + events
   (`gp.pushEvents`, `gp.applyHit` for hits on the own car).

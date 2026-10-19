@@ -325,6 +325,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       }
       if (sig.state === 'open' || sig.state === 'reconnecting') sig._setState('open');
       var msgs = j.msgs || [];
+      if (j.dropped && o && typeof o.onDropped === 'function') { try { o.onDropped(j.dropped); } catch (e) { /* ignore */ } }
       deliverAll(msgs);
       return msgs.length;
     };

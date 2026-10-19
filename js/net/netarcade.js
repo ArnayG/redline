@@ -57,6 +57,7 @@ CB.net = CB.net || {};
                    // fewer, self-contained snapshots, a longer interpolation window and a larger input delay budget
                    relaySnapHz: 5, relayInputHz: 10, relayMaxD: 96, relayInterp: [0.3, 1.0] };
   var PHASES = ['grid', 'countdown', 'racing', 'finished'];
+  var MAX_EXTRAP = 0.35;   // s a puppet may run on past the newest host snapshot
   var GRADES = [0, 'none', 'good', 'perfect', 'over'];
   // gameplay events the client already predicts for its own car (never doubled from the host)
   var OWN_PREDICTED = { nitroStart: 1, nitroEnd: 1, driftStart: 1, driftTier: 1, driftEnd: 1, landing: 1, start: 1 };
@@ -120,7 +121,7 @@ CB.net = CB.net || {};
     L.send = function (id, ch, d) { try { return H.send(id, ch, d); } catch (e) { return false; } };
     L.broadcast = function (ch, d, ex) { try { return H.broadcast(ch, d, ex); } catch (e) { return 0; } };
     L.peers = function () { return (typeof H.list === 'function' ? H.list() : []).filter(function (p) { return p && p.state !== 'closed'; }).map(function (p) { return p.id; }); };
-    L.modeOf = function (id) { var p = typeof H.get === 'function' ? H.get(id) : null; return p && p.mode === 'relay' ? 'relay' : 'direct'; };
+    L.modeOf = function (id) { var p = typeof H.get === 'function' ? H.get(id) : null; return p && (p.mode === 'relay' || p.mode === 'turn') ? p.mode : 'direct'; };
     L.rttOf = function (id) { var p = typeof H.get === 'function' ? H.get(id) : null; return p && isNum(p.rtt) && p.rtt > 0 ? p.rtt / 1000 : null; };
     L.onMessage = function (fn) { offs.push(onOf(H, 'message', function (peer, ch, data) { fn(peer && peer.id != null ? peer.id : peer, ch, data); })); };
     L.onLeave = function (fn) { offs.push(onOf(H, 'peer-leave', function (peer, why) { fn(peer && peer.id != null ? peer.id : peer, why); })); };
@@ -135,7 +136,7 @@ CB.net = CB.net || {};
     L.offset = function () { return num(C.clockOffset, 0) / 1000; };
     L.rtt = function () { return isNum(C.rtt) ? C.rtt / 1000 : 0; };
     L.state = function () { return C.state || 'open'; };
-    L.mode = function () { return C.mode === 'relay' ? 'relay' : 'direct'; };
+    L.mode = function () { return C.mode === 'relay' || C.mode === 'turn' ? C.mode : 'direct'; };
     L.send = function (ch, d) { try { return C.send(ch, d); } catch (e) { return false; } };
     L.onMessage = function (fn) { offs.push(onOf(C, 'message', function (ch, data) { fn('host', ch, data); })); };
     L.onClose = function (fn) { offs.push(onOf(C, 'close', fn)); };
@@ -157,7 +158,7 @@ CB.net = CB.net || {};
   function inputOf(qv) { return { steer: qv[0] / 127, throttle: qv[1] / 255, brake: qv[2] / 255, handbrake: !!(qv[3] & FB.handbrake) }; }
 
   /** Host-side input buffer of one remote player: tick-stamped changes, replayed at tick n − D. */
-  function InputBuffer() { this.maxD = DEFAULTS.maxD; this.ch = []; this.known = -1; this.late = null; this.jit = 0; this.D = 8; this.target = 8; this.starved = 0; this.received = 0; this.lastArrival = -1e9; }
+  function InputBuffer() { this.maxD = DEFAULTS.maxD; this.inHz = DEFAULTS.inputHz; this.ch = []; this.known = -1; this.late = null; this.jit = 0; this.D = 8; this.target = 8; this.starved = 0; this.received = 0; this.lastArrival = -1e9; }
   /** a: [[tick, steer, thr, brk, flags, itemSeq, grade], ...]; n: newest tick the client recorded; nowTick: host tick */
   InputBuffer.prototype.push = function (a, n, nowTick, nowS) {
     if (!isNum(n) || n <= this.known) return false;
@@ -169,7 +170,7 @@ CB.net = CB.net || {};
     if (this.late === null) this.late = late;
     else this.late += (late - this.late) * (late > this.late ? 0.25 : 0.03);
     this.jit += (Math.abs(late - this.late) - this.jit) * 0.08;
-    this.target = clamp(Math.ceil(this.late + 2.5 * this.jit + 120 / DEFAULTS.inputHz) + 2, DEFAULTS.minD, this.maxD);   // + one send interval
+    this.target = clamp(Math.ceil(this.late + 2.5 * this.jit + 120 / this.inHz) + 2, DEFAULTS.minD, this.maxD);   // + one send interval (10 Hz on the relay)
     return true;
   };
   /** Adaptive D: fast up (no starving), slow down (one tick per 0.25 s). Call once per host tick. */
@@ -259,7 +260,7 @@ CB.net = CB.net || {};
     // host
     var inbufs = {}, gone = {}, evQueue = [], lastSnapT = -1e9, lastStT = -1e9, lastEvT = -1e9, snapCount = 0, firstFinishT = null;
     // client
-    var snaps = [], snapLate = null, snapJit = 0, interpDelay = 0.12, hist = {}, histKeys = [], changes = [], lastQ = null, itemSeq = 0, prevItem = false;
+    var snaps = [], snapLate = null, snapJit = 0, snapDry = 0, interpDelay = 0.12, interpTarget = null, hist = {}, histKeys = [], changes = [], lastQ = null, itemSeq = 0, prevItem = false;
     var myGrade = 0, ackTick = -1, lastInSendT = -1e9, pendingCorr = null, mismatchN = 0, lastAckN = -1, lastSnapN = -1;
 
     /* ---------------- clocks ---------------- */
@@ -500,6 +501,9 @@ CB.net = CB.net || {};
       var i = n - 1;
       while (i > 0 && snaps[i].t > tRender) i--;
       var a = snaps[i], b = snaps[Math.min(n - 1, i + 1)];
+      // the playhead ran past the newest snapshot (a late burst): carry the cars on along their velocity for a moment
+      // instead of freezing them and jumping when the next snapshot lands
+      if (a === b && tRender > a.t) return { a: a, b: a, u: 0, ext: Math.min(tRender - a.t, MAX_EXTRAP) };
       if (tRender <= a.t || a === b) return { a: a, b: a, u: 0 };
       return { a: a, b: b, u: clamp((tRender - a.t) / Math.max(1e-6, b.t - a.t), 0, 1) };
     }
@@ -512,12 +516,13 @@ CB.net = CB.net || {};
       var idx = grid.indexOf(e), ra = smp.a.rows[idx], rb = smp.b.rows[idx];
       if (!ra && !rb) return null;
       ra = ra || rb; rb = rb || ra;
-      return { a: ra, b: rb, u: smp.u, dt: smp.b.t - smp.a.t };
+      return { a: ra, b: rb, u: smp.u, dt: smp.b.t - smp.a.t, ext: smp.ext || 0 };
     }
     function posePuppetStunt(c) {
       var p = puppetSample(c);
       if (!p) { c.v = 0; return; }
       var a = unpackStunt(p.a), b = unpackStunt(p.b), o = interpStunt(a, b, p.u, L);
+      if (p.ext > 0 && o.mode === 'ground') { var ds = o.v * Math.cos(o.psi) * p.ext; o = assign({}, o); o.s = wrapS(o.s + ds, L); o.dist += ds; }
       c.mode = o.mode; c.s = o.s; c.dist = o.dist; c.lat = o.lat; c.psi = o.psi; c.v = o.v; c.rpm = o.rpm; c.gear = o.gear; c.steerAngle = o.steerAngle;
       c.throttle = o.throttle; c.fade = o.fade; c.nitroOn = o.nitroOn; c.boostT = o.boosting ? 0.05 : 0; c.finished = o.finished;
       if (o.air) { assign(c, o.air); c._air = o.inAir || o.mode === 'air'; } else c._air = false;
@@ -532,6 +537,7 @@ CB.net = CB.net || {};
       var p = puppetSample(car), st = car.state;
       if (!p) { var hd = car._hold; st.x = hd.x; st.y = hd.y; st.heading = hd.heading; st.vx = 0; st.vy = 0; st.yawRate = 0; st.speed = 0; car.wvx = 0; car.wvy = 0; return; }
       var o = interpCircuit(unpackCircuit(p.a), unpackCircuit(p.b), p.u, p.dt);
+      if (p.ext > 0) { o.x += o.vx * p.ext; o.y += o.vy * p.ext; o.h = wrapAngle(o.h + clamp(o.w, -2.5, 2.5) * p.ext); }
       st.x = o.x; st.y = o.y; st.heading = o.h;
       var c = Math.cos(o.h), s = Math.sin(o.h);
       st.vx = c * o.vx + s * o.vy; st.vy = -s * o.vx + c * o.vy;
@@ -645,7 +651,7 @@ CB.net = CB.net || {};
       Object.keys(inbufs).forEach(function (id) { var b = inbufs[id]; ack[id] = [b.known, b.D]; });
       var msg = { t: 'na.s', n: Math.round(sim.time() / STEP), rt: r3(tRace), ph: PHASES.indexOf(sim.getPhase ? sim.getPhase() : 'racing'), c: rows, a: ack };
       var relay = relayPeers();
-      Object.keys(inbufs).forEach(function (id) { var e = gridById[id]; inbufs[id].maxD = e && relay.indexOf(e.peerId) >= 0 ? DEFAULTS.relayMaxD : DEFAULTS.maxD; });
+      Object.keys(inbufs).forEach(function (id) { var e = gridById[id], rl = e && relay.indexOf(e.peerId) >= 0; inbufs[id].maxD = rl ? DEFAULTS.relayMaxD : DEFAULTS.maxD; inbufs[id].inHz = rl ? DEFAULTS.relayInputHz : DEFAULTS.inputHz; });
       stats.snapOut++;
       if (relayOnly) {   // relay links: every snapshot self-contained (pose + gameplay pack), at relaySnapHz
         if (gp) msg.g = netPackOut();
@@ -746,8 +752,11 @@ CB.net = CB.net || {};
       snapJit += (Math.abs(late - snapLate) - snapJit) * 0.08;
       var hz = start.cfg.snapHz || 20;
       var rl = link.mode() === 'relay', lo = rl ? DEFAULTS.relayInterp[0] : 0.06, hi = rl ? DEFAULTS.relayInterp[1] : 0.4;
-      var target = clamp(snapLate + 2 * snapJit + 1.2 / (rl ? DEFAULTS.relaySnapHz : hz), lo, hi);
-      interpDelay += clamp(target - interpDelay, -0.02, 0.05);
+      // how old the newest snapshot had become when this one arrived (fast attack, slow release): the playhead
+      // must stay that far behind to never run past the newest snapshot (bursty server-relay links)
+      if (snaps.length) { var dry = now - snaps[snaps.length - 1].t; snapDry = snapDry ? snapDry + (dry - snapDry) * (dry > snapDry ? 0.5 : 0.04) : dry; }
+      var target = clamp(Math.max(snapLate + 2 * snapJit + 1.2 / (rl ? DEFAULTS.relaySnapHz : hz), snapDry + 0.02 + snapJit), lo, hi);
+      interpTarget = target;   // update() slews interpDelay towards it every frame (a step here made the cars jump)
       snaps.push({ t: t, rows: m.c || [] });
       while (snaps.length > 3 && snaps[1].t < t - 1.5) snaps.shift();
       var a = m.a && m.a[myCarId];
@@ -811,7 +820,15 @@ CB.net = CB.net || {};
       if (!isHost && !ended && start && link.now() - lastHostMsg > cfg.hostTimeout_s && link.state() !== 'open') endSession('host-timeout', 'Lost connection to the host — session ended');
       if (!start || !sim) return 0;
       var tNow = raceNow();
-      var feed = ended ? clamp(num(dt, 0), 0, 0.5) : clamp(tNow - sim.time(), 0, 0.5);
+      // the session's own clock is time() + the unstepped remainder (alpha · STEP): feeding tNow − time() alone counts
+      // that remainder twice, so substeps per frame came out 3,1,2,2,3,1 … and every car juddered (worst on guests,
+      // whose race clock also follows the host clock estimate)
+      var simT = sim.time() + (typeof sim.alpha === 'function' ? clamp01(num(safe(function () { return sim.alpha(); }, 0), 0)) * STEP : 0);
+      var feed = ended ? clamp(num(dt, 0), 0, 0.5) : clamp(tNow - simT, 0, 0.5);
+      if (!isHost && interpTarget !== null) {   // playback rate changes by at most -12 % / +35 % while the buffer adapts
+        if (stats.snapIn <= 1) interpDelay = interpTarget;
+        else interpDelay += clamp(interpTarget - interpDelay, -0.12 * feed, 0.35 * feed);
+      }
       var n = feed > 0 ? (sim.update(feed, input || {}) || 0) : 0;
       var tRace = sim.time();
       if (!ended) {

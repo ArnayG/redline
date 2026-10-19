@@ -33,6 +33,10 @@
    Multiplayer: CB.net.transport.host(sig, {relay:true}) / connect(sig, {relay:true}) enables the same fallback for
      a lobby (both ends must opt in; the guest asks with {t:'relay'}, the host answers {t:'relay-ok'}). Defaults: each
      side posts <= ~7/s (one host request carries posts for every guest) and collects its mail with them.
+   Multiplayer also passes streamDown:true (one streamed downlink when the server streams, posts then skip the poll) and
+     guests open fast-only side links to other relayed guests (opts.side: frames carry x:1; fan-out, needs a server that
+     accepts peer -> peer fast-only frames; a 'dropped' answer switches that destination off). sig.clock (optional
+     {now, setTimeout, clearTimeout}) replaces the real clock (tests: CB.net.transport.loopback({relay})).
    Wire format (a normal signalling message): {t:'_r', e: link epoch, n: batch#, s: first rel seq, r:[payload…], f:[payload…]}
      payload: string, or {b:'<base64>'} for binary.
      CB.net.relay.supported(signal) -> bool      CB.net.relay.hub(signal) -> Hub (debug: hub.stats, hub.mode 'split'|'post',
@@ -60,6 +64,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     upMulMax: 8,        // HTTP 429 / firewall 403: every gap doubles up to this factor, then recovers
     longWait: 4000,     // ms long-poll (PHP caps it at 5000); answered as soon as mail arrives
     stream: true,       // with downlinks > 0: try one streamed response instead of long-polls when the server offers it
+    streamDown: false,  // with downlinks 0 (multiplayer): when the server streams (probed once), ONE streamed response
+                        // carries our mail as soon as it is posted and every post skips the poll (nopoll); otherwise
+                        // posts collect the mail as before. Saves the wait for our next post (~upGap/2, up to upGap).
     streamWait: 12000,  // ms a streamed response stays open (the server caps it)
     streamOverlap: 600, // ms: the next stream opens this long before the current one ends
     minGap: 150,        // ms between posts in the old-server 'post' fallback
@@ -70,6 +77,7 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function now() { return Date.now(); }
+  var REAL_CLOCK = { now: now, setTimeout: function (f, ms) { return setTimeout(f, ms); }, clearTimeout: function (h) { clearTimeout(h); } };
 
   var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   function b64e(buf) {
@@ -103,10 +111,11 @@ if (typeof window !== 'undefined') window.CB = CB;
   function hub(sig, opts) {
     if (sig._relayHub && !sig._relayHub.dead) { sig._relayHub.tune(opts); return sig._relayHub; }
     var o = Object.assign({}, DEFAULTS, opts || {});
+    var C = sig.clock || REAL_CLOCK;   // a virtual clock (tests: CB.net.transport.loopback({relay}))
     var H = { links: {}, mode: typeof sig.exchange === 'function' ? 'split' : 'post', dead: false, opts: o,
       stream: typeof sig.stream === 'function' && o.stream ? 'unknown' : 'off',   // 'unknown' | 'probing' | 'on' | 'buffered' | 'unsupported' | 'off'
       stats: { requests: 0, posts: 0, polls: 0, streams: 0, errors: 0, rateLimited: 0, sentFrames: 0, recvFrames: 0 } };
-    sig._relayHub = H;
+    sig._relayHub = H; H.C = C;
     var running = false, batchNo = 0, timer = null, timerAt = 0;
     var up = { inFlight: 0, last: -1e9, holdUntil: 0, mul: 1, backoff: 0, since: 0 };
     var down = { polls: 0, lastPoll: -1e9, streams: 0, streamErrors: 0, nextTimer: null };
@@ -115,6 +124,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (!msg || msg.t !== '_r') return;
       var l = H.links[from];
       if (l) l._in(msg);
+      else if (msg.x === 1 && typeof H.onStray === 'function') { try { H.onStray(from, msg); } catch (e) { /* ignore */ } }   // fan-out frame, no side link yet
     });
     var offClosed = sig.on ? sig.on('closed', function (e) { killAll((e && e.reason) || 'signal-closed'); }) : null;
 
@@ -152,15 +162,19 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (fatal(e)) { killAll((e && e.code) || 'closed'); return true; }
       if (throttled(e)) { H.stats.rateLimited++; up.mul = Math.min(o.upMulMax, up.mul * 2); }
       up.backoff = Math.min(8000, up.backoff ? up.backoff * 2 : (throttled(e) ? 1000 : 300));
-      up.holdUntil = now() + up.backoff;
+      up.holdUntil = C.now() + up.backoff;
       return false;
+    }
+    /** the server refused some destinations (a peer that left; an older server without fan-out): side links die */
+    function dropped(list) {
+      (list || []).forEach(function (to) { var l = H.links[to]; if (l && l.side) { delete H.links[to]; l._dead('dropped'); } });
     }
     function succeeded() { up.backoff = 0; if (up.mul > 1) up.mul = Math.max(1, up.mul * 0.9); }
 
     function kick() {
       if (H.dead) return;
       if (H.mode === 'post') { schedulePost(); return; }
-      if (!up.since && hasData()) up.since = now();
+      if (!up.since && hasData()) up.since = C.now();
       if (!running) start();
       pump();
     }
@@ -170,6 +184,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (!x) return;
       ['downlinks', 'upInFlight'].forEach(function (k) { if (x[k] > o[k]) o[k] = x[k]; });
       ['upGap', 'pollGap', 'fastFlush', 'relFlush'].forEach(function (k) { if (x[k] >= 0 && x[k] < o[k]) o[k] = x[k]; });
+      if (x.streamDown && !o.streamDown) { o.streamDown = true; if (running && H.stream === 'unknown') probeStream(); }
       if (running) pump();
     };
 
@@ -177,20 +192,20 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (running || H.dead) return;
       running = true;
       if (sig.pausePolling) sig.pausePolling(true);
-      if (H.stream === 'unknown' && o.downlinks > 0) probeStream();
+      if (H.stream === 'unknown' && (o.downlinks > 0 || o.streamDown)) probeStream();
     }
     function stop() {
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (down.nextTimer) { clearTimeout(down.nextTimer); down.nextTimer = null; }
+      if (timer) { C.clearTimeout(timer); timer = null; }
+      if (down.nextTimer) { C.clearTimeout(down.nextTimer); down.nextTimer = null; }
       running = false;
       if (sig.pausePolling && sig.state !== 'closed') sig.pausePolling(false);
     }
     function arm(ms) {
-      var at = now() + Math.max(0, ms);
+      var at = C.now() + Math.max(0, ms);
       if (timer && timerAt <= at) return;
-      if (timer) clearTimeout(timer);
+      if (timer) C.clearTimeout(timer);
       timerAt = at;
-      timer = setTimeout(function () { timer = null; pump(); }, Math.max(0, ms));
+      timer = C.setTimeout(function () { timer = null; pump(); }, Math.max(0, ms));
     }
 
     /*
@@ -206,9 +221,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     function pump() {
       if (!running || H.dead || H.mode !== 'split') return;
       if (!linkCount()) { stop(); return; }
-      var t = now(), mul = up.mul;
+      var t = C.now(), mul = up.mul;
       if (t < up.holdUntil) { arm(up.holdUntil - t); return; }
-      if (H.stream === 'on') { if (!down.streams) openStream(); }
+      if (H.stream === 'on' && (o.downlinks > 0 || o.streamDown)) { if (!down.streams) openStream(); }
       else {
         var want = o.downlinks > 0 ? o.downlinks : (up.inFlight || hasData() ? 0 : 1);
         if (o.downlinks <= 0 && want && down.polls < want && t - up.last < o.idlePoll) { arm(up.last + o.idlePoll - t); want = 0; }
@@ -219,25 +234,26 @@ if (typeof window !== 'undefined') window.CB = CB;
         }
       }
       if (!hasData() || up.inFlight >= o.upInFlight) return;
-      var held = o.downlinks > 0 && (down.polls > 0 || down.streams > 0);
+      var streamDown = o.downlinks <= 0 && o.streamDown && H.stream === 'on' && down.streams > 0;
+      var held = streamDown || (o.downlinks > 0 && (down.polls > 0 || down.streams > 0));
       var urgent = hasRel(), due = up.last + (urgent ? o.relGap : o.upGap) * mul;
-      if (held) due = Math.max(due, (up.since || t) + (urgent ? o.relFlush : o.fastFlush) * mul);
+      if (held && !streamDown) due = Math.max(due, (up.since || t) + (urgent ? o.relFlush : o.fastFlush) * mul);
       if (due > t) { arm(due - t); return; }
       startPost(held);
     }
     function startPoll() {
       var d = drain();
-      down.polls++; down.lastPoll = now();
+      down.polls++; down.lastPoll = C.now();
       H.stats.requests++; H.stats.polls++;
-      sig.exchange(d.posts, o.longWait).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
+      sig.exchange(d.posts, o.longWait, { onDropped: dropped }).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
         function (e) { d.restore(); failed(e); }).then(function () { down.polls--; reap(); pump(); });
     }
     function startPost(nopoll) {
       var d = drain();
       if (!d.posts.length) return;
-      up.inFlight++; up.last = now();
+      up.inFlight++; up.last = C.now();
       H.stats.requests++; H.stats.posts++;
-      sig.exchange(d.posts, 0, nopoll ? { nopoll: true } : null).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
+      sig.exchange(d.posts, 0, { nopoll: !!nopoll, onDropped: dropped }).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
         function (e) { d.restore(); failed(e); }).then(function () { up.inFlight--; reap(); pump(); });
     }
 
@@ -260,8 +276,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       sig.stream({ wait: o.streamWait, onHeader: function (h) {
         // open the next stream shortly before this one ends, so the server always has a listener
         var max = Number(h && h.max) || o.streamWait;
-        if (down.nextTimer) clearTimeout(down.nextTimer);
-        down.nextTimer = setTimeout(function () { down.nextTimer = null; next(); }, Math.max(500, max - o.streamOverlap));
+        if (down.nextTimer) C.clearTimeout(down.nextTimer);
+        down.nextTimer = C.setTimeout(function () { down.nextTimer = null; next(); }, Math.max(500, max - o.streamOverlap));
       } }).then(function (r) {
         down.streams--; down.streamErrors = 0;
         if (!r.streamed || r.buffered) { H.stream = r.streamed ? 'buffered' : 'unsupported'; pump(); return; }   // back to long-polls
@@ -270,14 +286,14 @@ if (typeof window !== 'undefined') window.CB = CB;
         down.streams--;
         if (failed(e) || !running) return;
         if (++down.streamErrors >= 2) { H.stream = 'unsupported'; pump(); return; }
-        setTimeout(next, 300);
+        C.setTimeout(next, 300);
       });
     }
 
     function switchToPost() {   // server predates the 'relay' action: post + the signal's normal poll loop
       if (H.mode === 'post') return;
       H.mode = 'post'; running = false;
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) { C.clearTimeout(timer); timer = null; }
       if (sig.pausePolling) sig.pausePolling(false);
       schedulePost();
     }
@@ -286,12 +302,12 @@ if (typeof window !== 'undefined') window.CB = CB;
     var postTimer = null, posting = false, lastPost = 0;
     function schedulePost() {
       if (postTimer || posting || H.dead) return;
-      postTimer = setTimeout(doPost, Math.max(0, lastPost + o.minGap - now()));
+      postTimer = C.setTimeout(doPost, Math.max(0, lastPost + o.minGap - C.now()));
     }
     async function doPost() {
       postTimer = null;
       if (posting || H.dead) return;
-      posting = true; lastPost = now();
+      posting = true; lastPost = C.now();
       var d = drain();
       H.stats.requests += d.posts.length;
       await Promise.all(d.posts.map(function (p) {
@@ -310,7 +326,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     function reap() {
       Object.keys(H.links).forEach(function (k) {
         var l = H.links[k];
-        if (l.closed && (!l._pending() || now() - l.closedAt > 2000)) delete H.links[k];
+        if (l.closed && (!l._pending() || C.now() - l.closedAt > 2000)) delete H.links[k];
       });
       if (!linkCount()) { stop(); }
     }
@@ -323,7 +339,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     H.remove = function (l) {
       if (H.links[l.to] !== l) return;
-      if (l._pending()) { kick(); setTimeout(reap, 2100); } else { delete H.links[l.to]; reap(); }
+      if (l._pending()) { kick(); C.setTimeout(reap, 2100); } else { delete H.links[l.to]; reap(); }
     };
     H.destroy = function () {
       H.dead = true; killAll(null); offMsg(); if (offClosed) offClosed();
@@ -337,15 +353,17 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   /* ---------------------------------------------------------------- link */
   function link(sig, to, onRecv, opts) {
-    var H = hub(sig, opts), o = H.opts;
+    var H = hub(sig, opts), o = H.opts, C = H.C;
     var relOut = 0, rel = [], fast = new Map();
     var rin = 0, held = {}, gapTimer = null, lastN = -1, lastFrom = 0, inEpoch = null, seenEpochs = {};
     var epoch = (opts && opts.epoch) || Math.random().toString(36).slice(2, 10);
-    var L = { mode: 'relay', to: to, epoch: epoch, closed: false, closedAt: 0, onDead: null, _rel: rel };
+    var side = !!(opts && opts.side);   // fan-out side link to another peer: 'fast' only, frames marked x:1
+    var L = { mode: 'relay', to: to, epoch: epoch, closed: false, closedAt: 0, onDead: null, _rel: rel, side: side };
 
     L.send = function (ch, payload) {
       if (L.closed || H.dead) return false;
       var p = enc(payload);
+      if (ch === 'rel' && side) return false;
       if (ch === 'rel') {
         if (rel.length >= o.relMax) return false;
         rel.push({ s: relOut++, p: p });
@@ -358,9 +376,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     L.close = function () {
       if (L.closed) return;
-      L.closed = true; L.closedAt = now();
+      L.closed = true; L.closedAt = C.now();
       fast.clear();
-      if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
+      if (gapTimer) { C.clearTimeout(gapTimer); gapTimer = null; }
       H.remove(L);
     };
     L._pending = function () { return rel.length > 0 || fast.size > 0; };
@@ -374,6 +392,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       f.forEach(function (kp) { fast.delete(kp[0]); });
       if (!r.length && !f.length) return null;
       var frame = { t: '_r', e: epoch, n: H._nextBatch() };
+      if (side) frame.x = 1;
       if (r.length) { frame.s = r[0].s; frame.r = r.map(function (x) { return x.p; }); }
       if (f.length) frame.f = f.map(function (kp) { return kp[1]; });
       return { frame: frame, bytes: bytes, rel: r, fast: f };
@@ -395,9 +414,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     function flushHeld() {
       while (held[rin] !== undefined) { var p = held[rin]; delete held[rin]; rin++; deliver('rel', p); }
       var keys = Object.keys(held);
-      if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
+      if (gapTimer) { C.clearTimeout(gapTimer); gapTimer = null; }
       if (keys.length) {
-        gapTimer = setTimeout(function () {
+        gapTimer = C.setTimeout(function () {
           gapTimer = null;
           var min = Math.min.apply(null, Object.keys(held).map(Number));
           if (isFinite(min) && min > rin) { rin = min; flushHeld(); }
@@ -407,14 +426,14 @@ if (typeof window !== 'undefined') window.CB = CB;
     L._in = function (m) {
       if (L.closed) return;
       H.stats.recvFrames++;
-      lastFrom = now();
+      lastFrom = C.now();
       if (m.e !== inEpoch) {
         // a new link on the other side (first frame, or it reconnected): its sequence numbers start again at 0.
         // Frames from an epoch we already left behind are leftovers of a dead link: ignore them.
         if (m.e != null && seenEpochs[m.e]) return;
         if (inEpoch != null) seenEpochs[inEpoch] = 1;
         inEpoch = m.e; rin = 0; held = {}; lastN = -1;
-        if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
+        if (gapTimer) { C.clearTimeout(gapTimer); gapTimer = null; }
       }
       if (Array.isArray(m.r) && typeof m.s === 'number') {
         for (var i = 0; i < m.r.length; i++) { var s = m.s + i; if (s >= rin && held[s] === undefined) held[s] = m.r[i]; }
@@ -429,8 +448,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     };
     L._dead = function (reason) {
       if (L.closed && !reason) return;
-      L.closed = true; L.closedAt = L.closedAt || now();
-      if (gapTimer) { clearTimeout(gapTimer); gapTimer = null; }
+      L.closed = true; L.closedAt = L.closedAt || C.now();
+      if (gapTimer) { C.clearTimeout(gapTimer); gapTimer = null; }
       if (reason && typeof L.onDead === 'function') { try { L.onDead(reason); } catch (e) { /* ignore */ } }
     };
     H.add(L);

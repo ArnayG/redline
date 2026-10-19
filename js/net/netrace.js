@@ -63,6 +63,9 @@ CB.net = CB.net || {};
   var STEER_SCALE = 0.75;              // rad per unit of the packed (−1..1) steer field
   var DEFAULTS = {
     sendHz: 25, auxHz: 5, standingsHz: 5, interpDelay_s: 0.1, maxDelay_s: 0.35, maxExtrap_s: 0.3,
+    // server-relay links (peer.mode 'relay': ~6-7 posts/s, newest packet wins): states arrive in bursts ~150-300 ms
+    // apart, so the jitter buffer may grow this far (it adapts to the measured arrival gaps) and extrapolate further
+    relayMaxDelay_s: 1.2, relayMaxExtrap_s: 0.5,
     staleAfter_s: 1.0, ghost_s: 3, leadIn_s: 3, hostTimeout_s: 12, maxPlayers: 8, maxGrid: 11, claimWait_s: 6,
     gridTime_s: 1.5, lightInterval_s: 1.0
   };
@@ -154,6 +157,7 @@ CB.net = CB.net || {};
     L.peers = function () { return (typeof H.list === 'function' ? H.list() : []).filter(function (p) { return p && p.state !== 'closed'; }).map(function (p) { return p.id; }); };
     L.peer = function (id) { return typeof H.get === 'function' ? H.get(id) : null; };
     L.rttOf = function (id) { var p = L.peer(id); return p && isNum(p.rtt) && p.rtt > 0 ? p.rtt / 1000 : null; };
+    L.modeOf = function (id) { var p = L.peer(id), m = p && p.mode; return m === 'relay' || m === 'turn' ? m : 'direct'; };
     L.stateOf = function (id) { var p = L.peer(id); return p ? p.state : 'closed'; };
     L.onMessage = function (fn) { offs.push(onOf(H, 'message', function (peer, ch, data) { fn(peer && peer.id != null ? peer.id : peer, ch, data); })); };
     L.onJoin = function (fn) { offs.push(onOf(H, 'peer', function (peer) { fn(peer && peer.id != null ? peer.id : peer); })); };
@@ -172,8 +176,12 @@ CB.net = CB.net || {};
     L.offset = function () { return num(C.clockOffset, 0) / 1000; };
     L.rtt = function () { return isNum(C.rtt) ? C.rtt / 1000 : 0; };
     L.state = function () { return C.state || 'open'; };
+    L.mode = function () { var m = C.mode; return m === 'relay' || m === 'turn' ? m : 'direct'; };
     L.send = function (ch, data) { try { return C.send(ch, data); } catch (e) { return false; } };
     L.onMessage = function (fn) { offs.push(onOf(C, 'message', function (ch, data) { fn('host', ch, data); })); };
+    /** fan-out over the server relay (transport client.sendTo): car states straight to another relayed guest */
+    L.sendTo = function (pid, data) { try { return typeof C.sendTo === 'function' ? C.sendTo(pid, data) : false; } catch (e) { return false; } };
+    L.onPeerMessage = function (fn) { offs.push(onOf(C, 'peer-message', fn)); };
     L.onClose = function (fn) { offs.push(onOf(C, 'close', fn)); };
     L.onState = function (fn) { offs.push(onOf(C, 'state', fn)); };
     L.close = function () { offs.forEach(function (o) { try { o(); } catch (e) { /* ignore */ } }); offs = []; };
@@ -191,7 +199,7 @@ CB.net = CB.net || {};
     this.reset();
   }
   RemoteTrack.prototype.reset = function () {
-    this.buf = []; this.late = null; this.jit = 0; this.delay = this.base; this.target = this.base;
+    this.buf = []; this.late = null; this.jit = 0; this.delay = this.base; this.target = this.base; this.dry = 0; this.gap = null; this.newestAt = null;
     this.prevT = null; this.prevRt = null; this.prevRaw = null; this.cx = 0; this.cy = 0; this.ch = 0;
     this.received = 0; this.firstT = null; this.lastT = null; this.lastArrival = -Infinity; this.extrap = 0; this.maxExtrapSeen = 0;
   };
@@ -203,8 +211,18 @@ CB.net = CB.net || {};
     var i = n;
     while (i > 0 && b[i - 1].t > s.t) i--;
     if (i > 0 && Math.abs(b[i - 1].t - s.t) < 1e-6) return false; // duplicate
+    var prevNewest = n ? b[n - 1].t : null;
     b.splice(i, 0, s);
     var newest = b[b.length - 1].t;
+    if (prevNewest !== null && newest > prevNewest && isNum(now)) {
+      // how old the newest sample had become just before this one arrived: the delay that would have kept the
+      // playhead inside the buffer (no extrapolation). Fast attack, slow release; bursty links (server relay) need
+      // ~1.2-2x their arrival interval, a 25 Hz direct link ~ latency + 40 ms.
+      var dry = now - prevNewest;
+      this.dry = this.dry ? this.dry + (dry - this.dry) * (dry > this.dry ? 0.5 : 0.04) : dry;
+      if (this.newestAt !== null) { var g = now - this.newestAt; this.gap = this.gap === null ? g : this.gap + (g - this.gap) * 0.1; }
+      this.newestAt = now;
+    }
     while (b.length > 3 && b[1].t < newest - 1.5) b.shift();
     this.received++;
     if (this.firstT === null || s.t < this.firstT) this.firstT = s.t;
@@ -215,7 +233,7 @@ CB.net = CB.net || {};
       if (this.late === null) this.late = late;
       else this.late += (late - this.late) * (late > this.late ? 0.2 : 0.04);
       this.jit += (Math.abs(late - this.late) - this.jit) * 0.08;
-      this.target = clamp(Math.max(this.base, this.late + 2 * this.jit + 0.5 / this.hz), this.base, this.maxDelay);
+      this.target = clamp(Math.max(this.base, this.late + 2 * this.jit + 0.5 / this.hz, this.dry + 0.02 + this.jit), this.base, this.maxDelay);
     }
     return true;
   };
@@ -270,7 +288,7 @@ CB.net = CB.net || {};
     if (!this.buf.length) return null;
     var dt = this.prevT === null ? 0 : clamp(T - this.prevT, 0, 0.25);
     if (this.prevT === null) this.delay = this.target;
-    else this.delay += clamp(this.target - this.delay, -0.2 * dt, 0.2 * dt);
+    else this.delay += clamp(this.target - this.delay, -0.12 * dt, 0.35 * dt);   // grow quickly (stop extrapolating), shrink gently
     var rt = T - this.delay;
     var raw = this.rawAt(rt);
     if (!raw) return null;
@@ -278,7 +296,10 @@ CB.net = CB.net || {};
       var drt = rt - this.prevRt, p = this.prevRaw;
       var jx = raw.x - (p.x + p.vx * drt), jy = raw.y - (p.y + p.vy * drt), jh = wrapAngle(raw.h - (p.h + p.w * drt));
       if (Math.abs(jx) + Math.abs(jy) > 0.02 || Math.abs(jh) > 0.01) { this.cx -= jx; this.cy -= jy; this.ch -= jh; }
-      var k = Math.exp(-dt / 0.1);
+      // blend corrections out over ~0.1 s, longer for big ones (a late burst after extrapolating through a turn on a
+      // bursty relay link) so the car glides back instead of visibly jumping
+      var cm = Math.abs(this.cx) + Math.abs(this.cy);
+      var k = Math.exp(-dt / clamp(0.1 + 0.12 * cm, 0.1, 0.45));
       this.cx *= k; this.cy *= k; this.ch *= k;
       if (Math.abs(this.cx) + Math.abs(this.cy) > 6 || Math.abs(this.ch) > 1.2) { this.cx = 0; this.cy = 0; this.ch = 0; }   // teleport: snap
     }
@@ -333,9 +354,14 @@ CB.net = CB.net || {};
           st.x = hd.x; st.y = hd.y; st.heading = hd.heading; st.vx = 0; st.vy = 0; st.yawRate = 0; st.speed = 0;
           car.wvx = 0; car.wvy = 0;
           car.dnf = !!o.hiddenPuppet(car.id);
+          car._np0 = car._np1 = null;
           return;
         }
         st.x = p.x; st.y = p.y; st.heading = p.h;
+        // the clean network pose of this substep (and the previous one): the engine's car-vs-car contact may still nudge
+        // the puppet afterwards (e.g. two remote cars whose interpolated poses overlap), which is right for the physics
+        // but must not reach the screen (it showed as 0.5 m sideways jumps); snapshot() draws these instead
+        car._np0 = car._np1 || null; car._np1 = [p.x, p.y, p.h];
         var c = Math.cos(p.h), s = Math.sin(p.h);
         var bvx = c * p.vx + s * p.vy, bvy = -s * p.vx + c * p.vy;
         st.vx = bvx; st.vy = bvy;
@@ -742,7 +768,7 @@ CB.net = CB.net || {};
     var pending = [], resultsFns = [], endFns = [], latch = { shiftUp: false, shiftDown: false, requestReset: false, pit: false };
     var lastSendT = -1e9, lastAuxT = -1e9, lastStT = -1e9, claimed = 0, finishSent = false, goRace = null, lights = 0;
     var clockOff = null, roughOff = null, lastHostMsg = 0, curRun = -1, scoreSent = {}, autopilot = !!cfg.autopilot;
-    var rngShared = null, hostLights = { lights: 0, go: null }, stats = { pktIn: 0, pktOut: 0, relIn: 0, relOut: 0 };
+    var rngShared = null, hostLights = { lights: 0, go: null }, stats = { pktIn: 0, pktOut: 0, relIn: 0, relOut: 0, fanIn: 0, fanOut: 0 };
     var assistLevel = (cfg.drift && cfg.drift.assistLevel) || cfg.assistLevel || null, tuneLevel = (cfg.drift && cfg.drift.tuneLevel) || cfg.tuneLevel || null;
 
     /* ---------------- clocks ---------------- */
@@ -767,8 +793,54 @@ CB.net = CB.net || {};
     }
     function sendFast(data, except) {
       stats.pktOut++;
-      if (isHost) return link.broadcast('fast', data, except);
-      return link.send('fast', data);
+      if (isHost) return directFast(data, except);
+      var ok = link.send('fast', data);
+      if (fanTo.length && link.mode() === 'relay') fanTo.forEach(function (pid) { if (link.sendTo(pid, data)) stats.fanOut++; });
+      return ok;
+    }
+    var fanTo = [], viaSent = '';   // guest: relayed guests we fan out to; host: the last nr.via list sent
+    /** host: tell everyone which guests are on the server relay (they fan their car states out to each other) */
+    function viaOut() {
+      var r = relayPeerIds().filter(function (pid) { return peerToCar[pid]; }).sort(), k = r.join(',');
+      if (k === viaSent) return;
+      viaSent = k;
+      sendRel({ t: 'nr.via', r: r });
+    }
+    function onPeerMessage(pid, ch, data) {
+      if (destroyed || isHost || !start) return;
+      var states = unpackAny(data);
+      if (states) { stats.fanIn++; ingestStates(states, String(pid)); return; }
+      if (data && data.t === 'nr.aux') ingestAux(data.a, String(pid));
+    }
+    /** host: the peers on a server-relay link. The relay keeps only the newest 'fast' packet of a kind per request
+        (~6-7/s), so per-car packets forwarded one by one would overwrite each other (each remote car then arrives at
+        ~3-4 Hz with 0.5 s gaps); those peers get ONE merged packet per send tick instead (relayOut). */
+    function relayPeerIds() {
+      return link.peers().filter(function (pid) { return link.modeOf(pid) === 'relay'; });
+    }
+    function directFast(data, except) {
+      var n = 0;
+      link.peers().forEach(function (pid) { if (pid !== except && link.modeOf(pid) !== 'relay' && link.send(pid, 'fast', data)) n++; });
+      return n;
+    }
+    var relayLast = {}, relayAuxLast = {};   // host: newest state / aux row of every guest car (for relay peers)
+    function relayOut(list, rows) {
+      var rp = relayPeerIds();
+      if (!rp.length) return;
+      var t = raceNow() * 1000;
+      rp.forEach(function (pid) {
+        var own = peerToCar[pid];
+        if (list) {
+          var l2 = list.slice();
+          Object.keys(relayLast).forEach(function (id) { var s = relayLast[id]; if (id !== own && t - s.t < 1500) l2.push(s); });
+          if (l2.length) { stats.pktOut++; link.send(pid, 'fast', packList(l2)); }
+        }
+        if (rows) {
+          var r2 = rows.slice();
+          Object.keys(relayAuxLast).forEach(function (id) { if (id !== own) r2.push(relayAuxLast[id]); });
+          if (r2.length) link.send(pid, 'fast', { t: 'nr.aux', a: r2 });
+        }
+      });
     }
     function note(type, text, carId, extra) {
       var e = assign({ type: type, carId: carId == null ? null : mapId(carId), text: text, intensity: 0.5, x: 0, y: 0, t: sim ? r(sim.time(), 3) : 0 }, extra || {});
@@ -791,9 +863,18 @@ CB.net = CB.net || {};
       var g = gone[id];
       return !!(g && raceNow() - g.at > cfg.ghost_s);
     }
+    /** how car `id`'s states reach us: 'direct' | 'turn' | 'relay' (a guest gets every car through its host link) */
+    function viaFor(id) {
+      if (!isHost) return link.mode();
+      var e = gridById[id];
+      return e && e.peerId != null ? link.modeOf(e.peerId) : 'direct';
+    }
     function trackFor(id) {
       if (!tracks[id]) tracks[id] = new RemoteTrack({ base: start.cfg.interpDelay_s, maxDelay: cfg.maxDelay_s, maxExtrap: start.cfg.maxExtrap_s, hz: start.cfg.sendHz });
-      return tracks[id];
+      var tr = tracks[id], rl = viaFor(id) === 'relay';
+      tr.maxDelay = rl ? cfg.relayMaxDelay_s : cfg.maxDelay_s;
+      tr.maxExtrap = rl ? Math.max(cfg.relayMaxExtrap_s, num(start.cfg.maxExtrap_s, 0)) : num(start.cfg.maxExtrap_s, DEFAULTS.maxExtrap_s);
+      return tr;
     }
     function poseFor(id, t) {
       var tr = tracks[id];
@@ -886,8 +967,9 @@ CB.net = CB.net || {};
         if (!s || s.id == null) continue;
         var id = String(s.id);
         if (id === myCarId) continue;
-        if (isHost && peerToCar[from] !== id) continue;       // a peer may only speak for its own car
+        if ((isHost || from !== 'host') && peerToCar[from] !== id) continue;       // a peer may only speak for its own car
         if (!gridById[id]) continue;
+        if (isHost && (!relayLast[id] || relayLast[id].t < s.t)) relayLast[id] = s;
         var f = s.flags | 0, run = (f >> 8) & 15;
         if (mode === 'drift' && run !== (curRun & 15)) continue;
         trackFor(id).push({ t: s.t / 1000, x: s.x, y: s.y, h: s.heading, vx: s.vx, vy: s.vy, w: num(s.yawRate, 0), steer: num(s.steer, 0),
@@ -902,7 +984,8 @@ CB.net = CB.net || {};
         if (!Array.isArray(a)) return;
         var id = String(a[0]);
         if (id === myCarId || !gridById[id]) return;
-        if (isHost && peerToCar[from] !== id) return;
+        if ((isHost || from !== 'host') && peerToCar[from] !== id) return;
+        if (isHost) relayAuxLast[id] = a;
         var o = { t: num(a[1], 0) / 1000, lap: a[2], dist: a[3], speed: a[4], pen: a[5], score: a[6], run: a[7], fin: !!a[8], dnf: !!a[9], rtt: a[10] };
         if (aux[id] && aux[id].t > o.t) return;
         aux[id] = o;
@@ -947,6 +1030,9 @@ CB.net = CB.net || {};
           return;
         case 'nr.st':
           if (!isHost) standings = m;
+          return;
+        case 'nr.via':   // the guests on the server relay: we send our car straight to them (fan-out)
+          if (!isHost && Array.isArray(m.r)) fanTo = m.r.map(String).filter(function (pid) { return pid !== link.id && peerToCar[pid]; });
           return;
         case 'nr.ev':
           if (!isHost && Array.isArray(m.ev)) m.ev.forEach(function (ev) { if (ev && (ev.carId !== myCarId || ev.type === 'net')) note(ev.type, ev.text, ev.carId, { value: ev.value }); });
@@ -1144,6 +1230,7 @@ CB.net = CB.net || {};
         if (me) { var s0 = myState(tRace); if (s0) list.push(s0); }
         if (isHost) Object.keys(sim.cars).forEach(function (id) { var e = gridById[id]; if (e && e.kind === 'ai') list.push(aiState(id, sim.cars[id], tRace)); });
         if (list.length) sendFast(packList(list));
+        if (isHost) relayOut(list, null);
       }
       if (tRace - lastAuxT >= 1 / DEFAULTS.auxHz - 1e-6) {
         lastAuxT = Math.max(lastAuxT + 1 / DEFAULTS.auxHz, tRace - 1 / DEFAULTS.auxHz);
@@ -1151,6 +1238,7 @@ CB.net = CB.net || {};
         if (me) rows.push(auxRow(myCarId, me, tRace));
         if (isHost) Object.keys(sim.cars).forEach(function (id) { var e = gridById[id]; if (e && e.kind === 'ai') rows.push(auxRow(id, sim.cars[id], tRace)); });
         if (rows.length) sendFast({ t: 'nr.aux', a: rows });
+        if (isHost) relayOut(null, rows);
       }
     }
     function claimsOut() {
@@ -1190,7 +1278,7 @@ CB.net = CB.net || {};
         sendRel({ t: 'nr.ev', ev: rc.events });
         rc.events = [];
       }
-      if (tRace - lastStT >= 1 / DEFAULTS.standingsHz - 1e-6) { lastStT = tRace; sendRel(standings); }
+      if (tRace - lastStT >= 1 / DEFAULTS.standingsHz - 1e-6) { lastStT = tRace; sendRel(standings); viaOut(); }
       var over = mode === 'drift' ? dc.ended : (mode === 'race' && rc.ended);
       if (over && !finalResults) {
         finalResults = mode === 'drift' ? dc.results(true) : rc.results(tRace, true);
@@ -1290,6 +1378,11 @@ CB.net = CB.net || {};
         else {
           if (!e || hiddenPuppet(netId)) return;
           c.netId = netId; c.kind = e.kind; c.remote = isPuppet(netId); c.frozen = false; c.autopilot = false;
+          var pc = c.remote && sim.cars ? sim.cars[netId] : null;
+          if (pc && pc._np1) {
+            c.x = pc._np1[0]; c.y = pc._np1[1]; c.heading = pc._np1[2];
+            if (pc._np0) { c.prevX = pc._np0[0]; c.prevY = pc._np0[1]; c.prevHeading = pc._np0[2]; }
+          }
           var g = gone[netId], tr = tracks[netId];
           var stale = c.remote && (!tr || !tr.buf.length || now - tr.lastArrival > cfg.staleAfter_s);
           if (g || stale) {
@@ -1415,19 +1508,24 @@ CB.net = CB.net || {};
                  delay_ms: tr ? Math.round(tr.delay * 1000) : null, jitter_ms: tr ? Math.round(tr.jit * 1000) : null,
                  lateness_ms: tr && tr.late !== null ? Math.round(tr.late * 1000) : null,
                  lastPacketAge_ms: tr && tr.received ? Math.round((now - tr.lastArrival) * 1000) : null, loss_pct: tr ? r(tr.lossPct(), 1) : null,
-                 packets: tr ? tr.received : 0, extrapolating: !!(tr && tr.extrap > 0) };
+                 packets: tr ? tr.received : 0, extrapolating: !!(tr && tr.extrap > 0),
+                 updateHz: tr && tr.gap > 0 ? r(1 / tr.gap, 1) : null,
+                 via: local ? (isHost ? null : link.mode()) : (isHost ? (e.kind === 'human' && e.peerId != null ? link.modeOf(e.peerId) : null) : link.mode()) };
       });
       var avgDelay = delays.length ? delays.reduce(function (s, v) { return s + v; }, 0) / delays.length : 0;
       var rtt = isHost ? 0 : link.rtt();
-      var quality = rtt > 0.25 || worstLate > 0.3 ? 'poor' : rtt > 0.12 || worstLate > 0.18 ? 'fair' : 'good';
+      // over the server relay a long (adaptive) buffer is expected: judge it by its own scale
+      var rl = !isHost && link.mode() === 'relay';
+      var quality = rl ? (rtt > 0.9 || worstLate > 1.0 ? 'poor' : 'fair')
+        : rtt > 0.25 || worstLate > 0.3 ? 'poor' : rtt > 0.12 || worstLate > 0.18 ? 'fair' : 'good';
       return {
-        role: role, version: VERSION, started: !!start, connected: isHost ? true : link.state() === 'open', state: isHost ? 'open' : link.state(),
+        role: role, version: VERSION, started: !!start, via: isHost ? null : link.mode(), connected: isHost ? true : link.state() === 'open', state: isHost ? 'open' : link.state(),
         mode: mode, carId: myCarId, spectator: spectator, seed: start ? start.seed : null, raceTime: r(now, 3), phase: snapshotPhase(),
         ping_ms: Math.round(rtt * 1000), clockOffset_ms: isHost ? 0 : Math.round(num(clockOff !== null ? clockOff : roughOff, 0) * 1000),
         clockReady: isHost || clockOff !== null, players: players,
         sync: { quality: quality, interpDelay_ms: Math.round(avgDelay * 1000), worstLateness_ms: Math.round(worstLate * 1000), extrapolating: extrap,
                 engineLag_ms: sim && start ? Math.round((now - sim.epoch - sim.engineTime()) * 1000) : 0, packetsIn: stats.pktIn, packetsOut: stats.pktOut,
-                relIn: stats.relIn, relOut: stats.relOut },
+                relIn: stats.relIn, relOut: stats.relOut, fanIn: stats.fanIn, fanOut: stats.fanOut },
         run: curRun, ended: ended ? assign({}, ended) : null, final: !!finalResults,
         validation: rc ? { rejected: rc.rejected, corrected: rc.corrected } : null
       };
@@ -1441,6 +1539,7 @@ CB.net = CB.net || {};
 
     /* ---------------- wiring ---------------- */
     link.onMessage(onMessage);
+    if (!isHost && link.onPeerMessage) link.onPeerMessage(onPeerMessage);
     if (isHost) {
       link.onLeave(function (peerId, reason) { onPeerLeave(peerId, reason); });
       link.onJoin(function (peerId) { onPeerJoin(peerId); });

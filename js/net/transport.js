@@ -67,6 +67,10 @@
      net.disconnect(id, {permanent?})   drop the link for client `id`: both ends see 'reconnecting'; unless permanent,
                                         the client re-links after ~1 RTT + 200 ms (exercise reconnect paths)
      net.clients()          -> [Client]
+     relay: {oneWay, jitter, loss, stream true|'buffered'|false, fanout, opts}  every link runs the REAL js/net/relay.js
+                            scheduler over a virtual signalling server (per-leg latency, loss = +250 ms retransmit),
+                            peer.mode 'relay'; net.relayStats() -> {requests, byPeer{id:{requests, bytesUp, bytesDown}}}
+     client.sendTo(peerId, data) / client.on('peer-message', fn(peerId, 'fast', data))   relay fan-out between guests
      clock:'real' uses real timers (advance() is then a no-op); default 'manual'.
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
@@ -455,6 +459,46 @@ if (typeof window !== 'undefined') window.CB = CB;
     peer._attach(l);
     return l;
   }
+  /**
+   * Fan-out over the server relay (client side): client.sendTo(peerId, data) posts a 'fast' message straight to
+   * another guest's mailbox (it rides in the same request as our posts to the host: no extra requests), so car
+   * states between two relayed guests skip the host hop (~2 network legs + one post interval less). Incoming ones
+   * arrive as client.on('peer-message', fn(peerId, 'fast', data)). Only while this client is on the relay; a
+   * server without fan-out (older api/signal.php) answers 'dropped' and that destination is switched off.
+   */
+  function enableFanout(C, signal, relayOpts) {
+    var RL = relayLib();
+    if (!RL || C._fanout) return;
+    C._fanout = true;
+    var sides = {}, off = {};
+    function side(pid) {
+      if (off[pid]) return null;
+      var l = sides[pid];
+      if (l && !l.closed) return l;
+      l = sides[pid] = RL.link(signal, pid, function (ch, p) { if (ch === 'fast') recv(pid, p); }, Object.assign({}, relayOpts || {}, { side: true }));
+      l.onDead = function (reason) { if (sides[pid] === l) delete sides[pid]; if (reason === 'dropped') off[pid] = true; };
+      return l;
+    }
+    function recv(pid, p) {
+      var data = p;
+      if (typeof p === 'string') { try { data = JSON.parse(p); } catch (e) { return; } if (!data || typeof data !== 'object' || /^_/.test(String(data.t || ''))) return; }
+      C.emit('peer-message', pid, 'fast', data);
+    }
+    RL.hub(signal, relayOpts).onStray = function (from, msg) {
+      if (C.mode !== 'relay' || C.state === 'closed' || !from || from === 'host') return;
+      var l = side(String(from));
+      if (l) l._in(msg);
+    };
+    C.sendTo = function (pid, data) {
+      if (C.mode !== 'relay' || C.state !== 'open' || pid == null || pid === 'host' || pid === C.selfId) return false;
+      var l = side(String(pid));
+      if (!l) return false;
+      var payload = data instanceof ArrayBuffer ? data : ArrayBuffer.isView(data) ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) : JSON.stringify(data);
+      return l.send('fast', payload);
+    };
+    C.fanoutOff = function (pid) { return !!off[pid]; };
+    C.on('close', function () { Object.keys(sides).forEach(function (k) { try { sides[k].close(); } catch (e) { /* ignore */ } }); sides = {}; });
+  }
   function getRTC(opts) {
     var R = (opts && opts.RTCPeerConnection) || globalThis.RTCPeerConnection || globalThis.webkitRTCPeerConnection;
     if (!R) { var e = new Error('WebRTC is not available in this browser'); e.code = 'unsupported'; throw e; }
@@ -616,6 +660,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       clearTimeout(relayTimer);
       if (ctl) { var c0 = ctl; ctl = null; c0.close(); }
       attachRelay(signal, C, 'host', relayEpoch, relayOpts);
+      enableFanout(C, signal, relayOpts);
     }
 
     function sendJoin() {
@@ -692,6 +737,125 @@ if (typeof window !== 'undefined') window.CB = CB;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
+  /* ---------------------------------------------------------------- loopback server-relay emulation */
+  /** a minimal synchronous thenable: the manual clock runs timers synchronously, so the relay scheduler's
+   *  .then() chains must settle inside net.advance() (native promises would wait for the microtask queue) */
+  function syncDeferred() {
+    var st = 0, val, cbs = [];
+    var d = {
+      p: { then: function (ok, bad) {
+        var n = syncDeferred();
+        var run = function () {
+          var f = st === 1 ? ok : bad;
+          if (typeof f !== 'function') { if (st === 1) n.resolve(val); else n.reject(val); return; }
+          try { var r = f(val); if (r && typeof r.then === 'function') r.then(n.resolve, n.reject); else n.resolve(r); } catch (e) { n.reject(e); }
+        };
+        if (st) run(); else cbs.push(run);
+        return n.p;
+      } },
+      resolve: function (v) { if (st) return; st = 1; val = v; var c = cbs; cbs = []; c.forEach(function (f) { f(); }); },
+      reject: function (e) { if (st) return; st = 2; val = e; var c = cbs; cbs = []; c.forEach(function (f) { f(); }); }
+    };
+    return d;
+  }
+  /**
+   * A virtual signalling server for loopback({relay}): per-peer mailboxes, the 'relay' action (posts + an optional
+   * long-poll), the streamed downlink (stream: true | 'buffered' | false) and per-leg latency
+   * (oneWay + 0..jitter ms, `loss` = chance of a +250 ms TCP retransmit on a leg). Requests are independent (they
+   * may overtake each other under jitter), like HTTP requests to a shared host. srv.stats counts requests.
+   */
+  function relayServer(base, rc, rng) {
+    var boxes = {}, waits = {}, sigs = {};
+    var srv = { stats: { requests: 0, posts: 0, polls: 0, streams: 0, bytesUp: 0, bytesDown: 0, byPeer: {} } };
+    function leg() { return rc.oneWay + (rc.jitter ? rng() * rc.jitter : 0) + (rc.loss && rng() < rc.loss ? 250 : 0); }
+    function box(id) { return boxes[id] = boxes[id] || []; }
+    function wake(id) { var w = waits[id]; if (w && w.length) w.slice().forEach(function (f) { f(); }); }
+    function take(id) { var b = box(id); boxes[id] = []; return b; }
+    function count(me, kind, body) {
+      srv.stats.requests++; srv.stats[kind]++;
+      var bp = srv.stats.byPeer[me] = srv.stats.byPeer[me] || { requests: 0, bytesUp: 0, bytesDown: 0 };
+      bp.requests++;
+      var n = body ? JSON.stringify(body).length : 0; srv.stats.bytesUp += n; bp.bytesUp += n;
+    }
+    function down(me, msgs) {
+      var n = JSON.stringify(msgs).length; srv.stats.bytesDown += n; srv.stats.byPeer[me].bytesDown += n;
+      var s = sigs[me]; if (!s || s.state === 'closed') return;
+      msgs.forEach(function (m) { s._fns.forEach(function (fn) { try { fn(m.from, JSON.parse(m.msg)); } catch (e) { /* ignore */ } }); });
+    }
+    function fastOnly(list) { return list.every(function (m) { return m && m.t === '_r' && m.x === 1 && !('r' in m) && Array.isArray(m.f); }); }
+    function deliverPosts(me, posts) {
+      var dropped = [];
+      (posts || []).forEach(function (p) {
+        if (!p || !p.msgs || !p.msgs.length) return;
+        if (me !== 'host' && p.to !== 'host' && (rc.fanout === false || !fastOnly(p.msgs) || !sigs[p.to])) { dropped.push(p.to); return; }
+        var b = box(p.to);
+        p.msgs.forEach(function (m) { b.push({ from: me, msg: JSON.stringify(m) }); });
+        wake(p.to);
+      });
+      return dropped;
+    }
+    srv.sig = function (me) {
+      if (sigs[me]) return sigs[me];
+      var s = { state: 'open', peer: me, room: 'LOOPR', caps: { relay: true }, clock: base, _fns: [] };
+      s.onMessage = function (fn) { s._fns.push(fn); return function () { var i = s._fns.indexOf(fn); if (i >= 0) s._fns.splice(i, 1); }; };
+      s.on = function () { return function () {}; };
+      s.pausePolling = function () {};
+      s.send = function (to, m) { var d = syncDeferred(); count(me, 'posts', m); base.setTimeout(function () { deliverPosts(me, [{ to: to, msgs: [m] }]); d.resolve(); }, leg()); return d.p; };
+      s.exchange = function (posts, wait, o) {
+        var d = syncDeferred(), nopoll = !!(o && o.nopoll);
+        count(me, wait > 0 ? 'polls' : 'posts', posts);
+        base.setTimeout(function () {
+          var dropped = deliverPosts(me, posts);
+          var tell = function () { if (dropped.length && o && typeof o.onDropped === 'function') o.onDropped(dropped); };
+          if (nopoll) { base.setTimeout(function () { tell(); d.resolve(0); }, leg()); return; }
+          var done = false, tmo = null;
+          function answer() {
+            if (done) return; done = true;
+            if (tmo) base.clearTimeout(tmo);
+            var w = waits[me] || []; var i = w.indexOf(answer); if (i >= 0) w.splice(i, 1);
+            var msgs = take(me);
+            base.setTimeout(function () { tell(); down(me, msgs); d.resolve(msgs.length); }, 2 + leg());
+          }
+          if (box(me).length || !(wait > 0)) { answer(); return; }
+          (waits[me] = waits[me] || []).push(answer);
+          tmo = base.setTimeout(answer, wait);
+        }, leg());
+        return d.p;
+      };
+      if (rc.stream) {
+        s.stream = function (o) {
+          o = o || {};
+          var d = syncDeferred(), buffered = rc.stream === 'buffered';
+          count(me, 'streams', null);
+          if (o.probe) { base.setTimeout(function () { d.resolve({ streamed: true, buffered: buffered, n: 0, max: 600 }); }, leg() + 600 + leg()); return d.p; }
+          var max = Math.min(12000, Math.max(1000, o.wait | 0));
+          base.setTimeout(function () {
+            var t0 = base.now(), lastAt = 0, held = [], n = 0, closed = false;
+            base.setTimeout(function () { if (o.onHeader) o.onHeader({ stream: 1, max: max }); }, leg());
+            function line(msgs) {   // one NDJSON line: later legs never overtake earlier ones on the same response
+              if (buffered) { held = held.concat(msgs); return; }
+              var at = Math.max(lastAt, base.now() + leg()); lastAt = at; n += msgs.length;
+              base.setTimeout(function () { down(me, msgs); }, at - base.now());
+            }
+            function pull() { if (closed) return; if (box(me).length) { var m = take(me); line(m); } }
+            (waits[me] = waits[me] || []).push(pull);
+            pull();
+            base.setTimeout(function () {
+              closed = true;
+              var w = waits[me] || []; var i = w.indexOf(pull); if (i >= 0) w.splice(i, 1);
+              var at = Math.max(lastAt, base.now() + leg());
+              base.setTimeout(function () { if (buffered && held.length) down(me, held); d.resolve({ streamed: true, buffered: buffered, n: n + held.length, max: max }); }, at - base.now());
+            }, Math.max(0, max - (base.now() - t0)));
+          }, leg());
+          return d.p;
+        };
+      }
+      sigs[me] = s;
+      return s;
+    };
+    return srv;
+  }
+
   function loopback(netOpts) {
     netOpts = netOpts || {};
     var cond = { latency: netOpts.latency == null ? 30 : netOpts.latency, jitter: netOpts.jitter || 0, loss: netOpts.loss || 0 };
@@ -701,6 +865,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (manual) base = scheduler();
     else { var t0 = perfNow(); base = realClock(-t0); base.advance = function () {}; }
     var H = null, clients = [], links = {}; // id -> {up:boolean, pair}
+    var rcfg = netOpts.relay ? Object.assign({ oneWay: cond.latency, jitter: cond.jitter, loss: 0, stream: true, opts: null }, netOpts.relay === true ? {} : netOpts.relay) : null;
+    var relaySrv = rcfg && relayLib() ? relayServer(base, rcfg, rng) : null;
     var net = {
       now: function () { return base.now(); },
       advance: function (ms) { base.advance(ms); },
@@ -708,7 +874,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       setConditions: function (c) { Object.keys(c || {}).forEach(function (k) { if (k in cond) cond[k] = c[k]; }); },
       conditions: function () { return Object.assign({}, cond); },
       clients: function () { return clients.slice(); },
-      clock: base
+      clock: base,
+      relayStats: function () { return relaySrv ? relaySrv.stats : null; }
     };
     function copy(p) { return typeof p === 'string' ? p : p instanceof ArrayBuffer ? p.slice(0) : ArrayBuffer.isView(p) ? p.buffer.slice(p.byteOffset, p.byteOffset + p.byteLength) : p; }
     /** One direction of a link pair: sends to `dst` peer. */
@@ -743,6 +910,18 @@ if (typeof window !== 'undefined') window.CB = CB;
       var hp = H._peer(id);
       rec.up = true; rec.gen = (rec.gen || 0) + 1;
       var gen = rec.gen;
+      if (relaySrv) {   // server-relay emulation: the real js/net/relay.js links over a virtual signalling server
+        var hl = attachRelay(relaySrv.sig('host'), hp, id, null, rcfg.opts);
+        var cl = attachRelay(rec.rsig = rec.rsig || relaySrv.sig(id), C, 'host', null, rcfg.opts);
+        enableFanout(C, rec.rsig, rcfg.opts);
+        rec.hostLink = hl; rec.clientLink = cl;
+        rec.onDown = function (reason) {
+          if (rec.gen !== gen) return;
+          if (hp._hasLink(hl)) hp._linkLost(reason);
+          if (C._hasLink(cl)) C._linkLost(reason);
+        };
+        return;
+      }
       var toClient = half(rec, C), toHost = half(rec, hp);
       rec.hostLink = toClient; rec.clientLink = toHost;
       rec.onDown = function (reason) {

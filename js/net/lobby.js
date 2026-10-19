@@ -57,6 +57,7 @@ CB.net = CB.net || {};
      ====================================================================== */
   var PROTOCOL = 'forge-net/2';   // 2: Arcade multiplayer (js/net/netarcade.js) — older pages are refused, never mis-run an arcade race
   var MAX_PLAYERS = 8;
+  var RELAY_OPTS = { streamDown: true };   // js/net/relay.js options for online rooms (see createRoom)
   var MAX_AI = 7;
   var COUNTDOWN_MS = 3500;
   var CHAT_MAX = 280;
@@ -302,7 +303,7 @@ CB.net = CB.net || {};
       return name;
     }
     function player(id) { for (var i = 0; i < st.players.length; i++) if (st.players[i].id === id) return st.players[i]; return null; }
-    function pub(p) { return { id: p.id, name: p.name, build: p.build, ready: !!p.ready, ping: Math.round(p.ping || 0), host: !!p.host, late: !!p.late, link: p.link === 'reconnecting' ? 'reconnecting' : 'open' }; }
+    function pub(p) { return { id: p.id, name: p.name, build: p.build, ready: !!p.ready, ping: Math.round(p.ping || 0), host: !!p.host, late: !!p.late, link: p.link === 'reconnecting' ? 'reconnecting' : 'open', via: VIAS[p.via] ? p.via : undefined }; }
     function pushChat(m) {
       st.chat.push(m);
       if (st.chat.length > CHAT_KEEP) st.chat.splice(0, st.chat.length - CHAT_KEEP);
@@ -470,6 +471,8 @@ CB.net = CB.net || {};
         var p = player(id); if (!p) return;
         var r = readRtt(peers[id].peer);
         if (r != null && Math.abs(r - (p.ping || 0)) >= 3) { p.ping = r; dirty = true; }
+        var v = readVia(peers[id].peer);
+        if (v && v !== p.via) { p.via = v; dirty = true; }
       });
       if (dirty) pushRoster();
     }
@@ -482,7 +485,7 @@ CB.net = CB.net || {};
           st.connected = true;
           var list = Array.isArray(msg.players) ? msg.players.slice(0, MAX_PLAYERS) : [];
           st.players = list.filter(isObj).map(function (p, i) {
-            return { id: String(p.id), name: cleanName(p.name), build: sanitizeBuild(p.build), ready: !!p.ready, ping: clamp(num(p.ping, 0), 0, 9999), host: !!p.host, late: !!p.late, link: p.link === 'reconnecting' ? 'reconnecting' : 'open', joinedAt: i };
+            return { id: String(p.id), name: cleanName(p.name), build: sanitizeBuild(p.build), ready: !!p.ready, ping: clamp(num(p.ping, 0), 0, 9999), host: !!p.host, late: !!p.late, link: p.link === 'reconnecting' ? 'reconnecting' : 'open', via: VIAS[p.via] ? p.via : undefined, joinedAt: i };
           });
           var ph = ['lobby', 'countdown', 'racing'].indexOf(msg.phase) >= 0 ? msg.phase : 'lobby';
           if (st.phase === 'countdown' && ph === 'racing' && st.start) {
@@ -647,6 +650,14 @@ CB.net = CB.net || {};
     };
   }
 
+  /** how a peer's link runs: 'direct' (WebRTC peer to peer) | 'turn' (WebRTC through a TURN server) | 'relay' (through the
+      site's signalling server, js/net/relay.js) | null (unknown: loopback / custom transports) */
+  var VIAS = { direct: 1, turn: 1, relay: 1 };
+  function readVia(peer) {
+    var raw = peer && (peer.raw || peer);
+    var m = safe(function () { return raw && raw.mode; });
+    return VIAS[m] ? m : null;
+  }
   function readRtt(peer) {
     if (!peer) return null;
     var r = null;
@@ -919,6 +930,10 @@ CB.net = CB.net || {};
     '.nl-ping i:nth-child(1){height:5px}.nl-ping i:nth-child(2){height:9px}.nl-ping i:nth-child(3){height:13px}',
     '.nl-ping.is-good i{background:var(--good)}.nl-ping.is-warn i.on{background:var(--warn)}.nl-ping.is-bad i.on{background:var(--bad)}',
     '.nl-ping-ms{font:600 11px var(--mono);color:var(--text-dim);margin-left:5px}',
+    '.nl-via{display:block;font:600 10.5px var(--mono);color:var(--text-faint);margin:-2px 0 2px;letter-spacing:.02em}',
+    '.nl-via.is-relay{color:var(--warn)}',
+    '.nl-net-tip{grid-column:1/-1;margin:2px 0 0;display:flex;gap:6px;align-items:center}',
+    '.nl-net-tip a{color:inherit;text-decoration:underline}',
     '.nl-thumb{height:78px;border-radius:var(--radius-sm);background:radial-gradient(120% 90% at 50% 100%,var(--panel-3),transparent 70%);display:grid;place-items:center;overflow:hidden}',
     '.nl-thumb svg{max-width:100%;max-height:74px;width:auto;height:auto}',
     '.nl-thumb .nl-thumb-ph{width:70%;height:22px;border-radius:12px 18px 6px 6px;opacity:.9}',
@@ -1219,7 +1234,9 @@ CB.net = CB.net || {};
       var code = method === 'manual' ? '' : normCode((isObj(res) && (res.code || res.room)) || (typeof res === 'string' ? res : '') || sig.code || '');
       var T = CB.net.transport;
       // relay: server-relay fallback (js/net/relay.js) when a network blocks direct WebRTC (campus Wi-Fi, strict NATs)
-      var host = call(T, ['host', 'createHost', 'listen'], [sig, { relay: method === 'online' }]);
+      // streamDown: over the relay, one streamed response brings our mail the moment it is posted (when the host's
+      // server streams; probed once) instead of waiting for our next post
+      var host = call(T, ['host', 'createHost', 'listen'], [sig, { relay: method === 'online', relayOpts: RELAY_OPTS }]);
       return asPromise(host).then(function (h) {
         if (!h) throw new Error('The WebRTC transport could not start a room.');
         A.net = { role: 'host', sig: sig, host: h, method: method, peers: {} };
@@ -1277,7 +1294,7 @@ CB.net = CB.net || {};
   function guestConnect(sig, method, code) {
     var T = CB.net.transport;
     A.connectingText = 'Connecting to the host…'; render();
-    var raw = call(T, ['connect', 'join', 'dial'], [sig, { relay: method === 'online' }]);
+    var raw = call(T, ['connect', 'join', 'dial'], [sig, { relay: method === 'online' ? Object.assign({}, RELAY_OPTS) : false }]);
     return withTimeout(asPromise(raw).then(function (peerRaw) {
       if (!peerRaw) throw new Error('Could not open a connection to the host.');
       return waitOpen(peerRaw);
@@ -1545,6 +1562,21 @@ CB.net = CB.net || {};
     return '<span class="nl-ping ' + cls + '" title="Ping ' + (ms > 0 ? ms + ' ms' : 'measuring…') + '" aria-label="Ping ' + (ms > 0 ? ms + ' milliseconds' : 'unknown') + '">' + [1, 2, 3].map(function (i) { return '<i class="' + (i <= lvl ? 'on' : '') + '"></i>'; }).join('') + '</span><span class="nl-ping-ms">' + (ms > 0 ? ms : '–') + '</span>';
   }
 
+  /** "direct · 24 ms" / "via TURN · 60 ms" / "via server · ~310 ms" for a guest's link to the host */
+  function viaHtml(p) {
+    if (p.host || !VIAS[p.via]) return '';
+    var ms = p.ping > 0 ? Math.round(p.ping) : 0;
+    var label = p.via === 'relay' ? 'via server' : p.via === 'turn' ? 'via TURN' : 'direct';
+    var tip = p.via === 'relay' ? 'Relayed through the site’s server: works on any network, but the other cars run a few hundred ms behind'
+      : p.via === 'turn' ? 'WebRTC through a TURN server: low latency on networks that block peer-to-peer links' : 'Peer to peer (WebRTC)';
+    return '<span class="nl-via is-' + p.via + '" title="' + esc(tip) + '">' + label + (ms ? ' · ' + (p.via === 'relay' ? '~' : '') + ms + ' ms' : '') + '</span>';
+  }
+  var NET_TIP_URL = 'https://github.com/ArnayG/redline#multiplayer';
+  function netTipHtml(players) {
+    if (!(players || []).some(function (p) { return p.via === 'relay'; })) return '';
+    return '<p class="nl-hint nl-net-tip" role="note">' + svg('globe', 13) + ' On campus Wi-Fi? Add a free TURN key (<a href="' + NET_TIP_URL + '" target="_blank" rel="noopener">see setup</a>) or use a phone hotspot for smoother multiplayer.</p>';
+  }
+
   function homeHtml() {
     var m = chosenMethod(), b = myBuild();
     var methods = METHODS.map(function (x) {
@@ -1613,13 +1645,14 @@ CB.net = CB.net || {};
       var me = p.id === st.selfId, ready = p.host || p.ready;
       return '<article class="nl-player' + (me ? ' is-me' : '') + (ready ? ' is-ready' : '') + '" aria-label="' + esc(p.name + (p.host ? ', host' : '') + (me ? ', you' : '') + (ready ? ', ready' : ', not ready')) + '">' +
         '<div class="nl-ptop"><span class="nl-pname">' + esc(p.name) + '</span>' + (p.host ? '<span class="nl-ptag" title="Host">' + svg('crown', 12) + 'Host</span>' : '') + (me ? '<span class="nl-ptag">You</span>' : '') + pingHtml(p.ping, p.host) + '</div>' +
+        viaHtml(p) +
         carCardHtml(p.build) +
         '<div class="nl-pfoot"><span class="nl-state' + (ready ? ' is-ready' : '') + '">' + (p.link === 'reconnecting' ? 'Reconnecting…' : p.late ? 'Joins next race' : p.host ? 'Host' : ready ? '✓ Ready' : 'Not ready') + '</span>' +
         (host && !p.host ? '<button class="cb-btn ghost danger small" data-act="kick" data-id="' + esc(p.id) + '" data-k="kick-' + esc(p.id) + '"' + (A.kickArm === p.id ? ' aria-label="Confirm removing ' + esc(p.name) + '">Confirm kick' : ' aria-label="Remove ' + esc(p.name) + ' from the room">Kick') + '</button>' : '') +
         (me && !p.host ? '<button class="cb-btn ghost small" data-act="atelier">' + svg('wrench', 14) + 'Change car</button>' : '') + '</div></article>';
     });
     for (var i = 0; i < aiN; i++) cards.push('<article class="nl-player is-ai" aria-label="AI driver"><div class="nl-ptop"><span class="nl-pname">AI driver ' + (i + 1) + '</span><span class="nl-ptag">' + svg('bot', 12) + 'AI</span></div><p class="nl-hint">Fills an empty grid slot.</p></article>');
-    patch(q('.nl-players'), cards.join(''));
+    patch(q('.nl-players'), cards.join('') + netTipHtml(st.players));
     // settings
     q('.nl-hostonly').innerHTML = host ? '' : '<span class="nl-badge">Host picks</span>';
     patch(q('.nl-settings'), settingsHtml(st.settings, locked));

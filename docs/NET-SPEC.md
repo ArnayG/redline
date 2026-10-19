@@ -16,6 +16,12 @@ classic scripts; the function uses only built-in `fetch` (no npm packages). Ever
 Star: the **host** (room creator) is authoritative for room/race state; up to 8 players. Each client has one RTCPeerConnection
 to the host with two data channels: `rel` (ordered, reliable: lobby, chat, race control, results) and `fast` (unordered,
 maxRetransmits 0: car state 20–30 Hz). Host relays other players' car states to everyone.
+Over the server relay (newest 'fast' packet per type wins, ~6–7 posts/s) the host sends each relayed guest ONE merged
+packet with every car (forwarding per-car packets made them overwrite each other: ~3–4 Hz per car, 0.5 s gaps), guests
+receive through one streamed response when the server streams (`relay.js` `streamDown`), relayed guests fan their own
+car out to each other (`client.sendTo`, server `fanout:true`; fast-only frames `{t:'_r', x:1, f}`), and every remote car
+plays from a jitter buffer sized from the measured arrival gaps (0.1 s direct … ≤1.2 s relay). `tests/net-lag.test.js`
+runs all of it on `loopback({relay})` (the real relay scheduler on a virtual server).
 
 ## Files
 | File | Namespace | Purpose |

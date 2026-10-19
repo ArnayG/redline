@@ -17,7 +17,10 @@
                                                                          peer: leaves (host gets {t:'_leave'} from it)
      {action:'relay', room, token, posts?:[{to, msgs}], wait?, nopoll?} -> {ok, msgs, dropped?}
                                                         post + poll in ONE request (the server-relay fallback of
-                                                        js/net/relay.js when WebRTC cannot connect); own rate bucket
+                                                        js/net/relay.js when WebRTC cannot connect); own rate bucket.
+                                                        A peer may also post to another peer when every message is
+                                                        a fast-only relay frame {t:'_r', x:1, f:[…]} (fan-out: car
+                                                        states skip the host hop); status says fanout:true
        + stream:1 -> NDJSON lines flushed as mail arrives ({ok,stream,max,st} {m:[…],st} {hb,st} {end,st}); + probe:1
                      (with nopoll) -> header, two heartbeats 300 ms apart, end (no mailbox). Same as api/signal.php.
      {action:'ice', room, token}                        -> {ok, iceServers, ttl, provider}   TURN servers from env:
@@ -331,6 +334,10 @@ function createHandler(opts) {
   }
   function peersOf(fields) { return Object.keys(fields).filter(function (f) { return f.indexOf('p:') === 0; }).map(function (f) { return f.slice(2); }); }
 
+  /** fan-out: peer -> peer posts may only carry fast-only relay frames (car states), never signalling or rel data */
+  function fastOnly(list) {
+    return Array.isArray(list) && list.length > 0 && list.every(function (m) { return m && typeof m === 'object' && m.t === '_r' && m.x === 1 && !('r' in m) && Array.isArray(m.f); });
+  }
   function encMsg(from, msg) { return JSON.stringify({ from: from, msg: msg, ts: now() }); }
 
   async function push(db, room, to, items) {
@@ -385,7 +392,7 @@ function createHandler(opts) {
 
   var actions = {
     status: async function (db) {
-      return { ok: true, backend: db.kind || 'upstash', version: VERSION, relay: true, stream: true, ice: true, limits: { maxPlayers: L.maxPlayers, pollMaxWait: L.pollMaxWait } };
+      return { ok: true, backend: db.kind || 'upstash', version: VERSION, relay: true, stream: true, fanout: true, ice: true, limits: { maxPlayers: L.maxPlayers, pollMaxWait: L.pollMaxWait } };
     },
 
     create: async function (db, body, ctx) {
@@ -478,7 +485,8 @@ function createHandler(opts) {
       for (var j = 0; j < posts.length; j++) {
         var to = posts[j].to, list = posts[j].msgs;
         if (!list.length) continue;
-        if (to === a.peer || (!a.isHost && to !== 'host') || (to !== 'host' && !a.fields['p:' + to])) { dropped.push(to); continue; }
+        // peers may message the host, and (fan-out) another peer with fast-only relay frames: {t:'_r', x:1, f:[…]}
+        if (to === a.peer || (!a.isHost && to !== 'host' && !fastOnly(list)) || (to !== 'host' && !a.fields['p:' + to])) { dropped.push(to); continue; }
         await push(db, room, to, list.map(function (m) { return encMsg(a.peer, m); }));
       }
       var key = K.box(room, a.peer), step = db.kind === 'memory' ? L.memoryStep : L.relayStep;
