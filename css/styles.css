@@ -3712,6 +3712,12 @@ html.cb-routed .cb-screen:not(#screen-atelier) {
   background: var(--bg);
 }
 html.cb-routed.cb-driving .cb-screen:not(#screen-atelier) { top: 0; }
+/* setup screens of the Derby and Formula 1 modes are taller than the viewport: they scroll inside their layer
+   (the race / arcade setups scroll inner .rx-scroll columns instead). Not while driving. */
+html.cb-routed:not(.cb-driving) body #screen-derby.cb-screen,
+html.cb-routed:not(.cb-driving) body #screen-f1.cb-screen {
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
 html.cb-routed:not([data-route="atelier"]) body { overflow: hidden; }
 
 /* the Atelier layer: its top bar docks under the nav bar; the nav's FORGE mark replaces the Atelier brand */
