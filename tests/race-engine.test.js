@@ -269,11 +269,26 @@ variants.forEach(function (V) {
     assert.ok(s.snapshot().cars.every(function (c) { return !c.jumpStart; }), 'nobody jumps the start on their own');
   });
 
-  test('[' + V.tag + '] jump start: player moving before lights out is penalised', function () {
+  test('[' + V.tag + '] throttle before lights out is no jump start: the car is held on the line', function () {
     var s = E.createSession(base({ seed: 8, opponents: 2, jumpStartPenalty_s: 5 }, V.fb));
-    var evs = [];
+    var evs = [], p0 = s.snapshot().cars.filter(function (c) { return c.isPlayer; })[0];
     while (s.getPhase() !== 'racing' && s.time() < 15) {
-      s.update(1 / 60, { throttle: s.time() > 2.6 ? 1 : 0 });
+      s.update(1 / 60, { throttle: s.time() > 2.6 ? 1 : 0, steer: 0.4 });
+      evs = evs.concat(s.snapshot().events);
+    }
+    var p = s.snapshot().cars.filter(function (c) { return c.isPlayer; })[0];
+    assert.ok(!p.jumpStart, 'no jump start for revving');
+    assert.ok(!p.penalties_s, 'no penalty');
+    assert.ok(Math.hypot(p.x - p0.x, p.y - p0.y) < 0.3, 'held on the line');
+    assert.ok(!evs.some(function (e) { return e.type === 'jumpstart'; }));
+  });
+
+  test('[' + V.tag + '] jump start: a car that actually leaves its box before lights out is penalised', function () {
+    var s = E.createSession(base({ seed: 8, opponents: 2, jumpStartPenalty_s: 5 }, V.fb));
+    var evs = [], moved = false, me = s._debug().player;
+    while (s.getPhase() !== 'racing' && s.time() < 15) {
+      if (!moved && s.getPhase() === 'countdown') { me.state.x += 1.5 * Math.cos(me.state.heading); me.state.y += 1.5 * Math.sin(me.state.heading); moved = true; }
+      s.update(1 / 60, {});
       evs = evs.concat(s.snapshot().events);
     }
     var p = s.snapshot().cars.filter(function (c) { return c.isPlayer; })[0];

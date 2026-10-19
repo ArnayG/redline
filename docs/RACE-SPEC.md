@@ -41,6 +41,17 @@ diff lock factor, TC/ABS levels, redline, EV flag.
 env `{gripMult (surface × weather), wet}`. Planar dynamic bicycle model (or 4-wheel) with: Pacejka-lite/brush tire model with combined slip
 (friction circle), load transfer longitudinal + lateral, aero downforce & drag, rolling resistance, engine rpm from wheel speed & gear,
 torque from curve, rev limiter, auto or manual gearbox, launch, traction control, ABS, handbrake, speed-sensitive steering.
+**Launch & traction (shared with `CB.physics`, see SPEC.md "Launch")**: `input.hold` holds the car on the line
+(brakes + clutch / transbrake): it cannot move, the engine revs freely (launch control: its launch rpm with turbo
+pre-spool; automatics against the converter stall). On release the clutch / converter takes up over the plan's ramp.
+Traction control is a drive-torque limiter on a slip target per TC level (launch control: the peak): feed-forward
+from the tyre model at the current load / μ / slip angle (open diffs limited by the lighter wheel) + wheel & coupled
+engine inertia, wheel-speed feedback (τ 0.06 s) — never dependent on engine power, so more power never launches slower.
+TC off + `env.assists.driverSlip` emulates a driver modulating at that slip (reference launches). Drive μ by compound
+(`metrics.launch.driveRatio*`) warms from cold to warm over ~a lap (`state.tyreWarm`). `simulateLaunch(p, kph, opts)`
+stages the start (held 1.5 s at full throttle, timed from the release; `opts.stage false` = from idle) and lands within
+~2–3 % of the Garage 0–100 (`node tools/launch-report.js`); `launchHoldThrottle(p)` = the throttle that holds a car
+without launch control at its launch rpm (AI / reference).
 Must be stable at dt = 1/120 s at all speeds incl. zero (low-speed blending). The car's behavior MUST reflect the build: more power accelerates
 harder, slicks grip more, downforce helps at speed, FWD understeers, RWD high-power can oversteer, heavy cars brake longer.
 State exposes `{x,y,heading,vx,vy,yawRate,speed,rpm,gear,slipAngleF,slipAngleR,wheelspin,skidding,steerAngle}`.
@@ -52,13 +63,18 @@ State exposes `{x,y,heading,vx,vy,yawRate,speed,rpm,gear,slipAngleF,slipAngleR,w
 aggression 0..1, consistency 0..1 }` with fictional driver names & teams.
 `createDriver(opponent, geom, params)` → controller with `control(vehicleState, raceContext, dt) -> input`: follows racing line using
 pure-pursuit/lookahead steering, uses the track speedProfile computed from its own car's grip/brakes (scaled by skill), brakes for corners,
-overtakes (move off-line when faster car ahead and gap available), defends, avoids collisions (looks at nearby cars), recovers when off track or
+overtakes (move off-line when faster car ahead and gap available), defends, avoids collisions (looks at nearby cars), adapts its planned limits
+online (cornering: tyre saturation → `gripLearn`; braking: measured deceleration on a firm straight brake, arriving
+hotter than the plan, the rear stepping out under braking → `brakeLearn`), so mass / aero / grip it was not told about
+(±20 % mass, Real-car mass & aero) does not send it off (`tests/race-ai-robust.test.js`, `tools/ai-robustness.js`), recovers when off track or
 spun (reverse + rejoin), random mistakes scaled by (1-consistency), rubber-banding OFF by default (optional toggle).
 
 ## Race engine (`CB.race.engine`)
 
 `createSession({trackId, laps 1..50, opponents, playerBuild, weather 'dry'|'damp'|'wet', timeOfDay 'day'|'dusk'|'night', mode 'race'|'time-trial'|'practice', assists {abs, tc, autoShift, racingLine, steeringAssist}})`.
-`update(dt, playerInput)` with fixed 1/120 s substeps. Handles: grid & 3-2-1-GO lights countdown (jump start detection → time penalty),
+`update(dt, playerInput)` with fixed 1/120 s substeps. Handles: grid & 3-2-1-GO lights countdown (every car is held on
+the line with `input.hold` until lights-out — revving is allowed in every mode, so throttle is never a jump start; only a
+car that actually moves out of its box on its own is penalised),
 car-to-car collisions (oriented-box SAT + impulse response with restitution & friction), walls (street circuit) and off-track surfaces (grass/sand
 lower grip & drag), lap counting with anti-cut (must pass sectors in order; track limits: cut corners → lap invalidated in time-trial / warning
 then penalty in race), live positions by (lap, s), gaps to leader/ahead, sector & lap times, best lap, fastest lap of race, finish order,

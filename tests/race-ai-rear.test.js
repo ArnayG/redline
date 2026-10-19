@@ -100,8 +100,8 @@ function simulate(geom, cars, tMax, untilLaps) {
   }
   return { entries: E, t: t, minDist: minDist, length: A.length };
 }
-function solo(buildId, trackId) {
-  var g = geomOf(trackId), b = buildOf(buildId), p = paramsOf(b), A = I.adaptGeom(g);
+function solo(buildId, trackId, buildOverride) {
+  var g = geomOf(trackId), b = buildOverride || buildOf(buildId), p = paramsOf(b), A = I.adaptGeom(g);
   var opp = { id: 'x', name: 'Test', skill: 0.9, consistency: 0.95, aggression: 0.6, reaction_s: 0.2, seed: 11, build: b };
   var r = simulate(g, [{ opponent: opp, params: p, pose: poseOn(g, 10, 0) }], Math.max(150, A.length / 10), 1);
   return { e: r.entries[0], t: r.t, length: r.length };
@@ -187,6 +187,23 @@ HARD.forEach(function (tid) {
     });
   });
 });
+
+// Mass / aero robustness: the Overland (Range Rover) preset with Real-car mass & aero and +20 kg ballast used to leave
+// the road at the Grünwald Ring (the AI now learns its braking / cornering limits online: tests/race-ai-robust.test.js)
+[[0, false], [20, true], [60, true]].forEach(function (c) {
+  test('real lap: heavy SUV (overland) +' + c[0] + ' kg' + (c[1] ? ', Real-car mass & aero' : '') + ' stays on track at the Grünwald Ring', function () {
+    if (!geomOf('gruenwald-ring')) return;
+    var b = U_clone(buildOf('overland'));
+    b.weight.ballast_kg = Math.min(100, (b.weight.ballast_kg || 0) + c[0]);
+    if (c[1]) b.body.modelPhysics = true;
+    b = CB.state && CB.state.normalize ? CB.state.normalize(b) || b : b;
+    var r = solo('overland', 'gruenwald-ring', b), e = r.e;
+    assert.ok(e.laps >= 1, 'completed the lap (progress ' + e.progress.toFixed(0) + ' m)');
+    assert.ok(e.offT < 1.5, 'off-track time ' + e.offT.toFixed(2) + ' s');
+    assert.ok(e.maxOff < 0.5, 'max excess beyond the kerb ' + e.maxOff.toFixed(2) + ' m');
+  });
+});
+function U_clone(o) { return JSON.parse(JSON.stringify(o)); }
 
 test('real laps: the 441 hp 911 and the 645 hp reference coupe lap within 12 % of each other', function () {
   ['forge-ring', 'gruenwald-ring'].forEach(function (tid) {

@@ -182,6 +182,10 @@ CB.race.drift = CB.race.drift || {};
     p.torqueVectoring = false;
     p.tcLevel = Math.min(fin(orig.tcLevel, 2), L.tc);
     p.launchControl = false;
+    // drift tyres: the plain 1.1·μ drive force (no launch drive-μ map) and loose traction-control slip targets
+    // (the race model's TC is a slip-target torque limiter; a drift car's TC lets the rear step out)
+    p.driveXF = p.driveXR = p.driveXWarmF = p.driveXWarmR = 1;
+    p.tcSlip = [2.0, 1.9, 1.35, 1.0];
     changes.push(p.lockR >= 0.95 ? 'welded rear diff' : 'tight rear LSD');
 
     /* --- tyres / balance --- */

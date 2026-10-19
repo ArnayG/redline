@@ -287,7 +287,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   }
 
   var transmissions = [
-    { id: 'manual', name: 'Manual Gearbox', desc: 'H-pattern with a twin-plate clutch and rev-matching — maximum involvement.', gearRange: [5, 7], shiftTime_s: 0.45, efficiency: 0.95, price: 0, weight_kg: 55, torqueLimit_nm: 800, clutchPedal: true,
+    { id: 'manual', name: 'Manual Gearbox', desc: 'H-pattern with a twin-plate clutch and rev-matching — maximum involvement.', gearRange: [5, 7], shiftTime_s: 0.34, efficiency: 0.95, price: 0, weight_kg: 55, torqueLimit_nm: 800, clutchPedal: true,
       defaultRatios: ratioFn({ range: [5, 7], ref: 6, first: 3.45, top: 0.78, firstPerGear: 0.12, topPerGear: 0.05, p: 0.80 }) },
     { id: 'dct', name: 'Dual-Clutch (DCT)', desc: 'Wet twin-clutch with pre-selected gears — 80 ms shifts without interruption.', gearRange: [6, 9], shiftTime_s: 0.08, efficiency: 0.93, price: 4500, weight_kg: 82, torqueLimit_nm: 1100,
       defaultRatios: ratioFn({ range: [6, 9], ref: 7, first: 3.80, top: 0.78, firstPerGear: 0.15, topPerGear: 0.04, p: 0.82 }) },

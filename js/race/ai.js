@@ -742,8 +742,13 @@ CB.race = CB.race || {};
         // Edge margin: tracks.js lines touch hw - 0.8 (outer wheels on the paint), which leaves no room at all for
         // a tracking error at 250 km/h on an 11 m ribbon. Compress the outermost metre softly (a hard clamp
         // after the low-pass would put curvature kinks into the line) so the centre keeps >= ~1.1 m.
-        var EM = 1.15;
+        // On a narrow ribbon (half width < 7.2 m) the margin grows (to ~1.75 m at the Grünwald Ring's 5.7 m): the
+        // centre-to-edge room is the only safety a car at its limit has against a gust of oversteer or a misjudged
+        // kink (a heavy SUV / a light RWD car there used to leave the road from a 0.2 m wheel-to-edge line).
         for (i = 0; i < n; i++) {
+          // (fast sections only: the extra room is for kinks and sweepers, not for hairpins / kart-track corners)
+          var kAbs = Math.abs(num(A.ck[i]) ? A.ck[i] : 0), fastW = 1 - clamp((kAbs - 0.006) / 0.014, 0, 1);
+          var EM = 1.15 + 0.8 * clamp((7.2 - A.hw[i]) / 2, 0, 1) * fastW;
           var limE = A.hw[i] - EM, knee = limE - 0.8, ao = Math.abs(off[i]);
           if (ao > knee) off[i] = sign(off[i]) * (knee + 0.8 * Math.tanh((ao - knee) / 0.8));
           off[i] = clamp(off[i], -A.hw[i] + 0.8, A.hw[i] - 0.8);
@@ -1085,8 +1090,11 @@ CB.race = CB.race || {};
     return 1 - (0.07 + 0.06 * ov) * smoothstep(30, 52, v) - 0.03 * ov;
   }
 
+  // grip held back on a narrow ribbon at speed (Nordschleife-style 11 m road: no room to absorb a tracking error)
+  var NARROW_MARGIN = 0.06;
   /** Forward/backward-pass speed profile along the AI's racing line (downforce aware). */
-  function internalProfile(A, L, gripScale, latUse) {
+  function internalProfile(A, L, gripScale, latUse, brakeScale) {
+    brakeScale = brakeScale == null ? 1 : brakeScale;
     var n = A.n, v = new Float64Array(n), i, pass;
     // Long fast sweepers are taken with a little extra margin: at 150+ km/h a small line error costs metres of
     // lateral drift before it can be corrected, and there is no braking reserve while the tyres are loaded up.
@@ -1096,7 +1104,7 @@ CB.race = CB.race || {};
       // narrow road: less room to absorb a tracking error at speed (Nordschleife-style 11 m ribbon)
       var narrow = clamp((7.2 - A.hw[i]) / 2, 0, 1);
       for (var it = 0; it < 4; it++) {
-        var muE = L.mu * gripScale * latUse * highSpeedMargin(vi, L) * (1 - 0.06 * narrow * smoothstep(28, 50, vi));
+        var muE = L.mu * gripScale * latUse * highSpeedMargin(vi, L) * (1 - NARROW_MARGIN * narrow * smoothstep(28, 50, vi));
         var denom = k - muE * L.dfK / L.mass;
         vi = denom <= 1e-7 ? L.vTop : Math.min(L.vTop, Math.sqrt(muE * G / denom));
       }
@@ -1113,7 +1121,7 @@ CB.race = CB.race || {};
         // An oversteer-limited car (rear saturates first) gets even less: braking unloads exactly that axle.
         var hs = smoothstep(28, 48, v[j]), ovj = oversteerFactor(L, v[j]);
         circ = Math.sqrt(Math.max(0.12 * (1 - hs) * (1 - 0.5 * ovj), 1 - Math.pow(aLat / Math.max(0.1, aLatMax * (1 - (0.42 + 0.15 * ovj) * hs - 0.12 * ovj)), 2)));
-        var vb = Math.sqrt(v[j] * v[j] + 2 * brakeAccel(L, v[j], gripScale) * latUse * circ * A.lineSeg[i]);
+        var vb = Math.sqrt(v[j] * v[j] + 2 * brakeAccel(L, v[j], gripScale) * brakeScale * latUse * circ * A.lineSeg[i]);
         if (v[i] > vb) v[i] = vb;
       }
       // forward (acceleration)
@@ -1200,11 +1208,12 @@ CB.race = CB.race || {};
     }
 
     var profileCache = {};
-    function profileFor(gripScale) {
-      var key = Math.round(gripScale * 50) / 50;
+    function profileFor(gripScale, brakeScale) {
+      var gk = Math.round(gripScale * 50) / 50, bk = Math.round((brakeScale == null ? 1 : brakeScale) * 25) / 25;
+      var key = gk + ':' + bk;
       if (profileCache[key]) return profileCache[key];
-      var inner = internalProfile(A, L, key, latUse);
-      var tp = trackProfile(A, L, key);
+      var inner = internalProfile(A, L, gk, latUse, bk);
+      var tp = trackProfile(A, L, gk);
       var prof = new Float64Array(A.n);
       for (var i = 0; i < A.n; i++) {
         // track helper (contract) used as a sanity cap on the downforce-aware internal profile
@@ -1356,7 +1365,11 @@ CB.race = CB.race || {};
       // Online grip learning: the planned grip is corrected by what the tyres actually tolerate
       // (robust to any vehicle model / setup / surface). See tyre-saturation monitor below.
       if (S.gripLearn == null) S.gripLearn = 1;
-      var profile = profileFor(gripScale * S.gripLearn);
+      // Online braking learning (adaptive limit): the planned deceleration is corrected by what the car actually
+      // achieves on the brakes and by how hot it arrives where the plan says it should have slowed — robust to a
+      // car that is heavier / has less brake or tyre than its static estimate (mass, aero, Real-car physics).
+      if (S.brakeLearn == null) S.brakeLearn = 1;
+      var profile = profileFor(gripScale * S.gripLearn, S.brakeLearn);
 
       // ---- identify self & context cars
       var cars = Array.isArray(ctx.cars) ? ctx.cars : [];
@@ -2025,7 +2038,7 @@ CB.race = CB.race || {};
       input.steer = steerCmd;
 
       /* ------------------------------------------------ speed target with brake-point anticipation */
-      var aBrakeNow = brakeAccel(L, vAbs, gripScale) * brakeUse;
+      var aBrakeNow = brakeAccel(L, vAbs, gripScale) * brakeUse * (S.brakeLearn || 1);
       if (mistakeIs('lateBrake')) aBrakeNow *= 1 + 0.32 * S.mistake.mag;
       var horizon = clamp(vAbs * vAbs / (2 * Math.max(2, aBrakeNow * 0.8)) + 25, 30, 450);
       var vAllowed = Infinity, ffDecel = 0, j = idx, distAcc = 0, guard = A.n;
@@ -2083,7 +2096,7 @@ CB.race = CB.race || {};
             var vWide = Math.max(vAbs - wide * lerp(1.2, 2.2, skill), myTargetHere * lerp(0.62, 0.72, skill));
             vCmd = Math.min(vCmd, vWide); limCut = Math.min(limCut, vWide);
           }
-          S.dbg.wide = wide; wideAmt = wide;
+          S.dbg.wide = wide; wideAmt = wide; S.edgeRoomNow = edgeRoom;
         }
       }
       if (S.tyreSat > 0.72) limCut = Math.min(limCut, vAbs - (S.tyreSat - 0.72) * lerp(6, 10, skill));   // at the limit: ease off
@@ -2169,6 +2182,34 @@ CB.race = CB.race || {};
       // understeer (rotating less than asked) and too fast: braking is the cure, the fronts need the load
       if (yawExcess < -0.04 && overspeed > 0.5 && S.oversteer < 0.2) brkLimit = Math.max(brkLimit, clamp(0.35 + overspeed * 0.12, 0.35, 0.85));
       brk = Math.min(brk, brkLimit);
+      // ---- adaptive braking limit (see S.brakeLearn): learn from the measured deceleration on a firm, straight
+      // brake, and from arriving faster than the plan while braking as hard as the friction circle allows
+      if (!L.arcade && vAbs > 12 && !recovering && phase === 'racing') {
+        var gLongM = num(vs.gLong) ? -vs.gLong * G : NaN;
+        var bl = S.brakeLearn;
+        if (num(gLongM) && S.brake > 0.75 && latFrac < 0.35) {
+          var aExp = Math.max(1, brakeAccel(L, vAbs, gripScale) * Math.min(1, S.brake / 0.95));
+          var ratio = clamp(gLongM / aExp, 0.5, 1.1);
+          if (ratio < bl) bl += (ratio - bl) * clamp(dt * 1.2, 0, 1);
+          else bl += (Math.min(ratio, 1) - bl) * clamp(dt * 0.15, 0, 1);
+        }
+        if (overspeed > 1.5 && S.brake > Math.min(0.9, brkLimit) - 0.1) bl -= dt * 0.035 * clamp(overspeed - 1.5, 0, 6);
+        // the rear stepping out while braking into a corner hot: brake earlier (and straighter) from now on, and plan
+        // the corners a touch slower (the brakes get released for the slide, so the speed is not shed)
+        // (a car well past ~20 deg of body slip is spinning — the spin recovery owns that, nothing to learn from)
+        var slideOk = Math.abs(vLat) < 0.35 * vAbs;
+        var instab = slideOk ? Math.max(num(S.rearLed) ? S.rearLed : 0, num(S.oversteer) ? S.oversteer : 0) : 0;
+        if (instab > 0.3 && overspeed > 0.5 && (S.brake > 0.1 || brk > 0.1)) {
+          bl -= dt * 0.2 * instab;
+          S.gripLearn = Math.max(0.75, (S.gripLearn || 1) - dt * 0.04 * instab);
+        }
+        else if (overspeed < 0.3 && S.brake > 0.3) bl += dt * 0.003;
+        S.brakeLearn = clamp(bl, 0.55, 1);
+        // cornering at (not above) the plan and still running out of road (near the edge):
+        // the car corners worse than its static estimate -> plan every corner a little slower from now on
+        var atPlan = overspeed < 2 && Math.abs(vLat) < 0.15 * vAbs && S.mode === 'race';
+        if (atPlan && wideAmt > 1.2 && num(S.edgeRoomNow) && S.edgeRoomNow < 1.0) S.gripLearn = Math.max(0.75, (S.gripLearn || 1) - dt * 0.03 * Math.min(4, wideAmt - 1.2));
+      }
       // Oversteer: release brakes (rear unloading) and come off the throttle (power oversteer).
       // Maintenance throttle while loaded up mid-corner: a full lift means engine braking on the driven
       // wheels (lift-off oversteer on RWD), so hold roughly the drag-neutral throttle unless far too fast.
@@ -2237,7 +2278,7 @@ CB.race = CB.race || {};
         mode: S.mode, tactic: S.tacMode, side: S.tacSide, targetSpeed: vCmd, profileSpeed: profile[idx] * speedScale,
         lateral: lat, latTarget: S.latTarget, mistake: S.mistake ? S.mistake.type : null, index: idx, s: pr.s,
         offTrack: offTrack, avoid: avoidPush, ttc: minTTC, steerRatio: S.steerRatio,
-        eLat: eLat, psiE: psiE, sat: S.tyreSat, rearLed: S.rearLed, betaDot: S.betaDot, gl: S.gripLearn, ovs: S.oversteer, brkLimit: brkLimit, yawExcess: yawExcess, wPP: wPP, kTrack: kTrack, kappa: kappa, kFF: kFF, latRef: latRef, dev: S.dev, wide: S.dbg.wide || 0, crawl: obstacleCrawl, stuckT: S.stuckT, stuckCycles: S.stuckCycles || 0, aheadId: ahead ? ahead.key : null, aheadSpd: ahead ? ahead.speed : null,
+        eLat: eLat, psiE: psiE, sat: S.tyreSat, bl: S.brakeLearn, rearLed: S.rearLed, betaDot: S.betaDot, gl: S.gripLearn, ovs: S.oversteer, brkLimit: brkLimit, yawExcess: yawExcess, wPP: wPP, kTrack: kTrack, kappa: kappa, kFF: kFF, latRef: latRef, dev: S.dev, wide: S.dbg.wide || 0, crawl: obstacleCrawl, stuckT: S.stuckT, stuckCycles: S.stuckCycles || 0, aheadId: ahead ? ahead.key : null, aheadSpd: ahead ? ahead.speed : null,
       };
       return finish(input, dt);
     }

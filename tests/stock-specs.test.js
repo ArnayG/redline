@@ -179,5 +179,5 @@ T('calibration accuracy: most stock cars land on the real power, weight, 0-100 a
     if (Math.abs(x.zeroTo100_s - t.zeroTo100_s) <= 0.3) s++;
     if (Math.abs(x.topSpeed_kph - t.topSpeed_kph) / t.topSpeed_kph <= 0.05) v++;
   });
-  assert.ok(hp >= 47 && kg >= 46 && s >= 36 && v >= 48, `hp ${hp} kg ${kg} 0-100 ${s} vmax ${v} of ${n}`);
+  assert.ok(hp >= 47 && kg >= 46 && s >= 44 && v >= 48, `hp ${hp} kg ${kg} 0-100 ${s} vmax ${v} of ${n}`);
 });

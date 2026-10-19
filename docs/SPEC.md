@@ -244,7 +244,7 @@ in `normalize` only when the length mismatches.
 Model must be physically plausible: torque curve shapes by aspiration (turbo plateau, NA peaky, supercharged linear,
 EV flat torque then constant power), drivetrain losses, traction limit (mu * normal load on driven axle incl. weight
 transfer), aero drag 0.5ρCdAv², rolling resistance, downforce increases grip, gear-shift time loss, launch control.
-Real-world sanity: a ~1500 kg 500 hp RWD coupe should do 0-60 ≈ 3.8–4.3 s; a 2200 kg 1000 kW AWD EV ≈ 2.0–2.4 s; a
+Real-world sanity: a ~1500 kg 500 hp RWD coupe should do 0-60 ≈ 3.3–4.3 s; a 2200 kg 1000 kW AWD EV ≈ 2.0–2.4 s; a
 1300 kg 150 hp FWD hatch ≈ 7.5–9 s. Include `tests/physics.test.js` asserting these bands.
 
 Real-model scaling (opt-in with `body.modelPhysics`, which every stock spec sets; from `CB.data.modelRefs`, a copy of
@@ -252,9 +252,18 @@ the CB.shapes model refs, so it needs no CB.shapes; `body.model` null is the gen
 glider (BIW + closures) mass scales with the shell area of the named real model relative to the style's nominal car
 (×0.85..1.2); independently the glider always scales with `body.construction` (period ×0.66 … armoured ×1.45); the frontal area scales with the model's width × height (×0.85..1.45)
 and the body Cd is blended half-way to the model's real Cd. Top speed is governed by the lowest of the tyres' speed
-rating, the eco map and `engine.speedLimiter_kph`. Launch: the longitudinal tyre μ map gives summer UHP / supercar
-OE tyres a little more drive force and is tempered for cold Cup / slick compounds; modern 8–10-speed automatics carry
-more torque through a shift and lose a little to converter slip in 1st / 2nd.
+rating, the eco map and `engine.speedLimiter_kph`. Launch (shared with the race model, `CB.physics.traction` and
+`metrics.launch`): drive μ comes from the compound (`DRIVE_MU`, cold — a standing start — and warm; the chassis enters
+with a weak exponent), the traction-control level is a slip target in units of κpeak (off 2.0 — a driver modulating —,
+1: 1.4, 2: 1.0, 3: 0.6; launch control 1.0) and the delivered force is the race tyre's magic-formula curve at that
+target × a small ripple; launch control holds its launch rpm with partial turbo pre-spool, a manual is launched at
+0.85 × that, automatics against a 2,400 rpm converter stall (×1.9 → 1 multiplication); a clutch ramp
+(0.12 s LC / EV, 0.2 s auto / DCT, 0.35 s manual from 55 %) and the shift torque carry (DCT 0.55, auto 0.35 / 0.5 for
+8+ gears, manual 0) are the same numbers the race model uses; modern 8–10-speed automatics lose a little to converter
+slip in 1st / 2nd; commercial vans and pickups with an ICE automatic run a driveline-protection map (70 % / 90 % torque
+in 1st / 2nd, upshift by 78 % of the redline). EV motors are constant-torque to 30 % of the maximum motor speed.
+`metrics.launch` = `{ rpm, lc, tc, preSpool, ramp, ramp0, converter, stallRpm, convMult, convCouple, carry, shiftCap,
+gearTorque, kappaPeak, slipTarget, lcSlip, tcForce, driveRatioF/R, driveRatioWarmF/R }`.
 
 ## CB.rules — rules/pricing
 

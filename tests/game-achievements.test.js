@@ -178,6 +178,20 @@ test('race-finished: first win, podium, finish, pole from engine classification'
   assert.ok(!got.includes('comeback'));
 });
 
+test('race-finished: Lights Out only from a standing start (not Time Trial / Practice / drift)', () => {
+  ['time-trial', 'practice'].forEach((mode) => {
+    const P = fresh();
+    const got = ids(A.check(P, raceEv({ position: 1, grid: 1, field: 1, mode: mode }), opts()));
+    assert.ok(!got.includes('lights-out'), mode + ': ' + got);
+  });
+  const D = fresh();
+  const ev = raceEv({ position: 1, grid: 1, field: 4 });
+  ev.driftScore = 12345;
+  assert.ok(!ids(A.check(D, ev, opts())).includes('lights-out'), 'drift event');
+  const R = fresh();
+  assert.ok(ids(A.check(R, raceEv({ position: 4, grid: 2, field: 6 }), opts())).includes('lights-out'), 'a finished race unlocks it');
+});
+
 test('race-finished: Grand Slam needs pole + win + fastest lap + led every lap', () => {
   let P = fresh();
   let got = ids(A.check(P, raceEv({ position: 1, grid: 1, fastestLap: true, laps: 5, pbl: [1, 1, 1, 1, 1] }), opts()));

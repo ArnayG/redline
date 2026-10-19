@@ -1513,6 +1513,22 @@ CB.race = CB.race || {};
       return { throttle: rev || 0, brake: moving ? 1 : 0, steer: 0, handbrake: true, shiftUp: false, shiftDown: false };
     }
 
+    // On the grid (and through an AI's reaction time after lights-out) every car is HELD on the line: brakes + clutch
+    // (vehicle input.hold). Revving is allowed — launch control holds its launch rpm and pre-spools, automatics load
+    // the converter — but the car cannot creep, so throttle before lights-out is never a jump start.
+    function gridHold(car, rev) {
+      var o = holdFor(car, rev);
+      o.hold = true;
+      if (!car.V || car.V.isFallback) { o.throttle = 0; return o; }   // the fallback vehicle has no hold: brakes only, no revs
+      o.brake = 0; o.handbrake = false;
+      return o;
+    }
+    function aiGridRev(car) {
+      if (sess.phase === 'grid') return 0;
+      var V = car.V;
+      return V && typeof V.launchHoldThrottle === 'function' ? num(sandboxed(function () { return V.launchHoldThrottle(car.params); }), 0) : 0;
+    }
+
     function callDriver(drv, car) {
       var out;
       try {
@@ -1535,15 +1551,13 @@ CB.race = CB.race || {};
         car.autopilotActive = auto;
         if (auto) {
           var ai = callDriver(playerAutopilot(), car);
-          if (preStart) return holdFor(car, 0);
+          if (preStart) return gridHold(car, aiGridRev(car));
           if (car.finished || ph === 'finished') ai.throttle *= 0.7;
           return ai;
         }
-        if (preStart && cfg.mode !== 'race') {
-          return holdFor(car, clamp01(num(+(pin && pin.throttle), 0)) * 0.6);   // TT/practice: rev freely, car is held
-        }
+        // every mode: rev freely, the car is held until lights-out (no throttle-based jump start)
+        if (preStart) return gridHold(car, clamp01(num(+(pin && pin.throttle), 0)));
         var u = cleanInput(pin);
-        if (preStart && u.brake > 0 && carSpeed(car) < 0.6) { u.brake = 0; u.handbrake = true; }   // no reverse on the grid
         if (cfg.assists.steeringAssist) {
           var sp = Math.abs(num(car.state.speed, 0));
           var target = u.steer / (1 + Math.pow(sp / 45, 2) * 0.6);
@@ -1555,8 +1569,8 @@ CB.race = CB.race || {};
       }
       var drv = car.driver;
       var out = callDriver(drv, car);
-      if (preStart) return holdFor(car, 0);
-      if (ph === 'racing' && sess.goT !== null && t < sess.goT + num(car.launchDelay, 0)) return holdFor(car, 0);
+      if (preStart) return gridHold(car, aiGridRev(car));
+      if (ph === 'racing' && sess.goT !== null && t < sess.goT + num(car.launchDelay, 0) && carSpeed(car) < 0.6) return gridHold(car, aiGridRev(car));
       if (out.requestReset && ph === 'racing' && t - car.lastResetT > 6) { resetCar(car, false, 'request'); return holdFor(car, 0); }
       if (car.reaction === null && sess.goT !== null && out.throttle > 0.2) car.reaction = t - sess.goT;
       return out;
@@ -1567,7 +1581,11 @@ CB.race = CB.race || {};
       var st = car.state, px = st.x, py = st.y;
       car.prevX = px; car.prevY = py; car.prevH = st.heading;
       var env = envFor(car), V = car.V, res, stepParams = car.params;
-      if (hookList.length) { var hv = hookedVehicle(car, env, inp); env = hv.env; inp = hv.input; stepParams = hv.params; }
+      if (hookList.length) {
+        var held = inp && inp.hold;
+        var hv = hookedVehicle(car, env, inp); env = hv.env; inp = hv.input; stepParams = hv.params;
+        if (held && inp && !inp.hold) inp = Object.assign({}, inp, { hold: true });   // hooks keep the grid hold
+      }
       try { res = V.step(stepParams, st, inp, STEP, env); } catch (e) { res = null; sess.vehicleErrors = (sess.vehicleErrors || 0) + 1; }
       if (res && res !== st && typeof res === 'object' && isNum(res.x)) car.state = st = res;
       if (!isNum(st.x) || !isNum(st.y) || !isNum(st.heading) || !isNum(num(st.vx, 0)) || !isNum(num(st.vy, 0))) {
@@ -2080,7 +2098,9 @@ CB.race = CB.race || {};
         for (i = 0; i < cars.length; i++) {
           var jc = cars[i];
           if (jc.jumpStart) continue;
-          var selfPropelled = !jc.gridShunt || num(jc.input && jc.input.throttle, 0) > 0.08;
+          // only actual movement counts (cars are held on the line, so revving can never move one); a car shunted
+          // out of its box by someone else is not jumping the start
+          var selfPropelled = !jc.gridShunt;
           if (selfPropelled && Math.hypot(jc.state.x - jc.gridPose.x, jc.state.y - jc.gridPose.y) > 0.8) {
             jc.jumpStart = true;
             emit('jumpstart', jc, 0.9, cfg.jumpStartPenalty_s, 'Jump start — ' + jc.name);
@@ -2271,6 +2291,9 @@ CB.race = CB.race || {};
           gap = c.bestLap !== null && winner.c.bestLap !== null ? c.bestLap - winner.c.bestLap : null;
           gapText = c.bestLap === null ? 'No time' : i === 0 ? fmtTime(c.bestLap) : '+' + fmtTime(gap);
         }
+        // position-by-lap chart: the last entry is the classified position (time penalties applied), as in the table
+        var pbl = c.lapPositions.slice();
+        if (race && r.status === 'finished' && pbl.length) pbl[pbl.length - 1] = i + 1;
         return {
           position: i + 1, id: c.id, name: c.name, team: c.team, number: c.number, color: c.color, accent: c.accent,
           isPlayer: c.isPlayer, bodyStyle: c.bodyStyle, status: r.status, laps: c.finished ? c.finishLaps : c.tracker.lap,
@@ -2278,7 +2301,7 @@ CB.race = CB.race || {};
           gap_s: gap, gapText: gapText, bestLap_s: c.bestLap, lastLap_s: c.lastLap,
           lapTimes: c.lapTimes.map(function (l) { return l.time; }), laps_detail: c.lapTimes.map(function (l) { return { lap: l.lap, time: l.time, valid: l.valid, sectors: l.sectors.slice() }; }),
           bestSectors: c.bestSectors.slice(), trackLimits: c.tlCount, jumpStart: c.jumpStart, collisions: c.collisions,
-          gridPosition: c.gridPosition, positionsByLap: c.lapPositions.slice(), reaction_s: c.reaction,
+          gridPosition: c.gridPosition, positionsByLap: pbl, reaction_s: c.reaction,
           topSpeed_kph: round(c.maxSpeed * 3.6, 1), dnfReason: c.dnfReason, fastestLap: !!(sess.fastestLap && sess.fastestLap.carId === c.id),
           pitStops: c.pitStops || 0, pitLog: c.pitLog ? c.pitLog.slice() : [], endurance: hookSnapshot(c)
         };

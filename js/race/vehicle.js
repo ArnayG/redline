@@ -73,6 +73,12 @@ CB.race = CB.race || {};
   var V_LOW_LAT = 3.0;    // slip-angle denominator floor (m/s)
   var KIN_V0 = 0.8;       // below: fully kinematic
   var KIN_V1 = 3.2;       // above: fully dynamic
+  // Launch / traction-control model shared with CB.physics (CB.physics.traction): slip targets in units of κpeak per
+  // TC level (0 off: no controller), launch-control target, torque-converter stall / multiplication. Local copies
+  // keep the race model self-contained when physics.js is not loaded.
+  function TRX() { return (CB.physics && CB.physics.traction) || null; }
+  var TC_TAU = 0.06;      // s: traction-control wheel-speed feedback time constant
+  var TC_SLIP_FB = [2.0, 1.4, 1.0, 0.6], LC_SLIP_FB = 1.0, CONVERTER_FB = { stallRpm: 2400, mult: 1.9, couple: 0.85 };
 
   /* -------------------------------------------------------------- helpers */
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -629,6 +635,11 @@ CB.race = CB.race || {};
     var efficiency = clamp(fin(trO.efficiency, 0.92), 0.6, 1);
     var converter = trT === 'auto' || !!trO.converter;
     var launchControl = !!trB.launchControl;
+    // launch plan (CB.physics metrics.launch): launch rpm / converter stall, clutch ramp, pre-spool, shift carry,
+    // drive μ relative to the cornering μ (cold & warm tyres) — the same numbers the Garage's 0–100 uses
+    var LP = M.launch && typeof M.launch === 'object' ? M.launch : null;
+    var TX = TRX(), CONV = (TX && TX.CONVERTER) || CONVERTER_FB;
+    if (LP && isFinite(LP.carry)) shiftCut = clamp(LP.carry, 0, 1);
 
     /* --- drivetrain --- */
     var layout = dt.layout === 'fwd' || dt.layout === 'awd' ? dt.layout : 'rwd';
@@ -701,7 +712,19 @@ CB.race = CB.race || {};
       // gearbox
       transmission: trT, ratios: ratios, finalDrive: finalDrive, maxGear: maxGear, reverseRatio: reverseRatio,
       reverseMax: 8.5, isCVT: isCVT, cvtMin: cvtMin, cvtMax: cvtMax, shiftTime: shiftTime, shiftCut: shiftCut, efficiency: efficiency,
-      converter: converter, launchControl: launchControl, launchRpm: isEV ? 0 : clamp(Math.max(peakNmRpm * 0.85, red * 0.5), idle + 1200, red * 0.75),
+      converter: converter, launchControl: launchControl,
+      launchRpm: isEV ? 0 : (LP && LP.rpm > 0 ? clamp(LP.rpm, idle + 400, red * 0.95) :
+        launchControl ? clamp(Math.max(peakNmRpm * 0.85, red * 0.5), idle + 1200, red * 0.75) :
+        converter ? Math.min(clamp(Math.max(peakNmRpm * 0.85, red * 0.5), idle + 1200, red * 0.75), 2600) :
+        clamp(Math.max(peakNmRpm * 0.85, red * 0.5), idle + 1200, red * 0.75) * (trT === 'manual' || trT === 'sequential' ? 0.85 : 1)),
+      stallRpm: num(LP && LP.stallRpm, CONV.stallRpm), convMult: num(LP && LP.convMult, CONV.mult), convCouple: num(LP && LP.convCouple, CONV.couple),
+      preSpool: num(LP && LP.preSpool, launchControl ? 0.55 : 0.15),
+      clutchRamp: num(LP && LP.ramp, launchControl || isEV ? 0.12 : trT === 'manual' ? 0.35 : 0.2), clutchRamp0: num(LP && LP.ramp0, 0.55),
+      shiftCap: clamp(num(LP && LP.shiftCap, 1), 0.5, 1), gearTorque: LP && Array.isArray(LP.gearTorque) ? LP.gearTorque.slice() : null,
+      tcSlip: ((TX && TX.TC_SLIP) || TC_SLIP_FB).slice(), lcSlip: num(TX && TX.LC_SLIP, LC_SLIP_FB),
+      // drive μ multiplier on the tyre's longitudinal force when driving (κ > 0), cold → warm tyres (1 = legacy 1.1·μ)
+      driveXF: LP && LP.driveRatioF > 0 ? LP.driveRatioF / 1.1 : 1, driveXR: LP && LP.driveRatioR > 0 ? LP.driveRatioR / 1.1 : 1,
+      driveXWarmF: LP && LP.driveRatioWarmF > 0 ? LP.driveRatioWarmF / 1.1 : 1, driveXWarmR: LP && LP.driveRatioWarmR > 0 ? LP.driveRatioWarmR / 1.1 : 1,
       upshiftRpm: null, downshiftRpm: null,
       // drivetrain
       layout: layout, splitF: splitF, lockF: lockF, lockR: lockR, lockC: lockC, torqueVectoring: torqueVectoring,
@@ -756,7 +779,7 @@ CB.race = CB.race || {};
         var f2 = lookupTorque(p, rpm * r2 / r1) * r2;
         if (f2 >= f1) { best = Math.max(rpm, p.redline * 0.72); break; }
       }
-      up.push(Math.min(best, p.redline * 0.985));
+      up.push(Math.min(best, p.redline * 0.985, p.redline * (p.shiftCap || 1)));
     }
     for (var d = 1; d <= n; d++) {
       if (d === 1) { down.push(0); continue; }
@@ -1174,7 +1197,8 @@ CB.race = CB.race || {};
       wheels: [makeWheel(), makeWheel(), makeWheel(), makeWheel()], // FL, FR, RL, RR
       odometer: 0, t: 0, nanGuard: 0, driveTorque: 0, brakeLight: false, redline: params.redline,
       handling: params.handling === 'arcade' ? 'arcade' : 'sim', arcSteer: 0, spin: null, boosting: false,
-      slideAngle: 0, slideDir: 0, powerslide: false, slideTime: 0, slideRate: 0
+      slideAngle: 0, slideDir: 0, powerslide: false, slideTime: 0, slideRate: 0,
+      held: false, releaseT: 0, tcTrim: 1, tcCap: Infinity, tyreWarm: clamp(num(pose.tyreWarm, 0), 0, 1)
     };
     reset(params, s, pose);
     return s;
@@ -1189,6 +1213,7 @@ CB.race = CB.race || {};
     s.steerAngle = 0; s.ax = 0; s.ay = 0; s.gLong = 0; s.gLat = 0;
     s.shiftTimer = 0; s.shiftCooldown = 0; s.loadHold = 0; s.shifting = false; s.reverseTimer = 0; s.reversing = false;
     s.tcFactor = 1; s.spool = 0; s.limiter = false; s.fuelCut = false; s.launch = false;
+    s.held = false; s.releaseT = v > 1 ? 99 : 0; s.tcTrim = 1; s.tcCap = Infinity;
     s.spin = null; s.arcSteer = 0; s.slideAngle = 0; s.slideDir = 0; s.powerslide = false; s.slideTime = 0; s.slideRate = 0;
     for (var i = 0; i < 4; i++) {
       var w = s.wheels[i];
@@ -1221,7 +1246,7 @@ CB.race = CB.race || {};
   /* ------------------------------------------------------- tyre model */
   // Writes into TIRE scratch: fx, fy (wheel frame), s (normalised slip)
   var TIRE = { fx: 0, fy: 0, s: 0 };
-  function tire(p, Fz, mu, kp, ap, kappa, tanA) {
+  function tire(p, Fz, mu, kp, ap, kappa, tanA, dx) {
     var sx = kappa / kp, sy = tanA / ap;
     var s = Math.sqrt(sx * sx + sy * sy);
     TIRE.s = s;
@@ -1230,9 +1255,40 @@ CB.race = CB.race || {};
     var f = Math.sin(p.shapeC * Math.atan(Bs));
     if (s > 1) f *= 1 - 0.06 * Math.min(1, (s - 1) / 4); // extra sliding friction loss
     var F = mu * Fz * f;
-    TIRE.fx = F * p.muXScale * sx / s;
+    TIRE.fx = F * p.muXScale * sx / s * (kappa > 0 && dx ? dx : 1);
     TIRE.fy = -F * sy / s;
     return TIRE;
+  }
+
+  /** Drive μ multiplier of wheel i (κ > 0 only): cold → warm tyres. */
+  function driveX(p, s, i) {
+    var f = i < 2, c = f ? p.driveXF : p.driveXR, wm = f ? p.driveXWarmF : p.driveXWarmR;
+    if (!(c > 0)) return 1;
+    return wm > 0 ? c + (wm - c) * clamp(num(s.tyreWarm, 0), 0, 1) : c;
+  }
+
+  /** Car held on the line (input.hold): stopped, clutch open; the engine revs (launch control: 2-step at the launch
+   *  rpm with pre-spool; automatic: against the converter stall; otherwise free to the limiter). */
+  function holdStep(p, s, thr, launchCtl, dt) {
+    s.vx = 0; s.vy = 0; s.yawRate = 0; s.speed = 0; s.ax = 0; s.ay = 0; s.gLong = 0; s.gLat = 0;
+    s.steerAngle = 0;
+    for (var i = 0; i < 4; i++) { var w = s.wheels[i]; w.omega = 0; w.kappa = 0; w.alpha = 0; w.fx = 0; w.fy = 0; w.slip = 0; w.skid = 0; w.locked = false; }
+    s.held = true; s.releaseT = 0; s.tcTrim = 1; s.wheelspin = 0; s.skidding = 0; s.tcActive = false; s.absActive = false;
+    s.clutchLocked = !!p.isEV; s.clutch = 0; s.driveTorque = 0;
+    if (p.isEV) { s.rpm = s.engineRpm = 0; s.spool = 1; s.boost = thr; return; }
+    var target;
+    if (launchCtl) target = p.converter ? Math.max(p.launchRpm, num(p.stallRpm, 2400)) : p.launchRpm;
+    else if (p.converter) target = p.idle + thr * (Math.min(num(p.stallRpm, 2400), p.redline * 0.6) - p.idle);
+    else target = p.idle + thr * (p.redline * 1.02 - p.idle);
+    s.engineRpm = approach(s.engineRpm, target, dt * (target > s.engineRpm ? 9000 : 5000));
+    if (s.engineRpm >= p.limiterRpm) { s.fuelCut = true; s.engineRpm = p.redline - 120; } else if (s.engineRpm < p.redline - 180) s.fuelCut = false;
+    s.limiter = s.fuelCut;
+    s.rpm = s.engineRpm;
+    if (p.turbo) {
+      var spT = launchCtl || (p.converter && thr > 0.9) ? num(p.preSpool, 0.55) : 0.15 * thr;
+      s.spool += (spT - s.spool) * (1 - Math.exp(-dt / 0.35));
+      s.boost = s.spool;
+    } else { s.spool = 1; s.boost = thr; }
   }
 
   /* ---------------------------------------------------- engine torque */
@@ -1291,7 +1347,7 @@ CB.race = CB.race || {};
       var upLoad = Math.max(load, s.loadHold * 0.9);
       var upAt = lerp(Math.max(p.idle + 1600, p.redline * 0.42), p.upshiftRpm[g - 1], Math.pow(upLoad, 0.65));
       var spinning = s.wheelspin > 0.35 && rpm < p.redline * 0.97;
-      if (rpm > upAt && !spinning && !s.launch) { requestShift(p, s, g + 1); return; }
+      if (rpm > upAt && !spinning) { requestShift(p, s, g + 1); return; }
     }
     if (g > 1) {
       var lowerRpm = rpmG(g - 1);
@@ -1348,6 +1404,20 @@ CB.race = CB.race || {};
     // travel direction while sliding, so a slide can be counter-steered at speed (inert unless the flag is set)
     s.slideRack = !!input.slideRack;
 
+    // input.hold: the car is held on the line (brakes + clutch / transbrake) — the engine revs freely (launch control:
+    // to its 2-step launch rpm, pre-spooling the turbo; automatics against the converter stall) but it cannot move
+    // (the race engine holds every car this way until lights-out, so a revving start is never a jump start).
+    if (input.hold) {
+      if (s.gear !== 1) { s.gear = 1; s.shiftTimer = 0; s.shifting = false; s.shiftCooldown = 0; }
+      s.reversing = false; s.reverseTimer = 0;
+      var lcH = p.launchControl && p.handling !== 'arcade' && rawThr > 0.9;
+      s.launch = lcH;
+      holdStep(p, s, rawThr, lcH, dt);
+      s.throttle = rawThr; s.brake = 1; s.handbrake = false; s.brakeLight = true; s.t += dt;
+      s.heading = wrapAngle(s.heading);
+      return s;
+    }
+
     /* ---------- gear selection: manual edges, reverse logic ---------- */
     var fwdSpeed = s.vx;
     if (input.shiftUp) {
@@ -1381,8 +1451,17 @@ CB.race = CB.race || {};
     if (s.autoShift) autoShiftLogic(p, s, pedalDrive, pedalBrake, dt);
 
     /* ---------- launch control ---------- */
+    // input.hold: the car is held on the line (brakes + clutch / transbrake) — the engine revs freely (launch control:
+    // to its 2-step launch rpm, pre-spooling the turbo; automatics against the converter stall) but it cannot move.
     var launchCtl = p.launchControl && p.handling !== 'arcade' && s.gear === 1 && pedalDrive > 0.9 && s.vx < 12 && (s.launch || Math.abs(s.vx) < 1);
     s.launch = launchCtl;
+    if (s.held) { s.held = false; s.releaseT = 0; }
+    // a fresh standing start (no hold): the clutch ramp runs from the first press of the throttle
+    if (Math.abs(s.vx) < 0.4 && pedalDrive < 0.05 && s.gear === 1) s.releaseT = 0;
+    else if (pedalDrive >= 0.05 || Math.abs(s.vx) > 3) s.releaseT += dt;
+    // tyre warm-up (drive μ of Cup / slick compounds needs heat): ~a lap of running, slow cool-down when parked
+    var sp0 = Math.abs(s.vx);
+    s.tyreWarm = clamp(s.tyreWarm + dt * (sp0 > 3 ? sp0 / 2400 + s.wheelspin * 0.02 : -1 / 240), 0, 1);
 
     /* ---------- environment ---------- */
     var grip = clamp(num(env.gripMult, 1), 0.05, 2);
@@ -1508,7 +1587,8 @@ CB.race = CB.race || {};
 
     /* ---- spool ---- */
     if (p.turbo) {
-      var spT = clamp(thr * smoothstep(p.idle, p.idle + 2200, s.engineRpm) + (launchCtl ? 0.8 : 0), 0, 1);
+      var spT = clamp(thr * smoothstep(p.idle, p.idle + 2200, s.engineRpm), 0, 1);
+      if (launchCtl) spT = Math.max(spT, num(p.preSpool, 0.55));
       var tau = spT > s.spool ? 0.08 + p.turboLag * 1.1 : 0.35;
       s.spool += (spT - s.spool) * (1 - Math.exp(-h / tau));
       s.boost = s.spool;
@@ -1542,10 +1622,48 @@ CB.race = CB.race || {};
       }
       maxDrivenK = Math.max(maxDrivenK, kN);
     }
-    var tcTarget = launchCtl ? 1.05 : tcLevel === 3 ? 1.0 : tcLevel === 2 ? 1.35 : tcLevel === 1 ? 1.9 : Infinity;
-    if (isFinite(tcTarget)) {
-      if (maxDrivenK > tcTarget) s.tcFactor = Math.max(0.05, s.tcFactor - h * 14 * Math.min(3, (maxDrivenK - tcTarget) / tcTarget + 0.2));
-      else s.tcFactor = Math.min(1, s.tcFactor + h * 2.8);
+    /* Traction control = a drive-torque limiter on a slip TARGET (κ/κpeak per TC level; launch control: the peak).
+       Feed-forward: the wheel torque the driven tyres can take at the target slip (tyre model at the current load,
+       μ and slip angle, open diffs limited by the lighter wheel) + the torque that spins the wheels up with the car;
+       feedback: a slow trim on the measured slip. Because the cap does not depend on the engine, more power can
+       never launch slower (the old throttle-cut bang-bang could invert that). ESC (tcFactor) only guards body slip. */
+    // assists.driverSlip (> 0): with TC off, a skilled driver modulating the throttle around that slip (reference runs)
+    var slipT = launchCtl ? num(p.lcSlip, 1) : tcLevel > 0 ? num((p.tcSlip || TC_SLIP_FB)[tcLevel], 1) : Math.max(0, num(assists.driverSlip, 0));
+    s.tcCap = Infinity;
+    if (slipT > 0 && s.gear > 0) {
+      var capAx = [0, 0], capLo = [Infinity, Infinity], capHi = [0, 0];
+      var axIn = Math.max(0, s.ax);
+      // a coupled engine (and EV rotor) spins up with the wheels: its inertia torque is part of the feed-forward,
+      // and the feedback pulls each wheel back to its target speed within TC_TAU
+      var coupled = (s.clutchLocked || p.isEV) && s.shiftTimer <= 0;
+      var GtC = gearRatioTotal(p, s.gear, s.cvtRatio), ieC = coupled ? p.engineInertia * GtC * GtC : 0;
+      for (var ci = 0; ci < 4; ci++) if (drv[ci]) {
+        var cf = ci < 2, cw = w[ci], cR = cf ? p.radiusF : p.radiusR;
+        var cmu = (cf ? p.muF : p.muR) * gripMult * (wg ? num(wg[ci], 1) : 1);
+        cmu *= clamp(1 - p.loadSens * (cw.load - (cf ? fzRefF : fzRefR)) / (cf ? fz0F : fz0R), 0.72, 1.18);
+        var ckp = cf ? p.kappaPeakF : p.kappaPeakR, cap0 = cf ? p.tanAlphaPeakF : p.tanAlphaPeakR;
+        // combined slip: a tyre already working sideways has less to give for drive (the cap shrinks mid-corner)
+        tire(p, cw.load, cmu, ckp, cap0, slipT * ckp, cw._tanA != null ? cw._tanA : 0, driveX(p, s, ci));
+        var Ii = (cf ? p.IwF : p.IwR) + ieC * (cf ? p.splitF : 1 - p.splitF) * 0.5;
+        var vwx = num(cw._wvx, vx), omT = (vwx + slipT * ckp * Math.max(Math.abs(vwx), V_LOW_LONG)) / cR;
+        var tq = Math.max(0, Math.max(0, TIRE.fx) * cR + Ii * (axIn / cR - (cw.omega - omT) / TC_TAU));
+        var ax_ = cf ? 0 : 1;
+        capAx[ax_] += tq; capLo[ax_] = Math.min(capLo[ax_], tq); capHi[ax_] = Math.max(capHi[ax_], tq);
+      }
+      var axleCap = function (k, lock) { return lock * capAx[k] + (1 - lock) * 2 * (isFinite(capLo[k]) ? capLo[k] : 0); };
+      var cFa = p.splitF > 0 ? axleCap(0, p.lockF) : 0, cRa = p.splitF < 1 ? axleCap(1, p.lockR) : 0;
+      var capT;
+      if (p.splitF >= 1) capT = cFa;
+      else if (p.splitF <= 0) capT = cRa;
+      else {
+        var fixedC = Math.min(cFa / p.splitF, cRa / (1 - p.splitF));
+        capT = Math.min(cFa + cRa, p.lockC * (cFa + cRa) + (1 - p.lockC) * fixedC);
+      }
+      s.tcTrim = 1;
+      s.tcCap = capT * s.tcTrim / Math.max(0.05, p.efficiency);   // as engine-side torque × ratio (efficiency re-applied below)
+    } else s.tcTrim = 1;
+    if (tcLevel > 0) {
+      s.tcFactor = Math.min(1, s.tcFactor + h * 2.8);
       // ESC-style guard on large body slip
       if (tcLevel >= 2 && vAbs > 8) {
         // ESC-style stability guard: body slip angle plus yaw rate in excess of what the front axle asks
@@ -1561,6 +1679,8 @@ CB.race = CB.race || {};
     } else s.tcFactor = 1;
     var thrEff = thr * s.tcFactor;
     s.tcActive = thr > 0.05 && s.tcFactor < 0.97;
+    // clutch / converter take-up ramp after a standing start (the Garage's driver ramp)
+    var rampF = s.releaseT < num(p.clutchRamp, 0) && Math.abs(vx) < 15 ? lerp(num(p.clutchRamp0, 0.55), 1, s.releaseT / Math.max(1e-3, p.clutchRamp)) : 1;
     if (vAbs > p.governor) thrEff = Math.min(thrEff, Math.max(0, 1 - (vAbs - p.governor) * 0.5));
     // reverse speed limiter (~30 km/h)
     if (s.gear < 0) thrEff *= clamp((p.reverseMax + vx) / 2, 0, 1);
@@ -1601,20 +1721,30 @@ CB.race = CB.race || {};
         engineCoupled = true; s.clutch = 1;
       } else {
         // slipping clutch / torque converter: engine revs toward a stall/launch speed
-        var stall = launchCtl ? p.launchRpm : p.converter ? Math.min(p.redline * 0.42, 2800) : clamp(p.peakNmRpm * 0.7, p.idle + 1000, p.redline * 0.6);
+        // slipping clutch / torque converter: launch control holds its launch rpm, a converter its stall speed, a
+        // driver slips the clutch at the launch rpm of the plan (CB.physics metrics.launch)
+        var stall = p.converter ? Math.max(num(p.stallRpm, 2400), launchCtl ? p.launchRpm : 0) : p.launchRpm || clamp(p.peakNmRpm * 0.7, p.idle + 1000, p.redline * 0.6);
         var tgt = Math.max(p.idle + thrEff * (stall - p.idle), Math.abs(wheelRpm));
         s.engineRpm = approach(s.engineRpm, tgt, h * (tgt > s.engineRpm ? 7000 : 5000));
         var teC = Math.max(0, engineTorque(p, s, s.engineRpm, thrEff));
         var engage = smoothstep(p.idle, p.idle + 400, s.engineRpm) * (thrEff > 0.02 ? 1 : 0);
         var mult = 1;
         if (p.converter) {
-          var sr = clamp(Math.abs(wheelRpm) / Math.max(s.engineRpm, 1), 0, 1);
-          mult = 1 + 0.9 * (1 - sr); // torque multiplication
+          var sr = clamp(Math.abs(wheelRpm) / Math.max(num(p.stallRpm, 2400), 1), 0, 1);
+          mult = lerp(num(p.convMult, 1.9), 1, clamp(sr / num(p.convCouple, 0.85), 0, 1)); // torque multiplication
           if (thrEff < 0.02 && brk < 0.05) teC = p.peakNm * 0.06, engage = 1; // creep
         }
         driveT = teC * engage * mult * Gt * p.efficiency;
         s.clutch = engage * 0.5;
       }
+    }
+    if (driveT > 0) {
+      driveT *= rampF;
+      // converter not yet locked up in 1st / 2nd: a few % slip loss (as in the Garage)
+      if (p.converter && s.gear >= 1 && s.gear <= 2 && !p.isEV) driveT *= 0.95;
+      if (p.gearTorque && s.gear >= 1 && s.gear <= p.gearTorque.length) driveT *= num(p.gearTorque[s.gear - 1], 1);
+      var capW = s.tcCap * p.efficiency;
+      if (driveT > capW) { driveT = capW; if (thr > 0.05) s.tcActive = true; }
     }
     s.rpm = clamp(s.engineRpm, 0, p.isEV ? p.redline * 1.05 : p.limiterRpm + 150);
     s.driveTorque = driveT;
@@ -1680,9 +1810,10 @@ CB.race = CB.race || {};
 
       // implicit spin update
       var kap0 = clamp((wh.omega * R - wvx) / den, -1.5, 12);
-      tire(p, Fz, mu, kpk, apk, kap0, tanA);
+      var dxi = driveX(p, s, i);
+      tire(p, Fz, mu, kpk, apk, kap0, tanA, dxi);
       var fx0 = TIRE.fx;
-      tire(p, Fz, mu, kpk, apk, kap0 + 0.002, tanA);
+      tire(p, Fz, mu, kpk, apk, kap0 + 0.002, tanA, dxi);
       var slope = Math.max(0, (TIRE.fx - fx0) / 0.002); // dFx/dkappa
       var kw = slope * R / den;                         // dFx/domega
       var denomI = Iw + h * R * kw;
@@ -1696,7 +1827,7 @@ CB.race = CB.race || {};
       wh.omega = om;
       wh.locked = locked;
       wh._R = R; wh._mu = mu; wh._kp = kpk; wh._ap = apk; wh._den = den; wh._tanA = tanA; wh._wvx = wvx;
-      wh._Iw = Iw;
+      wh._Iw = Iw; wh._dx = dxi;
     }
 
     /* ---- differentials: speed equalisation (LSD / locking / centre) ---- */
@@ -1723,7 +1854,7 @@ CB.race = CB.race || {};
     for (var j = 0; j < 4; j++) {
       var q2 = w[j];
       var kap = clamp((q2.omega * q2._R - q2._wvx) / q2._den, -1.5, 12);
-      tire(p, q2.load, q2._mu, q2._kp, q2._ap, kap, q2._tanA);
+      tire(p, q2.load, q2._mu, q2._kp, q2._ap, kap, q2._tanA, q2._dx);
       q2.kappa = kap;
       q2.alpha = Math.atan(q2._tanA);
       q2.fx = TIRE.fx; q2.fy = TIRE.fy;
@@ -1859,15 +1990,31 @@ CB.race = CB.race || {};
     return out;
   }
 
+  /** Throttle that holds a car without launch control at its launch rpm on the line (launch control / converter /
+   *  EV: full throttle). AI drivers and the reference launch use it; a human may rev wherever they like. */
+  function launchHoldThrottle(p) {
+    if (p.isEV || p.launchControl || p.converter || !(p.launchRpm > 0)) return 1;
+    return clamp((p.launchRpm - p.idle) / Math.max(1, p.redline * 1.02 - p.idle), 0.1, 1);
+  }
+
   /** Straight-line launch sim (full throttle). Returns {t (s) to target or null, trace}. */
   function simulateLaunch(p, targetKph, opts) {
     opts = opts || {};
     var s = createState(p, { x: 0, y: 0, heading: 0, autoShift: true });
     var dt = opts.dt || 1 / 120, tMax = opts.tMax || 60;
     var env = opts.env || { gripMult: 1, wet: 0 };
+    // TC off: the reference driver modulates the throttle near the limit (the Garage's "driver-modulated" launch)
+    if (p.tcLevel === 0 && opts.driver !== false && !(env.assists && env.assists.driverSlip)) {
+      env = Object.assign({}, env, { assists: Object.assign({}, env.assists || {}, { driverSlip: (p.tcSlip || TC_SLIP_FB)[0] }) });
+    }
     var target = targetKph / 3.6;
     var trace = [];
     var inp = { throttle: 1, brake: 0, steer: 0, handbrake: false };
+    // staged start (default): held on the line at full throttle (launch control / converter stall / revs, turbo
+    // pre-spool) for opts.stage_s, timed from the release — how the factory 0–100 and the Garage figure are taken
+    var stage = opts.stage === false ? 0 : num(opts.stage_s, 1.5);
+    var holdInp = { throttle: launchHoldThrottle(p), brake: 0, steer: 0, handbrake: false, hold: true };
+    for (var st = 0; st < stage; st += dt) step(p, s, holdInp, dt, env);
     for (var t = 0; t < tMax; t += dt) {
       step(p, s, inp, dt, env);
       if (opts.trace && Math.round(t / dt) % 6 === 0) trace.push({ t: t, kph: s.vx * 3.6, gear: s.gear, rpm: s.rpm });
@@ -1887,6 +2034,7 @@ CB.race = CB.race || {};
     applyImpulse: applyImpulse,
     wheelPositions: wheelPositions,
     simulateLaunch: simulateLaunch,
+    launchHoldThrottle: launchHoldThrottle,
     gearRatio: gearRatioTotal,
     torqueAt: lookupTorque,
     accelAt: accelAt,

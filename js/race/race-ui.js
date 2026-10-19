@@ -5251,7 +5251,7 @@ CB.race = CB.race || {};
     U.host.appendChild(h('div', { class: 'rx-results' }, head, main, foot));
     var draw = function () {
       try { drawLapChart(lapCv, myLaps, compare ? (R.tracker.cars[compare.id] || { laps: [] }).laps : null, compare ? compare.color : null, pb && pb.time); } catch (e) { /* ignore */ }
-      if (posCv) { try { drawPositionChart(posCv, myTrack, total, gridPos); } catch (e2) { /* ignore */ } }
+      if (posCv) { try { drawPositionChart(posCv, myTrack, total, gridPos, myRow && myRow.status === 'finished' ? myRow.position : null); } catch (e2) { /* ignore */ } }
     };
     U.resultsRedraw = draw;
     requestAnimationFrame(draw);
@@ -5452,12 +5452,14 @@ CB.race = CB.race || {};
     series(laps, acc, 2.2, true, laps.length === 1 ? 'You' : null);
   }
 
-  function drawPositionChart(canvas, track, total, gridPos) {
+  function drawPositionChart(canvas, track, total, gridPos, finalPos) {
     var f = fitCanvas(canvas), ctx = f.ctx, W = f.w, H = f.h;
     ctx.clearRect(0, 0, W, H);
     var pts = [];
     if (isNum(gridPos)) pts.push(gridPos);
     if (track) track.positions.forEach(function (p) { if (isNum(p)) pts.push(p); });
+    // the finish point is the classified position (time penalties applied), so the chart matches the table
+    if (isNum(finalPos) && pts.length >= 2) pts[pts.length - 1] = finalPos;
     if (pts.length < 2) {
       ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('Not enough laps', W / 2, H / 2);
       return;

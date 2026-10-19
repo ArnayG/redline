@@ -1612,7 +1612,7 @@ CB.race = CB.race || {};
         font(ctx, '700', 15 * k);
         ctx.save();
         ctx.globalAlpha = 0.6 + 0.4 * Math.sin(tnow / 300);
-        var cap = lightsOn > 0 ? (lightsOn >= 5 ? 'WAIT FOR LIGHTS OUT' : 'HOLD YOUR GRID SLOT') : 'GET READY';
+        var cap = lightsOn > 0 ? (lightsOn >= 5 ? 'WAIT FOR LIGHTS OUT' : 'REV UP · HELD ON THE LINE') : 'GET READY';
         if ((snap.mode || 'race') !== 'race') cap = lightsOn > 0 ? 'GET READY' : 'PREPARE TO LAUNCH';
         // dark backing pill so the caption stays readable over bright track/scenery
         var capW = ctx.measureText(cap).width + 34 * k, capH = 26 * k;

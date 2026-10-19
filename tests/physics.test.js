@@ -160,7 +160,9 @@ function tuneBoost(base, targetHp) {
   return with_(base, { engine: { boost_bar: (lo + hi) / 2 } });
 }
 
-test('physics sanity: ~1500 kg 500 hp RWD coupe → 0-60 in 3.8–4.3 s', () => {
+// band widened from 3.8–4.3 s: with the shared launch / drive-μ model a launch-control DCT coupe on summer UHP tyres
+// launches like its real peers (911 Carrera GTS 3.2 s, AMG GT S 3.7 s 0-60)
+test('physics sanity: ~1500 kg 500 hp RWD coupe → 0-60 in 3.3–4.3 s', () => {
   const base = mk({
     body: { style: 'coupe', chassisMaterial: 'carbon-tub', seats: 2 },
     engine: { layout: 'V8', displacement_l: 4.0, aspiration: 'twin-turbo', compression: 9.5, fuel: 'premium', tune: 'stock', exhaust: 'sport' },
@@ -173,7 +175,7 @@ test('physics sanity: ~1500 kg 500 hp RWD coupe → 0-60 in 3.8–4.3 s', () => 
   console.log('       coupe: ' + m.power_hp + ' hp, ' + m.weight_kg + ' kg, 0-60 ' + m.zeroTo60_s + ' s (' + m.zeroTo60_note + '), 0-100 ' + m.zeroTo100_s + ' s, ¼ mile ' + m.quarterMile_s + ' s @ ' + m.quarterMileTrap_mph + ' mph');
   assert.ok(Math.abs(m.power_hp - 500) < 10, 'power ' + m.power_hp);
   assert.ok(m.weight_kg > 1400 && m.weight_kg < 1620, 'weight ' + m.weight_kg);
-  assert.ok(m.zeroTo60_s >= 3.8 && m.zeroTo60_s <= 4.3, '0-60 ' + m.zeroTo60_s);
+  assert.ok(m.zeroTo60_s >= 3.3 && m.zeroTo60_s <= 4.3, '0-60 ' + m.zeroTo60_s);
   assert.ok(m.quarterMile_s > 11 && m.quarterMile_s < 12.8, 'quarter ' + m.quarterMile_s);
 });
 

@@ -25,9 +25,12 @@
    TYRES          Load-sensitive friction μ(Fz) = μ0·(1 − k·(Fz/Fz0 − 1)), Fz0 ∝ tyre width; μ0 from compound ×
                   suspension × camber × chassis stiffness × damping × toe × rim-fit.
    LONGITUDINAL   dt = 0.05 s time-stepped launch: clutch slip / launch control / torque-converter multiplication,
-                  turbo transient spool, traction limit (μ·Fz on the driven axle incl. load transfer & downforce,
-                  diff lock, traction control, AWD centre-diff coupling), drag ½ρCdAv², rolling resistance,
-                  rotating-inertia equivalent mass, optimal shift points and shift-time torque interruption.
+                  turbo transient spool, traction limit (drive μ by compound × Fz on the driven axle incl. load
+                  transfer & downforce, diff lock, AWD centre-diff coupling) × the force fraction the traction-control
+                  slip target delivers on the race tyre's curve, drag ½ρCdAv², rolling resistance, rotating-inertia
+                  equivalent mass, optimal shift points, shift-time torque interruption, commercial (van / pickup
+                  automatic) driveline-protection torque map. Shared with the race model (CB.physics.traction,
+                  metrics.launch).
    TOP SPEED      Steady-state force balance per gear → 'drag' / 'redline' / 'governor' (tyre speed rating, eco map).
    BRAKING        Tyre-limited vs hydraulic capacity (piston area × line pressure × pad μ × effective radius),
                   ABS/EBD efficiency or bias-limited lock-up with ABS off, aero assistance.
@@ -73,6 +76,54 @@ if (typeof window !== 'undefined') window.CB = CB;
     return T[T.length - 1][1] + (mu - T[T.length - 1][0]) * 1.08;
   }
   function brakeMu(mu) { return mu * 1.06 + 0.1; }
+  /* Drive (traction) μ by compound and tyre temperature. A tyre's longitudinal peak is mostly a property of the
+     compound; the chassis (suspension type, camber, stiffness) that lifts the cornering μ helps the drive peak far
+     less, so it enters with a weak exponent. cold = the tyre at ambient (a standing start from the grid / the
+     Garage's figure), warm = in its window: road compounds barely change, Cup / slick tyres need heat. */
+  var DRIVE_MU = {
+    eco: [1.02, 1.03], 'all-season': [1.09, 1.10], winter: [1.00, 1.00], touring: [1.13, 1.15],
+    performance: [1.40, 1.43], 'super-sport': [1.38, 1.47], track: [1.42, 1.58], slick: [1.50, 1.75]
+  };
+  function driveMu(compId, compMu, axleMu, warm) {
+    var row = DRIVE_MU[compId], w = clamp(num(warm, 0), 0, 1);
+    var base = row ? row[0] + (row[1] - row[0]) * w : longMu(num(compMu, 1));
+    var chassis = axleMu > 0 && compMu > 0 ? Math.pow(clamp(axleMu / compMu, 0.6, 1.6), 0.3) : 1;
+    return base * chassis;
+  }
+
+  /* ---- LAUNCH & TRACTION CONTROL — shared with CB.race.vehicle (exported as CB.physics.traction) ----
+     The race model's tyre is a magic-formula curve sin(C·atan(B·s)) of the normalised slip s = κ/κpeak; a traction
+     controller holds a slip TARGET (in units of κpeak) on the driven wheels, so the drive force it delivers is that
+     curve's value at the target. The Garage uses the same numbers: the TC level's slip target → force fraction (× a
+     small controller ripple), the drive μ by compound (DRIVE_MU), the launch rpm / converter stall the driver or
+     launch control holds on the line, the clutch ramp, the shift torque carry and the commercial-vehicle torque map.
+     Race and Garage therefore launch from one traction model (metrics.launch carries the per-build values). */
+  var SHAPE_C = 1.42;
+  function shapeB(C) { return Math.tan(PI / (2 * C)); }
+  /** Peak slip ratio of a tyre with (effective) friction mu — the race tyre's own formula. */
+  function kappaPeak(mu, C) { C = C || SHAPE_C; return clamp(mu * C * shapeB(C) / 24, 0.06, 0.2); }
+  /** Drive force fraction of the peak at normalised slip sN (κ/κpeak), magic-formula shape incl. sliding loss. */
+  function forceFraction(sN, C) {
+    C = C || SHAPE_C;
+    if (!(sN > 0)) return 0;
+    var f = Math.sin(C * Math.atan(shapeB(C) * sN));
+    if (sN > 1) f *= 1 - 0.06 * Math.min(1, (sN - 1) / 4);
+    return f;
+  }
+  // slip targets (κ/κpeak) per TC level: 0 = off (a driver modulating the throttle at the limit), 1 sport (lets the
+  // tyres run past the peak), 2 normal (on the peak), 3 max (conservative, well below it). Launch control: the peak.
+  var TC_SLIP = [2.0, 1.4, 1.0, 0.6];
+  var TC_RIPPLE = [0.965, 0.985, 0.985, 0.985];  // controller / driver ripple around the target
+  var LC_SLIP = 1.0, LC_RIPPLE = 0.99, EV_RIPPLE = 0.995;
+  var CONVERTER = { stallRpm: 2400, mult: 1.9, couple: 0.85 };   // torque-converter stall speed / multiplication
+  function tcForceFraction(level, opts) {
+    opts = opts || {};
+    level = clamp(Math.round(num(level, 2)), 0, 3);
+    var f = forceFraction(TC_SLIP[level], opts.C) * TC_RIPPLE[level];
+    if (opts.ev && level > 0) f = Math.max(f, forceFraction(1, opts.C) * EV_RIPPLE);
+    if (opts.launch) f = Math.max(f, forceFraction(LC_SLIP, opts.C) * LC_RIPPLE);
+    return f;
+  }
 
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
   function num(v, d) {
@@ -357,7 +408,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     var battKw = kwh * num(chem.cRate, 4) * 2.5;
     var Pkw = Math.min(motorKw, battKw);
     if (battKw < motorKw * 0.98) M.warnings.push('Battery discharge limit (' + Math.round(battKw) + ' kW at ' + num(chem.cRate, 4) + 'C) caps the ' + Math.round(motorKw) + ' kW of motors — add capacity or a higher-power chemistry');
-    var R = EV_MAX_RPM, base = R * (volt === 800 ? 0.36 : 0.30);
+    var R = EV_MAX_RPM, base = R * 0.30;   // constant-torque region: ~30 % of max motor speed (motor design, 400 or 800 V alike)
     var P = Pkw * 1000, Tmax = P / (base * PI / 30);
     function torque(rpm) {
       rpm = clamp(rpm, 0, R);
@@ -718,6 +769,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     var lambdaF = clamp(kF / (kF + kR), 0.2, 0.8);
     return {
       muF: muF, muR: muR, longF: camberLong(cF), longR: camberLong(cR), ks: ks,
+      driveF: driveMu(comp.id, comp.mu, muF) * camberLong(cF), driveR: driveMu(comp.id, comp.mu, muR) * camberLong(cR),
       Fz0F: 4300 * geo.twF / 245, Fz0R: 4300 * geo.twR / 245, lambdaF: lambdaF, stiff: stiff, bottom: bottom,
       comp: comp, wetRatio: clamp(num(comp.wetMu, 0.8) / num(comp.mu, 1), 0.1, 1.2), suspension: st, spring: spr
     };
@@ -777,10 +829,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     var lockF = lockOf(dt.frontDiff), lockR = lockOf(dt.rearDiff), lockC = dt.centerDiff === 'none' || !dt.centerDiff ? 0.35 : lockOf(dt.centerDiff);
     var drivenLock = layout === 'fwd' ? lockF : layout === 'rwd' ? lockR : (lockF + lockR) / 2;
     var tc = clamp(Math.round(num(dt.tractionControl, 2)), 0, 3);
-    var tcF = [0.92, 0.96, 0.98, 0.95][tc]; // off: driver-modulated wheelspin; 3: conservative intervention
+    // force fraction the TC level's slip target delivers (shared traction model, see tcForceFraction)
+    var tcF = tcForceFraction(tc);
     if (E.type === 'ev') {
       // motor torque is controlled ~10× faster than spark/throttle cuts: slip is held near the optimum
-      if (tc > 0) tcF = Math.max(tcF, 0.99);
+      if (tc > 0) tcF = tcForceFraction(tc, { ev: true });
       // separate front/rear motors actively re-split torque; one motor per wheel acts as a fully locked/vectored diff
       if (layout === 'awd' && E.motors >= 2) lockC = Math.max(lockC, 0.95);
       if (E.motors >= 4 || (layout !== 'awd' && E.motors >= 2)) drivenLock = 1;
@@ -789,7 +842,12 @@ if (typeof window !== 'undefined') window.CB = CB;
     var rDriven = layout === 'fwd' ? geo.rF : layout === 'rwd' ? geo.rR : geo.rF * split + geo.rR * (1 - split);
     var span = Array.isArray(tr.ratioSpan) ? tr.ratioSpan : [2.63, 0.40];
     var cvtLow = ratios[0], cvtHigh = ratios[0] * (num(span[1], 0.4) / num(span[0], 2.63));
+    // commercial vans (ICE automatics): the driveline-protection map caps the torque in 1st / 2nd and the shift map
+    // upshifts early (long-life / economy calibration) — why a 211 hp Sprinter needs 12 s, not the 10.5 s its power
+    // to weight alone would give
+    var commercial = b.body && (b.body.style === 'van' || b.body.style === 'pickup') && E.type !== 'ev' && tr.id === 'auto';
     return {
+      commercial: commercial, shiftCap: commercial ? 0.78 : 1, gearTorque: commercial ? [0.7, 0.9] : null,
       tr: tr, ratios: ratios, fd: fd, layout: layout, split: split, eff: eff, effTr: effTr, shift: shift, carry: carry,
       lockF: lockF, lockR: lockR, lockC: lockC, drivenLock: drivenLock, tc: tc, tcF: tcF, lc: lc, r: rDriven,
       isCVT: isCVT, cvtLow: cvtLow, cvtHigh: cvtHigh, tv: !!dt.torqueVectoring,
@@ -810,10 +868,10 @@ if (typeof window !== 'undefined') window.CB = CB;
     var transfer = m * Math.max(0, a) * h / L;
     var WF = Math.max(0, m * G * ctx.wf + df * aero.dfFrontShare - transfer);
     var WR = m * G * (1 - ctx.wf) + df * (1 - aero.dfFrontShare) + transfer;
-    var fF = 2 * tyreGrip(longMu(gr.muF) * gr.longF, WF / 2, gr.Fz0F, gr.ks);
-    var fR = 2 * tyreGrip(longMu(gr.muR) * gr.longR, WR / 2, gr.Fz0R, gr.ks);
+    var fF = 2 * tyreGrip(gr.driveF, WF / 2, gr.Fz0F, gr.ks);
+    var fR = 2 * tyreGrip(gr.driveR, WR / 2, gr.Fz0R, gr.ks);
     var diffK = 0.955 + 0.045 * dl.drivenLock;
-    var ctl = launch && dl.lc ? Math.max(dl.tcF, 0.99) : dl.tcF;
+    var ctl = launch && dl.lc ? Math.max(dl.tcF, tcForceFraction(dl.tc, { launch: true })) : dl.tcF;
     var F;
     if (dl.layout === 'fwd') F = fF;
     else if (dl.layout === 'rwd') F = fR;
@@ -900,28 +958,50 @@ if (typeof window !== 'undefined') window.CB = CB;
       for (var v = vRed * 0.55; v < vRed * 0.995; v += 0.1) {
         if (gearForce(ctx, v, gi + 1) > gearForce(ctx, v, gi) && rpmAt(v, dl.ratios[gi + 1] * dl.fd, dl.r) > E.idle * 1.4) { vs = v; break; }
       }
-      out.push(vs);
+      out.push(Math.min(vs, vRed * dl.shiftCap));
     }
     return out;
   }
 
+  /** How this build leaves the line (shared with the race model through metrics.launch). */
+  function launchPlan(ctx) {
+    var dl = ctx.dl, E = ctx.E, trType = dl.tr.id, ev = E.type === 'ev';
+    // launch control: a 2-step rev limit at the launch rpm with partial pre-spool; without it the driver holds a
+    // little less on a clutch (manual / sequential) and an automatic / DCT creeps off at a moderate stall speed
+    var rpm = ev ? 0 : dl.lc ? E.launchRpm : (trType === 'manual' || trType === 'sequential' ? E.launchRpm * 0.85 :
+      trType === 'auto' ? Math.min(E.launchRpm, 2600) : Math.min(E.launchRpm, 2800));
+    var gr = ctx.grip, muD = dl.layout === 'fwd' ? gr.muF : dl.layout === 'rwd' ? gr.muR : (gr.muF + gr.muR) / 2;
+    return {
+      rpm: rpm, lc: dl.lc, tc: dl.tc,
+      preSpool: E.boosted ? (dl.lc ? (E.tune && E.tune.id === 'time-attack' ? 0.95 : 0.55) : 0.15) : 1,
+      ramp: dl.lc || ev ? 0.12 : trType === 'manual' ? 0.35 : 0.2, ramp0: 0.55,
+      converter: trType === 'auto' && !ev, stallRpm: CONVERTER.stallRpm, convMult: CONVERTER.mult, convCouple: CONVERTER.couple,
+      carry: dl.carry, shiftCap: dl.shiftCap, gearTorque: dl.gearTorque,
+      kappaPeak: kappaPeak(muD), slipTarget: TC_SLIP[dl.tc], lcSlip: LC_SLIP, tcForce: dl.tcF,
+      // drive μ relative to each axle's (unloaded) cornering μ, cold and warm tyres
+      driveRatioF: gr.driveF / gr.muF, driveRatioR: gr.driveR / gr.muR,
+      driveRatioWarmF: driveMu(gr.comp.id, gr.comp.mu, gr.muF, 1) * gr.longF / gr.muF,
+      driveRatioWarmR: driveMu(gr.comp.id, gr.comp.mu, gr.muR, 1) * gr.longR / gr.muR
+    };
+  }
+
   function simulate(ctx, top) {
     var dl = ctx.dl, E = ctx.E, m = ctx.mass;
+    var plan = ctx.launch || launchPlan(ctx);
     var nG = dl.ratios.length;
     var shiftV = dl.isCVT ? [] : shiftSpeeds(ctx);
     var Iw = ctx.wheelInertia;
     var trType = dl.tr.id;
     var t = 0, v = 0, x = 0, gi = 0, a = 0, shiftT = 0, nextGi = 0;
     // boost state: launch control holds a 2-step rev limit with partial pre-spool
-    var bs = E.boosted ? (dl.lc ? (E.tune && E.tune.id === 'time-attack' ? 0.95 : 0.55) : 0.15) : 1;
+    var bs = plan.preSpool;
     var curve = [];
     var res = { t60: null, t100: null, t200: null, tQM: null, trapQM: null, tractionTime60: 0, lagTime60: 0, tractionGears: {} };
     var v60 = 60 * MPH, v100 = 100 / 3.6, v200 = 200 / 3.6;
     var vStop = top.v * 0.98, reach200 = top.v > v200 + 0.05;
-    var launchRpm = dl.lc ? E.launchRpm : (trType === 'manual' || trType === 'sequential' ? E.launchRpm * 0.85 : trType === 'auto' ? Math.min(E.launchRpm, 2600) : Math.min(E.launchRpm, 2800));
-    if (E.type === 'ev') launchRpm = 0;
-    var stall = trType === 'auto' && E.type !== 'ev';
-    var driverRamp = dl.lc || E.type === 'ev' ? 0.12 : trType === 'manual' ? 0.35 : 0.2;
+    var launchRpm = plan.rpm;
+    var stall = plan.converter;
+    var driverRamp = plan.ramp;
     var maxT = 60;
     var shifts = 0;
     for (var step = 0; step < 2400; step++) {
@@ -933,8 +1013,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       rpm = wheelRpm;
       var tcMult = 1;
       if (gi === 0 && wheelRpm < launchRpm && E.type !== 'ev') { rpm = dl.isCVT ? Math.max(launchRpm, wheelRpm) : launchRpm; slip = true; }
-      if (stall && gi === 0 && wheelRpm < 2400) {
-        var sr = wheelRpm / 2400; tcMult = lerp(1.9, 1.0, clamp(sr / 0.85, 0, 1)); rpm = Math.max(rpm, 2400); slip = true;
+      if (stall && gi === 0 && wheelRpm < CONVERTER.stallRpm) {
+        var sr = wheelRpm / CONVERTER.stallRpm; tcMult = lerp(CONVERTER.mult, 1.0, clamp(sr / CONVERTER.couple, 0, 1)); rpm = Math.max(rpm, CONVERTER.stallRpm); slip = true;
       }
       rpm = Math.max(rpm, E.idle);
       if (rpm >= E.R) rpm = E.R;
@@ -943,13 +1023,15 @@ if (typeof window !== 'undefined') window.CB = CB;
         bs += (1 - bs) * (1 - Math.exp(-DT / E.tau));
       } else bs = 1;
       T = Math.min(E.torque(rpm, bs), dl.torqueLimit) * tcMult;
+      if (dl.gearTorque && gi < dl.gearTorque.length) T *= dl.gearTorque[gi];
       var Fe = T * Gt * dl.eff / dl.r;
       // torque converter not yet locked up in 1st / 2nd: a few % slip loss on top of the gearbox efficiency
       if (stall && gi <= 1 && tcMult === 1) Fe *= 0.95;
-      if (t < driverRamp) Fe *= lerp(0.55, 1, t / driverRamp);
+      if (t < driverRamp) Fe *= lerp(plan.ramp0, 1, t / driverRamp);
       if (shiftT > 0) Fe *= dl.carry;
       var Ft = tractionLimit(ctx, v, a, t < 2.5);
       var limitedByTraction = Fe > Ft;
+
       var F = Math.min(Fe, Ft);
       if (ctx.governor && v >= ctx.governor) F = Math.min(F, resistance(ctx, v, true));
       // engine-side: the crank, gearbox & wheels must be spun up too; tyre-side: once the tyres are at their
@@ -1395,6 +1477,7 @@ if (typeof window !== 'undefined') window.CB = CB;
 
     var top = topSpeed(ctx);
     ctx.top = top;
+    ctx.launch = launchPlan(ctx);
     var sim = simulate(ctx, top);
     var brakes = brakeModel(b, ctx);
     ctx.brakes = brakes;
@@ -1506,6 +1589,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       reliabilityScore: r(reliability, 0), comfortIndex: r(comfort, 0),
       noise_db_cabin: r(noise.cabin, 1), exhaust_db: r(noise.exhaust, 1),
       zeroTo60_note: note,
+      launch: sanitize(ctx.launch),
       warnings: warnings
     };
     mx.ratings = ratingsModel(b, ctx, mx);
@@ -1544,6 +1628,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     compute: safeCompute,
     _computeUnsafe: compute,
     downforceAt: downforceAt,
+    // shared launch / traction-control model (CB.race.vehicle uses the same slip targets and drive μ)
+    traction: {
+      TC_SLIP: TC_SLIP, TC_RIPPLE: TC_RIPPLE, LC_SLIP: LC_SLIP, CONVERTER: CONVERTER, DRIVE_MU: DRIVE_MU, SHAPE_C: SHAPE_C,
+      kappaPeak: kappaPeak, forceFraction: forceFraction, tcForceFraction: tcForceFraction, driveMu: driveMu
+    },
     tyreSpeedRating: function (compoundId) { return num(TYRE_SPEED_RATING[compoundId], 300); },
     track: {
       name: 'Redline Ring', length_m: 5800,

@@ -620,6 +620,9 @@ CB.game = CB.game || {};
       pole: !!(st.pole || player.pole || grid === 1) && mode0 !== 'practice', fastestLap: fastestLap, ledEveryLap: ledEveryLap, lapsLed: lapsLed,
       collisions: collisions, wallHits: wallHits, penalties: penalties, trackLimits: trackLimits, clean: clean,
       margin: margin, topSpeed: topSpeed, laps: laps, trackId: trackId, mode: mode0,
+      // a standing start from the lights: a Race (not Time Trial / Practice, not a drift event, not a rolling start)
+      standingStart: mode0 === 'race' && !isNum(firstNum(num(st.driftScore), num(player.driftScore), num(ev.driftScore))) &&
+        eventType !== 'drift' && String(first(cfg.discipline, extras.discipline) || '').toLowerCase() !== 'drift' && !cfg.rollingStart && !cfg.drift,
       weather: cfg.weather || res.weather || st.weather || 'dry', timeOfDay: cfg.timeOfDay || res.timeOfDay || st.timeOfDay || 'day',
       difficulty: difficulty ? String(difficulty).toLowerCase() : null, eventType: eventType ? String(eventType).toLowerCase() : null,
       endurance: !!(extras.endurance || eventType === 'endurance' || endur.enabled),
@@ -878,7 +881,7 @@ CB.game = CB.game || {};
 
   /* ------------------------------------------------------------------ Racing */
 
-  raceIs('lights-out', 'Lights Out', 'Finish your first race.', 'bronze', 'flag', function (r) { return r.finished; }, { xp: 150, credits: 1500 });
+  raceIs('lights-out', 'Lights Out', 'Finish your first race from a standing start.', 'bronze', 'flag', function (r) { return r.finished && r.standingStart; }, { xp: 150, credits: 1500 });
   raceIs('first-win', 'First Win', 'Win a race against at least one opponent.', 'bronze', 'trophy', function (r) { return r.won && r.mode !== 'time-trial'; });
   raceIs('champagne', 'Champagne', 'Finish on the podium.', 'bronze', 'podium', function (r) { return r.podium && r.mode !== 'time-trial'; });
   raceIs('grand-slam', 'Grand Slam', 'Pole, win, fastest lap and lead every lap — all in one race.', 'platinum', 'crown', function (r) { return r.won && r.pole && r.fastestLap && r.ledEveryLap && r.fieldSize >= 4; });
