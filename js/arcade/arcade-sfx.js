@@ -16,6 +16,15 @@ CB.arcade = CB.arcade || {};
 (function () {
   'use strict';
 
+  /** stunt special-feature events ('stuntFx' kind, stunt-features.js) -> synth sound name (null = silent) */
+  var STUNT_SOUND = {
+    warp: 'warp', cannon: 'cannon', bumper: 'boing', flipper: 'clack', hazard: 'thud', hazardBlocked: 'ping', star: 'star',
+    fireRing: 'fire', tunnel: 'tunnel', spring: 'spring', belt: 'tunnel', shortcut: 'fanfare', bigJump: 'fanfare',
+    barrelRoll: 'swirl', barrelRoll2: 'swirl', zeroG: 'swirl', megaLoop: 'swirl', corkscrew: 'swirl', halfpipe: 'swish',
+    driftZone: 'tier1', driftZoneBonus: 'chime'
+  };
+  function stuntSound(kind) { return STUNT_SOUND[kind] || null; }
+
   function create(opts) {
     opts = opts || {};
     var A = { ctx: null, master: null, noise: null, muted: !!opts.muted, vol: opts.volume == null ? 0.55 : opts.volume, loops: {}, lastTick: -1, lastTier: 0 };
@@ -78,7 +87,19 @@ CB.arcade = CB.arcade || {};
       fanfare: function () { [523, 659, 784, 1047].forEach(function (f, i) { tone('square', f, f, 0.12, 0.07, i * 0.07); }); },
       bog: function () { tone('sawtooth', 120, 50, 0.6, 0.12); },
       shieldUp: function () { tone('sine', 440, 1320, 0.3, 0.12); },
-      ghost: function () { tone('sine', 660, 330, 0.6, 0.1); tone('sine', 990, 495, 0.6, 0.06); }
+      ghost: function () { tone('sine', 660, 330, 0.6, 0.1); tone('sine', 990, 495, 0.6, 0.06); },
+      // stunt special features
+      warp: function () { tone('sawtooth', 220, 1760, 0.35, 0.09); tone('sine', 1760, 440, 0.45, 0.12, 0.3); noise(0.6, 600, 6000, 2, 0.22); },
+      cannon: function () { noise(0.6, 900, 60, 0.6, 0.7, 0, 'lowpass'); tone('sine', 110, 38, 0.55, 0.6); noise(0.12, 4000, 1500, 0.8, 0.3); },
+      clack: function () { noise(0.05, 2500, 1200, 3, 0.45); tone('square', 420, 180, 0.08, 0.12); },
+      thud: function () { tone('sine', 160, 45, 0.3, 0.6); noise(0.18, 700, 150, 1, 0.35, 0, 'lowpass'); tone('triangle', 900, 1400, 0.12, 0.06, 0.12); },
+      star: function () { [1568, 1976, 2349, 3136].forEach(function (f, i) { tone('triangle', f, f, 0.2, 0.12, i * 0.06); }); },
+      fire: function () { noise(0.7, 300, 2600, 0.7, 0.4); tone('sawtooth', 70, 140, 0.5, 0.07); },
+      tunnel: function () { noise(1.0, 400, 1800, 1.2, 0.28); tone('sawtooth', 60, 120, 0.9, 0.06); },
+      spring: function () { tone('sine', 220, 1100, 0.22, 0.2); tone('sine', 1100, 550, 0.3, 0.1, 0.2); },
+      swirl: function () { tone('triangle', 330, 990, 0.5, 0.08); tone('triangle', 495, 1485, 0.5, 0.05, 0.08); },
+      swish: function () { noise(0.5, 800, 2400, 1.5, 0.18); },
+      tier1: function () { tone('triangle', 900, 1300, 0.12, 0.12); }
     };
 
     function events(list, me) {
@@ -104,6 +125,11 @@ CB.arcade = CB.arcade || {};
             break;
           case 'start': if (mine) { if (e.grade === 'perfect' || e.grade === 'good') SND.fanfare(); else if (e.grade === 'over') SND.bog(); } break;
           case 'landing': if (mine) noise(0.2, 300, 120, 1, e.big ? 0.45 : 0.25, 0, 'lowpass'); break;
+          case 'stuntFx': {
+            var nm = mine ? stuntSound(e.kind) : null, tq = now(), lf = A.lastFx || (A.lastFx = {});
+            if (nm && SND[nm] && !(lf[nm] > tq - 0.12)) { lf[nm] = tq; SND[nm](); }   // bumper chains: no machine-gun stacking
+            break;
+          }
           default: break;
         }
       });
@@ -158,7 +184,7 @@ CB.arcade = CB.arcade || {};
     };
   }
 
-  CB.arcade.sfx = { create: create };
+  CB.arcade.sfx = { create: create, stuntSound: stuntSound, STUNT_SOUND: STUNT_SOUND };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CB.arcade.sfx;

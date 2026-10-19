@@ -172,7 +172,7 @@ kicker, gap {len, drop}, loop {radius, shift}, corkscrew {len, radius, turns}, w
 `features` (`pad, ring {z}, box (row), can, coin, checkpoint, arrow`). Frames are explicit (turtle frame = rotation-
 minimising for yaw/pitch, authored bank/roll on top, smoothed); the builder appends a C1 Hermite closing piece with a
 double-reflection RMF and spreads the residual roll; `def.solve` auto-tunes 1–3 piece parameters so every map closes
-exactly. Six maps: `loop-rush` (starter loop + hills + small gap), `canyon-leap` (3 gaps, boost drop), `corkscrew-carnival`
+exactly. Thirteen maps (§4.6 lists the seven 2026-10 additions). The original six: `loop-rush` (starter loop + hills + small gap), `canyon-leap` (3 gaps, boost drop), `corkscrew-carnival`
 (double loop, corkscrew, bowls), `neon-wallride` (wall-rides, half-pipe bowl, loop, night), `mega-drop` (2-turn spiral
 climb, 44 m boost-chain drop, 64 m monster gap), `figure-8` (crossover jump 13 m over the lower road). 2.4–2.9 km, AI laps 45–58 s.
 
@@ -232,6 +232,69 @@ is never touched: no heading auto-align):
 Human sweep (`node tools/stunt-sweep.js`, 462 runs: 7 lateral offsets × 11 speed/boost/item profiles × air inputs ×
 8 builds × 6 frame-rate profiles on all 6 maps): 0 falls, 0 fall-throughs / road-under / wrong re-attaches / launches /
 stuck / loop drops, 100 % laps completed.
+
+### 4.6 Special pieces, features and the 2026-10 maps (`stunt-features.js`)
+
+Load order: `stunt-physics.js → stunt-features.js → stunt-ai.js` (feature-detected: without it sessions run as before).
+
+**New pieces** (`stunt-track.js`; `trk.pieces[i]` carries every extra field the piece records — world positions stay world):
+| piece | params | what | info on `trk.pieces[i]` |
+|---|---|---|---|
+| `tube` | `len, radius (7), turns (1/2), dir` | barrel-roll tube: a corkscrew helix with a see-through cage; flags `cork, tube` | `axisStart, axisDir, axisLen, radius, turns` |
+| `zerog` | `radius (14), len (60), shift` | half loop up, inverted ceiling run at 2R, half loop down; flags `loop, zerog` (adhesion holds ≥ 35 km/h) | `radius, ceilLen, ceilStart, ceilEnd, entry…` |
+| `halfpipe` | `len, bank (55), waves (1.5), dir, lift (0.8)` | the bank swings ±bank `waves` times; centre line lifted with the smooth `1 − cos(bank)` so it never kinks; flags `wall, halfpipe` | `bank, waves` |
+| `cannon` | `angle (30), ramp (26), len (110), drop` | launcher ramp + a gap whose arc every car flies (design speed ×1.015 — crawling or Mega Nitro), nose straightened; flags `ramp, cannon` / `gap, cannon` | `rampLen, angle, designSpeed` |
+| `warp` | `to [x,y,z] \| by [dx,dy,dz], heading (deg)` | portal: 3 m mouth, then the road continues elsewhere, level. Track space is continuous (~1 m); only the world position jumps. `trk.WARP[i]` marks the seam i→i+1, `trk.warps [{s, i, from, to, fromFwd, toFwd}]`; `sample()` snaps to a mouth, tangents are one-sided at the seam, the mesh never stitches across it, an airborne car is carried through (`airWarp` event) | `from, fromFwd, to, toFwd` |
+`loop` now records `radius`. `def.widthBlend` (m) softens width tapers. Thumbnails / minimaps don't draw a line across a warp.
+
+**Features** (piece `features`, `at` 0..1 or `s` m; every field is copied onto the built record):
+`hazard {kind 'pendulum'|'hammer'|'windmill'|'piston'|'boulder', lat, period, phase, amp, w, r, side, ext, h}` · `bumper {lat, r}` ·
+`flipper {side, len, period, phase}` · `belt {len, lat, w, push, top}` · `tunnel {len, push, top, r}` (booster tunnel: continuous push) ·
+`spring {lat, len, w, vy}` (hop pad) · `star {lat, z}` (collectible, once per lap per car) · `ring {fire: true}` (ring of fire: +0.22 nitro + boost) ·
+`driftZone {len}` (powerslide inside = +0.16 nitro/s) · `split {len, div, inner ±1, dw, nose, shortcut}` (lane divider rail: the lane is latched on entry;
+on a wide bend the inner lane progresses faster in `s` = a real shortcut, the outer lane is the safe main line). Built lists: `trk.splits, tunnels, belts,
+hazards`; flags `split, tunnel, belt, hazard` (all unsafe for respawns / checkpoints).
+
+**Runtime** (`CB.arcade.stunt.features`): `hazardState(f, t, halfWidth) → {active, lat0, lat1, latC, sHalf, dir, angle, ext, h, r, visible, warn, ph}` and
+`flipperState(f, t)` are pure functions of time; `step(car, ctx)` runs per car after the physics step; `hazardsNear(track, s, range, t, v)` (AI);
+`CALLOUTS`. Hazards only touch cars on the ground. A hit is a cartoon bump (`P.bump`: sideways shove `car.latV` that decays and the rails clamp, speed ×0.6–0.88
+never below 9 m/s, optional stunt spin) — never a fall, never stuck. Shield / ghost / respawn invulnerability block it. Per-car state is `car.feat`
+(plain JSON: cooldowns, stars taken per lap, counters) and goes through `getState / setState`.
+**Clock**: hazards / flippers use the car's race clock `session t − car.clockOffset`. On the multiplayer host a remote human's copy drives the input of tick
+n − D, so netarcade sets `clockOffset = D · STEP` and the copy meets every phase exactly like the player's own prediction (tests/net-arcade-stunt-features.test.js:
+host + 2 clients agree on results and per-car hazard hits). Puppets carry a spin flag (row flags bit 16).
+**Events**: `{type: 'stuntFx', kind, carId, isPlayer, …}` with kinds `barrelRoll, barrelRoll2, zeroG, warp, cannon, tunnel, shortcut, mainLine, halfpipe,
+megaLoop, corkscrew, hazard {hz}, hazardBlocked, bumper, flipper, belt, spring, star {count, total}, fireRing, driftZone, driftZoneBonus, bigJump {dist}`.
+`arcade-layer` hands them to the HUD (callouts merged ×n within 1.6 s, star counter), arcade-fx (warp flash, cannon kick, tunnel lines, bonk stars) and arcade-sfx.
+Nitro awards go through `session.bindGameplay(gp)` (the gameplay extension calls it on attach). `snap.stunt.starsTaken` / `snap.stunt.clock` drive the renderer;
+`results().classification[i].stunt` adds `stars, starsTotal, hazardHits, bumpers, shortcuts, fireRings, warps` (multiplayer results too).
+**AI**: speed plan knows tubes / zero-g / cannons, dodges hazards with `hazardsNear` at its arrival time (skill-dependent), picks split lanes by difficulty
+(seeded; better AI cuts more often): `S.ai.splitAhead / laneCentre`.
+
+**Maps added 2026-10** (all 3 laps, every one with stars and tuned item rows):
+| id | name | theme | length | AI lap | identity |
+|---|---|---|---|---|---|
+| `tube-twister` | Tube Twister | lab | 2.50 km | 48 s | barrel-roll tubes incl. a double, zero-g ceiling run, booster tunnel, fire hoop |
+| `volcano-cannon` | Volcano Cannon Run | volcano (dusk) | 2.58 km | 48 s | two cannons, rings of fire, rolling boulders, lava drop |
+| `pinball-wizard` | Pinball Wizard | pinball (night) | 2.58 km | 48 s | bumpers, flippers, speed belts, pistons, ramp loop, a split |
+| `sky-highway` | Sky Highway | sky | 2.91 km | 50 s | warp portals between floating islands, giant ski jump, mega loop |
+| `toybox-bedroom` | Toy Box Bedroom | bedroom | 2.64 km | 48 s | orange track over giant furniture, wrecking balls, pinwheel, hop pads, shortcut |
+| `glacier-halfpipe` | Glacier Halfpipe | glacier | 2.54 km | 47 s | half-pipe slaloms, ski jump, ice tube, drift zone |
+| `megacity-rooftops` | Megacity Rooftops | rooftops (dusk) | 2.94 km | 56 s | risky shortcut lanes, crushers, hammer, rooftop cannon |
+The original six each gained 1–2 features (fire hoops, stars, a hazard / tunnel / belt where it helps the flow).
+
+**Rendering**: meshes for every piece / feature (tube cage + faint glass, zero-g gantries, half-pipe lips, cannon barrel + muzzle + landing bullseye, portal
+frames + swirl discs, split divider + SHORTCUT sign, tunnel neon arches (no solid shell), animated hazards with road warning stripes, bumpers, flippers,
+springs, belts, drift-zone gantry, stars, fire rings), groups `decal` (polygon offset) and `glass`; scenery for lab, pinball, sky, bedroom, rooftops, glacier,
+volcano. The camera cuts on a > 12 m pose jump (warp / respawn), sits closer and lower while inverted, pulls back on long flights. Budgets kept on all 13 maps
+(high 31–51 k tris, low 16–23 k).
+
+**Testing**: `tests/arcade-stunt-features.test.js` (geometry continuity except at warp seams, tubes / zero-g / half-pipes / warps / cannons at crawl … 2×
+speed, split lanes + real shortcut, every feature, determinism + `getState / setState` mid-hazard, every gap and cannon on every map across lanes,
+±0.4 rad yaw, 8–90 m/s and air steering), `tests/arcade-stunt-hud.test.js`, `tests/net-arcade-stunt-features.test.js`. Human sweep `node tools/stunt-sweep.js`:
+94 runs per map (lateral offsets, nitro / Mega / megaGap / crawl / slow / lift / coast / brake, item hits, air inputs, light hatch … heavy SUV / pickup …
+hypercar, 30 / 60 / 120 / 144 Hz, spikes and 100 ms frames, plus 'fuzz' human lines hugging an edge into ramps and launchers): 0 falls, 0 fall-throughs,
+0 wrong re-attaches, 0 stuck, 0 unfinished on all 13 maps; CI runs a 23-run-per-map subset.
 
 ### 4.3 Rendering (`stunt-mesh.js`, `stunt-renderer.js`)
 

@@ -14,7 +14,7 @@
      stuck         stuck / wrong-way respawns, or no lap progress
      loopDrop      dropped off a loop / corkscrew / wall while faster than the adhesion speed
      unfinished    lap not completed within the time budget
-   Usage: node tools/stunt-sweep.js [--map id] [--quick] [--verbose] [--json]
+   Usage: node tools/stunt-sweep.js [--map id,id] [--quick | --ci] [--verbose] [--json]   (all 13 maps by default)
    As a module: require('./tools/stunt-sweep.js') -> { load, runCase, profiles, sweep, summarize }
    ========================================================================== */
 'use strict';
@@ -23,7 +23,7 @@ var fs = require('fs');
 
 var ROOT = path.join(__dirname, '..');
 var FILES = ['js/util.js', 'js/data.js', 'js/state.js', 'js/physics.js', 'js/race/tracks.js', 'js/race/vehicle.js', 'js/race/ai.js',
-  'js/race/engine.js', 'js/arcade/mode.js', 'js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js',
+  'js/race/engine.js', 'js/arcade/mode.js', 'js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-features.js',
   'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js', 'js/arcade/items.js', 'js/arcade/nitro.js', 'js/arcade/gameplay.js', 'js/arcade/arcade-hud.js',
   'js/arcade/arcade-layer.js'];
 var loaded = false;
@@ -36,7 +36,8 @@ function load() {
   return CB;
 }
 
-var MAPS = ['loop-rush', 'canyon-leap', 'corkscrew-carnival', 'neon-wallride', 'mega-drop', 'figure-8'];
+/** every registered stunt map (6 originals + the 7 special-feature maps) */
+var MAPS = (function () { try { return load().arcade.stunt.ids(); } catch (e) { return ['loop-rush', 'canyon-leap', 'corkscrew-carnival', 'neon-wallride', 'mega-drop', 'figure-8']; } })();
 /** preset index -> label (light hatch, heavy SUV / pickup / van, hypercars, slow commuter) */
 var BUILDS = { hatch: 3, suv: 4, pickup: 12, van: 13, hyper: 8, ehyper: 2, eco: 6, touge: 14, gt: 0 };
 var DT = {
@@ -65,13 +66,14 @@ function runCase(o) {
   var track = S.get(o.map), L = track.length, F = track.FLAGS;
   var preset = CB.data.presets[BUILDS[o.build] != null ? BUILDS[o.build] : 3];
   var build = JSON.parse(JSON.stringify(preset.build || preset));
-  var rep = { map: o.map, falls: 0, fallThrough: [], roadUnder: [], wrongAttach: [], launched: [], stuck: [], loopDrop: [], respawns: [], landings: 0, finished: false, time: null, maxV: 0, events: [] };
+  var rep = { map: o.map, falls: 0, fallThrough: [], roadUnder: [], wrongAttach: [], launched: [], stuck: [], loopDrop: [], respawns: [], landings: 0, finished: false, time: null, maxV: 0, events: [], fx: {} };
   var air = null, lastLandEv = null;
   var B = track.bounds;
   var obs = {
     name: 'stunt-sweep-observer',
     onEvent: function (e) {
       if (!e.isPlayer) return;
+      if (e.type === 'stuntFx') { rep.fx[e.kind] = (rep.fx[e.kind] || 0) + 1; return; }
       if (e.type === 'takeoff' || e.type === 'drop') {
         if (e.type === 'drop' && e.speed > P.V_ADHERE + 3) rep.loopDrop.push({ s: +e.s.toFixed(1), v: +e.speed.toFixed(1) });
       } else if (e.type === 'land') { rep.landings++; lastLandEv = e; }
@@ -119,17 +121,27 @@ function runCase(o) {
   var gp = gpInst ? gpInst.gameplay : null;
   var plan = S.ai.plan(track), drive = P.resolveDrive({});
   var rng = mulberry(o.seed * 7919 + 1), dtf = DT[o.dt] || DT.hz60;
-  var budget = o.timeout_s || (track.def.estLap_s || 55) * o.laps * (o.speed === 'crawl' ? 4 : o.speed === 'slow' || o.speed === 'coast' ? 2.6 : 2.0) + 20;
+  var budget = o.timeout_s || (track.def.estLap_s || 55) * o.laps * (o.speed === 'crawl' ? 4 : o.speed === 'slow' || o.speed === 'coast' || o.speed === 'fuzz' ? 2.6 : 2.0) + 20;
   var t = 0, k = 0, lastGapUsed = -1, lastHit = -1;
   var phaseOffset = rng() * 100;
+  var hz = { lat: 0, air: 0, thr: 1, nitro: false, edgeT: 0 };   // 'human' fuzz state (speed 'fuzz')
   while (t < budget) {
     var c = sess.player();
     var sm = track.sample(c.s), v = c.v;
     var hwUse = Math.max(0, sm.halfWidth - P.HALF_W - 0.15);
     var latT = clamp(o.lat, -1, 1) * hwUse + (o.wobble ? o.wobble * Math.sin((c.dist + phaseOffset) / 23) : 0);
-    latT = clamp(latT, -hwUse, hwUse);
     var gapA = track.gapAhead(c.s, 70);
+    if (o.speed === 'fuzz') {
+      // a sloppy human: new line / throttle / nitro choice every ~0.4-0.9 s, hugging an edge into ramps, lips and
+      // launchers, steering and lifting in the air, short brake stabs
+      if (k % (24 + (k % 31)) === 0) { hz.lat = rng() * 2 - 1; hz.air = rng() < 0.4 ? 0 : rng() < 0.5 ? 1 : -1; hz.thr = rng() < 0.12 ? 0 : rng() < 0.15 ? 0.5 : 1; hz.nitro = rng() < 0.35; }
+      if (gapA && gapA.dist < 35 && hz.edgeT <= 0 && rng() < 0.02) { hz.edgeT = 1.5; hz.lat = rng() < 0.5 ? 1.05 : -1.05; }
+      hz.edgeT -= 1 / 60;
+      latT = hz.lat * hwUse;
+    }
+    latT = clamp(latT, -hwUse, hwUse);
     var inp = { throttle: o.throttle, brake: 0, steer: 0, nitro: false, handbrake: false };
+    if (o.speed === 'fuzz') { inp.throttle = hz.thr; inp.nitro = hz.nitro; if (rng() < 0.004) inp.brake = 1; }
     // ---- speed profile
     var pi = Math.round(c.s / track.DS) % track.N;
     if (o.speed === 'slow') { if (v > 24) inp.throttle = 0; }
@@ -161,6 +173,7 @@ function runCase(o) {
       else if (o.air === 'lift') inp.throttle = 0;
       else if (o.air === 'brake') { inp.throttle = 0; inp.brake = 1; }
       else if (o.air === 'handbrake') inp.handbrake = true;
+      if (o.speed === 'fuzz') { inp.steer = hz.air; if (rng() < 0.3) inp.throttle = 0; }
     }
     if (gpInst && gpInst._layer) { gpInst._layer.keys.nitro = inp.nitro; }
     if (gp) gp.setInput({ nitro: inp.nitro });
@@ -175,15 +188,18 @@ function runCase(o) {
   return rep;
 }
 
-/** Profile list: full sweep (quick = a reduced deterministic subset for CI). */
+/** Profile list: full sweep; quick = a small deterministic subset; 'ci' = the reduced subset the test suite runs on every
+    map (every lateral band incl. split lanes / bumpers / stars, nitro + Mega Nitro, crawl, light / heavy / hyper builds,
+    30 / 60 / 144 Hz + spiky frames). */
 function profiles(map, quick) {
   var out = [];
-  var lats = quick ? [-0.9, 0, 0.9] : [-1, -0.6, -0.25, 0, 0.3, 0.65, 1];
-  var speeds = quick ? [['full', 'none'], ['full', 'megaGap'], ['lift', 'none']] :
-    [['full', 'none'], ['full', 'nitro'], ['full', 'mega'], ['full', 'megaGap'], ['full', 'hit'], ['human', 'none'], ['lift', 'none'], ['coast', 'none'], ['slow', 'none'], ['brakeGap', 'none'], ['full', 'pads']];
-  var airs = quick ? ['none', 'left', 'right'] : ['none', 'left', 'right', 'lift', 'brake', 'handbrake', 'wiggle'];
-  var builds = quick ? ['hatch', 'pickup', 'hyper'] : ['hatch', 'suv', 'pickup', 'van', 'hyper', 'ehyper', 'eco', 'touge'];
-  var dts = quick ? ['hz60', 'spiky'] : ['hz30', 'hz60', 'hz120', 'hz144', 'spiky', 'slow'];
+  var ci = quick === 'ci';
+  var lats = ci ? [-0.85, -0.3, 0.35, 0.9] : quick ? [-0.9, 0, 0.9] : [-1, -0.6, -0.25, 0, 0.3, 0.65, 1];
+  var speeds = ci ? [['full', 'none'], ['full', 'megaGap'], ['full', 'nitro'], ['crawl', 'none'], ['lift', 'none']] : quick ? [['full', 'none'], ['full', 'megaGap'], ['lift', 'none']] :
+    [['full', 'none'], ['full', 'nitro'], ['full', 'mega'], ['full', 'megaGap'], ['full', 'hit'], ['human', 'none'], ['lift', 'none'], ['coast', 'none'], ['slow', 'none'], ['crawl', 'none'], ['brakeGap', 'none'], ['full', 'pads']];
+  var airs = ci ? ['none', 'left', 'right', 'wiggle'] : quick ? ['none', 'left', 'right'] : ['none', 'left', 'right', 'lift', 'brake', 'handbrake', 'wiggle'];
+  var builds = ci ? ['hatch', 'suv', 'hyper', 'pickup'] : quick ? ['hatch', 'pickup', 'hyper'] : ['hatch', 'suv', 'pickup', 'van', 'hyper', 'ehyper', 'eco', 'touge'];
+  var dts = ci ? ['hz30', 'hz60', 'hz144', 'spiky', 'slow'] : quick ? ['hz60', 'spiky'] : ['hz30', 'hz60', 'hz120', 'hz144', 'spiky', 'slow'];
   var n = 0;
   // a structured cartesian core (lateral x speed) plus rotating secondary dimensions so every value is covered
   lats.forEach(function (lat) {
@@ -193,12 +209,16 @@ function profiles(map, quick) {
         build: builds[(i * 5 + 2) % builds.length], dt: dts[(i * 7 + 3) % dts.length], keyboard: i % 3 === 0, wobble: i % 4 === 1 ? 2.5 : 0, seed: 11 + i });
     });
   });
+  // human-like fuzz runs (random lines incl. edge-hugging into ramps / launchers, air steering, lifts, nitro)
+  var nf = ci ? 3 : quick ? 1 : 10;
+  for (var f = 0; f < nf; f++) out.push({ map: map, lat: 0, speed: 'fuzz', boost: f % 3 === 1 ? 'mega' : 'none', air: 'none', build: builds[f % builds.length], dt: dts[(f * 3 + 1) % dts.length], keyboard: f % 2 === 0, wobble: 0, seed: 501 + f * 17 });
   return out;
 }
 
 function summarize(reps) {
-  var s = { runs: reps.length, falls: 0, fallThrough: 0, roadUnder: 0, wrongAttach: 0, launched: 0, stuck: 0, loopDrop: 0, unfinished: 0 };
+  var s = { runs: reps.length, falls: 0, fallThrough: 0, roadUnder: 0, wrongAttach: 0, launched: 0, stuck: 0, loopDrop: 0, unfinished: 0, fx: {} };
   reps.forEach(function (r) {
+    for (var k in r.fx || {}) s.fx[k] = (s.fx[k] || 0) + r.fx[k];
     s.falls += r.falls; s.fallThrough += r.fallThrough.length; s.roadUnder += r.roadUnder.length; s.wrongAttach += r.wrongAttach.length;
     s.launched += r.launched.length; s.stuck += r.stuck.length; s.loopDrop += r.loopDrop.length; if (!r.finished) s.unfinished++;
   });
@@ -217,7 +237,7 @@ function sweep(maps, quick, onRun) {
 if (require.main === module) {
   var args = process.argv.slice(2);
   var mi = args.indexOf('--map'), maps = mi >= 0 ? args[mi + 1].split(',') : MAPS;
-  var quick = args.indexOf('--quick') >= 0, verbose = args.indexOf('--verbose') >= 0, asJson = args.indexOf('--json') >= 0;
+  var quick = args.indexOf('--ci') >= 0 ? 'ci' : args.indexOf('--quick') >= 0, verbose = args.indexOf('--verbose') >= 0, asJson = args.indexOf('--json') >= 0;
   var t0 = Date.now();
   var res = sweep(maps, quick, function (r) {
     if (verbose || bad(r)) {

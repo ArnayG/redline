@@ -210,6 +210,9 @@ CB.arcade = CB.arcade || {};
         // stunt sessions (CB.arcade.stunt): track-space bridge, ARCADE-SPEC § 7 Gameplay layer
         var st = stuntBridge(session);
         if (st) { try { gp.setTrack(st.track, st.layout); } catch (e2) { /* ignore */ } }
+        // special features (stunt-features.js) award nitro through this gameplay instance (stars, fire rings, bumpers …)
+        if (session && typeof session.bindGameplay === 'function') { try { session.bindGameplay(gp); } catch (e3) { /* optional */ } }
+        if (hud && st && st.starsTotal) hud.setStars(0, st.starsTotal);
       }
       if (fx) fx.setTrack(gp.track());
     }
@@ -233,7 +236,18 @@ CB.arcade = CB.arcade || {};
           return { x: p[0], y: -p[2], z: p[1], heading: tg ? Math.atan2(-tg[2], tg[0]) : 0, pos3: p, up3: sm && sm.up };
         }
       };
-      return { track: track, layout: featureSpecs(T.features || []) };
+      var Fe = SM && SM.features, laps = num(session && session.config && session.config.laps, num(T.laps, 3)), stars = 0;
+      try { stars = Fe && typeof Fe.index === 'function' ? Fe.index(T).starTotal * laps : 0; } catch (e3) { stars = 0; }
+      return { track: track, layout: featureSpecs(T.features || []), starsTotal: stars };
+    }
+    /** the stunt session's own special-feature events ('stuntFx': BARREL ROLL!, WARP!, hazards, stars …) of a snapshot;
+        each snapshot object is read once (race-ui may hand the same snap to drawHud twice when paused) */
+    function stuntEvents(snap) {
+      if (!snap || snap === L.lastSnap || !Array.isArray(snap.events)) return [];
+      L.lastSnap = snap;
+      var out = [];
+      for (var i = 0; i < snap.events.length; i++) { var e = snap.events[i]; if (e && e.type === 'stuntFx') out.push(e); }
+      return out;
     }
     function featureSpecs(list) {
       return list.filter(function (f) { return f && /^(box|pad|ring|coin|can)$/.test(f.type); })
@@ -273,6 +287,8 @@ CB.arcade = CB.arcade || {};
       var me = st.player ? st.player.id : 'player';
       var ev = pendingEvents; pendingEvents = [];
       if (st.events && st.events !== ev && !ev.length) ev = st.events;
+      var sev = stuntEvents(snap);
+      if (sev.length) ev = ev.concat(sev);
       if (hud) hud.events(ev, me);
       if (fx) fx.events(ev, snap, st);
       // paused / menus: the sim clock stops -> silence the continuous layers (nitro roar, drift hiss)

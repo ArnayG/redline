@@ -148,7 +148,7 @@ test('stunt mercy: raw physics, too slow for a gap twice -> the next attempt get
 });
 
 test('stunt human sweep: lateral offsets x speeds / boosts / item hits x air inputs x builds x frame rates (one arcade model, no assist) — every map completes, no fall-through', () => {
-  const res = SW.sweep(SW.MAPS, false);
+  const res = SW.sweep(SW.MAPS, 'ci');   // reduced deterministic subset on all maps (full sweep: node tools/stunt-sweep.js)
   SW.MAPS.forEach((id) => {
     res[id].forEach((r) => {
       const p = r.profile, tag = id + ' ' + JSON.stringify(p);

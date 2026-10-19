@@ -30,6 +30,16 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     high: { dpr: 1.5, scale: 1, shadow: 2048, post: true, particles: 1200, lodHigh: 5, far: 3600 },
     ultra: { dpr: 2, scale: 1, shadow: 2048, post: true, particles: 2000, lodHigh: 12, far: 4200 }
   };
+  /** per-theme lighting tweaks on top of the time-of-day preset (fog colour sRGB, density x, ambient x, sun/ambient tint) */
+  var THEME_LIGHT = {
+    pinball: { fog: [0.09, 0.03, 0.14], fogK: 1.1, amb: 1.5, tint: [1.05, 0.85, 1.2] },
+    lab: { fog: [0.80, 0.87, 0.92], fogK: 0.9, amb: 1.15, tint: [0.95, 1.0, 1.05] },
+    sky: { fog: [0.70, 0.84, 0.98], fogK: 0.55, amb: 1.1, exposure: 1.02 },
+    bedroom: { fog: [0.62, 0.52, 0.44], fogK: 0.5, amb: 1.35, tint: [1.15, 0.98, 0.82] },
+    rooftops: { fog: [0.42, 0.33, 0.40], fogK: 1.1, amb: 1.1 },
+    glacier: { fog: [0.84, 0.91, 0.99], fogK: 0.9, amb: 1.2, tint: [0.94, 1.0, 1.08], exposure: 0.92 },
+    volcano: { fog: [0.40, 0.18, 0.12], fogK: 1.25, tint: [1.15, 0.9, 0.8] }
+  };
   function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
@@ -148,6 +158,15 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (L.fogColor) base.fogColor = L.fogColor.slice(); if (L.skyZenith) base.envTop = L.skyZenith.slice(); if (L.skyHorizon) base.envHorizon = L.skyHorizon.slice();
         if (L.skyGround) base.envBottom = L.skyGround.slice();
         if (tod === 'night') { base.ambientSky = mul(base.ambientSky, 1.8); base.sunColor = mul(base.sunColor, 1.6); }
+      }
+      var TL = THEME_LIGHT[track.theme];
+      if (TL) {
+        if (TL.fog) base.fogColor = TL.fog.slice();
+        if (TL.fogK) base.fogDensity *= TL.fogK;
+        if (TL.amb) base.ambientSky = mul(base.ambientSky, TL.amb);
+        if (TL.tint) { base.sunColor = [base.sunColor[0] * TL.tint[0], base.sunColor[1] * TL.tint[1], base.sunColor[2] * TL.tint[2]]; base.ambientSky = [base.ambientSky[0] * TL.tint[0], base.ambientSky[1] * TL.tint[1], base.ambientSky[2] * TL.tint[2]]; }
+        if (TL.exposure) base.exposure *= TL.exposure;
+        if (TL.horizon) base.envHorizon = TL.horizon.slice();
       }
       if (base.sunDir[1] < 0.15) { base.sunDir[1] = 0.15; }
       base.sunDir = norm(base.sunDir);
@@ -312,17 +331,26 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       lampGreen: { color: [1, 1, 1, 1], unlit: true, castShadow: false },
       ent: { color: [1, 1, 1, 1], unlit: true, castShadow: false },
       oil: { color: [0.02, 0.02, 0.04, 0.92], transparent: true, roughness: 0.05, metallic: 0.3, castShadow: false },
-      rocket: { color: [1, 0.2, 0.15, 1], unlit: true, castShadow: false }
+      rocket: { color: [1, 0.2, 0.15, 1], unlit: true, castShadow: false },
+      lit: { color: [1, 1, 1, 1], roughness: 0.45, metallic: 0.2, clearcoat: 0.3 },
+      steel: { color: [1, 1, 1, 1], roughness: 0.25, metallic: 0.85, clearcoat: 0.4 },
+      glowU: { color: [1, 1, 1, 1], unlit: true, castShadow: false },
+      swirl: { color: [1, 1, 1, 1], unlit: true, transparent: true, additive: true, depthWrite: false, doubleSided: true, castShadow: false },
+      flash: { color: [1, 1, 1, 1], unlit: true, transparent: true, additive: true, depthWrite: false, castShadow: false },
+      warn: { color: [1, 1, 1, 1], unlit: true, transparent: true, additive: true, depthWrite: false, castShadow: false, polygonOffset: [-2, -4] },
+      star: { color: [1, 1, 1, 1], unlit: true, castShadow: false }
     };
     MAT.lampRed.color = [4, 0.15, 0.1, 1]; MAT.lampGreen.color = [0.3, 4, 0.6, 1];
     var dynPool = [];
     function dynItem(mesh, mat, pos, fwd, up, scale, spin) {
+      if (!mesh) return null;
       var it = dynPool[dynItems.length] || (dynPool[dynItems.length] = { model: M4.create() });
       var f = fwd, u = up;
       if (spin) f = norm(rotAxis(fwd, up, spin));
-      var r = cross(f, u), s = scale || 1, m = it.model;
-      m[0] = f[0] * s; m[1] = f[1] * s; m[2] = f[2] * s; m[3] = 0; m[4] = u[0] * s; m[5] = u[1] * s; m[6] = u[2] * s; m[7] = 0;
-      m[8] = r[0] * s; m[9] = r[1] * s; m[10] = r[2] * s; m[11] = 0; m[12] = pos[0]; m[13] = pos[1]; m[14] = pos[2]; m[15] = 1;
+      var r = cross(f, u), m = it.model, sx, sy, sz;
+      if (scale && scale.length) { sx = scale[0]; sy = scale[1]; sz = scale[2]; } else sx = sy = sz = scale || 1;
+      m[0] = f[0] * sx; m[1] = f[1] * sx; m[2] = f[2] * sx; m[3] = 0; m[4] = u[0] * sy; m[5] = u[1] * sy; m[6] = u[2] * sy; m[7] = 0;
+      m[8] = r[0] * sz; m[9] = r[1] * sz; m[10] = r[2] * sz; m[11] = 0; m[12] = pos[0]; m[13] = pos[1]; m[14] = pos[2]; m[15] = 1;
       it.mesh = mesh; it.material = mat; it.castShadow = false; it.transparent = !!mat.transparent; it.kind = 'stunt-dyn';
       dynItems.push(it);
       return it;
@@ -342,7 +370,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           if (e.type === 'box') dynItem(fm.box, MAT.box, madd(pos, sm.up, 1.0 + Math.sin(t * 2 + e.s) * 0.12), sm.tangent, sm.up, 1, t * 1.6 + e.s);
           else if (e.type === 'can') dynItem(fm.can, MAT.can, madd(pos, sm.up, 0.9), sm.tangent, sm.up, 1, t * 2);
           else if (e.type === 'coin') dynItem(fm.coin, MAT.coin, madd(pos, sm.up, 0.9), sm.tangent, sm.up, 1, t * 3 + e.s);
-          else if (e.type === 'ring') { var rr = num(e.r, 2.8); dynItem(fm.ring, MAT.ring, madd(pos, sm.up, num(e.z, 0.5) + rr), sm.tangent, sm.up, rr, 0); }
+          else if (e.type === 'ring') { var rr = num(e.r, 2.8), isFire = !!(D.fire && D.fire[Math.round(e.s * 10) + '|' + Math.round(num(e.lat, 0) * 10)]); var rp = madd(pos, sm.up, num(e.z, 0.5) + rr); dynItem(isFire ? fm.fireRing : fm.ring, MAT.ring, rp, sm.tangent, sm.up, rr, 0); if (isFire) fireRingFx(rp, sm, rr, camPos); }
           else if (e.type === 'oil') dynItem(fm.coin, MAT.oil, madd(pos, sm.up, 0.03), sm.up, mul(sm.tangent, -1), 3.2, 0);
           else if (e.type === 'rocket') dynItem(fm.can, MAT.rocket, madd(pos, sm.up, 0.8), sm.up, mul(sm.tangent, -1), 0.9, 0);
         }
@@ -351,8 +379,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         D.boxes.forEach(function (b) { if (!hidden[b.id] && near(b.pos)) dynItem(fm.box, MAT.box, madd(b.pos, b.up, Math.sin(t * 2 + b.s) * 0.12), b.fwd, b.up, 1, t * 1.6 + b.s); });
         D.cans.forEach(function (b) { if (!hidden[b.id] && near(b.pos)) dynItem(fm.can, MAT.can, b.pos, b.fwd, b.up, 1, t * 2); });
         D.coins.forEach(function (b) { if (!hidden[b.id] && near(b.pos)) dynItem(fm.coin, MAT.coin, b.pos, b.fwd, b.up, 1, t * 3 + b.s); });
-        D.rings.forEach(function (b) { if (near(b.pos)) dynItem(fm.ring, MAT.ring, b.pos, b.fwd, b.up, b.r, 0); });
+        D.rings.forEach(function (b) {
+          if (!near(b.pos)) return;
+          var isF = !!(D.fire && D.fire[Math.round(b.s * 10) + '|' + Math.round(num(b.lat, 0) * 10)]);
+          dynItem(isF ? fm.fireRing : fm.ring, MAT.ring, b.pos, b.fwd, b.up, b.r, 0);
+          if (isF) fireRingFx(b.pos, { up: b.up, left: b.left, tangent: b.fwd }, b.r, camPos);
+        });
       }
+      specialDynamic(snap, camPos, near);
       // hook-spawned entities (generic glowing markers)
       var ents = snap && snap.stunt && snap.stunt.entities;
       if (ents) ents.forEach(function (e) {
@@ -371,6 +405,105 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var pulse = 0.75 + 0.35 * Math.sin(t * 9);
       pm.color = [pulse * 1.6, pulse * 1.6, pulse * 1.6, 1];
       return dynItems;
+    }
+
+    /* ---- special features: hazards, portals, bumpers, flippers, stars, belts (animated from the race clock) */
+    var FT = S.features || null, flashUntil = {};
+    var BLADE_MAT = [[1, 0.16, 0.12], [1, 0.82, 0.2], [0.18, 0.5, 1], [0.2, 0.9, 0.5]].map(function (c) { return { color: [c[0], c[1], c[2], 1], roughness: 0.4, clearcoat: 0.5 }; });
+    function featureClock(snap) { var c = snap && snap.stunt && snap.stunt.clock; return typeof c === 'number' && isFinite(c) ? c : num(snap && snap.t, R.time); }
+    function fireRingFx(c, sm, r, camPos) {
+      var dx = c[0] - camPos[0], dy = c[1] - camPos[1], dz = c[2] - camPos[2];
+      if (dx * dx + dy * dy + dz * dz > 160 * 160 || PS.length > PMAX * 0.8) return;
+      for (var i = 0; i < 2; i++) {
+        var a = Math.random() * TAU, d = add(mul(sm.left, Math.cos(a) * r), mul(sm.up, Math.sin(a) * r));
+        spawn({ p: add(c, d), v: add(mul(sm.up, 2.5 + Math.random() * 2), mul(d, 0.3)), life: 0.35 + Math.random() * 0.3, age: 0, size: 0.55, grow: 0.8, col: [4, 1.3 + Math.random(), 0.25, 1], add: true, g: -0.4 });
+      }
+    }
+    var _sm = null;
+    function specialDynamic(snap, camPos, near) {
+      var D = world.dyn, fm = world.meshes, t = featureClock(snap), rt = R.time, k;
+      if (FT && D.hazards) for (k = 0; k < D.hazards.length; k++) {
+        var hz = D.hazards[k], f = hz.f, sm = track.sample(f.s), base = track.pointAt(f.s, f.lat, 0);
+        if (!near(base)) continue;
+        var hs = FT.hazardState(f, t, hz.hw), fwd = sm.tangent, up = sm.up, left = sm.left;
+        if (hs.kind === 'pendulum') {
+          var H = num(hs.h, 13), piv = track.pointAt(f.s, f.lat, H), bp = add(add(piv, mul(left, Math.sin(hs.angle) * H)), mul(up, -Math.cos(hs.angle) * H));
+          var r = num(hs.r, 1.45), lift = Math.max(r, num(bp[1], 0) - 0);
+          var ballC = track.pointAt(f.s, hs.latC, r + (H - Math.sqrt(Math.max(0, H * H - Math.pow(hs.latC - f.lat, 2)))));
+          var rodDir = norm(sub(piv, ballC)), rodLen = Math.hypot(piv[0] - ballC[0], piv[1] - ballC[1], piv[2] - ballC[2]);
+          dynItem(fm.rod, MAT.steel, ballC, fwd, rodDir, [0.12, rodLen, 0.12], 0);
+          dynItem(fm.ball, MAT.steel, ballC, fwd, rodDir, r, 0);
+          void lift; void bp;
+        } else if (hs.kind === 'hammer') {
+          var side = f.lat >= 0 ? 1 : -1, hinge = track.pointAt(f.s, side * (hz.hw + 1.8), 1.6);
+          var toLane = mul(left, -side), Lh = Math.abs(side * (hz.hw + 1.8) - f.lat), ca = Math.cos(hs.angle), sa = Math.sin(hs.angle);
+          var dirH = norm(add(mul(toLane, ca), mul(up, sa)));
+          var headC = add(add(hinge, mul(dirH, Lh)), mul(up, -0.45 * ca));
+          dynItem(fm.rod, MAT.lit, hinge, fwd, dirH, [0.42, Lh, 0.42], 0);
+          dynItem(fm.head, MAT.lit, headC, fwd, norm(cross(fwd, dirH)), 1.35, 0);
+          if (hs.warn) warnBand(f.s, f.lat - num(f.w, 2.8), f.lat + num(f.w, 2.8), 2.2, rt);
+        } else if (hs.kind === 'windmill') {
+          var Rr = num(hs.r, 5), hubP = track.pointAt(f.s, f.lat, num(hs.h, Rr + 0.6));
+          dynItem(fm.hub, MAT.lit, hubP, fwd, up, 1, 0);
+          for (var b = 0; b < 4; b++) {
+            var ang = hs.angle + b * Math.PI / 2, bd = norm(add(mul(left, Math.sin(ang)), mul(up, -Math.cos(ang))));
+            dynItem(fm.blade, BLADE_MAT[b], hubP, fwd, bd, [1.4, Rr, 1.4], 0);
+          }
+        } else if (hs.kind === 'piston') {
+          var sd = hs.side || 1, ext = num(hs.ext, 0), outer = sd * (hz.hw + 1.6), inner = sd * (hz.hw - ext), mid = (outer + inner) / 2, half = Math.abs(outer - inner) / 2;
+          var pf = sd > 0 ? fwd : mul(fwd, -1);
+          dynItem(fm.block, MAT.lit, track.pointAt(f.s, mid, 0.85), pf, up, [num(f.len, 5) / 2, 0.85, half], 0);
+          if (hs.warn) warnBand(f.s, sd > 0 ? hz.hw - num(f.ext, hz.hw * 0.55) : -hz.hw, sd > 0 ? hz.hw : -hz.hw + num(f.ext, hz.hw * 0.55), num(f.len, 5) / 2 + 0.5, rt);
+        } else if (hs.kind === 'boulder') {
+          if (hs.visible) {
+            var rr2 = num(hs.r, 2.1), bc = track.pointAt(f.s, hs.latC, rr2);
+            dynItem(fm.rock, MAT.lit, bc, fwd, norm(rotAxis(up, fwd, hs.angle)), rr2, 0);
+          } else if (hs.warn) warnBand(f.s, -hz.hw, hz.hw, 2.6, rt);
+        }
+      }
+      // bumpers: flash on hits
+      if (D.bumpers) for (k = 0; k < D.bumpers.length; k++) {
+        var bm = D.bumpers[k], fl = flashUntil[bm.id];
+        if (fl && fl > rt && near(bm.pos)) { var kf = (fl - rt) / 0.3; dynItem(fm.cap, MAT.flash, bm.pos, bm.fwd, bm.up, bm.r * (1 + 0.6 * (1 - kf)), 0); }
+      }
+      // flippers
+      if (FT && D.flippers) for (k = 0; k < D.flippers.length; k++) {
+        var fp = D.flippers[k], ps = track.sample(fp.s - fp.len / 2), piv = track.pointAt(fp.s - fp.len / 2, fp.side * (ps.halfWidth - 0.5), 0.05);
+        if (!near(piv)) continue;
+        var st = FT.flipperState(fp.f, t), a = (0.22 + 0.55 * st.angle) * -fp.side;   // rest: angled slightly inward; flipped: kicked across
+        var fd = norm(rotAxis(ps.tangent, ps.up, a));
+        dynItem(fm.flipper, MAT.lit, piv, fd, ps.up, [fp.len * 0.85, 1, 1.4], 0);
+      }
+      // stars (hidden once taken this lap)
+      if (D.stars && D.stars.length) {
+        var taken = {}; ((snap && snap.stunt && snap.stunt.starsTaken) || []).forEach(function (id) { taken[id] = 1; });
+        for (k = 0; k < D.stars.length; k++) {
+          var sr = D.stars[k]; if (taken[sr.id]) continue;
+          var ss = track.sample(sr.s), sp = track.pointAt(sr.s, sr.lat, sr.z + Math.sin(rt * 2.4 + k) * 0.15);
+          if (near(sp)) dynItem(fm.star, MAT.star, sp, ss.tangent, ss.up, 1.05, rt * 2.2 + k);
+        }
+      }
+      // warp portal swirls
+      if (D.portals) for (k = 0; k < D.portals.length; k++) {
+        var po = D.portals[k];
+        if (!near(po.pos)) continue;
+        dynItem(fm.swirl, MAT.swirl, madd(po.pos, po.fwd, po.exit ? 0.2 : -0.2), po.fwd, norm(rotAxis(po.up, po.fwd, rt * (po.exit ? -2.2 : 2.6))), po.r * 0.98, 0);
+      }
+      // speed belts: chevrons scrolling forward
+      if (D.belts) for (k = 0; k < D.belts.length; k++) {
+        var bl = D.belts[k], off = (rt * 9) % 3;
+        if (!near(track.pointAt(bl.s + bl.len / 2, bl.lat, 0))) continue;
+        for (var d = off; d < bl.len - 0.5; d += 3) {
+          _sm = track.sample(bl.s + d, _sm);
+          for (var l = -1; l <= 1; l += 2) if (bl.w > 6 || l < 0) dynItem(fm.chevron, MAT.glowU, track.pointAt(bl.s + d, bl.lat + (bl.w > 6 ? l * bl.w / 4 : 0), 0.06), _sm.tangent, _sm.up, Math.min(2.6, bl.w * 0.4), 0);
+        }
+      }
+    }
+    function warnBand(s, la, lb, sh, rt) {
+      var on = Math.sin(rt * 18) > 0;
+      if (!on) return;
+      var sm = track.sample(s), c = track.pointAt(s, (la + lb) / 2, 0.06);
+      dynItem(world.meshes.warn, MAT.warn, c, sm.tangent, sm.up, [sh, 1, Math.abs(lb - la) / 2], 0);
     }
 
     function arcadeEntities(snap) {
@@ -444,14 +577,21 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     function cameraFor(pose, c, dt, aspect, e) { R.dt = dt; return applyCtl(cameraBase(pose, c, dt, aspect, e), R.mode); }
     function cameraBase(pose, c, dt, aspect, e) {
       var speed = num(c.speed, 0), boost = c.boosting ? 1 : 0;
-      var fovT = 66 + clamp01((speed - 20) / 45) * 8 + boost * 10;
+      var fovT = 66 + clamp01((speed - 20) / 45) * 8 + boost * 10 + num(R.fovKick, 0) + (c.airborne && num(c.airTime_s, 0) > 0.7 ? 6 : 0);
+      R.fovKick = Math.max(0, num(R.fovKick, 0) - dt * 18);
       R.fov += (fovT - R.fov) * (1 - Math.exp(-dt * 4));
       var shake = R.shake, sh = shake > 0 ? [Math.sin(R.time * 53) * shake * 0.12, Math.sin(R.time * 61 + 1) * shake * 0.1, Math.sin(R.time * 47 + 2) * shake * 0.12] : [0, 0, 0];
       R.shake = Math.max(0, R.shake - dt * 2.5);
       var mode = R.mode;
       if (mode === 'chase' || mode === 'chase-far') {
         var far = mode === 'chase-far';
-        var rig = chaseRig(R.rig, pose, dt, { dist: far ? 12 : 7.2, height: far ? 4.2 : 2.4, look: far ? 6 : 4, back: R.lookBack ? -1 : 1 });
+        // upside down (loops, zero-g, barrel rolls) a touch closer / lower so the eye stays inside tubes and cages;
+        // long flights (cannons, monster jumps) pull back to frame the landing
+        var inv = clamp01((0.35 - pose.up[1]) / 0.7), airK = c.airborne ? clamp01((num(c.airTime_s, 0) - 0.5) / 0.8) : 0;
+        R.camInv = num(R.camInv, 0) + (inv - num(R.camInv, 0)) * (1 - Math.exp(-dt * 3));
+        R.camAir = num(R.camAir, 0) + (airK - num(R.camAir, 0)) * (1 - Math.exp(-dt * 2));
+        var cd = (far ? 12 : 7.2) * (1 - 0.14 * R.camInv) + R.camAir * (far ? 3 : 3.5), chh = (far ? 4.2 : 2.4) * (1 - 0.15 * R.camInv) + R.camAir * 1.2;
+        var rig = chaseRig(R.rig, pose, dt, { dist: cd, height: chh, look: far ? 6 : 4, back: R.lookBack ? -1 : 1, upRate: 5.5 - 1.5 * R.camInv });
         // near-lens protection: rise over an opponent whose body would cut the near plane (cheap box test, smoothed)
         var need = 0, others = R.camCars || [];
         for (var oi = 0; oi < others.length; oi++) {
@@ -514,6 +654,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         }
         c2.stroke();
       }
+      if (R.flash && R.flash.t > 0) {
+        c2.fillStyle = 'rgba(' + R.flash.col + ',' + clamp01(R.flash.t * 1.6).toFixed(3) + ')'; c2.fillRect(0, 0, W, H);
+        R.flash.t -= R.dt || 0.016;
+      }
       var fade = snap && snap.stunt ? num(snap.stunt.fade, 0) : 0;
       if (fade > 0.001) { c2.fillStyle = 'rgba(8,8,14,' + clamp01(fade).toFixed(3) + ')'; c2.fillRect(0, 0, W, H); }
       c2.restore();
@@ -550,6 +694,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (e.prev && e.prevT !== snap.t) {
           var jump = Math.hypot(cur.pos[0] - e.prev.pos[0], cur.pos[1] - e.prev.pos[1], cur.pos[2] - e.prev.pos[2]);
           if (jump < 12) p = { pos: lerp3(e.prev.pos, cur.pos, a), fwd: norm(lerp3(e.prev.fwd, cur.fwd, a)), up: norm(lerp3(e.prev.up, cur.up, a)) };
+          else if (c.isPlayer || c.id === snap.playerId) { R.rig.init = false; R.fpUp = null; R.camCut = true; }   // warp / respawn: cut, no swing
         }
         if (e.prevT !== snap.t) { e.prev = cur; e.prevT = snap.t; }
         poses[c.id] = p;
@@ -568,6 +713,20 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           emitSparks(madd(pp.pos, cross(pp.fwd, pp.up), num(ev.side, 1) * -1.0), mul(pp.fwd, pc.speed * 0.6), 10);
           if (pc.isPlayer) R.shake = Math.min(1, R.shake + 0.3);
         } else if (ev.type === 'contact' && pc.isPlayer) { R.shake = Math.min(1, R.shake + 0.25); emitSparks(pp.pos, mul(pp.fwd, pc.speed * 0.5), 8); }
+        else if (ev.type === 'takeoff' && ev.cannon) {   // muzzle blast
+          emitSparks(pp.pos, mul(pp.fwd, pc.speed * 0.3), 30, [4, 2, 0.5, 1]);
+          emitDust(madd(pp.pos, pp.fwd, -2), 14, [0.35, 0.33, 0.32, 0.6]);
+          if (pc.isPlayer) { R.shake = Math.min(1.6, R.shake + 1.1); R.fovKick = 14; R.flash = { t: 0.25, col: '255,170,60' }; }
+        } else if (ev.type === 'stuntFx') {
+          var kd = ev.kind;
+          if (kd === 'warp' && pc.isPlayer) { R.flash = { t: 0.35, col: '200,120,255' }; R.rig.init = false; }
+          else if (kd === 'hazard') { emitSparks(madd(pp.pos, pp.up, 0.8), mul(pp.fwd, pc.speed * 0.3), 22, [3.5, 3.2, 2.4, 1]); if (pc.isPlayer) R.shake = Math.min(1.6, R.shake + 0.9); }
+          else if (kd === 'bumper') { if (ev.bumper) flashUntil[ev.bumper] = R.time + 0.3; emitSparks(madd(pp.pos, pp.up, 0.6), [0, 0, 0], 14, [4, 0.6, 3.4, 1]); if (pc.isPlayer) R.shake = Math.min(1, R.shake + 0.4); }
+          else if (kd === 'flipper') { emitSparks(pp.pos, mul(pp.fwd, pc.speed * 0.5), 12, [4, 3.6, 0.6, 1]); if (pc.isPlayer) R.fovKick = 8; }
+          else if (kd === 'star') { for (var si = 0; si < 3; si++) emitSparks(madd(pp.pos, pp.up, 1.2), mul(pp.fwd, pc.speed * 0.6), 10, [4, 3.4, 0.8, 1]); if (pc.isPlayer) R.flash = { t: 0.2, col: '255,230,120' }; }
+          else if (kd === 'fireRing') { emitSparks(madd(pp.pos, pp.up, 1), mul(pp.fwd, pc.speed * 0.6), 26, [4, 1.4, 0.3, 1]); if (pc.isPlayer) { R.flash = { t: 0.22, col: '255,120,40' }; R.fovKick = 10; } }
+          else if (kd === 'spring') emitDust(pp.pos, 6, [0.6, 1, 0.5, 0.4]);
+        }
       });
       // camera
       var pe = carEntry(player);
@@ -637,7 +796,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       if (particles && PS.length) { try { particles.draw(cam, env, { viewportHeight: size.h }); } catch (e5) { /* optional */ } }
       if (usePost) {
         try {
-          post.end({ bloom: true, bloomStrength: track.theme === 'neon' ? 0.9 : 0.6, threshold: env.linearOutput ? 1.1 : 0.82, vignette: 0.3,
+          post.end({ bloom: true, bloomStrength: track.theme === 'neon' || track.theme === 'pinball' ? 0.9 : track.theme === 'lab' || track.theme === 'rooftops' ? 0.7 : 0.6, threshold: env.linearOutput ? 1.1 : 0.82, vignette: 0.3,
             speedBlur: player.boosting ? 0.55 : clamp01((num(player.speed, 0) - 45) / 30) * 0.25, exposure: Lt.exposure, saturation: 1.12, contrast: 1.05, time: R.time });
         } catch (e6) { post = null; }
       }

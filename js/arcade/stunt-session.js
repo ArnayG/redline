@@ -91,7 +91,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     var extGameplay = hooks.some(function (h) { return h.name === 'arcade-gameplay'; });
     var hasVehicleEnv = hooks.some(function (h) { return typeof h.vehicleEnv === 'function'; });
     var pads = track.features.filter(function (f) { return f.type === 'pad'; });
-    var sess, gp = null;
+    var sess, gp = null, boundGp = null;   // boundGp: the CB.arcade.mode gameplay extension's instance (bindGameplay)
+    var Fe = S.features || null;
     var session = { track: track, trackDef: track.def, geom: track.geom2D, config: cfg, STEP: STEP };
 
     /* ---------------- entrants ---------------- */
@@ -334,7 +335,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           continue;
         }
         if (c.isPlayer && !sess.autopilot && !c.finished) inp = { throttle: pin.throttle, brake: pin.brake, steer: pin.steer, nitro: pin.nitro };
-        else inp = AI.drive(c.ai || (c.ai = AI.createDriver({ skill: 0.9 })), c, track, { cars: cars, pads: pads, driveModel: driveModel });
+        else inp = AI.drive(c.ai || (c.ai = AI.createDriver({ skill: 0.9 })), c, track, { cars: cars, pads: pads, driveModel: driveModel, t: sess.t - num(c.clockOffset, 0) });
         if (c.finished && !c.isPlayer) inp.throttle *= 0.6;
         // engine-hook contract mirror (ARCADE-SPEC §3/§4): car.ctx / car.input / car.state / car.params
         if (hooks.length) {
@@ -388,7 +389,13 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           track: track, dt: STEP, drive: driveModel, input: inp, fx: fx, help: help, jumpAssist: cfg.jumpAssist !== false || help === 'ai',
           respawnPoint: respawnPoint, paceMult: pace, latMult: c.ai && !c.humanAssist ? c.ai.latMult : 1
         });
-        if (c.events) { for (var e = 0; e < c.events.length; e++) { var ev = c.events[e]; evt(ev.type, c, ev); } c.events = null; }
+        if (Fe) {   // special features (hazards, bumpers, belts, stars, callouts …): stunt-features.js
+          var fctx = featureCtx(c, inp);
+          if (c.events) for (var e0 = 0; e0 < c.events.length; e0++) Fe.onPhysicsEvent(c, c.events[e0], fctx);
+          drainEvents(c);
+          Fe.step(c, fctx);
+        }
+        drainEvents(c);
         if (!gp && !extGameplay) fallbackPickups(c);
         if (Math.abs(c.v) > c.maxSpeed) c.maxSpeed = Math.abs(c.v);
         timing(c, prevDist);
@@ -408,6 +415,20 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       sess.steps++;
     }
 
+    function drainEvents(c) { if (c.events) { var list = c.events; c.events = null; for (var e = 0; e < list.length; e++) evt(list[e].type, c, list[e]); } }
+    function featureCtx(c, inp) {
+      return {
+        track: track, t: sess.t - num(c.clockOffset, 0), dt: STEP, input: inp, gp: gp || boundGp,
+        emit: function (kind, data) { evt('stuntFx', c, Object.assign({ kind: kind }, data || {})); }
+      };
+    }
+    function playerStars() {
+      var pl = sess.player, out = [];
+      if (!pl || !pl.feat || !pl.feat.st) return out;
+      var lap = Math.max(0, Math.floor(pl.dist / L));
+      for (var k in pl.feat.st) if (pl.feat.st[k] === lap) out.push(k);
+      return out;
+    }
     function timing(c, prevDist) {
       // checkpoints (unwrapped): remember the last one passed for respawns
       var lapBase = Math.floor(c.dist / L) * L, cps = track.checkpoints;
@@ -489,7 +510,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         raceTime: sess.goT !== null ? Math.max(0, (sess.endT !== null ? sess.endT : sess.t) - sess.goT) : 0,
         fastestLap: sess.fastestLap ? Object.assign({}, sess.fastestLap) : null, leaderId: sess.order[0] ? sess.order[0].id : null,
         cars: sess.cars.map(snapCar), order: sess.order.map(function (c) { return c.id; }), events: ev,
-        stunt: { trackId: track.id, theme: track.theme, assist: sess.assist, entities: sess.entities.slice(), pickupsHidden: hiddenPickups(), fade: sess.player ? sess.player.fade : 0 },
+        stunt: { trackId: track.id, theme: track.theme, assist: sess.assist, entities: sess.entities.slice(), pickupsHidden: hiddenPickups(), fade: sess.player ? sess.player.fade : 0,
+          starsTaken: playerStars(), clock: sess.t - num(sess.player && sess.player.clockOffset, 0) },
         kind: 'stunt'
       };
       var extra = {};
@@ -522,7 +544,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           gap_s: c.finished && win.finished ? c.finishT - win.finishT : null, gapText: gapText, bestLap_s: c.bestLap, lastLap_s: c.lastLap,
           lapTimes: c.lapTimes.map(function (l) { return l.time; }), gridPosition: c.gridPosition, topSpeed_kph: round(c.maxSpeed * 3.6, 1),
           collisions: c.collisions, fastestLap: !!(sess.fastestLap && sess.fastestLap.carId === c.id),
-          stunt: { airTime_s: round(c.airTotal, 2), bestAir_s: round(c.bestAir, 2), landings: c.landings, falls: c.falls }
+          stunt: { airTime_s: round(c.airTotal, 2), bestAir_s: round(c.bestAir, 2), landings: c.landings, falls: c.falls,
+            stars: c.feat ? c.feat.stars : 0, starsTotal: Fe ? Fe.index(track).starTotal * cfg.laps : 0, hazardHits: c.feat ? c.feat.hz : 0,
+            bumpers: c.feat ? c.feat.bumps : 0, shortcuts: c.feat ? c.feat.cuts : 0, fireRings: c.feat ? c.feat.fire : 0, warps: c.feat ? c.feat.warps : 0 }
         };
       });
       var player = cls.filter(function (r) { return r.isPlayer; })[0] || null;
@@ -541,7 +565,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         for (var k in c) {
           if (k === 'ctx' || k === 'input' || k === 'state' || k === 'params' || k === 'build') continue;
           if (k === 'drive') { o.drive = driveState(c.drive); continue; }
-          if (k === 'ai' || k === 'drive' || k === 'lastCp' || k === 'lapTimes' || k === 'inputState') o[k] = JSON.parse(JSON.stringify(c[k])); else if (typeof c[k] !== 'function' && k !== 'events') o[k] = c[k]; }
+          if (k === 'ai' || k === 'drive' || k === 'lastCp' || k === 'lapTimes' || k === 'inputState' || k === 'feat') o[k] = JSON.parse(JSON.stringify(c[k])); else if (typeof c[k] !== 'function' && k !== 'events') o[k] = c[k]; }
         return o;
       });
       return {
@@ -591,6 +615,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     session.setPlayerAutopilot = function (b) { sess.autopilot = !!b; };
     session.setAssist = function () { return 'player'; };    // no steering assist in arcade (kept for callers; no-op)
     session.setAssists = function () {};
+    /** CB.arcade.mode's gameplay extension hands its CB.arcade.gameplay instance over (arcade-layer attach): special
+        features award nitro through it (stars, rings of fire, bumpers, drift zones). */
+    session.bindGameplay = function (g) { boundGp = g && typeof g.addNitro === 'function' ? g : null; return !!boundGp; };
+    session.features = Fe;
     session.getState = getState;
     session.setState = setState;
     session.cars = function () { return sess.cars; };

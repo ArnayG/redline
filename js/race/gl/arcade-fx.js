@@ -44,7 +44,9 @@ CB.arcade = CB.arcade || {};
     opts = opts || {};
     var S = {
       track: opts.track || null, renderer: null, cam: null, W: 1, H: 1, t: 0, parts: [], rings: [], bolts: [], trails: {},
-      kick: 0, shake: 0, speedLines: 0, posCache: {}, elev: null, prevCtl: null, ctlSet: false, quality: opts.quality || 'auto', maxParts: 360
+      kick: 0, shake: 0, speedLines: 0, posCache: {}, elev: null, prevCtl: null, ctlSet: false, quality: opts.quality || 'auto', maxParts: 360,
+      // stunt special features: screen flash (warp), tunnel speed lines timer, fire vignette, cartoon bonk stars on cars
+      sflash: 0, sflashRgb: '190,110,255', tunnelT: 0, fireT: 0, dizzy: {}
     };
 
     /* ---------------- camera + projection ---------------- */
@@ -503,9 +505,32 @@ CB.arcade = CB.arcade || {};
           case 'landing': if (base) burstC([base[0], base[1] - 0.9, base[2]], e.big ? 26 : 14, '255,200,90', 6, 0.45, 0.06, 9); if (car && car.isPlayer) S.shake = Math.max(S.shake, e.big ? 0.8 : 0.45); break;
           case 'boost': if (car && car.isPlayer) { S.kick = Math.max(S.kick, e.kind === 'mega' || e.kind === 'start' ? 1 : 0.7); S.shake = Math.max(S.shake, 0.35); } break;
           case 'nitroStart': if (car && car.isPlayer) { S.kick = Math.max(S.kick, 1); S.shake = Math.max(S.shake, 0.5); } break;
+          case 'stuntFx': stuntFx(e, car, base, burstC); break;
           default: break;
         }
       });
+    }
+
+    /** stunt special features (stunt-features.js): cheap 2D accents on top of the 3D renderer */
+    function stuntFx(e, car, base, burstC) {
+      var mine = !!(car && car.isPlayer);
+      switch (e.kind) {
+        case 'warp': if (mine) { S.sflash = 1; S.sflashRgb = '190,110,255'; S.kick = Math.max(S.kick, 1); } if (base) burstC(base, 24, '210,140,255', 7, 0.5, 0.1, 0); break;
+        case 'cannon': if (mine) { S.shake = Math.max(S.shake, 1.4); S.kick = Math.max(S.kick, 1); S.sflash = 0.45; S.sflashRgb = '255,170,90'; } if (base) burstC(base, 30, '255,150,60', 9, 0.6, 0.14, 3); break;
+        case 'tunnel': case 'belt': if (mine) S.tunnelT = Math.max(S.tunnelT, e.kind === 'tunnel' ? 2.6 : 1.2); break;
+        case 'hazard':
+          if (base) burstC(base, 14, '255,236,120', 5, 0.6, 0.1, 5);
+          if (car) S.dizzy[car.id] = 1.1;
+          if (mine) S.shake = Math.max(S.shake, 1.1);
+          break;
+        case 'bumper': if (base) burstC(base, 16, '255,90,220', 6, 0.4, 0.09, 2); if (mine) S.shake = Math.max(S.shake, 0.5); break;
+        case 'flipper': if (base) burstC(base, 12, '255,230,90', 6, 0.4, 0.08, 2); if (mine) S.kick = Math.max(S.kick, 0.9); break;
+        case 'star': if (base) { burstC(base, 22, '255,226,80', 6, 0.7, 0.1, 1); burstC(base, 8, '255,255,255', 3, 0.4, 0.14, 0); } break;
+        case 'fireRing': if (mine) S.fireT = 0.9; if (base) burstC(base, 26, '255,130,30', 7, 0.5, 0.12, -2); break;
+        case 'spring': if (base) burstC([base[0], base[1] - 0.9, base[2]], 12, '160,255,90', 5, 0.4, 0.08, 6); break;
+        case 'bigJump': case 'megaLoop': case 'barrelRoll2': if (mine) S.kick = Math.max(S.kick, 0.8); break;
+        default: break;
+      }
     }
 
     /* ---------------- frame ---------------- */
@@ -519,7 +544,8 @@ CB.arcade = CB.arcade || {};
       var boosting = me && (me.nitroOn || me.boost);
       S.kick += ((boosting ? (me.nitroOn ? 1 : 0.6) : 0) - S.kick) * clamp(dt * (boosting ? 5 : 2.2), 0, 1);
       S.shake = Math.max(boosting ? 0.25 : 0, S.shake - dt * 1.6);
-      S.speedLines += ((boosting ? 1 : (me && me.slip > 0.3 ? 0.35 : 0)) - S.speedLines) * clamp(dt * 6, 0, 1);
+      S.tunnelT = Math.max(0, S.tunnelT - dt);
+      S.speedLines += ((boosting || S.tunnelT > 0 ? 1 : (me && me.slip > 0.3 ? 0.35 : 0)) - S.speedLines) * clamp(dt * 6, 0, 1);
       ctx.save();
       if (S.cam) {
         // entities, far to near (skipped when the 3D renderer draws the arcade world itself, e.g. the stunt renderer)
@@ -578,6 +604,23 @@ CB.arcade = CB.arcade || {};
             if (A.slow > 0 && Math.random() < dt * 25) spawn({ p: [P.x, P.z + 1.4, -P.y], v: [(Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2], life: 0.5, age: 0, rgb: '255,240,120', size: 0.08, g: 0, floor: -1e9 });
           }
         }
+        // cartoon "dizzy" stars circling a car's roof after a hazard bonk
+        if (snap && snap.cars) Object.keys(S.dizzy).forEach(function (id) {
+          S.dizzy[id] -= dt;
+          if (S.dizzy[id] <= 0) { delete S.dizzy[id]; return; }
+          var dc = null; for (var q = 0; q < snap.cars.length; q++) if (snap.cars[q].id === id) dc = snap.cars[q];
+          if (!dc) return;
+          var DP = carPose(dc);
+          for (var si = 0; si < 3; si++) {
+            var an = S.t * 7 + si * TAU / 3, sp = projectGL([DP.x + Math.cos(an) * 1.1, DP.z + 1.9, -DP.y + Math.sin(an) * 1.1]);
+            if (!sp || sp.d > 90) continue;
+            var rs = clamp(sp.k * 0.32, 3, 18);
+            ctx.fillStyle = 'rgba(255,226,80,' + clamp(S.dizzy[id] / 0.4, 0, 1).toFixed(3) + ')';
+            ctx.beginPath();
+            for (var pi2 = 0; pi2 < 10; pi2++) { var aa = -Math.PI / 2 + pi2 * Math.PI / 5, r2 = pi2 % 2 ? rs * 0.45 : rs; ctx.lineTo(sp.x + Math.cos(aa) * r2, sp.y + Math.sin(aa) * r2); }
+            ctx.closePath(); ctx.fill();
+          }
+        });
         stepParts(dt); drawParts(ctx);
         // EMP rings
         for (i = S.rings.length - 1; i >= 0; i--) {
@@ -622,6 +665,17 @@ CB.arcade = CB.arcade || {};
           ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         }
       }
+      // stunt screen accents: warp / cannon flash, ring-of-fire vignette
+      if (S.sflash > 0.01) {
+        ctx.fillStyle = 'rgba(' + S.sflashRgb + ',' + (0.5 * S.sflash * S.sflash).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H);
+        S.sflash = Math.max(0, S.sflash - dt * 2.6);
+      }
+      if (S.fireT > 0) {
+        S.fireT = Math.max(0, S.fireT - dt);
+        var fg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.7);
+        fg.addColorStop(0, 'rgba(255,120,20,0)'); fg.addColorStop(1, 'rgba(255,100,20,' + (0.45 * S.fireT).toFixed(3) + ')');
+        ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+      }
       ctx.restore();
     }
 
@@ -633,7 +687,7 @@ CB.arcade = CB.arcade || {};
       project: function (x, y, e) { return project(x, y, e); },
       cameraFeel: function () { return { kick: S.kick, shake: S.shake }; },
       destroy: function () {
-        S.parts = []; S.rings = []; S.trails = {};
+        S.parts = []; S.rings = []; S.trails = {}; S.dizzy = {};
         if (S.renderer && S.ctlSet && typeof S.renderer.setCameraController === 'function') { try { S.renderer.setCameraController(S.prevCtl); } catch (e) { /* ignore */ } }
         S.ctlSet = false; S.renderer = null;
       },

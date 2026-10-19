@@ -49,11 +49,12 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   var G = 9.81;
   var G_AIR = 1.45 * G;       // arcade flight gravity (shared with stunt-physics)
 
-  var FLAG_NAMES = ['gap', 'ramp', 'landing', 'loop', 'cork', 'wall', 'bowl', 'jump', 'boost', 'start', 'checkpoint', 'rails', 'noRespawn', 'tunnel'];
+  var FLAG_NAMES = ['gap', 'ramp', 'landing', 'loop', 'cork', 'wall', 'bowl', 'jump', 'boost', 'start', 'checkpoint', 'rails', 'noRespawn', 'tunnel',
+    'tube', 'zerog', 'halfpipe', 'warp', 'cannon', 'split', 'belt', 'hazard'];
   var FLAGS = {};
   FLAG_NAMES.forEach(function (n, i) { FLAGS[n] = 1 << i; });
   // flags that make a spot unsafe for respawns / grid / AI braking
-  var UNSAFE = FLAGS.gap | FLAGS.ramp | FLAGS.landing | FLAGS.loop | FLAGS.cork | FLAGS.wall | FLAGS.jump | FLAGS.noRespawn;
+  var UNSAFE = FLAGS.gap | FLAGS.ramp | FLAGS.landing | FLAGS.loop | FLAGS.cork | FLAGS.wall | FLAGS.jump | FLAGS.noRespawn | FLAGS.warp | FLAGS.cannon | FLAGS.split | FLAGS.hazard;
 
   /* ---------------------------------------------------------------- tiny vec3 (plain arrays) */
   function v3(x, y, z) { return [x, y, z]; }
@@ -98,7 +99,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   }
   Turtle.prototype.right = function () { return cross(this.t, this.n); };
   Turtle.prototype.rec = function () {
-    this.raw.push({ p: this.p.slice(), n: this.n.slice(), t: this.t.slice(), w: this.width, bank: this.bank, flags: this.flags, piece: this.piece, lift: this.lift, design: this.design });
+    this.raw.push({ p: this.p.slice(), n: this.n.slice(), t: this.t.slice(), w: this.width, bank: this.bank, flags: this.flags, piece: this.piece, lift: this.lift, design: this.design, jump: this.jumpNext || false });
+    this.jumpNext = false;
   };
   /** Advance ds with rotations split around the move (midpoint rule). yawW = yaw about WORLD up (rad),
       pitch about the right axis, twist about the forward axis. */
@@ -161,6 +163,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         var u0 = i / n, u1 = (i + 1) / n, dsh = shift * (smooth(u1) - smooth(u0));
         T.step(L / n, 0, TAU / n, 0, dsh);
       }
+      T.info = { radius: R };
       return L;
     },
     corkscrew: function (T, pc) {
@@ -207,6 +210,72 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var L = num(pc.len, 60), n = nSteps(L);
       for (var i = 0; i < n; i++) T.step(L / n, 0, 0, 0);
       return L;
+    },
+    /** barrel-roll tube: a corkscrew (helix inside a tube of radius r around an axis above the car) with a rendered tube
+        cage; turns 1 or 2 (double barrel roll). Info for the renderer: axisStart, axisDir, radius, turns. */
+    tube: function (T, pc) {
+      var r = num(pc.radius, 7), A = T.t.slice(), C = madd(T.p, T.n, r);
+      var Lt = PIECES.corkscrew(T, { len: num(pc.len, 80), radius: r, turns: num(pc.turns, 1), dir: pc.dir });
+      T.info = { axisStart: C, axisDir: A, radius: r, turns: num(pc.turns, 1), axisLen: num(pc.len, 80) };
+      return Lt;
+    },
+    /** zero-g stretch loop: half loop up, an inverted ceiling run of `len` m (upside down at 2R), half loop down; the
+        lateral `shift` is eased over the whole piece (like a loop) so the exit runs beside the entry. */
+    zerog: function (T, pc) {
+      var R = Math.max(8, num(pc.radius, 14)), Ls = Math.max(0, num(pc.len, 60)), shift = num(pc.shift, T.width + 2);
+      var L1 = PI * R, tot = 2 * L1 + Ls, n1 = nSteps(L1), n2 = nSteps(Ls), a = 0, i;
+      function sh(x) { return shift * smooth(x / tot); }
+      var p0 = T.p.slice(), t0 = T.t.slice(), n0 = T.n.slice();
+      for (i = 0; i < n1; i++) { T.step(L1 / n1, 0, PI / n1, 0, sh(a + L1 / n1) - sh(a)); a += L1 / n1; }
+      var cs = T.p.slice();
+      for (i = 0; i < n2; i++) { T.step(Ls / n2, 0, 0, 0, sh(a + Ls / n2) - sh(a)); a += Ls / n2; }
+      var ce = T.p.slice();
+      for (i = 0; i < n1; i++) { T.step(L1 / n1, 0, PI / n1, 0, sh(a + L1 / n1) - sh(a)); a += L1 / n1; }
+      T.info = { radius: R, ceilLen: Ls, ceilStart: cs, ceilEnd: ce, entry: p0, entryFwd: t0, entryUp: n0 };
+      return tot;
+    },
+    /** half-pipe slalom: a wide channel whose bank swings ±bank `waves` times (the car rides up alternate walls); the
+        centre line is lifted like a wall-ride so the low edge stays near the base height. */
+    halfpipe: function (T, pc) {
+      var L = num(pc.len, 160), n = nSteps(L), B = num(pc.bank, 55), wv = num(pc.waves, 1.5), sg = pc.dir < 0 ? -1 : 1;
+      for (var i = 0; i < n; i++) {
+        var u = (i + 0.5) / n, env = smooth(Math.min(1, u * 6)) * smooth(Math.min(1, (1 - u) * 6));
+        T.bank = sg * B * Math.sin(TAU * wv * u) * (0.35 + 0.65 * env);
+        T.step(L / n, 0, 0, 0);
+      }
+      T.bank = 0;
+      T.info = { bank: B, waves: wv };
+      return L;
+    },
+    /** cannon: a steep launcher ramp (`angle` deg over `ramp` m) firing the car on a FIXED ballistic arc (every car leaves
+        at exactly the design speed: crawling or Mega Nitro) over `len` m to a landing deck `drop` m lower. */
+    cannon: function (T, pc) {
+      var f0 = T.flags, a0 = 0;
+      T.flags = f0 | FLAGS.ramp | FLAGS.cannon;
+      a0 = PIECES.pitchTo(T, { len: num(pc.ramp, 26), angle: num(pc.angle, 30) });
+      T.flags = f0 | FLAGS.gap | FLAGS.cannon;
+      var g = PIECES.gap(T, { len: num(pc.len, 110), drop: num(pc.drop, 0), speed: pc.speed });
+      T.flags = f0;
+      T.info = { rampLen: num(pc.ramp, 26), angle: num(pc.angle, 30), designSpeed: T.design };
+      return a0 + g;
+    },
+    /** warp portal: a 3 m portal mouth, then the road continues at `to` (absolute [x,y,z]) or `by` (relative offset),
+        heading `heading` (deg, default: unchanged), level. Track space stays continuous (s += ~1 m); only the world
+        position jumps. */
+    warp: function (T, pc) {
+      var f0 = T.flags;
+      T.flags = f0 | FLAGS.warp;
+      for (var i = 0; i < 12; i++) T.step(0.25, 0, 0, 0);
+      var from = T.p.slice(), fromT = T.t.slice();
+      var to = Array.isArray(pc.to) ? pc.to.slice() : add(T.p, Array.isArray(pc.by) ? pc.by : [0, 0, 0]);
+      var hd = pc.heading != null ? num(pc.heading, 0) * DEG : Math.atan2(-T.t[2], T.t[0]);
+      T.p = to; T.t = [Math.cos(hd), 0, -Math.sin(hd)]; T.n = [0, 1, 0];
+      T.jumpNext = true;
+      T.rec();
+      for (i = 0; i < 12; i++) T.step(0.25, 0, 0, 0);
+      T.flags = f0;
+      T.info = { from: from, fromFwd: fromT, to: to.slice(), toFwd: T.t.slice() };
+      return 6;
     }
   };
   PIECES.kicker = PIECES.pitchTo;
@@ -222,7 +291,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     T.rotate(0, base - T.pitchAngle(), 0);
     return L;
   }
-  var PIECE_FLAGS = { gap: FLAGS.gap, kicker: FLAGS.ramp, loop: FLAGS.loop, corkscrew: FLAGS.cork, wall: FLAGS.wall, hill: FLAGS.jump };
+  var PIECE_FLAGS = { gap: FLAGS.gap, kicker: FLAGS.ramp, loop: FLAGS.loop, corkscrew: FLAGS.cork, wall: FLAGS.wall, hill: FLAGS.jump,
+    tube: FLAGS.cork | FLAGS.tube, zerog: FLAGS.loop | FLAGS.zerog, halfpipe: FLAGS.wall | FLAGS.halfpipe };
 
   /* ======================================================================
      Closing piece: cubic Hermite from the turtle's end pose to the start pose (C1), rotation-minimising frames
@@ -332,7 +402,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     var pieceInfo = [], rawFeatures = [], arcAt = [0];
     function rawLen() {
       var r = T.raw, a = arcAt[arcAt.length - 1];
-      for (var j = arcAt.length; j < r.length; j++) { a += len(sub(r[j].p, r[j - 1].p)); arcAt.push(a); }
+      for (var j = arcAt.length; j < r.length; j++) { a += r[j].jump ? RAW : len(sub(r[j].p, r[j - 1].p)); arcAt.push(a); }
       return a;
     }
     pieces.forEach(function (pc, idx) {
@@ -345,7 +415,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       if (pc.type === 'turn' && pc.bank != null && pc.bankAuto !== false) bank = Math.abs(bank) * (num(pc.angle, 90) >= 0 ? 1 : -1);
       if (pc.type === 'wall') bank = Math.abs(num(pc.bank, 80)) * (pc.side < 0 ? -1 : 1);
       T.bank = bank;
-      T.lift = pc.type === 'wall' ? 1 : 0;
+      T.lift = pc.type === 'wall' ? 1 : pc.type === 'halfpipe' ? num(pc.lift, 0.8) : 0;
+      T.info = null;
       var f = PIECE_FLAGS[pc.type] || 0;
       if (pc.type === 'turn' && Math.abs(bank) >= 40) f |= FLAGS.bowl;
       (pc.flags || []).forEach(function (n) { if (FLAGS[n]) f |= FLAGS[n]; });
@@ -354,7 +425,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       fn(T, pc);
       var s1 = rawLen();
       var info = { type: pc.type, index: idx, s0: s0, s1: s1, flags: f };
-      if (pc.type === 'gap') info.designSpeed = T.design;
+      if (pc.type === 'gap' || pc.type === 'cannon') info.designSpeed = T.design;
+      if (T.info) { for (var ik in T.info) info[ik] = T.info[ik]; T.info = null; }
+      if (pc.name) info.name = pc.name;
       pieceInfo.push(info);
       (pc.features || []).forEach(function (fe) {
         var at = fe.s != null ? s0 + num(fe.s, 0) : s0 + (s1 - s0) * num(fe.at, 0.5);
@@ -386,6 +459,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       while (j < nr - 1 && arcAt[j + 1] <= a) j++;
       var a0 = arcAt[j], r0 = raw[j], r1 = raw[(j + 1) % nr], a1 = j + 1 < nr ? arcAt[j + 1] : Lraw;
       var f = a1 > a0 ? (a - a0) / (a1 - a0) : 0;
+      if (r1.jump) f = f < 0.5 ? 0 : 1;   // warp seam: never interpolate between the portal mouths
       var near = f < 0.5 ? r0 : r1;
       return { p: lerp3(r0.p, r1.p, f), n: lerp3(r0.n, r1.n, f), w: r0.w + (r1.w - r0.w) * f, bank: near.bank, flags: near.flags, piece: near.piece, lift: near.lift, design: Math.max(r0.design, r1.design) };
     }
@@ -409,20 +483,27 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     }
     var bankWin = Math.round(num(def.bankBlend, 14) / dsU);
     Bk = smoothArr(smoothArr(Bk, bankWin), bankWin);
-    Wd = smoothArr(Wd, Math.round(8 / dsU));
+    Wd = smoothArr(smoothArr(Wd, Math.round(num(def.widthBlend, 8) / dsU)), def.widthBlend ? Math.round(num(def.widthBlend, 8) / dsU) : 0);   // def.widthBlend: gentler width tapers (wide split bends)
     Lift = smoothArr(smoothArr(Lift, bankWin), bankWin);
     // wall-rides: lift the centreline so the lower edge stays near the base height
+    // (half-pipes swing the bank through zero: their lift uses the smooth 1 - cos(bank) so the centre line has no kink)
+    var HPw = new Float64Array(N);
+    for (i = 0; i < N; i++) HPw[i] = Pc[i] >= 0 && pieces[Pc[i]] && pieces[Pc[i]].type === 'halfpipe' ? 1 : 0;
+    HPw = smoothArr(smoothArr(HPw, bankWin), bankWin);
     for (i = 0; i < N; i++) {
       if (Lift[i] > 1e-3) {
-        var lb = Math.abs(Bk[i]) * DEG;
-        P[i * 3 + 1] += Lift[i] * (Wd[i] / 2) * Math.sin(lb);
+        var lb = Math.abs(Bk[i]) * DEG, hw0 = HPw[i];
+        P[i * 3 + 1] += Lift[i] * (Wd[i] / 2) * (hw0 * 1.4 * (1 - Math.cos(lb)) + (1 - hw0) * Math.sin(lb));
       }
     }
     /* ---- frames: T by central differences, up = turtle up orthonormalised then rolled by bank ---- */
     var Tg = new Float64Array(N * 3), Nn = new Float64Array(N * 3), Rt = new Float64Array(N * 3);
     function Pv(k) { k = idx(k); return [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]]; }
+    // warp seams: the segment i -> i+1 jumps through a portal (world positions far apart, track space continuous)
+    var Wp = new Uint8Array(N), warps = [];
+    for (i = 0; i < N; i++) if (len(sub(Pv(i + 1), Pv(i))) > dsU * 3) Wp[i] = 1;
     for (i = 0; i < N; i++) {
-      var t = norm(sub(Pv(i + 1), Pv(i - 1)));
+      var t = Wp[i] ? norm(sub(Pv(i), Pv(i - 1))) : Wp[idx(i - 1)] ? norm(sub(Pv(i + 1), Pv(i))) : norm(sub(Pv(i + 1), Pv(i - 1)));
       var nb = ortho([Up[i * 3], Up[i * 3 + 1], Up[i * 3 + 2]], t);
       var b = Bk[i] * DEG;
       if (b) nb = norm(madd(mul(nb, Math.cos(b)), cross(t, nb), -Math.sin(b)));   // + bank: up leans toward LEFT (-right)
@@ -439,6 +520,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       KL[i] = -dot(dT, [Rt[i * 3], Rt[i * 3 + 1], Rt[i * 3 + 2]]);
       KN[i] = dot(dT, [Nn[i * 3], Nn[i * 3 + 1], Nn[i * 3 + 2]]);
     }
+    for (i = 0; i < N; i++) if (Wp[i]) for (var wq = -2; wq <= 3; wq++) { KL[idx(i + wq)] = 0; KN[idx(i + wq)] = 0; }
     KL = smoothArr(KL, 2); KN = smoothArr(KN, 2);
     // gaps never carry curvature (no surface)
     for (i = 0; i < N; i++) if (Fl[i] & FLAGS.gap) { KL[i] = 0; KN[i] = 0; }
@@ -465,12 +547,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         for (var cc = 0; cc < nC; cc++) features.push({ id: 'f' + fid++, type: 'coin', s: wrapS(s + cc * spc, L), lat: num(fe.lat, 0), z: num(fe.z, 0.9) });
       } else {
         var o = { id: 'f' + fid++, type: fe.type, s: s, lat: num(fe.lat, 0) };
-        if (fe.len != null) o.len = fe.len;
-        if (fe.w != null) o.w = fe.w;
-        if (fe.r != null) o.r = fe.r;
-        if (fe.z != null) o.z = fe.z;
-        if (fe.side != null) o.side = fe.side;
-        if (fe.text) o.text = fe.text;
+        for (var fk in fe) if (fk !== 'type' && fk !== 'at' && fk !== 's' && fk !== 'lat' && fk.charAt(0) !== '_') o[fk] = fe[fk];
+        o.piece = fe._piece;
         features.push(o);
       }
     });
@@ -481,6 +559,24 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var half = num(fe.len, 7) / 2;
       for (var a = -half; a <= half; a += dsU) Fl[idx(Math.round((fe.s + a) / dsU))] |= FLAGS.boost;
     });
+    // ranged special features (stunt-features.js): splits, booster tunnels, speed belts, hazards flag their samples
+    var splits = [], tunnels = [], belts = [], hazards = [];
+    function flagRange(s0, ln, bit) { for (var a = 0; a <= ln; a += dsU) Fl[idx(Math.round((s0 + a) / dsU))] |= bit; }
+    features.forEach(function (fe) {
+      if (fe.type === 'split') {
+        var sl = num(fe.len, 120);
+        splits.push({ id: fe.id, s0: fe.s, s1: wrapS(fe.s + sl, L), len: sl, div: num(fe.div, 0), dw: num(fe.dw, 0.55), inner: fe.inner < 0 ? -1 : 1, nose: num(fe.nose, 6), shortcut: fe.shortcut !== false });
+        flagRange(fe.s - 6, sl + 6, FLAGS.split);
+      } else if (fe.type === 'tunnel') {
+        var tl = num(fe.len, 120);
+        tunnels.push({ id: fe.id, s0: fe.s, s1: wrapS(fe.s + tl, L), len: tl, push: num(fe.push, 7), top: num(fe.top, 1.14), r: num(fe.r, 7.5) });
+        flagRange(fe.s, tl, FLAGS.tunnel);
+      } else if (fe.type === 'belt') {
+        flagRange(fe.s, num(fe.len, 40), FLAGS.belt); belts.push(fe);
+      } else if (fe.type === 'hazard') {
+        flagRange(fe.s - 8, 16, FLAGS.hazard); hazards.push(fe);
+      }
+    });
 
     /* ---- gaps ---- */
     var gaps = [];
@@ -488,7 +584,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       if ((Fl[i] & FLAGS.gap) && !(Fl[idx(i - 1)] & FLAGS.gap)) {
         var k2 = i, cnt2 = 0, dmax = 0;
         while ((Fl[idx(k2)] & FLAGS.gap) && cnt2 < N) { dmax = Math.max(dmax, Dsg[idx(k2)]); k2++; cnt2++; }
-        gaps.push({ s0: i * dsU, s1: idx(k2) * dsU, takeoffS: wrapS((i - 1) * dsU, L), landS: idx(k2) * dsU, designSpeed: dmax, length: cnt2 * dsU });
+        gaps.push({ s0: i * dsU, s1: idx(k2) * dsU, takeoffS: wrapS((i - 1) * dsU, L), landS: idx(k2) * dsU, designSpeed: dmax, length: cnt2 * dsU, cannon: !!(Fl[i] & FLAGS.cannon) });
       }
     }
     /* ---- checkpoints: authored + automatic every ~220 m on safe ground ---- */
@@ -531,16 +627,21 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       id: def.id, name: def.name, theme: def.theme || 'stadium', def: def, solvedPieces: pieces, length: L, L: L, N: N, DS: dsU, laps: num(def.laps, 3),
       P: P, T: Tg, U: Nn, R: Rt, W: Wd, B: Bk, F: Fl, KL: KL, KN: KN, piece: Pc, design: Dsg,
       FLAGS: FLAGS, features: features, checkpoints: checkpoints, gaps: gaps, pieces: pieceInfo.map(function (p) {
-        return { type: p.type, index: p.index, s0: absS(p.s0), s1: absS(p.s1), length: p.s1 - p.s0, designSpeed: p.designSpeed };
+        var o = { type: p.type, index: p.index, s0: absS(p.s0), s1: absS(p.s1), length: p.s1 - p.s0, designSpeed: p.designSpeed };
+        for (var pk in p) if (!(pk in o) && pk !== 'flags') o[pk] = p[pk];   // piece info (radius, tube axis, zero-g ceiling, warp mouths …)
+        return o;
       }),
-      groundY: groundY, bounds: { min: mn, max: mx }, startAt: startAt
+      groundY: groundY, bounds: { min: mn, max: mx }, startAt: startAt, WARP: Wp, warps: warps, splits: splits, tunnels: tunnels, belts: belts, hazards: hazards
     };
+    for (i = 0; i < N; i++) if (Wp[i]) warps.push({ s: (i + 0.5) * dsU, i: i, from: Pv(i), to: Pv(i + 1), fromFwd: [Tg[i * 3], Tg[i * 3 + 1], Tg[i * 3 + 2]], toFwd: [Tg[idx(i + 1) * 3], Tg[idx(i + 1) * 3 + 1], Tg[idx(i + 1) * 3 + 2]] });
 
     /* ---- sampling ---- */
     trk.sample = function (s, out) {
       out = out || { pos: [0, 0, 0], tangent: [0, 0, 0], up: [0, 0, 0], right: [0, 0, 0], left: [0, 0, 0] };
       s = wrapS(s, L);
-      var x = s / dsU, i0 = Math.floor(x), f = x - i0, a = idx(i0), b2 = idx(i0 + 1), g = 1 - f, k3;
+      var x = s / dsU, i0 = Math.floor(x), f = x - i0, a = idx(i0), b2 = idx(i0 + 1), k3;
+      if (Wp[a]) f = f < 0.5 ? 0 : 1;   // warp seam: snap to a portal mouth
+      var g = 1 - f;
       var pp = out.pos, tt = out.tangent, uu = out.up, rr2 = out.right, ll = out.left;
       for (k3 = 0; k3 < 3; k3++) {
         pp[k3] = P[a * 3 + k3] * g + P[b2 * 3 + k3] * f;
@@ -663,8 +764,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     neon: { track: '#ff2fd6', bg: '#120a2a', edge: '#30e3ff' },
     toybox: { track: '#2f8bff', bg: '#f2d9a0', edge: '#ffd23f' },
     glacier: { track: '#30c8ff', bg: '#dfefff', edge: '#ffffff' },
-    volcano: { track: '#ff8a1f', bg: '#2a1410', edge: '#ffcf4a' }
+    volcano: { track: '#ff8a1f', bg: '#2a1410', edge: '#ffcf4a' },
+    lab: { track: '#2ef2c8', bg: '#0e1a24', edge: '#ffffff' },
+    pinball: { track: '#ff2f6d', bg: '#1a0830', edge: '#ffe14a' },
+    sky: { track: '#ffb21f', bg: '#7fc6ff', edge: '#ffffff' },
+    bedroom: { track: '#ff7a10', bg: '#6b4a8a', edge: '#ffe14a' },
+    rooftops: { track: '#ffd21f', bg: '#2a3140', edge: '#ff3b30' }
   };
+  var DOT_TYPES = { loop: 1, corkscrew: 1, gap: 1, tube: 1, zerog: 1, cannon: 1, warp: 1, halfpipe: 1 };
   function thumbnailSVG(trk, o) {
     o = o || {};
     var Wpx = num(o.width, 160), Hpx = num(o.height, 100), pad = 8, b = trk.minimap.bounds;
@@ -673,11 +780,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     function X(x) { return (ox + (x - b.minX) * sc).toFixed(1); }
     function Y(y) { return (Hpx - (oy + (y - b.minY) * sc)).toFixed(1); }
     var c = THEME_COLORS[trk.theme] || THEME_COLORS.stadium;
-    var d = trk.minimap.points.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]) + ' ' + Y(p[1]); }).join('') + 'Z';
+    var pts = trk.minimap.points, d = pts.map(function (p, i) {
+      var jump = i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 20;   // warp portals: no line across the seam
+      return (i && !jump ? 'L' : 'M') + X(p[0]) + ' ' + Y(p[1]);
+    }).join('') + (trk.warps && trk.warps.length ? '' : 'Z');
     var dots = '';
     trk.pieces.forEach(function (pc) {
-      if (pc.type !== 'loop' && pc.type !== 'corkscrew' && pc.type !== 'gap') return;
-      var sm = trk.sample(pc.s0 + Math.max(0, pc.length) / 2), col = pc.type === 'gap' ? '#ffffff' : '#ffd23f';
+      if (!DOT_TYPES[pc.type]) return;
+      var sm = trk.sample(pc.s0 + Math.max(0, pc.length) / 2), col = pc.type === 'gap' || pc.type === 'cannon' ? '#ffffff' : pc.type === 'warp' ? '#b64dff' : '#ffd23f';
       dots += '<circle cx="' + X(sm.pos[0]) + '" cy="' + Y(-sm.pos[2]) + '" r="3.2" fill="' + col + '" stroke="#000" stroke-width="0.8"/>';
     });
     var st = trk.sample(0);
@@ -713,25 +823,53 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       return {
         id: d.id, name: d.name, theme: d.theme || 'stadium', length: t ? Math.round(t.length) : 0, length_m: t ? Math.round(t.length) : 0, laps: num(d.laps, 3), blurb: d.blurb || '',
         desc: d.blurb || '', tagline: d.tagline || tagline(counts), stunt: true, timeOfDay: d.timeOfDay || (d.theme === 'neon' ? 'night' : 'day'),
-        features: t ? t.features.filter(function (f) { return f.type !== 'coin'; }).length : 0, stuntCount: (counts.loop || 0) + (counts.corkscrew || 0) + (counts.gap || 0) + (counts.wall || 0),
-        difficulty: ({ easy: 2, normal: 3, hard: 4, expert: 5 })[d.difficulty] || 3, difficultyName: d.difficulty || 'normal', stuntBreakdown: { loops: counts.loop || 0, corkscrews: counts.corkscrew || 0, gaps: counts.gap || 0, walls: counts.wall || 0 },
+        features: t ? t.features.filter(function (f) { return f.type !== 'coin'; }).length : 0, stuntCount: stuntCount(counts),
+        special: t ? specialList(t, counts) : [],
+        difficulty: ({ easy: 2, normal: 3, hard: 4, expert: 5 })[d.difficulty] || 3, difficultyName: d.difficulty || 'normal', stuntBreakdown: { loops: counts.loop || 0, corkscrews: counts.corkscrew || 0, gaps: counts.gap || 0, walls: counts.wall || 0,
+          tubes: counts.tube || 0, zerog: counts.zerog || 0, halfpipes: counts.halfpipe || 0, cannons: counts.cannon || 0, warps: counts.warp || 0,
+          hazards: t ? t.hazards.length : 0, splits: t ? t.splits.length : 0 },
         estLap_s: d.estLap_s || null, kind: 'stunt',
         thumbnail: t ? t.thumbnail() : '', minimap: t ? t.minimap : null,
         // 2D outline for race-ui's generic track maps (catmull-rom of [x, y] points, y = -z) + headline stats
         points: t ? t.minimap.points.filter(function (p, i) { return i % 4 === 0; }).map(function (p) { return [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; }) : [],
-        corners: counts.turn || 0, width_m: num(d.width, 12), stunts: (counts.loop || 0) + (counts.corkscrew || 0) + (counts.gap || 0) + (counts.wall || 0) + (counts.hill || 0) + (counts.drop || 0)
+        corners: counts.turn || 0, width_m: num(d.width, 12), stunts: stuntCount(counts) + (counts.hill || 0) + (counts.drop || 0)
       };
     });
   }
 
+  function stuntCount(c) {
+    return (c.loop || 0) + (c.corkscrew || 0) + (c.gap || 0) + (c.wall || 0) + (c.tube || 0) + (c.zerog || 0) + (c.halfpipe || 0) + (c.cannon || 0) + (c.warp || 0);
+  }
+  /** headline special features of a built track (setup-screen chips) */
+  function specialList(t, c) {
+    var out = [], ft = {};
+    t.features.forEach(function (f) { ft[f.type === 'hazard' ? 'hazard:' + f.kind : f.type === 'ring' && f.fire ? 'fireRing' : f.type] = 1; });
+    if (c.tube) out.push('barrel roll');
+    if (c.zerog) out.push('zero-g');
+    if (c.halfpipe) out.push('half-pipe');
+    if (c.cannon) out.push('cannon');
+    if (c.warp) out.push('warp portals');
+    if (t.splits.length) out.push('shortcut');
+    if (t.tunnels.length) out.push('boost tunnel');
+    if (t.hazards.length) out.push('hazards');
+    if (ft.bumper || ft.flipper) out.push('pinball bumpers');
+    if (ft.fireRing) out.push('fire hoops');
+    if (ft.star) out.push('stars');
+    return out;
+  }
   function tagline(c) {
     var p = [];
     if (c.loop) p.push(c.loop + (c.loop > 1 ? ' loops' : ' loop'));
     if (c.corkscrew) p.push('corkscrew');
+    if (c.tube) p.push('barrel roll');
+    if (c.zerog) p.push('zero-g');
+    if (c.cannon) p.push(c.cannon > 1 ? c.cannon + ' cannons' : 'cannon');
+    if (c.warp) p.push('warp portals');
     if (c.gap) p.push(c.gap + (c.gap > 1 ? ' gaps' : ' gap'));
     if (c.wall) p.push('wall-rides');
-    p.push('boost pads');
-    return p.join(' · ');
+    if (c.halfpipe) p.push('half-pipe');
+    if (p.length < 3) p.push('boost pads');
+    return p.slice(0, 4).join(' · ');
   }
   /** Draw a track thumbnail (top-down, theme colours, stunt markers) into a 2D canvas. def = list() entry / id / def. */
   function drawThumb(canvas, def, o) {
@@ -750,13 +888,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     function Y(y) { return H - (oy + (y - b.minY) * sc); }
     var pts = t.minimap.points;
     c.lineJoin = 'round'; c.lineCap = 'round';
-    c.beginPath(); pts.forEach(function (p, i) { if (i) c.lineTo(X(p[0]), Y(p[1])); else c.moveTo(X(p[0]), Y(p[1])); }); c.closePath();
+    c.beginPath(); pts.forEach(function (p, i) { if (i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) <= 20) c.lineTo(X(p[0]), Y(p[1])); else c.moveTo(X(p[0]), Y(p[1])); });
+    if (!(t.warps && t.warps.length)) c.closePath();
     c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = Math.max(4, Math.min(W, H) * 0.06); c.stroke();
     c.strokeStyle = o.color || col.track; c.lineWidth = Math.max(2.5, Math.min(W, H) * 0.035); c.stroke();
     t.pieces.forEach(function (pc) {
-      if (pc.type !== 'loop' && pc.type !== 'corkscrew' && pc.type !== 'gap') return;
+      if (!DOT_TYPES[pc.type]) return;
       var sm = t.sample(pc.s0 + Math.max(0, pc.length) / 2);
-      c.fillStyle = pc.type === 'gap' ? '#ffffff' : col.edge; c.strokeStyle = '#000'; c.lineWidth = 1;
+      c.fillStyle = pc.type === 'gap' || pc.type === 'cannon' ? '#ffffff' : pc.type === 'warp' ? '#b64dff' : col.edge; c.strokeStyle = '#000'; c.lineWidth = 1;
       c.beginPath(); c.arc(X(sm.pos[0]), Y(-sm.pos[2]), Math.max(2.5, Math.min(W, H) * 0.035), 0, Math.PI * 2); c.fill(); c.stroke();
     });
     var st = t.sample(0);

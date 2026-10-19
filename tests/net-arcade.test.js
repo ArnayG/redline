@@ -8,7 +8,7 @@ var fs = require('fs');
 
 var root = path.join(__dirname, '..');
 ['js/util.js', 'js/data.js', 'js/state.js', 'js/physics.js', 'js/race/tracks.js', 'js/race/tracks-extra.js', 'js/race/vehicle.js', 'js/race/ai.js',
- 'js/race/engine.js', 'js/race/drift/assist.js', 'js/arcade/mode.js', 'js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js',
+ 'js/race/engine.js', 'js/race/drift/assist.js', 'js/arcade/mode.js', 'js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-features.js',
  'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js', 'js/arcade/items.js', 'js/arcade/nitro.js', 'js/arcade/gameplay.js', 'js/arcade/arcade-hud.js',
  'js/arcade/arcade-layer.js', 'js/net/transport.js', 'js/net/netarcade.js', 'js/net/lobby.js'].forEach(function (f) {
   var p = path.join(root, f);

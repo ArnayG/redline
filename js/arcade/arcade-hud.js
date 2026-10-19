@@ -110,6 +110,34 @@ CB.arcade = CB.arcade || {};
 
   /* ---------------- announcer text for events ---------------- */
   var TIER_COL = ['#fff', '#3aa8ff', '#ff9a2a', '#c45bff'];
+  var HAZ_SUB = { pendulum: 'WRECKING BALL', hammer: 'SQUASHED!', windmill: 'WINDMILLED!', piston: 'CRUSHER!', boulder: 'BOULDER!' };
+  /** stunt special-feature callouts (stunt-features.js 'stuntFx' events, kind) -> [text, colour, sub, small] for the own car */
+  function stuntCallout(e) {
+    switch (e.kind) {
+      case 'barrelRoll': return ['BARREL ROLL!', '#ffd84a'];
+      case 'barrelRoll2': return ['DOUBLE BARREL ROLL!', '#ffb21f'];
+      case 'zeroG': return ['ZERO-G!', '#b9a8ff', 'UPSIDE DOWN'];
+      case 'warp': return ['WARP!', '#d77bff'];
+      case 'cannon': return ['CANNON!', '#ff6b1a', 'FIRE IN THE HOLE'];
+      case 'tunnel': return ['BOOST TUNNEL!', '#7fe3ff', null, true];
+      case 'shortcut': return ['SHORTCUT!', '#62f0b5'];
+      case 'halfpipe': return ['HALF-PIPE!', '#7ae0ff', null, true];
+      case 'megaLoop': return ['MEGA LOOP!', '#ffd84a'];
+      case 'corkscrew': return ['CORKSCREW!', '#ffd84a', null, true];
+      case 'hazard': return ['BONK!', '#ff5a5a', HAZ_SUB[e.hz] || null];
+      case 'hazardBlocked': return ['SHIELDED', '#62f0b5', null, true];
+      case 'bumper': return ['BOING!', '#ff2fd6', '+NITRO', true];
+      case 'flipper': return ['FLIPPER!', '#ffe14a', 'BOOST'];
+      case 'belt': return ['SPEED BELT', '#7fe3ff', null, true];
+      case 'spring': return ['SPRING!', '#9bff3a', null, true];
+      case 'star': return ['STAR!', '#ffe14a', e.total ? '★ ' + (e.count || 0) : null];
+      case 'fireRing': return ['RING OF FIRE!', '#ff8a1f', '+NITRO'];
+      case 'driftZone': return ['DRIFT ZONE', '#ff7ad9', 'POWERSLIDE FOR NITRO', true];
+      case 'driftZoneBonus': return ['DRIFT BONUS', '#ff7ad9', '+NITRO', true];
+      case 'bigJump': return ['MONSTER JUMP!', '#ffd84a', e.dist ? e.dist + ' m' : null];
+      default: return null;
+    }
+  }
   function calloutFor(e, me) {
     var mine = e.carId === me;
     switch (e.type) {
@@ -139,23 +167,34 @@ CB.arcade = CB.arcade || {};
         if (e.item === 'emp') return ['SHOCKWAVE!', '#33d6ff'];
         return null;
       case 'canister': return mine ? ['+NITRO', NITRO_CYAN, null, true] : null;
+      case 'stuntFx': return mine ? stuntCallout(e) : null;
       default: return null;
     }
   }
 
   function create(opts) {
     opts = opts || {};
-    var S = { calls: [], flash: 0, flashCol: '#ff3b3b', time: 0, nitroDisp: 0, itemPop: 0, lastItem: null, coinPop: 0, lastCoins: 0, revSeen: false };
+    var S = { calls: [], flash: 0, flashCol: '#ff3b3b', time: 0, nitroDisp: 0, itemPop: 0, lastItem: null, coinPop: 0, lastCoins: 0, revSeen: false,
+      combo: {}, stars: 0, starsTotal: 0, starPop: 0 };
 
     function announce(text, color, sub, small) {
-      // replace a small callout of the same text instead of stacking duplicates
-      for (var i = 0; i < S.calls.length; i++) if (S.calls[i].text === text) { S.calls[i].t = 0; return; }
+      // replace a callout of the same text instead of stacking duplicates (keeps the newest sub line, e.g. a combo counter)
+      for (var i = 0; i < S.calls.length; i++) if (S.calls[i].text === text) { S.calls[i].t = 0.12; if (sub) S.calls[i].sub = sub; return; }
       S.calls.push({ text: text, color: color || '#fff', sub: sub || null, t: 0, small: !!small, life: small ? 1.0 : 1.5 });
       if (S.calls.length > 3) S.calls.shift();
     }
     function events(list, me) {
       (list || []).forEach(function (e) {
         var c = calloutFor(e, me);
+        if (c && e.type === 'stuntFx') {
+          // repeated feature hits (bumpers, hazards) merge into one callout with a counter instead of spamming the screen
+          var cb = S.combo[e.kind];
+          if (cb && S.time - cb.t < 1.6 && e.kind !== 'star') { cb.n++; cb.t = S.time; c = [c[0], c[1], '×' + cb.n + (c[2] ? '  ' + c[2] : ''), c[3]]; }
+          else S.combo[e.kind] = { n: 1, t: S.time };
+          if (e.kind === 'star') { S.stars = Math.max(S.stars, e.count || S.stars + 1); S.starPop = 1; if (e.total && !S.starsTotal) S.starsTotal = e.total; }
+          if (e.kind === 'hazard' && e.carId === me) { S.flash = 0.6; S.flashCol = '#ff7a3b'; }
+          if (e.kind === 'warp' && e.carId === me) { S.flash = 0.8; S.flashCol = '#c06bff'; }
+        }
         if (c) announce(c[0], c[1], c[2], c[3]);
         if (e.type === 'hit' && e.carId === me) { S.flash = 1; S.flashCol = '#ff3b3b'; }
         if (e.type === 'blocked' && e.carId === me) { S.flash = 0.7; S.flashCol = '#62f0b5'; }
@@ -184,7 +223,21 @@ CB.arcade = CB.arcade || {};
       drawChips(ctx, P, W, H, k, compact);
       if (st.options && st.options.nitro !== false) drawNitro(ctx, st, P, W, H, k, compact, dt);
       if (!st.started && (st.phase === 'countdown' || st.phase === 'grid')) drawRev(ctx, P, W, H, k);
+      if (S.starsTotal > 0) drawStars(ctx, W, H, k, compact, dt);
       drawCallouts(ctx, W, H, k, compact, dt);
+      ctx.restore();
+    }
+    /** ★ n / total collected this race (maps with collectible stars) — right of the item slot */
+    function drawStars(ctx, W, H, k, compact, dt) {
+      S.starPop = Math.max(0, S.starPop - dt * 3);
+      var sz = (compact ? 62 : 78) * k, x = W / 2 + sz / 2 + 12 * k, y = SLOT_Y + (compact ? 4 : 8) * k + sz / 2, r = 11 * k * (1 + S.starPop * 0.4);
+      ctx.save();
+      ctx.beginPath();
+      for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr2 = i % 2 ? r * 0.45 : r; ctx.lineTo(x + r + Math.cos(a) * rr2, y + Math.sin(a) * rr2); }
+      ctx.closePath(); ctx.fillStyle = '#ffd84a'; ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = 'rgba(8,10,16,.8)'; ctx.stroke();
+      font(ctx, 800, (compact ? 13 : 15) * k); ctx.textAlign = 'left'; ctx.lineWidth = 3 * k;
+      var txt = S.stars + ' / ' + S.starsTotal;
+      ctx.strokeText(txt, x + 2 * r + 6 * k, y + 1); ctx.fillStyle = '#fff'; ctx.fillText(txt, x + 2 * r + 6 * k, y + 1);
       ctx.restore();
     }
 
@@ -356,12 +409,14 @@ CB.arcade = CB.arcade || {};
     return {
       draw: function (ctx, st, W, H, dt) { try { draw(ctx, st, W, H, dt); } catch (e) { if (!S.err && typeof console !== 'undefined') { S.err = 1; console.warn('[arcade.hud]', e); } } },
       events: events, announce: announce,
-      reset: function () { S.calls = []; S.flash = 0; S.nitroDisp = 0; },
+      /** maps with collectible stars: total per race (0 hides the counter) and the count already collected */
+      setStars: function (n, total) { S.stars = Math.max(0, n | 0); S.starsTotal = Math.max(0, total | 0); },
+      reset: function () { S.calls = []; S.flash = 0; S.nitroDisp = 0; S.combo = {}; S.stars = 0; },
       _state: S
     };
   }
 
-  CB.arcade.hud = { create: create, drawIcon: drawIcon, calloutFor: calloutFor };
+  CB.arcade.hud = { create: create, drawIcon: drawIcon, calloutFor: calloutFor, stuntCallout: stuntCallout };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CB.arcade.hud;

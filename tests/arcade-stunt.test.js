@@ -8,17 +8,18 @@ const assert = require('node:assert/strict');
 const test = globalThis.test || ((n, f) => f());
 
 const ROOT = path.join(__dirname, '..');
-['js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js',
+['js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-features.js', 'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js',
   'js/race/gl/stunt-mesh.js', 'js/race/gl/stunt-renderer.js'].forEach((f) => require(path.join(ROOT, f)));
 const CB = globalThis.CB;
 const S = CB.arcade.stunt, P = S.physics, V = S._vec;
-const IDS = ['loop-rush', 'canyon-leap', 'corkscrew-carnival', 'neon-wallride', 'mega-drop', 'figure-8'];
+const IDS = ['loop-rush', 'canyon-leap', 'corkscrew-carnival', 'neon-wallride', 'mega-drop', 'figure-8',
+  'tube-twister', 'volcano-cannon', 'pinball-wizard', 'sky-highway', 'toybox-bedroom', 'glacier-halfpipe', 'megacity-rooftops'];
 const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, V.dot(a, b))));
 
-test('stunt: six authored maps register, build closed C1 tracks and list() carries the setup-screen data', () => {
+test('stunt: thirteen authored maps register, build closed C1 tracks and list() carries the setup-screen data', () => {
   assert.deepEqual(S.ids().slice().sort(), IDS.slice().sort());
   const list = S.list();
-  assert.equal(list.length, 6);
+  assert.equal(list.length, IDS.length);
   list.forEach((e) => {
     assert.equal(e.kind, 'stunt'); assert.equal(e.stunt, true);
     ['id', 'name', 'theme', 'desc', 'tagline'].forEach((k) => assert.ok(typeof e[k] === 'string' && e[k].length, e.id + ' ' + k));
@@ -33,6 +34,7 @@ test('stunt: six authored maps register, build closed C1 tracks and list() carri
       const j = (i + 1) % t.N;
       const T0 = [t.T[i * 3], t.T[i * 3 + 1], t.T[i * 3 + 2]], T1 = [t.T[j * 3], t.T[j * 3 + 1], t.T[j * 3 + 2]];
       const U0 = [t.U[i * 3], t.U[i * 3 + 1], t.U[i * 3 + 2]], U1 = [t.U[j * 3], t.U[j * 3 + 1], t.U[j * 3 + 2]];
+      if (t.WARP[i]) continue;   // warp portal seam: the world position (not the track frame) jumps
       if (!(t.F[i] & t.FLAGS.gap)) assert.ok(ang(T0, T1) < 6 * Math.PI / 180, id + ' tangent kink at ' + i);
       assert.ok(ang(U0, U1) < 7 * Math.PI / 180, id + ' up-vector flip at ' + i);
       assert.ok(Math.abs(V.dot(T0, U0)) < 1e-6, id + ' frame orthonormal at ' + i);
@@ -274,7 +276,7 @@ test('stunt camera: the chase rig follows the track up-vector through a loop wit
 test('stunt integration: index.html loads the stunt modules before race-ui and the router', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map((m) => m[1]);
-  const order = ['js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js', 'js/race/gl/stunt-mesh.js', 'js/race/gl/stunt-renderer.js'];
+  const order = ['js/arcade/stunt-track.js', 'js/arcade/stunt-maps.js', 'js/arcade/stunt-physics.js', 'js/arcade/stunt-features.js', 'js/arcade/stunt-ai.js', 'js/arcade/stunt-session.js', 'js/race/gl/stunt-mesh.js', 'js/race/gl/stunt-renderer.js'];
   let last = -1;
   order.forEach((f) => { const i = scripts.indexOf(f); assert.ok(i > last, f + ' in order'); last = i; });
   assert.ok(last < scripts.indexOf('js/race/race-ui.js') && last < scripts.indexOf('js/router.js'));

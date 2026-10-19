@@ -195,7 +195,7 @@ CB.net = CB.net || {};
   // circuit: [idx, x cm, y cm, heading mrad, wvx cm/s, wvy cm/s, yawRate mrad/s, rpm/10, gear, steer mrad, thr %, brk %, flags]
   var MODE_C = { ground: 0, air: 1, respawn: 2 }, MODE_N = ['ground', 'air', 'respawn'];
   function packStunt(idx, c) {
-    var f = (c.finished ? 1 : 0) | (c.nitroOn ? 2 : 0) | (c.boostT > 0 || c.extBoost ? 4 : 0) | (c._air ? 8 : 0);
+    var f = (c.finished ? 1 : 0) | (c.nitroOn ? 2 : 0) | (c.boostT > 0 || c.extBoost ? 4 : 0) | (c._air ? 8 : 0) | (c.spinT > 0 ? 16 : 0);
     var row = [idx, MODE_C[c.mode] || 0, q(c.s, 100), q(c.dist, 100), q(c.lat, 100), q(c.psi, 1000), q(c.v, 100), q(c.rpm, 0.1), c.gear | 0,
                q(c.steerAngle, 1000), q(c.throttle, 100), f, q(c.fade, 100)];
     if (c.mode === 'air' || (c.mode === 'respawn' && c._air)) {
@@ -206,7 +206,7 @@ CB.net = CB.net || {};
   }
   function unpackStunt(a) {
     var o = { mode: MODE_N[a[1]] || 'ground', s: a[2] / 100, dist: a[3] / 100, lat: a[4] / 100, psi: a[5] / 1000, v: a[6] / 100, rpm: a[7] * 10, gear: a[8],
-              steerAngle: a[9] / 1000, throttle: a[10] / 100, finished: !!(a[11] & 1), nitroOn: !!(a[11] & 2), boosting: !!(a[11] & 4), inAir: !!(a[11] & 8), fade: a[12] / 100 };
+              steerAngle: a[9] / 1000, throttle: a[10] / 100, finished: !!(a[11] & 1), nitroOn: !!(a[11] & 2), boosting: !!(a[11] & 4), inAir: !!(a[11] & 8), spinning: !!(a[11] & 16), fade: a[12] / 100 };
     if (a.length > 13) {
       o.air = { px: a[13] / 100, py: a[14] / 100, pz: a[15] / 100, vx: a[16] / 100, vy: a[17] / 100, vz: a[18] / 100,
                 fx: a[19] / 1e4, fy: a[20] / 1e4, fz: a[21] / 1e4, ux: a[22] / 1e4, uy: a[23] / 1e4, uz: a[24] / 1e4, airT: a[25] / 1000, takeoffS: a[26] / 100 };
@@ -379,6 +379,9 @@ CB.net = CB.net || {};
       var buf = inbufs[netIdOf(car.id)];
       if (!buf) return inp;
       if (car.isPlayer === false && car.ctx && car === carsByLocal[car.id]) buf.adapt(tick);
+      // stunt hazards (stunt-features.js) run on the car's own race clock: this copy drives the player's input of tick
+      // n − D, so it meets every pendulum / piston phase exactly as the player's own prediction did at tick n − D
+      car.clockOffset = buf.D * STEP;
       if (ph === 'grid' || ph === 'countdown' || goTick === null) return inp;
       var m = tick - buf.D;
       if (m < goTick) return holdInput(car);        // held until GO + D: the same start the player saw
@@ -435,6 +438,7 @@ CB.net = CB.net || {};
       if (kind === 'stunt') {
         if (car.mode !== 'ground') return;
         car.s = wrapS(car.s + c.s * k, L); car.dist += c.s * k; car.lat += c.lat * k; car.psi += c.psi * k; car.v += c.v * k;
+        if (car.lane && c.lat) relatchLane(car);
       } else {
         var st = car.state;
         st.x += c.x * k; st.y += c.y * k; st.heading = wrapAngle(st.heading + c.h * k); st.vx += c.vx * k; st.vy += c.vy * k; st.yawRate += c.w * k;
@@ -479,8 +483,17 @@ CB.net = CB.net || {};
       if (!pendingCorr) pendingCorr = {};
       for (var k in e) pendingCorr[k] = (pendingCorr[k] || 0) + e[k];
     }
+    /** split lanes (stunt-features.js): a correction that moves the car across a divider re-latches its lane there
+        (the lane is not part of the snapshot row; the physics latches it again from the corrected side) */
+    function relatchLane(car) {
+      var P = CB.arcade && CB.arcade.stunt && CB.arcade.stunt.physics, tr = sim && sim.track;
+      if (!P || typeof P.splitInfo !== 'function' || !tr || !tr.splits || !tr.splits.length) return;
+      var si = P.splitInfo(tr, car.s);
+      if (!si || (car.lat - si.sp.div) * car.lane < 0) car.lane = 0;
+    }
     function hardSnap(hs) {
       var me = carsByLocal.player; if (!me) return;
+      me.lane = 0; me.latV = 0;
       stats.snaps++; pendingCorr = null; hist = {}; histKeys = []; mismatchN = 0;
       me.mode = hs.mode; me.s = hs.s; me.dist = hs.dist; me.lat = hs.lat; me.psi = hs.psi; me.v = hs.v; me.fade = hs.fade;
       if (hs.air) { assign(me, hs.air); me._air = hs.inAir || hs.mode === 'air'; }
@@ -525,6 +538,8 @@ CB.net = CB.net || {};
       if (p.ext > 0 && o.mode === 'ground') { var ds = o.v * Math.cos(o.psi) * p.ext; o = assign({}, o); o.s = wrapS(o.s + ds, L); o.dist += ds; }
       c.mode = o.mode; c.s = o.s; c.dist = o.dist; c.lat = o.lat; c.psi = o.psi; c.v = o.v; c.rpm = o.rpm; c.gear = o.gear; c.steerAngle = o.steerAngle;
       c.throttle = o.throttle; c.fade = o.fade; c.nitroOn = o.nitroOn; c.boostT = o.boosting ? 0.05 : 0; c.finished = o.finished;
+      // hazard bonks / spins (stunt-features.js): the puppet plays a local cartoon 360 while the host flags it spinning
+      if (o.spinning) { if (!(c.spinT > 0)) { c.spinT = 0.8; c.spinDur = 0.8; } else c.spinT = Math.max(0.02, c.spinT - STEP); } else c.spinT = 0;
       if (o.air) { assign(c, o.air); c._air = o.inAir || o.mode === 'air'; } else c._air = false;
       c.inputState = { throttle: o.throttle, brake: 0, steer: 0 };
       c.state = { vx: c.v, vy: 0, speed: Math.abs(c.v), mode: c.mode, airborne: c.mode === 'air', s: c.s, lat: c.lat, dist: c.dist };
@@ -701,6 +716,13 @@ CB.net = CB.net || {};
       sendRel(finalResults);
       fireResults();
     }
+    /** stunt special-feature stats of a host car (stunt-features.js car.feat) for the classification */
+    function stuntStats(car) {
+      if (!car) return null;
+      var F = car.feat || {};
+      return { stars: F.stars | 0, hazardHits: F.hz | 0, bumpers: F.bumps | 0, shortcuts: F.cuts | 0, fireRings: F.fire | 0, warps: F.warps | 0,
+               falls: car.falls | 0, landings: car.landings | 0, airTime_s: r3(num(car.airTotal, 0)) };
+    }
     function buildResults(rows, tRace) {
       var win = rows[0], st = {};
       if (gp) grid.forEach(function (e) { var s = gp.stats(localId(e.carId)); if (s) st[e.carId] = { hitsLanded: s.hitsLanded, hitsTaken: s.hitsTaken, itemsUsed: s.itemsUsed, coins: s.coins, boxes: s.boxes, blocked: s.blocked, nitroUsed_s: r3(s.nitroUsed_s), bestDrift: s.bestDrift, startGrade: s.startGrade || null }; });
@@ -714,7 +736,7 @@ CB.net = CB.net || {};
         return { position: i + 1, id: rw.id, name: e.name + (gone[rw.id] ? ' (AI)' : ''), kind: gone[rw.id] ? 'ai' : e.kind, status: status, laps: rw.lap, raceTime_s: rw.fin ? rw.ft : null,
                  totalTime_s: rw.fin ? rw.ft : null, penalties_s: 0, gap_s: gap, gapText: gapText, bestLap_s: rw.best, lastLap_s: rw.last, lapTimes: rw.laps,
                  gridPosition: grid.indexOf(e) + 1, dnfReason: null, left: !!gone[rw.id], connected: rw.conn,
-                 fastestLap: !!(fastest && fastest.carId === rw.id), arcade: st[rw.id] || null };
+                 fastestLap: !!(fastest && fastest.carId === rw.id), arcade: st[rw.id] || null, stunt: kind === 'stunt' ? stuntStats(carsByLocal[localId(rw.id)]) : null };
       });
       return { t: 'results', v: VERSION, arcade: true, final: true, mode: 'race', lapsTotal: start.cfg.laps, trackLength_m: L, trackId: start.cfg.trackId, kind: kind,
                raceTime_s: goTick !== null ? Math.max(0, tRace - goTick * STEP) : 0, fastestLap: fastest, classification: cls, settings: start.cfg.arcade };

@@ -49,6 +49,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   var GAP_FLAT = 1.06;           // faster than this x the design speed: launch on the flat ballistic solution to the deck
   var MERCY_FALLS = 2;           // mercy rule: falls in a row before the next jumps get guided help (until a clean landing)
   var RESPAWN_T = 0.9, RESPAWN_SWAP = 0.42;
+  var CREST_HOLD = 1.2;          // g: convex non-hill shoulders hold the car up to this much negative press
+  var CANNON_K = 1.015;          // cannons fire 1.5 % over the design arc: they land just past the landing lip, never on it
 
   var V = S._vec;
   var add = V.add, sub = V.sub, mul = V.mul, madd = V.madd, dot = V.dot, cross = V.cross, len = V.len, norm = V.norm, ortho = V.ortho;
@@ -236,7 +238,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       // visuals / timers
       susp: 0, suspV: 0, steerAngle: 0, rpm: 900, gear: 1, yawRate: 0, spinT: 0, spinDur: 1, spinDir: 1,
       respawnT: 0, fade: 0, ghostT: 0, stuckT: 0, wrongT: 0, railT: 0, boostT: 0, boostTop: 1, boostAccel: 0,
-      throttle: 0, brake: 0, steer: 0, events: null, landings: 0, bestAir: 0, falls: 0, airTotal: 0
+      throttle: 0, brake: 0, steer: 0, events: null, landings: 0, bestAir: 0, falls: 0, airTotal: 0,
+      // special features (stunt-features.js): lateral shove (hazards / bumpers / pistons, m/s, decays), split lane (+1 / -1 / 0)
+      latV: 0, lane: 0
     };
   }
 
@@ -350,7 +354,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     var sdot = c.v * Math.cos(c.psi) / denom;
     c.psi = wrapA(c.psi + (yaw - sm.kLeft * sdot) * dt);
     if (c.spinT > 0) c.psi *= 1 - Math.min(1, dt * 1.5);
-    var nlat = c.lat + c.v * Math.sin(c.psi) * dt;
+    var nlat = c.lat + (c.v * Math.sin(c.psi) + c.latV) * dt;
+    if (c.latV) { c.latV *= Math.exp(-dt / 0.28); if (Math.abs(c.latV) < 0.05) c.latV = 0; }
     var ns = c.s + sdot * dt;
     // gap lip -> launch (from the current point, before moving into the gap)
     var nflags = tr.flagsAt(ns);
@@ -363,6 +368,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     if (Math.abs(c.lat) > hw) {
       var side = c.lat > 0 ? 1 : -1;
       c.lat = side * hw;
+      if (c.latV * side > 0) c.latV = -c.latV * 0.3;
       var into = Math.sin(c.psi) * side;
       if (into > 0) {
         var hit = Math.abs(c.v) * into;
@@ -372,6 +378,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       }
     }
     c.railT = Math.max(0, c.railT - dt);
+    // split lanes (shortcut / main line): a divider rail between the lanes
+    if (tr.splits && tr.splits.length) splitRail(c, tr, sm);
+    else c.lane = 0;
     // adhesion
     var sm2 = _b = tr.sample(c.s, _b);
     var stunt = sm2.flags & (F.loop | F.cork | F.wall | F.bowl);
@@ -383,6 +392,9 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     // hill crests: still climbing steeply (a Mega Nitro car on the up-slope) the car stays glued over the shoulder and is
     // released near the top — a short hop instead of a 20 m moon shot that flies past the next bend / into a gap
     if (!stunt && press < 0 && c.v * sm2.tangent[1] > CREST_VY) press = 0.1;
+    // gentle convex shoulders (the top of a drop / climb / ramp run-out, not a bunny-hop hill): stay glued instead of a
+    // stutter of 50 ms micro-hops (air / land / air … at 200 km/h over the lip of a long drop)
+    if (!stunt && press < 0 && press > -CREST_HOLD * G && !(sm2.flags & F.jump)) press = 0.1;
     if (press < 0) return detach(c, ctx, sm2, stunt ? 'drop' : 'crest');
     // stuck / wrong way
     if (Math.abs(c.v) < 1.2 && !(ctx.input && ctx.input.throttle > 0.5 && c.v > -0.5)) c.stuckT += dt; else c.stuckT = Math.max(0, c.stuckT - dt * 2);
@@ -391,13 +403,44 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     return c;
   }
 
+  /**
+   * Split-lane divider (stunt-track.js `split` feature): from the divider nose (s0 - nose .. s0, a wedge that grows to full
+   * thickness) to s1 the car is held in its lane like a guard rail. The lane is latched on entry (the side the car is on).
+   */
+  function splitInfo(tr, s) {
+    var L = tr.length;
+    for (var i = 0; i < tr.splits.length; i++) {
+      var q = tr.splits[i], d = wrapD(s - q.s0, L);
+      if (d >= -q.nose && d <= q.len) return { sp: q, d: d, dw: d < 0 ? q.dw * clamp01((d + q.nose) / q.nose) : q.dw };
+    }
+    return null;
+  }
+  function splitRail(c, tr, sm) {
+    var si = splitInfo(tr, c.s);
+    if (!si) { c.lane = 0; return; }
+    var q = si.sp, rel = c.lat - q.div;
+    if (!c.lane) c.lane = rel >= 0 ? 1 : -1;
+    var edge = si.dw + HALF_W, side = c.lane;
+    if (rel * side < edge) {
+      c.lat = q.div + side * edge;
+      var into = -Math.sin(c.psi) * side;
+      if (c.latV * side < 0) c.latV = -c.latV * 0.3;
+      if (into > 0) {
+        var hit = Math.abs(c.v) * into;
+        c.psi *= 0.25;
+        c.v *= 1 - Math.min(0.15, into * 0.3);
+        if (hit > 2 && c.railT <= 0) { emit(c, 'rail', { side: -side, impact: hit, s: c.s, divider: true }); c.railT = 0.25; }
+      }
+    }
+  }
+
   /** Minimum speed wanted at the next loop / gap within `range` m (null when none). */
   function stuntNeed(tr, s, range) {
     var F = tr.FLAGS, best = null;
     for (var d = 0; d < range; d += 4) {
       var f = tr.flagsAt(s + d);
       if (f & F.gap) { var g = tr.gapAt(s + d); if (g) return Math.max(best || 0, g.designSpeed * 1.04); }
-      if (f & (F.loop | F.cork)) { best = Math.max(best || 0, 27); break; }
+      if (f & (F.loop | F.cork)) { best = Math.max(best || 0, (f & F.zerog) ? 30 : 27); break; }
     }
     return best;
   }
@@ -425,13 +468,18 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     if (gap && ja) {
       var want = gap.designSpeed * (help === 'player' ? 1.02 : 1.05);   // the design arc lands exactly on the lip: aim past it
       if (v < want) { v = want; c.assisted = true; }
-      if (help !== 'player') c.psi *= 0.2;
+      c.psi *= help !== 'player' ? 0.2 : 0.55;   // a lip hit at an angle still flies (mostly) along the road
       P = pose(tr, c);
     }
+    if (gap && gap.cannon) {   // cannon: every car leaves on the design arc (nose straight, same speed: crawling or Mega Nitro)
+      v = gap.designSpeed * CANNON_K; c.psi = 0; c.latV = 0;
+      c.lat = clamp(c.lat, -(sm.halfWidth - HALF_W - 1.2), sm.halfWidth - HALF_W - 1.2);
+      P = pose(tr, c); c.assisted = true;
+    }
     var vel = mul(P.fwd, v);
-    if (gap && v > gap.designSpeed * GAP_FLAT) vel = flatLaunch(tr, gap, P, v) || vel;
+    if (gap && !gap.cannon && v > gap.designSpeed * GAP_FLAT) vel = flatLaunch(tr, gap, P, v) || vel;
     toAir(c, P.pos, vel, P.fwd, P.up, sm.s);
-    emit(c, 'takeoff', { s: c.s, speed: v, gap: !!gap });
+    emit(c, 'takeoff', { s: c.s, speed: v, gap: !!gap, cannon: !!(gap && gap.cannon) });
     return c;
   }
   /**
@@ -470,6 +518,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     var tr = ctx.track, dt = ctx.dt, inp = ctx.input || {}, help = helpOf(c, ctx), L = tr.length;
     var guided = help === 'ai' || help === 'guided';
     c.airT += dt;
+    if (tr.warps && tr.warps.length) airWarp(c, tr);
     var vel = [c.vx, c.vy, c.vz];
     vel[1] -= G_AIR * dt;
     // where are we over the track? (s-window around the jump)
@@ -500,7 +549,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       // edge guard (the guard rails, extended into the air): past the usable width the car cannot be steered further out
       // and its outward drift is damped — a flight that started over the road lands on it (edge landings included).
       // Over a gap (no rails) 'off' only loses the outward air steering.
-      var overGap = !!(smN.flags & tr.FLAGS.gap);
+      var overGap = !!(smN.flags & tr.FLAGS.gap) && !(smN.flags & tr.FLAGS.cannon);   // a cannon arc keeps its air rails for everyone
       var edge = smN.halfWidth - HALF_W - (help === 'off' ? -0.3 : 0.4), over = Math.abs(near.lateral) - edge;
       var guard = over > 0, guardDamp = guard && !(overGap && help === 'off');
       // air steering: a lateral nudge in the track frame to aim the landing (bounded, so holding a key through a long
@@ -526,7 +575,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       if (thl > 0.3 && hv > 2 && help !== 'off') {
         var ang = Math.atan2((vel[2] * th[0] - vel[0] * th[2]) / thl, (vel[0] * th[0] + vel[2] * th[2]) / thl);
         if (Math.abs(ang) < 1.4) {
-          var rate = (guided ? 1.3 : 0.6) * dt;
+          var rate = (guided ? 1.3 : help === 'player' ? 0.9 : 0.6) * dt;
           var rotA = clamp(ang, -rate, rate), cr = Math.cos(rotA), sr = Math.sin(rotA), wx = vel[0], wz = vel[2];
           vel[0] = wx * cr + wz * sr; vel[2] = -wx * sr + wz * cr;
         }
@@ -576,6 +625,26 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     return c;
   }
 
+  /** A car airborne through a warp portal mouth (a hop / bump right at the portal) goes through it too: its position,
+      velocity and frame are carried by the rigid transform entrance mouth -> exit mouth (both level). */
+  function airWarp(c, tr) {
+    for (var i = 0; i < tr.warps.length; i++) {
+      var w = tr.warps[i], rx = c.px - w.from[0], ry = c.py - w.from[1], rz = c.pz - w.from[2];
+      var fh = Math.hypot(w.fromFwd[0], w.fromFwd[2]) || 1, fx = w.fromFwd[0] / fh, fz = w.fromFwd[2] / fh;
+      var along = rx * fx + rz * fz, side = -rx * fz + rz * fx;
+      if (along <= 0 || along > 8 || Math.abs(side) > 14 || ry < -6 || ry > 14) continue;
+      var a0 = Math.atan2(-w.fromFwd[2], w.fromFwd[0]), a1 = Math.atan2(-w.toFwd[2], w.toFwd[0]), d = a1 - a0, cd = Math.cos(d), sd = Math.sin(d);
+      function ry2(x, z) { return [x * cd + z * sd, -x * sd + z * cd]; }   // yaw about +Y by d (heading + = left)
+      var p = ry2(rx, rz), v = ry2(c.vx, c.vz), f = ry2(c.fx, c.fz), u = ry2(c.ux, c.uz);
+      c.px = w.to[0] + p[0]; c.py = w.to[1] + ry; c.pz = w.to[2] + p[1];
+      c.vx = v[0]; c.vz = v[1]; c.fx = f[0]; c.fz = f[1]; c.ux = u[0]; c.uz = u[1];
+      c.airS = wrapS(w.s + 1, tr.length); c.airHd = null; c.prevH = 1;
+      emit(c, 'airWarp', { s: w.s });
+      return true;
+    }
+    return false;
+  }
+
   function land(c, ctx, pr, sm, vel, dS) {
     var vn = -dot(vel, sm.up);
     var vp = madd(vel, sm.up, vn);
@@ -589,7 +658,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     psi = clamp(psi, -0.9, 0.9);
     if (helpOf(c, ctx) !== 'off') psi *= 0.5;
     c.mode = 'ground';
-    c.s = pr.s; c.lat = clamp(pr.lateral, -(sm.halfWidth - HALF_W), sm.halfWidth - HALF_W);
+    c.s = pr.s; c.lat = clamp(pr.lateral, -(sm.halfWidth - HALF_W), sm.halfWidth - HALF_W); c.lane = 0; c.latV = 0;
     c.psi = psi;
     c.v = v * (1 - clamp(vn * 0.003, 0, 0.08));
     c.dist = num(c.takeoffDist, c.dist) + dS;
@@ -624,11 +693,32 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var rp = (ctx.respawnPoint && ctx.respawnPoint(c)) || { s: c.s, dist: c.dist };
       c._air = false;
       c.s = wrapS(rp.s, ctx.track.length); c.dist = num(rp.dist, c.dist); c.lat = num(rp.lat, 0); c.psi = 0;
-      c.v = num(rp.speed, 16); c.airT = 0; c.stuckT = 0; c.wrongT = 0; c.spinT = 0;
+      c.v = num(rp.speed, 16); c.airT = 0; c.stuckT = 0; c.wrongT = 0; c.spinT = 0; c.latV = 0; c.lane = 0;
       c.ghostT = 1.6;
       emit(c, 'respawn', { s: c.s, why: c.respawnWhy });
     }
     if (c.respawnT >= RESPAWN_T) { c.mode = 'ground'; c._swapped = false; c.fade = 0; c.respawnT = 0; }
+    return c;
+  }
+
+  /** Spring / hop pad: leave the ground with `vy` m/s along the surface up (a short hop that lands on the same road). */
+  function hop(c, ctx, vy) {
+    if (c.mode !== 'ground') return c;
+    var P = pose(ctx.track, c);
+    toAir(c, P.pos, add(mul(P.fwd, c.v), mul(P.up, num(vy, 7))), P.fwd, P.up, c.s);
+    emit(c, 'takeoff', { s: c.s, speed: c.v, hop: true });
+    return c;
+  }
+  /** Cartoon bump (hazards, bumpers, pistons): lateral shove `latV` m/s (decays, rails clamp), speed x keep (never below
+      `floor` m/s), optional spin (the stunt spin: throttle cut + nose straightened, cartoon 360 visual). */
+  function bump(c, o) {
+    o = o || {};
+    if (c.mode !== 'ground') return c;
+    c.latV = num(o.latV, 0);
+    var keep = num(o.keep, 0.75), floor = num(o.floor, 9);
+    if (c.v > floor) c.v = Math.max(floor, c.v * keep);
+    if (o.spin) { c.spinT = Math.max(c.spinT, num(o.spin, 0.8)); c.spinDur = Math.max(0.3, c.spinT); c.spinDir = num(o.dir, 1) >= 0 ? 1 : -1; }
+    if (o.psi != null) c.psi = clamp(num(o.psi, c.psi), -0.6, 0.6);
     return c;
   }
 
@@ -644,7 +734,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     G_AIR: G_AIR, SLOPE_K: SLOPE_K, MAG_BASE: MAG_BASE, MAG_STUNT: MAG_STUNT, V_ADHERE: V_ADHERE, LAT_G: LAT_G, HALF_W: HALF_W,
     RESPAWN_T: RESPAWN_T, RESPAWN_SWAP: RESPAWN_SWAP, LAND_MARGIN: LAND_MARGIN, GAP_FLAT: GAP_FLAT, MERCY_FALLS: MERCY_FALLS, CREST_VY: CREST_VY,
     FALLBACK: FALLBACK, resolveDrive: resolveDrive, vehicleAdapter: vehicleAdapter, responseAdapter: responseAdapter, STUNT_VMAX: STUNT_VMAX, perfOf: perfOf,
-    createCar: createCar, step: step, pose: pose, boost: boost, spinOut: spinOut, startRespawn: startRespawn,
+    createCar: createCar, step: step, pose: pose, boost: boost, spinOut: spinOut, startRespawn: startRespawn, hop: hop, bump: bump, splitInfo: splitInfo,
     latMaxAt: latMaxAt, cornerSpeed: cornerSpeed, stuntNeed: stuntNeed, helpOf: helpOf, HELP_LEVELS: ['player', 'guided', 'ai', 'off']
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = S.physics;
