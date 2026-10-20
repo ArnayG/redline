@@ -108,6 +108,7 @@ CB.game = CB.game || {};
     { id: 'garage', name: 'Collection & Economy', desc: 'Collecting, maintaining and earning.' },
     { id: 'milestones', name: 'Milestones', desc: 'Long-haul career statistics.' },
     { id: 'media', name: 'Replays & Photo', desc: 'Capture and relive the moments.' },
+    { id: 'derby', name: 'Demolition Derby', desc: 'Wrecks, T-bones and the last car standing.' },
     { id: 'meta', name: 'Meta', desc: 'Achievements about achievements.' }
   ];
 
@@ -430,7 +431,8 @@ CB.game = CB.game || {};
     challenge: 'challenge', 'challenge-finished': 'challenge',
     drift: 'drift', endurance: 'endurance', pit: 'endurance',
     replay: 'replay', photo: 'photo',
-    profile: 'profile', session: 'session', meta: 'meta', boot: 'session'
+    profile: 'profile', session: 'session', meta: 'meta', boot: 'session',
+    derby: 'derby', 'derby-finished': 'derby'   // Demolition Derby (docs/DERBY-SPEC.md)
   };
 
   function safeCompute(fnHolder, fnName, args) {
@@ -728,6 +730,11 @@ CB.game = CB.game || {};
     if (kind === 'garage') ctx.g = garageAction(ev.action);
     if (kind === 'challenge') ctx.ch = { id: ev.id || ev.challengeId || null, medal: ev.medal ? String(ev.medal).toLowerCase() : null, score: num(ev.score) };
     if (kind === 'drift') ctx.d = { score: num(ev.score, 0), combo: num(ev.combo, 0), duration: num(ev.duration_s, 0) };
+    if (kind === 'derby') {   // {type:'derby', results (CB.derby.session results), launches?}
+      var dr = ev.results || ev, dp = dr.player || {}, dst = dp.stats || {};
+      ctx.dd = { won: !!dr.won, arenaId: dr.arenaId || null, kills: num(dst.kills, 0), tbones: num(dst.tbones, 0), flameDmg: num(dst.flameDmg, 0),
+        health: num(dp.health, 0), launches: num(ev.launches, 0), dealt: num(dst.dealt, 0) };
+    }
     if (kind === 'endurance') ctx.en = { pit: ev.action === 'pit' || ev.type === 'pit' || !!ev.pitStop };
     if (kind === 'race' && ctx.r && isNum(ctx.r.drift)) ctx.d = { score: ctx.r.drift, combo: num(get(ev, 'stats.driftCombo'), 0), duration: 0 };
     if (kind === 'stat') {
@@ -1078,6 +1085,20 @@ CB.game = CB.game || {};
   function photoExported(ctx) { var a = String(ctx.ev.action || '').toLowerCase(); return /^export/.test(a) ? 1 : 0; }
   counter('shutterbug', 'Shutterbug', 'Export a photo from Photo Mode.', 'bronze', 'camera', 'media', null, 1, 'photo', photoExported);
   counter('gallery-wall', 'Gallery Wall', 'Export 25 photos.', 'silver', 'camera', 'media', null, 25, 'photo', photoExported);
+
+  /* ------------------------------------------------------------------ Demolition Derby (docs/DERBY-SPEC.md) */
+
+  function ddIs(id, name, desc, tier, glyph, fn, extra) {
+    return when(id, name, desc, tier, glyph, 'derby', 'derby', function (ctx) { return !!ctx.dd && !!fn(ctx.dd, ctx); }, extra);
+  }
+  ddIs('derby-first-blood', 'First Blood', 'Eliminate a car in a Demolition Derby.', 'bronze', 'burst', function (d) { return d.kills >= 1; });
+  ddIs('derby-last-standing', 'Last Car Standing', 'Win a Demolition Derby.', 'silver', 'trophy', function (d) { return d.won; });
+  ddIs('derby-tbone', 'T-Bone Specialist', 'Land 5 T-bones in a single derby.', 'silver', 'burst', function (d) { return d.tbones >= 5; });
+  ddIs('derby-pyro', 'Pyromaniac', 'Deal 50 % worth of damage with the flamethrower in one derby.', 'silver', 'flame', function (d) { return d.flameDmg >= 0.5; });
+  ddIs('derby-untouchable', 'Untouchable', 'Win a derby with more than 70 % health left.', 'gold', 'shield', function (d) { return d.won && d.health > 0.7; });
+  ddIs('derby-flying', 'Flying Lessons', 'Launch a car into the air with the Front Ramp.', 'bronze', 'wing', function (d) { return d.launches >= 1; });
+  counter('derby-wrecker', 'Wrecking Crew', 'Eliminate 25 cars in Demolition Derby.', 'gold', 'burst', 'derby', null, 25, 'derby', function (ctx) { return ctx.dd ? ctx.dd.kills : 0; });
+  collect('derby-expert', 'Demolition Expert', 'Win a derby in all six arenas.', 'platinum', 'crown', 'derby', 'derby', function (ctx) { return ctx.dd && ctx.dd.won ? ctx.dd.arenaId : null; }, 6);
 
   /* ------------------------------------------------------------------ Secret / time-based */
 
