@@ -66,8 +66,8 @@ CB.derby = CB.derby || {};
       floors: [],
       hazards: [
         { id: 'tt', type: 'turntable', x: 0, y: 0, r: 7, omega: 0.95 },
-        { id: 'mud0', type: 'mud', x: -24, y: 17, r: 8, grip: 0.62, drag: 0.9 },
-        { id: 'mud1', type: 'mud', x: 24, y: -17, r: 8, grip: 0.62, drag: 0.9 },
+        { id: 'mud0', type: 'mud', x: -24, y: 17, r: 8, grip: 0.7, drag: 0.35 },
+        { id: 'mud1', type: 'mud', x: 24, y: -17, r: 8, grip: 0.7, drag: 0.35 },
         { id: 'pw0', type: 'pusher', x: 0, y: 23, r: 3.2, period: 3.6, offset: 0, dir: 'center', strength: 9 },
         { id: 'pw1', type: 'pusher', x: 0, y: -23, r: 3.2, period: 3.6, offset: 1.8, dir: 'center', strength: 9 }
       ],
@@ -194,7 +194,7 @@ CB.derby = CB.derby || {};
         { id: 'pl1', type: 'circle', x: -36, y: -14, r: 0.7, h: 3.2, kind: 'pillar' },
         { id: 'pl2', type: 'circle', x: 16, y: 16, r: 0.7, h: 3.2, kind: 'pillar' },
         { id: 'pl3', type: 'circle', x: 16, y: -16, r: 0.7, h: 3.2, kind: 'pillar' },
-        { id: 'lift', type: 'box', x: -50, y: 26, hw: 4, hh: 4, rot: 0, h: 4, kind: 'block' }
+        { id: 'lift', type: 'box', x: -52, y: 26, hw: 4.2, hh: 6.2, rot: 0, h: 4, kind: 'block' }
       ],
       ramps: [
         { id: 'r0', x: -18, y: 20, hw: 8, hh: 3.6, rot: 0, h: 3.2, kind: 'deck' },
@@ -234,7 +234,7 @@ CB.derby = CB.derby || {};
         { id: 'br1', type: 'fire', x: -30, y: -16, r: 1.4, dps: 0.07 },
         { id: 'br2', type: 'fire', x: -30, y: 16, r: 1.4, dps: 0.07 },
         { id: 'br3', type: 'fire', x: 30, y: -16, r: 1.4, dps: 0.07 },
-        { id: 'pit0', type: 'mud', x: 0, y: 30, r: 4, grip: 0.7, drag: 1.2 },
+        { id: 'pit0', type: 'mud', x: 0, y: 30, r: 4, grip: 0.75, drag: 0.4 },
         { id: 'tt', type: 'turntable', x: 0, y: 0, r: 12, rIn: 3.0, omega: -0.75 },
         { id: 'pc0', type: 'pusher', x: 34, y: 0, r: 3.0, period: 3.4, offset: 0, dir: 'center', strength: 9 },
         { id: 'pc1', type: 'pusher', x: -34, y: 0, r: 3.0, period: 3.4, offset: 1.7, dir: 'center', strength: 9 }

@@ -131,7 +131,7 @@ CB.derby = CB.derby || {};
       cars = ents.map(function (e, i) { return makeCar(i, e); });
       world = {
         t: 0, tick: 0, arena: arena, cars: cars, rng: rng, phase: 'countdown', countdown: num(cfg.countdown_s, 3), events: [], feed: [], entities: [],
-        evId: 0, entId: 0, elimOrder: [], winnerId: null, overT: 0, slowmo: 0, lastCount: -1, damage: DM(), diff: diff, tauntT: -9, sd: safeScaleAt(0, cfg.rules)
+        evId: 0, entId: 0, pairT: {}, pairGhost: {}, elimOrder: [], winnerId: null, overT: 0, slowmo: 0, lastCount: -1, damage: DM(), diff: diff, tauntT: -9, sd: safeScaleAt(0, cfg.rules)
       };
       world.emit = function (ev) {
         ev.id = ++world.evId; ev.t = r3(world.t); world.events.push(ev); if (world.events.length > 400) world.events.splice(0, world.events.length - 400);
@@ -215,15 +215,28 @@ CB.derby = CB.derby || {};
       // drive
       cars.forEach(function (c) {
         var mods = c.out ? { noDrive: true, gripMult: [0.9, 0.9, 0.9, 0.9] } : DM().effects(c);
+        // post-hit slide: the shoved car's tyres let go for a moment, so knock-back carries it metres away (and spins it)
+        if (c.slideT > 0) {
+          c.slideT -= dt;
+          var gS = mods.gripMult || [1, 1, 1, 1], kS = c.slideT > 0.15 ? 0.22 : 0.6;
+          mods.gripMult = [gS[0] * kS, gS[1] * kS, gS[2] * kS, gS[3] * kS];
+        }
+        // humans keep punchy acceleration: >= 75 % power until 25 % health (then 50 %); top speed / handling still degrade
+        if (c.isPlayer && !c.out && !mods.noDrive) mods.powerMult = Math.max(num(mods.powerMult, 1), c.dmg.health > 0.25 ? 0.75 : 0.5);
+        // launch kick: every car pulls hard out of a standstill after a crash (the scrum clears, run-ups happen)
+        if (!c.out && Math.abs(num(c.u, 0)) < 12) mods.accelMult = num(mods.accelMult, 1) * (c.isPlayer ? 1.4 : 1.25);
         if (!c.out) AC().driveMods(c, mods);
         if (c.input.hold) { mods.noDrive = true; c.vx = 0; c.vy = 0; c.w = 0; c.gear = 1; }
         ramBoost(c, mods, dt, fighting);
         // oil slicks / caltrops under the car
         entityEffects(c, mods, dt);
         PH().drive(F, c, c.input, mods, dt);
-        if (c.isPlayer && !autopilot && fighting && !c.out) ramAssist(c, dt);
+        if (c.isPlayer && !autopilot && fighting && !c.out) { ramAssist(c, dt); humanFeel(c, dt); }
+        if (fighting && !c.out) lowSpeedPivot(c, dt);
         if (c.justLanded) {
           var lv = c.justLanded; c.justLanded = 0;
+          // big air (the player): airborne > 0.7 s and landed upright
+          if (c.isPlayer && fighting && !c.out && !c.flipped && num(c.airT, 0) > 0.7) { var huge = c.airT > 1.3; award(c, null, huge ? 'HUGE AIR' : 'BIG AIR', huge ? 250 : 100, true); W.emit({ type: 'big-air', carId: c.id, air: +c.airT.toFixed(2), x: c.x, y: c.y, z: c.z }); }
           if (lv > 7 && fighting && !c.out) {
             var l = DM().addZone(c, 'wheels', (lv - 7) * 0.04, {});
             c.stats.taken += l;
@@ -236,9 +249,36 @@ CB.derby = CB.derby || {};
       // contacts: car-car (each pair once), then the arena
       for (var i = 0; i < cars.length; i++) {
         for (var j = i + 1; j < cars.length; j++) {
-          var a = cars[i], b = cars[j];
-          var ct = PH().collideCars(a, b, { restitution: 0.2, friction: 0.35, massMultA: a.shieldT > 0 ? 3 : 1, massMultB: b.shieldT > 0 ? 3 : 1 });
-          if (ct) carContact(ct, dt);
+          var a = cars[i], b = cars[j], pk = a.id + '|' + b.id;
+          if (a.ghostT > 0 || b.ghostT > 0 || num(W.pairGhost[pk], -1) > W.t) continue;
+          var ct = PH().collideCars(a, b, { restitution: 0.3, friction: 0.3, massMultA: a.shieldT > 0 ? 3 : 1, massMultB: b.shieldT > 0 ? 3 : 1 });
+          if (ct) {
+            carContact(ct, dt);
+            // ARCADE BOUNCE: ricochet apart, attacker keeps its momentum, victim shoved / spun / hopped; a pair that
+            // stays in contact > 0.22 s (wedged, both pushing) is popped apart and ghosted for 0.35 s
+            var pt = W.pairT[pk];
+            if (pt && W.t - pt.t < 0.03) pt.dur += dt; else pt = W.pairT[pk] = { t: W.t, dur: 0 };
+            pt.t = W.t;
+            var attA = ct.aIn >= ct.bIn, att0 = attA ? a : b, grind = pt.dur > 0.22 && a.speed < 4.5 && b.speed < 4.5;
+            var follow = !!(att0.ram && att0.ram.active);
+            var vic0 = att0 === a ? b : a;
+            if (ct.vn > 3) { a.hitSpinT = W.t; b.hitSpinT = W.t; }
+            if (ct.vn > 3) {
+              // human hits send the victim flying (room for the next run-up); a hit human slides briefly but keeps control
+              var sl = clamp(0.3 + ct.vn * 0.035, 0.3, 1.0) + (att0.isPlayer ? 0.35 : 0);
+              vic0.slideT = Math.max(num(vic0.slideT, 0), vic0.isPlayer ? Math.min(0.35, sl) : sl); att0.slideT = Math.max(num(att0.slideT, 0), 0.1);
+            }
+            PH().arcadeBounce(a, b, ct, { attacker: att0, e: 0.55, minSep: grind ? 6.5 : ct.vn > 1.5 ? 4.6 + Math.min(3, ct.vn * 0.12) + (att0.isPlayer ? 3 : 0) : 0.25, attMass: 2.6, follow: follow, hop: fighting, spin: 1.6 });
+            // follow-through: when YOU ram, you keep ~80 % of your speed and punch through (the victim flies off)
+            if (ct.vn > 4 && !grind && !att0.out) {   // AI attackers carry through too (55 %): they bounce off and come again
+              var human = att0.isPlayer && !autopilot;
+              var hc = Math.cos(att0.heading), hs = Math.sin(att0.heading), uNow = att0.vx * hc + att0.vy * hs, uWant = (human ? 0.8 : 0.55) * num(att0.u, 0);
+              if (uWant > uNow && uWant > 0) { att0.vx += hc * (uWant - uNow); att0.vy += hs * (uWant - uNow); }
+              W.pairGhost[pk] = W.t + (human ? 0.3 : 0.2);
+            }
+            if (grind) { W.pairGhost[pk] = W.t + 0.35; pt.dur = 0; W.emit({ type: 'unstick', carId: a.id, otherId: b.id, pair: true, x: ct.px, y: ct.py, z: a.z + 0.4 }); }
+            else if (follow && ct.vn > 8) W.pairGhost[pk] = W.t + 0.22;
+          }
         }
       }
       cars.forEach(function (c) {
@@ -249,6 +289,7 @@ CB.derby = CB.derby || {};
       cars.forEach(function (c) {
         AC().step(F, c, fighting ? c.input : {}, dt);
         if (c.invulnT > 0) c.invulnT -= dt;
+        if (c.ghostT > 0) c.ghostT -= dt;
         if (!c.out && fighting) {
           var evs = DM().tick(c, dt, { throttle: c.throttle, rng: W.rng });
           evs.forEach(function (e) { e.carId = c.id; e.x = c.x; e.y = c.y; e.z = c.z + 0.9; W.emit(e); if (c.isPlayer && e.type === 'stall') W.feedLine('Engine dead! You are a sitting duck…', 'info', c.id); if (c.isPlayer && e.type === 'fire') W.feedLine('You are on fire!', 'info', c.id); });
@@ -269,18 +310,32 @@ CB.derby = CB.derby || {};
       // entities age
       for (var k = W.entities.length - 1; k >= 0; k--) { var e = W.entities[k]; e.life -= dt; if (e.armT > 0) e.armT -= dt; if (e.life <= 0) W.entities.splice(k, 1); }
       if (W.slowmo > 0) W.slowmo = Math.max(0, W.slowmo - dt * 1.5);
+      // near misses (the player): flash past a car within ~1 m at > 12 m/s relative without touching it
+      var NP = cars[0];
+      if (W.phase === 'fight' && !NP.out && W.tick % 6 === 0) cars.forEach(function (o) {
+        if (o === NP || o.out) return;
+        var dx = o.x - NP.x, dy = o.y - NP.y, d = Math.hypot(dx, dy), gap = d - (NP.spec.width + o.spec.width) / 2;
+        if (gap > 1.1 || gap < 0.15 || d > (NP.spec.length + o.spec.length) / 2) return;
+        var rv = Math.hypot(o.vx - NP.vx, o.vy - NP.vy);
+        if (rv < 12 || W.t - num(NP.touch && NP.touch[o.id], -9) < 0.6 || W.t - num(NP.nearMissT, -9) < 2) return;
+        NP.nearMissT = W.t; NP.pendingNear = { id: o.id, t: W.t };
+      });
+      if (NP.pendingNear && W.t - NP.pendingNear.t > 0.4) {   // confirmed only if no contact followed
+        var pn = NP.pendingNear; NP.pendingNear = null;
+        if (W.t - num(NP.touch && NP.touch[pn.id], -9) > 0.45) { var oN = W.byId(pn.id); award(NP, oN, 'NEAR MISS', 50, true); W.emit({ type: 'near-miss', carId: NP.id, otherId: pn.id, x: NP.x, y: NP.y, z: NP.z }); }
+      }
       // lonely player failsafe: nobody within 25 m of the player for 5 s -> the nearest AI is sent at them
       var P0 = cars[0];
       if (W.phase === 'fight' && !P0.out && W.tick % 12 === 0) {
         var nearest = null, nd = 1e9, crowd = false;
         cars.forEach(function (o) { if (o === P0 || o.out) return; var d = Math.hypot(o.x - P0.x, o.y - P0.y); if (d < 25) crowd = true; if (d < nd && brains[o.id]) { nd = d; nearest = o; } });
         W.lonelyT = crowd ? 0 : num(W.lonelyT, 0) + 0.1;
-        if (W.lonelyT > 3 && nearest) { var nb = brains[nearest.id]; nb.target = P0.id; nb.retargetT = 5; nearest.aiTarget = P0.id; if (nb.mode === 'ambush') nb.mode = 'hunt'; W.lonelyT = 2; }
+        if (W.lonelyT > 4 && nearest) { var nb = brains[nearest.id]; nb.target = P0.id; nb.retargetT = 5; nearest.aiTarget = P0.id; if (nb.mode === 'ambush') nb.mode = 'hunt'; W.lonelyT = 2; }
         // action director: no crunch at / near the player for 3 s -> the nearest free AI comes for the player
         // (a second one after 5 s), retargeted for 5 s with a fresh ram meter, boosting + leading the intercept
         W.pQuietT = num(W.pQuietT, 0) + 0.1;
-        if (W.pQuietT > 1.8) {
-          var want = W.pQuietT > 4 ? 3 : 2, have = 0, pool = [];
+        if (W.pQuietT > 2.6) {
+          var want = W.pQuietT > 5 ? 2 : 1, have = 0, pool = [];
           cars.forEach(function (o) { if (o === P0 || o.out || !brains[o.id]) return; if (o.aiTarget === P0.id && W.t - num(o.directT, -9) < 5) have++; else pool.push(o); });
           pool.sort(function (x, y) { return Math.hypot(x.x - P0.x, x.y - P0.y) - Math.hypot(y.x - P0.x, y.y - P0.y); });
           for (var q = 0; q < pool.length && have < want; q++) {
@@ -325,6 +380,41 @@ CB.derby = CB.derby || {};
       var cr = Math.cos(rot), sr = Math.sin(rot);
       var nvx = c.vx * cr - c.vy * sr, nvy = c.vx * sr + c.vy * cr;
       c.vx = nvx; c.vy = nvy; c.heading = PH()._.wrap(c.heading + rot * 0.8);
+    }
+
+    /** human feel: J-turn assist (handbrake + steer swings the car round fast), post-hit spin settles within ~0.5 s,
+        strong instant reverse when nose-in against something */
+    function humanFeel(c, dt) {
+      var inp = c.input || {}, sp = Math.hypot(c.vx, c.vy), st = num(inp.steer, 0);
+      if (c.airborne || c.flipped) return;
+      if (inp.handbrake && Math.abs(st) > 0.35 && sp > 4) {
+        c.jturnT = num(c.jturnT, 0) + dt;
+        if (c.jturnT < 0.75) {
+          var wT = (st > 0 ? 1 : -1) * 3.6;
+          c.w += clamp(wT - c.w, -10 * dt, 10 * dt);
+          // keep the speed through the swing (no scrub to a standstill)
+          var k = 1 - 0.6 * dt; c.vx *= k + (1 - k) * 0.4; c.vy *= k + (1 - k) * 0.4;
+        }
+      } else c.jturnT = 0;
+      // spin from a hit settles quickly once the player steers / accelerates again
+      var sinceHit = world.t - num(c.hitSpinT, -9);
+      if (sinceHit > 0.3 && sinceHit < 1.5 && Math.abs(c.w) > 2.2 && !inp.handbrake) c.w *= 1 - 3.5 * dt;
+    }
+
+    /** arcade pivot: below ~8 m/s a car can still swing its nose round on the throttle (real cars barely turn when slow,
+        which is what made post-crash recovery feel stuck); the velocity turns with the nose so it carves, not slides */
+    function lowSpeedPivot(c, dt) {
+      var inp = c.input || {}, st = num(inp.steer, 0), u = num(c.u, 0), sp = Math.hypot(c.vx, c.vy);
+      if (c.airborne || c.flipped || sp > 8 || Math.abs(st) < 0.25) return;
+      var pushing = num(inp.throttle, 0) > 0.3 || num(inp.brake, 0) > 0.3;
+      if (!pushing) return;
+      var dir = c.gear < 0 ? -1 : 1, k = 1 - sp / 8;
+      var wT = st * 2.6 * dir * (0.55 + 0.45 * k) * (c.isPlayer ? 1.15 : 1);
+      var dw = clamp(wT - c.w, -9 * dt, 9 * dt) * k;
+      c.w += dw;
+      var rot = dw * dt * 0.0 + c.w * dt * 0.35 * k, cr = Math.cos(rot), sr = Math.sin(rot);
+      var vx = c.vx * cr - c.vy * sr, vy = c.vx * sr + c.vy * cr; c.vx = vx; c.vy = vy;
+      void u;
     }
 
     function fallbackAI(c) {
@@ -389,7 +479,7 @@ CB.derby = CB.derby || {};
     function flipRecovery(c, dt) {
       if (c.flipped) {
         c.flippedT += dt;
-        if (c.flippedT > 1.5 || (c.input && c.input.reset && c.flippedT > 0.5)) {
+        if (c.flippedT > (c.isPlayer ? 0.8 : 1.2) || (c.input && c.input.reset && c.flippedT > 0.3)) {
           c.flipped = false; c.roll = 0; c.rollV = 0; c.pitch = 0; c.vz = 3; c.airborne = true; c.flippedT = 0; c.z += 0.3;
           var l = DM().addZone(c, 'all', 0.06 / DM().ZONE_HPP, {}); c.stats.taken += l;
           world.emit({ type: 'unflip', carId: c.id, x: c.x, y: c.y });
@@ -460,7 +550,7 @@ CB.derby = CB.derby || {};
     }
 
     /* ---------------------------------------------------------------- ram boost (every car, input.boost held) */
-    var RAM = { drain: 0.55, refill: 0.2, accel: 1.8, top: 1.25, push: 3.2, hitRefill: 0.12, dealt: 1.4 };
+    var RAM = { drain: 0.5, refill: 0.24, accel: 1.9, top: 1.28, push: 3.6, hitRefill: 0.3, dealt: 1.4 };
     function ramBoost(c, mods, dt, fighting) {
       var R = c.ram;
       var want = !!(c.input && c.input.boost) && fighting && !c.out && !c.flipped && !c.input.hold;
@@ -489,7 +579,7 @@ CB.derby = CB.derby || {};
       else if ((pushing && c.speed < 2) || pinned) c.wedgeT += dt * (pinned ? 0.85 : 1);
       else c.wedgeT = Math.max(0, c.wedgeT - dt);
       var force = c.resetT > 1 && c.resetCd <= 0;
-      if (c.wedgeT < 1.2 && !force) return;
+      if (c.wedgeT < (c.isPlayer ? 0.7 : 1.1) && !force) return;
       // direction: away from everything touching us (cars, wrecks, walls, obstacles, deck sides) + toward the centre
       var dx = 0, dy = 0, L = c.spec.length;
       cars.forEach(function (o) {
@@ -509,7 +599,7 @@ CB.derby = CB.derby || {};
       c.vx += dx / l * k; c.vy += dy / l * k;
       c.w += (world.rng() < 0.5 ? -1 : 1) * (force ? 1.6 : 1.0);
       c.vz = Math.max(c.vz, force ? 3.2 : 1.8); c.airborne = true; c.airT = 0;
-      c.wedgeT = 0; c.wedgeN++; c.wedgeX = c.x; c.wedgeY = c.y;
+      c.wedgeT = 0; c.wedgeN++; c.wedgeX = c.x; c.wedgeY = c.y; c.ghostT = 0.5;
       if (force) { c.resetT = 0; c.resetCd = 3; var lh = DM().addZone(c, 'all', 0.02 / DM().ZONE_HPP, {}); c.stats.taken += lh; }
       world.emit({ type: 'unstick', carId: c.id, x: c.x, y: c.y, z: c.z + 0.4, forced: force });
     }
@@ -791,7 +881,7 @@ CB.derby = CB.derby || {};
         elimOrder: W.elimOrder, winnerId: W.winnerId, overT: W.overT, fightT0: W.fightT0, slowmo: W.slowmo, lastCount: W.lastCount, feed: W.feed, endReason: W.endReason || null, sdAnnounced: !!W.sdAnnounced,
         cars: cars.map(function (c) { var o = {}; for (var k in c) if (!SKIP[k] && typeof c[k] !== 'function') o[k] = c[k]; return o; }),
         brains: Object.keys(brains).reduce(function (o, id) { o[id] = brains[id].serialize ? brains[id].serialize() : null; return o; }, {}),
-        acc: acc, autopilot: autopilot, tauntT: W.tauntT, sd: W.sd, sdStart: W.sdStart == null ? null : W.sdStart, lastSigT: num(W.lastSigT, 0), lonelyT: num(W.lonelyT, 0), pQuietT: num(W.pQuietT, 0), pickups: pickups && pickups.serialize ? pickups.serialize() : null, pkRng: pkRng ? pkRng.state.s : null
+        acc: acc, autopilot: autopilot, tauntT: W.tauntT, sd: W.sd, sdStart: W.sdStart == null ? null : W.sdStart, lastSigT: num(W.lastSigT, 0), lonelyT: num(W.lonelyT, 0), pQuietT: num(W.pQuietT, 0), pairT: W.pairT, pairGhost: W.pairGhost, pickups: pickups && pickups.serialize ? pickups.serialize() : null, pkRng: pkRng ? pkRng.state.s : null
       }));
     }
     function setState(st) {
@@ -799,7 +889,7 @@ CB.derby = CB.derby || {};
       var W = world;
       W.rng.state.s = st.rng >>> 0; W.t = st.t; W.tick = st.tick; W.phase = st.phase; W.countdown = st.countdown; W.evId = st.evId; W.entId = st.entId;
       W.entities = JSON.parse(JSON.stringify(st.entities)); W.elimOrder = st.elimOrder.slice(); W.winnerId = st.winnerId; W.overT = st.overT; W.fightT0 = st.fightT0;
-      W.slowmo = st.slowmo; W.lastCount = st.lastCount; W.feed = JSON.parse(JSON.stringify(st.feed || [])); W.endReason = st.endReason; W.sdAnnounced = !!st.sdAnnounced; W.events = [];
+      W.slowmo = st.slowmo; W.lastCount = st.lastCount; W.feed = JSON.parse(JSON.stringify(st.feed || [])); W.endReason = st.endReason; W.sdAnnounced = !!st.sdAnnounced; W.events = []; W.pairT = JSON.parse(JSON.stringify(st.pairT || {})); W.pairGhost = JSON.parse(JSON.stringify(st.pairGhost || {}));
       st.cars.forEach(function (o, i) {
         var c = cars[i];
         for (var k in o) c[k] = JSON.parse(JSON.stringify(o[k]));

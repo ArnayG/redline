@@ -361,3 +361,64 @@ health in 0.1 s, on 2 seeds), before → after the fun pass:
 | longest time nobody within 15 m of the player (s) | 0–61 | 0.2–7.7 |
 | stuck % (never > 1.5 m/s for 2 s) | 2.3–15.7 | 0–3.7 |
 | self-falls (all matches) | 0 | 0–1 |
+
+## 12. Arcade collisions and "never stuck" (2026-10, from human play-tests)
+
+Players said a crash left them stuck in a near-stalemate. `tools/derby-human.js` measures the derby from a
+human's point of view: a scripted player drives at the nearest car at full throttle, keeps trying to drive and
+uses the J-turn. It logs, per collision, the speed before and after, the time back above 50 % of the pre-hit
+speed and the contact duration. Per match it logs the share of fight time below 5 m/s, big hits and airborne
+moments per minute, the longest gap without action, and wall pins.
+
+* **Arcade bounce** (`physics.arcadeBounce`, applied by the session after the exact `collideCars` impulse, which
+  stays momentum-conserving):
+  * Overlap is removed in one step, and the cars separate at `max(minSep, e·closing)`, with e = 0.55–0.73.
+  * minSep is 4.6 m/s + 0.12·closing, or +3 m/s when the human rams.
+  * The attacker keeps its momentum (effective mass ×2.6, ×2.2 more while ram-boosting), and the victim is
+    shoved and spun from the hit's lever arm.
+  * Hits above 16 m/s hop and roll the victim (light cars fly).
+  * Gentle side rubs (< 1.5 m/s) only get a 0.25 m/s nudge, so wheel saws still grind.
+* **Post-hit slide**: the shoved car's tyres let go for 0.3–1.0 s (grip ×0.22), so knock-back carries it metres
+  away. A human victim slides at most 0.35 s.
+* **Follow-through**: an attacker that rams (closing > 4 m/s) keeps 80 % of its forward speed if human, 55 % if AI,
+  and the pair is ghosted for 0.3 s / 0.2 s (punch through; AI bounce off and come again instead of grinding).
+* **Anti-wedge**: a pair in contact for more than 0.22 s with both cars slower than 4.5 m/s is popped apart at
+  6.5 m/s and ghosted for 0.35 s (`unstick` event with `pair: true`).
+* **Pin escape**: a human pinned for 0.7 s gets a push-off plus 0.5 s ghost (AI: 1.1 s).
+* **Other recovery aids**:
+  * Auto-unflip after 0.8 s (AI 1.2 s).
+  * Every car gets an arcade low-speed pivot (below 8 m/s the nose swings round on the throttle).
+  * Launch kick below 12 m/s: accel ×1.4 for the human, ×1.25 for AI.
+  * Reverse top speed is 50 % of forward, at full drive force.
+  * J-turn assist for the human: handbrake plus steer at more than 4 m/s spins the car round within 0.75 s
+    without scrubbing all the speed.
+  * Post-hit spin settles within 0.3–1.5 s.
+* **Damage**:
+  * The human keeps at least 75 % power until 25 % health (then 50 %); top speed and handling still degrade.
+  * The engine only dies near zero health: human < 10 %, AI < 35 % (it used to stall at 40 % health with a
+    crumpled front, a common way to be "stuck").
+* **Pacing**:
+  * The director sends 1 AI at a quiet human after 2.6 s, and a second after 5 s.
+  * Mud drag is lower.
+  * The front ramp can launch the same victim at most every 4 s for a human (2 s for AI), with a softer roll
+    kick on humans.
+  * Ram boost refills faster (0.24/s, +0.3 per scoring hit).
+* **New scoring**: NEAR MISS +50 (flash past a car within ~1 m at > 12 m/s relative), BIG AIR +100 / HUGE AIR +250
+  (airborne > 0.7 / 1.3 s and landing upright). Events `near-miss` and `big-air`.
+
+* **Contact point**: `collideCars` now puts the contact in the middle of the real overlap along the tangent, so an
+  off-centre T-bone spins the victim (it used to snap to the middle of the victim's flank). The arcade bounce caps the
+  victim's yaw at 6 rad/s.
+* **Arena traps removed**: the Rooftop lift block is now flush with the corner. Its 2 m slot to the walls was a
+  car-width wedge that the pin escape kept popping a car out of and back into.
+
+| scripted human (`tools/derby-human.js`, 2 seeds per arena, 8 cars, Amateur) | before | after |
+|---|---|---|
+| time below 5 m/s (fight) | 24–82 % | 21–39 % (real-key browser runs: 18–44 %) |
+| longest car–car contact | 0.6–3.3 s | ≤ 0.13 s |
+| median recovery to 50 % of pre-hit speed | 0.01–0.19 s | 0.01 s |
+| recovery p90 | 0.04–2.4 s | ≤ 1.1 s |
+| big hits per minute involving the player | 8–37 | 20–31 |
+| longest gap without action near the player | 4–15 s | 4.8–10.8 s |
+| early "engine" eliminations with health left | common | gone (engine dies < 10 % health) |
+| AI-only sim (`tools/derby-sim.js`): impacts per car-minute / stuck % | 21–35 / ~0 | 17–35 / ≤ 0.1 |

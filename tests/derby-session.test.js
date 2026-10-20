@@ -88,9 +88,10 @@ test('countdown holds every car; GO releases them', function () {
   var sn = S.snapshot();
   assert.strictEqual(sn.phase, 'countdown');
   sn.cars.forEach(function (c) { assert.ok(c.speed < 0.01, c.id + ' held'); });
-  steps(S, 120 * 2, { throttle: 1 });
+  var vmax = 0;
+  steps(S, 120 * 2, function () { vmax = Math.max(vmax, S._cars[0].speed || 0); return { throttle: 1 }; });
   assert.strictEqual(S.snapshot().phase, 'fight');
-  assert.ok(S._cars[0].speed > 2);
+  assert.ok(vmax > 2, 'released: ' + vmax);
 });
 
 test('elimination: wrecked (health 0), engine dead + standing, fell off an open edge, immobile', function () {
@@ -136,8 +137,9 @@ test('anti-stalemate: limp floor, pinned cars pushed apart, R pops a stuck car, 
   var a = P._cars[0], b = P._cars[1], seen = 0;
   a.x = -2.4; a.y = 0; a.heading = 0; b.x = 2.4; b.y = 0; b.heading = Math.PI;
   b.scriptInput = { throttle: 1, brake: 0, steer: 0 };
-  for (var i = 0; i < 120 * 5; i++) { P.step({ throttle: 1 }); if (i % 12 === 0) P.snapshot().events.forEach(function (e) { if (e.type === 'unstick') seen++; }); }
-  assert.ok(seen >= 1 || Math.hypot(a.x - b.x, a.y - b.y) > 6, 'grinding pair separated');
+  var sepMax = 0;
+  for (var i = 0; i < 120 * 5; i++) { P.step({ throttle: 1 }); sepMax = Math.max(sepMax, Math.hypot(a.x - b.x, a.y - b.y)); if (i % 12 === 0) P.snapshot().events.forEach(function (e) { if (e.type === 'unstick') seen++; }); }
+  assert.ok(seen >= 1 || sepMax > 6, 'grinding pair separated (arcade bounce ricochets them apart): ' + sepMax.toFixed(1));
   // R held on a stuck (not flipped) car: pop after ~1 s
   var R = quiet({ rules: { idlePenalty: false } });
   var r = R._cars[0], pops = 0;

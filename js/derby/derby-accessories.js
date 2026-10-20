@@ -426,13 +426,13 @@ CB.derby = CB.derby || {};
     // front ramp: head-on / nose hits launch the other car
     if (has(car, 'ramp') && info.myZone === 'front' && vn > 5 && (info.attacker || vn > 9)) {
       var st = get(car, 'ramp');
-      if (st.cooldown <= 0 && !other.airborne) {
-        st.cooldown = 0.7;
-        var lift = clamp(0.32 * vn + 1.5, 3, 8.5) * Math.sqrt(1500 / other.spec.mass);
+      if (st.cooldown <= 0 && !other.airborne && world.t - (other.launchedT == null ? -99 : other.launchedT) > (other.isPlayer ? 4 : 2)) {
+        st.cooldown = 0.7; other.launchedT = world.t;
+        var lift = clamp(0.32 * vn + 1.5, 3, other.isPlayer ? 6.5 : 8.5) * Math.sqrt(1500 / other.spec.mass);
         other.airborne = true; other.vz = lift; other.airT = 0;
         var side = info.otherZone === 'left' ? -1 : info.otherZone === 'right' ? 1 : (world.rng() < 0.5 ? -1 : 1);
         // a sideways roll kick: usually it lands on its wheels, big hits put it on its roof (~1 in 4 overall)
-        other.rollV += side * clamp(0.4 + vn * 0.07, 0.7, 2.2) * (0.55 + 0.9 * world.rng());   // harder hits flip more often
+        other.rollV += side * clamp(0.4 + vn * 0.07, 0.7, 2.2) * (0.55 + 0.9 * world.rng()) * (other.isPlayer ? 0.55 : 1);   // a launched human usually lands on its wheels   // harder hits flip more often
         other.pitchV += (info.otherZone === 'front' ? 1 : info.otherZone === 'rear' ? -1 : 0) * 1.4;
         // keep some forward momentum: the ramp throws them up and over
         other.vx += info.nx * vn * 0.25; other.vy += info.ny * vn * 0.25;

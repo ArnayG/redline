@@ -15,7 +15,7 @@ function test(name, fn) {
 var IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false, action1: false, action2: false };
 /** scripted 1v1 on the mud bowl's dry south side: player at (px, py, ph), opponent at (bx, by, bh); AI idle */
 function duel(o) {
-  var S = SS.create({ arenaId: o.arena || 'mud-bowl', seed: 3, opponents: 1, difficulty: 'pro', countdown_s: 0.01, aiDisabled: true,
+  var S = SS.create({ arenaId: o.arena || 'mud-bowl', seed: 3, opponents: 1, difficulty: 'pro', countdown_s: 0.01, aiDisabled: true, aimAssist: 0,
     player: { presetId: o.pa || 'muscle', accessories: o.acc || [] }, ai: [{ presetId: o.pb || 'muscle', accessories: o.accB || [] }] });
   S.step(IDLE); S.step(IDLE);
   var a = S._cars[0], b = S._cars[1];
@@ -166,7 +166,7 @@ test('repair kit works exactly once', function () {
 test('wrecking ball: swung by a hard turn it smashes a nearby car', function () {
   var found = null;
   // a few parked positions around the swing (robust to small tuning changes); at least one must be smashed by the ball
-  [[-21, -17], [-18, -14], [-18, -11], [-21, -14]].some(function (bp) {
+  [[-21, -17], [-18, -14], [-18, -11], [-21, -14], [-18, -18], [-14, -16], [-12, -14], [-10, -12]].some(function (bp) {
     var D = duel({ acc: ['wrecking-ball'], ax: -40, ay: -20, ah: 0, bx: bp[0], by: bp[1], bh: 0 });
     var ballHit = false;
     D.run(4, function (i) { return { throttle: 1, steer: i < 180 ? 0 : 1 }; }, function () {

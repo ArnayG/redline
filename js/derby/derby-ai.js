@@ -27,8 +27,8 @@ CB.derby = CB.derby || {};
   function wrap(a) { if (!(a > -Math.PI && a <= Math.PI)) { if (!isFinite(a)) return 0; a = a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI)); } return a; }
   var LEVEL = {
     rookie: { react: 0.42, noise: 0.2, aggro: 0.78, player: 0.3, lead: 0.4, charge: 0.85, backoff: 0.6 },
-    amateur: { react: 0.24, noise: 0.09, aggro: 0.97, player: 0.4, lead: 0.85, charge: 1, backoff: 0.8 },
-    pro: { react: 0.18, noise: 0.06, aggro: 1.04, player: 0.42, lead: 0.85, charge: 1, backoff: 1 },
+    amateur: { react: 0.24, noise: 0.09, aggro: 0.97, player: 0.3, lead: 0.85, charge: 1, backoff: 0.8 },
+    pro: { react: 0.18, noise: 0.06, aggro: 1.04, player: 0.34, lead: 0.85, charge: 1, backoff: 1 },
     alien: { react: 0.12, noise: 0.035, aggro: 1.08, player: 0.4, lead: 1.0, charge: 1, backoff: 1.1 }
   };
 

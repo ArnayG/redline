@@ -200,10 +200,10 @@ CB.derby = CB.derby || {};
     var fx = 0, fy = 0, tq = 0;   // world force + yaw torque
     if (grounded && !car.flipped) {
       // ---- longitudinal: drive (accel envelope fading to top speed), brakes, rolling / aero drag
-      var top = sp.topSpeed * num(mods.topMult, 1) * (car.gear < 0 ? 0.36 : 1);
+      var top = sp.topSpeed * num(mods.topMult, 1) * (car.gear < 0 ? 0.5 : 1);
       var aMax = sp.accel * num(mods.powerMult, 1) * num(mods.accelMult, 1);
       var sAbs = Math.abs(u), fade = 1 - Math.pow(clamp(sAbs / Math.max(4, top), 0, 1.2), 2.2);
-      var Fdrive = mods.noDrive ? 0 : wantDrive * aMax * m * Math.max(fade, car.gear > 0 && sAbs > top ? -0.4 : 0) * (car.gear > 0 ? 1 : -0.85);
+      var Fdrive = mods.noDrive ? 0 : wantDrive * aMax * m * Math.max(fade, car.gear > 0 && sAbs > top ? -0.4 : 0) * (car.gear > 0 ? 1 : -1.05);
       // traction cap per driven axle
       var muDrive = sp.drive === 'awd' ? (muF + muR) / 2 * (Nf + Nr) : sp.drive === 'fwd' ? muF * Nf : muR * Nr;
       // derby tyres + weight transfer onto the driven axle: launches are punchy (traction cap ~1.4 x static axle load)
@@ -370,6 +370,11 @@ CB.derby = CB.derby || {};
       px -= nx * best * 0.5; py -= ny * best * 0.5;
     }
     if (bi < 2) { px += nx * best * 0.5; py += ny * best * 0.5; }
+    // tangential position: the middle of the real overlap of both outlines along the contact tangent (face-to-face hits
+    // otherwise snap to the middle of the incident face and an off-centre T-bone would never spin the victim)
+    var tx0 = -ny, ty0 = nx, pta = project(ca, [tx0, ty0]), ptb = project(cb, [tx0, ty0]);
+    var tlo = Math.max(pta[0], ptb[0]), thi = Math.min(pta[1], ptb[1]);
+    if (thi > tlo) { var tc = (tlo + thi) / 2, tcur = px * tx0 + py * ty0; px += tx0 * (tc - tcur); py += ty0 * (tc - tcur); }
     var ma = a.spec.mass * num(opts.massMultA, 1), mb = b.spec.mass * num(opts.massMultB, 1);
     var Ia = a.spec.Iz * num(opts.massMultA, 1), Ib = b.spec.Iz * num(opts.massMultB, 1);
     var va = pointVel(a, px, py), vb = pointVel(b, px, py);
@@ -404,6 +409,50 @@ CB.derby = CB.derby || {};
       a: a, b: b, kind: 'car', px: px, py: py, nx: nx, ny: ny, vn: closing, vt: Math.abs(vt), j: jn,
       energy: 0.5 * mu * closing * closing, depth: best, aIn: aIn, bIn: bIn
     };
+  }
+
+  /**
+   * ARCADE BOUNCE (Burnout / Destruction AllStars feel), applied by the session on top of the exact collideCars impulse:
+   * the cars ricochet apart (separation speed >= max(minSep, e·closing)), the ATTACKER keeps most of its momentum
+   * (effective mass ×attMass, ×follow when ram-boosting) while the victim is shoved, spun (a side hit sends it spinning
+   * away) and, on big hits, hopped / rolled. Overlap is removed in one step. Not momentum-conserving on purpose.
+   * o {attacker: a|b, e, minSep, attMass, spin, follow (bool), hop (bool)} -> {jx, jy, sep}
+   */
+  function arcadeBounce(a, b, ct, o) {
+    o = o || {};
+    var nx = ct.nx, ny = ct.ny, closing = num(ct.vn, 0);
+    var att = o.attacker === b ? b : a, vic = att === a ? b : a;
+    // full separation along the normal (never leave them interlocked)
+    var depth = Math.max(0, num(ct.depth, 0));
+    if (depth > 0) {
+      var wa0 = a === att ? 0.25 : 0.75;
+      a.x -= nx * (depth + 0.03) * wa0; a.y -= ny * (depth + 0.03) * wa0;
+      b.x += nx * (depth + 0.03) * (1 - wa0); b.y += ny * (depth + 0.03) * (1 - wa0);
+    }
+    var e = num(o.e, 0.55) + 0.18 * clamp((closing - 6) / 14, 0, 1);
+    var target = Math.max(num(o.minSep, 2.5), e * closing);
+    var va = pointVel(a, ct.px, ct.py), vb = pointVel(b, ct.px, ct.py);
+    var sep = (vb.x - va.x) * nx + (vb.y - va.y) * ny;
+    if (sep >= target) return { jx: 0, jy: 0, sep: sep };
+    var am = num(o.attMass, 2.6) * (o.follow ? 2.2 : 1);
+    var ma = a.spec.mass * (a === att ? am : 1), mb = b.spec.mass * (b === att ? am : 1);
+    var J = (target - sep) / (1 / ma + 1 / mb);
+    var jx = nx * J, jy = ny * J;
+    a.vx -= jx / ma; a.vy -= jy / ma; b.vx += jx / mb; b.vy += jy / mb;
+    // spin the victim from the lever arm of the hit (side hits spin hardest); the attacker barely twists
+    var spin = num(o.spin, 1.5), r = vic === b ? 1 : -1;
+    var rx = ct.px - vic.x, ry = ct.py - vic.y, lev = rx * (ny * r) - ry * (nx * r);
+    vic.w += clamp(lev * J * r * r / vic.spec.Iz * spin, -4.5, 4.5);
+    vic.w = clamp(vic.w, -6, 6);
+    // big hits: hop + roll kick on the victim (light cars fly)
+    if (o.hop && closing > 16 && !vic.airborne) {
+      var lightK = Math.sqrt(1500 / vic.spec.mass);
+      vic.vz = Math.max(vic.vz, clamp(0.8 + (closing - 16) * 0.16, 0.8, 3) * lightK);
+      vic.airborne = true; vic.airT = 0;
+      var cv = Math.cos(vic.heading), sv = Math.sin(vic.heading), side = -(nx * r) * sv + (ny * r) * cv;   // + = shoved toward its left
+      vic.rollV += clamp(side * (1.2 + (closing - 16) * 0.18), -4.5, 4.5) * lightK;
+    }
+    return { jx: jx, jy: jy, sep: target };
   }
 
   /* ================================================================== car vs arena (walls, obstacles, steps) */
@@ -515,7 +564,7 @@ CB.derby = CB.derby || {};
   CB.derby.physics = {
     DT: DT, G: G,
     specFromBuild: specFromBuild, withMass: withMass, createBody: createBody, corners: corners, probes: probes,
-    drive: drive, vertical: vertical, collideCars: collideCars, collideArena: collideArena, surfaceAt: surfaceAt,
+    drive: drive, vertical: vertical, collideCars: collideCars, arcadeBounce: arcadeBounce, collideArena: collideArena, surfaceAt: surfaceAt,
     raycast: raycast, edgeInfo: edgeInfo, applyImpulse: applyImpulse, pointVel: pointVel, toLocal: toLocal, toWorld: toWorld,
     _: { clamp: clamp, wrap: wrap, smooth: smooth }
   };

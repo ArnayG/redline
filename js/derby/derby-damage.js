@@ -198,7 +198,7 @@ CB.derby = CB.derby || {};
 
   function updateEngine(car) {
     var d = car.dmg, ez = d.zones[engineZone(car)];
-    d.engine.hp = clamp(1 - Math.pow(ez, 1.35) * 0.92 - (ez >= 0.999 && d.health < 0.4 ? 1 : 0), 0, 1);
+    d.engine.hp = clamp(1 - Math.pow(ez, 1.35) * 0.92 - (ez >= 0.999 && d.health < (car.isPlayer ? 0.1 : 0.35) ? 1 : 0), 0, 1);
     d.engine.smoke = clamp((ez - 0.3) / 0.6, 0, 1) + d.engine.fire * 0.5;
     d.engine.black = clamp((ez - 0.65) / 0.3, 0, 1);
   }
