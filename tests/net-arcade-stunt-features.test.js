@@ -92,7 +92,8 @@ function raceOn(track, net) {
       assert.strictEqual(own, hostHits, id + ': client predicted ' + own + ' hazard hits, host decided ' + hostHits);
       assert.strictEqual(row.stunt.hazardHits, hostHits, id + ': results carry the host count');
       assert.strictEqual(R.seen[i + 1], own, id + ': every predicted hit reached the HUD once');
-      assert.ok(Math.abs(hostCars[id].clockOffset - env.host._debug().inbufs[id].D / 120) < 1e-9, id + ' hazard clock offset = D');
+      var ib = env.host._debug().inbufs[id];
+      assert.ok(Math.abs(hostCars[id].clockOffset - (ib.E !== null ? ib.E : ib.D) / 120) < 1e-9, id + ' hazard clock offset = the delay the copy runs at (E)');
       total += hostHits;
       assert.strictEqual(env.clients[i].netState().sync.snaps, 0, id + ': no hard snaps');
     });

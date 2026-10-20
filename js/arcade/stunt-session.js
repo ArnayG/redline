@@ -137,7 +137,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       c.lastCp = { s: 0, dist: Math.min(0, s0), lat: 0 };
       c.finished = false; c.finishT = null; c.finishPos = null; c.lapStartT = null; c.lapTimes = []; c.bestLap = null; c.lastLap = null;
       c.position = k + 1; c.gridPosition = k + 1; c.maxSpeed = 0; c.nitro = 0; c.nitroOn = false; c.collisions = 0;
-      c.prevX = 0; c.prevY = 0; c.prevH = 0; c.hookData = null; c.inputState = { throttle: 0, brake: 0, steer: 0 };
+      c.hookData = null; c.inputState = { throttle: 0, brake: 0, steer: 0 };
       return c;
     }
 
@@ -328,12 +328,19 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var cars = sess.cars;
       for (var i = 0; i < cars.length; i++) {
         var c = cars[i];
-        var inp;
         if (c.external) {   // multiplayer puppet (js/net/netarcade.js): its pose comes from the network, no AI / physics here
           if (hooks.length) { c.ctx = { t: sess.t, phase: sess.phase, trackLength: L, dt: STEP, position: c.position }; c.lap = Math.max(0, Math.floor(c.dist / L)); }
           callHooks('externalStep', [c, STEP, api]);
           continue;
         }
+        // netarcade host (js/net/netarcade.js): a remote player's car steps 0 or 2 times in one tick to grow / shrink its
+        // input delay WITHOUT breaking the one-input-per-physics-step replay of that player's own prediction
+        var reps = c.netSteps === 0 || c.netSteps === 2 ? c.netSteps : 1;
+        if (c.netSteps !== undefined) c.netSteps = 1;
+        for (var rep = 0; rep < reps; rep++) { if (reps !== 1 || c.netRep) c.netRep = rep; stepCar(c); }
+      }
+      function stepCar(c) {
+        var inp;
         if (c.isPlayer && !sess.autopilot && !c.finished) inp = { throttle: pin.throttle, brake: pin.brake, steer: pin.steer, nitro: pin.nitro };
         else inp = AI.drive(c.ai || (c.ai = AI.createDriver({ skill: 0.9 })), c, track, { cars: cars, pads: pads, driveModel: driveModel, t: sess.t - num(c.clockOffset, 0) });
         if (c.finished && !c.isPlayer) inp.throttle *= 0.6;
@@ -355,7 +362,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         c.throttle = num(inp.throttle, 0); c.brake = num(inp.brake, 0); c.steer = num(inp.steer, 0);
         if (!racing) {   // grid / countdown: hold position (gameplay rocket-start gauge reads the throttle)
           c.v = 0; c.rpm = 1000 + 5500 * c.throttle;
-          continue;
+          return;
         }
         var fx = gp ? gp.effects(c.id) : null;
         if (hasVehicleEnv) {   // extension boosts via env.arcade { push, topSpeedMult }
@@ -376,7 +383,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           if (c.mode === 'air') c.nitro = clamp01(c.nitro + 0.11 * STEP);
         } else c.nitroOn = !!(fx && (fx.nitroOn || fx.boostKind === 'nitro'));
         c.noCollide = !!(fx && fx.noCollide);
-        var human = c.isPlayer ? !sess.autopilot : !!c.humanAssist && !c.finished;   // humanAssist: a remote player's car (netarcade host)
+        // humanAssist: a remote player's car (netarcade host). cfg.netPlayer (netarcade): the own car keeps the human helpers on
+        // autopilot too, exactly like the host's copy of it (else an autopiloted guest predicted 'ai' launches / air guidance
+        // while the host flew the same inputs with the 'player' ones)
+        var human = c.isPlayer ? !sess.autopilot || !!cfg.netPlayer : !!c.humanAssist && !c.finished;
         var help = human ? 'player' : 'ai';
         var pace = 1;
         if (!c.isPlayer && !gp && cfg.rubberBanding !== false && cfg.mode === 'race' && sess.player) {
@@ -406,7 +416,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
           callHooks('postStep', [c, STEP, api]);
           if (c.state.vx !== vBefore && isNum(c.state.vx) && c.mode === 'ground') c.v = c.state.vx;
         } else callHooks('postStep', [c, STEP, api]);
-      }
+    }
       if (racing) collide();
       // hook entities with a life time
       for (var k = sess.entities.length - 1; k >= 0; k--) { var en = sess.entities[k]; if (en.life > 0) { en.life -= STEP; if (en.life <= 0) sess.entities.splice(k, 1); } }
@@ -474,28 +484,50 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       sess.prevReset = pin.reset;
       sess.acc += Math.min(dt, MAX_SUB * STEP);
       var n = 0;
-      while (sess.acc >= STEP - 1e-9 && n < MAX_SUB) { sess.acc -= STEP; stepOnce(pin); n++; }
+      while (sess.acc >= STEP - 1e-9 && n < MAX_SUB) {
+        sess.acc -= STEP;
+        if (!(sess.acc >= STEP - 1e-9) || n + 1 >= MAX_SUB) capturePrevPoses();   // the last substep of this frame
+        stepOnce(pin); n++;
+      }
       return n;
+    }
+    /** Pose of every car BEFORE the last substep: the snapshot interpolates prev -> current with alpha = acc / STEP (one
+        substep), so the drawn car moves with the clock however many substeps a frame ran (1, 2, 3 … at 60 Hz on a guest
+        whose race clock follows the host's). It used to be the pose of the previous snapshot() call (the previous frame),
+        lerped by a one-substep alpha: every 1- or 3-substep frame showed as a 0.4-1.5 m jump of every car. */
+    function capturePrevPoses() {
+      for (var i = 0; i < sess.cars.length; i++) {
+        var c = sess.cars[i], pp = c._pp || (c._pp = { pos: [0, 0, 0], fwd: [1, 0, 0], up: [0, 1, 0], right: [0, 0, 1] });
+        P.pose(track, c, pp);
+        pp.t = sess.t;
+      }
     }
     var _pose = { pos: [0, 0, 0], fwd: [1, 0, 0], up: [0, 1, 0], right: [0, 0, 1] };
     function snapCar(c) {
       var p = P.pose(track, c, _pose);
       var x = p.pos[0], y = -p.pos[2], heading = Math.atan2(-p.fwd[2], p.fwd[0]);
+      // previous substep's pose (capturePrevPoses); none yet / a teleport (warp, respawn swap) -> no interpolation
+      var pp = c._pp && Math.abs(c._pp.t + STEP - sess.t) < 1e-6 ? c._pp : null;
+      if (pp && Math.hypot(pp.pos[0] - p.pos[0], pp.pos[1] - p.pos[1], pp.pos[2] - p.pos[2]) > 12) pp = null;
+      var px0 = pp ? pp.pos[0] : x, py0 = pp ? -pp.pos[2] : y, ph0 = pp ? Math.atan2(-pp.fwd[2], pp.fwd[0]) : heading;
       var racing = sess.goT !== null;
       var o = {
         id: c.id, isPlayer: c.isPlayer, name: c.name, team: c.team, number: c.number, color: c.color, accent: c.accent, build: c.build, bodyStyle: c.bodyStyle,
-        x: x, y: y, heading: heading, prevX: c.prevX, prevY: c.prevY, prevHeading: c.prevH,
+        x: x, y: y, heading: heading, prevX: px0, prevY: py0, prevHeading: ph0,
         speed: Math.abs(c.v), vSigned: c.v, rpm: c.rpm, gear: c.gear, maxGear: 6, redline: 7400, steerAngle: c.steerAngle,
         throttle: c.throttle, brake: c.brake, lap: Math.max(0, Math.min(cfg.laps, Math.floor(c.dist / L))), s: c.s, lateral: c.mode === 'ground' ? c.lat : 0,
         raceDist: c.dist, position: c.position, gridPosition: c.gridPosition, currentLap_s: racing && c.lapStartT !== null && !c.finished ? sess.t - c.lapStartT : 0,
         lastLap_s: c.lastLap, bestLap_s: c.bestLap, finished: c.finished, finishTime_s: c.finishT, finishPosition: c.finishPos,
         onTrack: c.mode !== 'respawn', offTrack: false, surface: 'asphalt', wrongWay: c.wrongT > 1.5, collisions: c.collisions,
         // 3D stunt extras
-        pos: p.pos.slice(), fwd: p.fwd.slice(), up: p.up.slice(), right: p.right.slice(), mode: c.mode, airborne: c.mode === 'air', airTime_s: c.airT,
+        pos: p.pos.slice(), fwd: p.fwd.slice(), up: p.up.slice(), right: p.right.slice(), mode: c.mode,
+        prevPos: pp ? pp.pos.slice() : p.pos.slice(), prevFwd: pp ? pp.fwd.slice() : p.fwd.slice(), prevUp: pp ? pp.up.slice() : p.up.slice(), airborne: c.mode === 'air', airTime_s: c.airT,
         lastAir_s: c.lastAir, fade: c.fade, susp: c.susp, ghost: c.ghostT > 0, boosting: c.boostT > 0 || c.nitroOn || !!c.extBoost, nitroOn: c.nitroOn, nitro: c.nitro,
         spin: c.spinT, yawRate: c.yawRate, psi: c.psi, height: 0
       };
-      c.prevX = x; c.prevY = y; c.prevH = heading;
+      // (no per-car prevX / prevH writes here: c.prevH is stunt-physics' height-above-surface memory for the swept landing
+      //  test — writing the heading into it from snapshot() made landings depend on WHEN the renderer asked for a snapshot,
+      //  so a guest's prediction and the host's copy of the same car could land a tick apart or not at all)
       if (gp) { var fx = gp.effects(c.id); o.visualYaw = num(fx.yaw, 0) + num(fx.slide, 0); o.hop = num(fx.hop, 0); o.boostKind = fx.boostKind; o.boosting = o.boosting || !!fx.boostKind; o.shielded = !!fx.shielded; }
       else o.visualYaw = c.spinT > 0 ? Math.PI * 2 * (1 - c.spinT / c.spinDur) : 0;
       var hd = callHooks('snapshot', [c, api]);
@@ -563,7 +595,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       var cars = sess.cars.map(function (c) {
         var o = {};
         for (var k in c) {
-          if (k === 'ctx' || k === 'input' || k === 'state' || k === 'params' || k === 'build') continue;
+          if (k === 'ctx' || k === 'input' || k === 'state' || k === 'params' || k === 'build' || k === '_pp') continue;
           if (k === 'drive') { o.drive = driveState(c.drive); continue; }
           if (k === 'ai' || k === 'drive' || k === 'lastCp' || k === 'lapTimes' || k === 'inputState' || k === 'feat') o[k] = JSON.parse(JSON.stringify(c[k])); else if (typeof c[k] !== 'function' && k !== 'events') o[k] = c[k]; }
         return o;
@@ -609,6 +641,17 @@ CB.arcade.stunt = CB.arcade.stunt || {};
     session.end = function () { if (sess.phase !== 'finished') { sess.phase = 'finished'; sess.flagT = sess.t; sess.endT = sess.t; updatePositions(); } };
     session.resetPlayerToTrack = function () { if (sess.player) P.startRespawn(sess.player, {}, 'manual'); };
     session.simulate = function (seconds, input) { var n = Math.round(num(seconds, 1) / STEP), done = 0; while (done < n) done += update(Math.min(n - done, MAX_SUB) * STEP, typeof input === 'function' ? input(session) : input); return done; };
+    /** netarcade client re-prediction: one bare physics substep of `car` (drive model + stunt physics with the player
+        helpers and the car's current gameplay effects; no hooks, features, timing or events). */
+    session.netPredict = function (car, input) {
+      var c = carById(car);
+      if (!c) return null;
+      var fx = gp ? gp.effects(c.id) : null;
+      P.step(c, { track: track, dt: STEP, drive: driveModel, input: input || {}, fx: fx, help: 'player', jumpAssist: cfg.jumpAssist !== false,
+                  respawnPoint: respawnPoint, paceMult: 1, latMult: 1 });
+      c.events = null;
+      return c;
+    };
     session.time = function () { return sess.t; };
     session.getPhase = function () { return sess.phase; };
     session.alpha = function () { return clamp01(sess.acc / STEP); };

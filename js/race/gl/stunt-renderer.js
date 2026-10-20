@@ -691,9 +691,14 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         var cur = { pos: c.pos || [c.x, 0, -c.y], fwd: c.fwd || [Math.cos(c.heading), 0, -Math.sin(c.heading)], up: c.up || [0, 1, 0] };
         var a = clamp01(num(alpha, num(snap.alpha, 1)));
         var p = cur;
+        if (c.prevPos && c.pos) {
+          // the session's pose before its last substep (stunt-session capturePrevPoses): prev -> current by alpha is the car
+          // exactly on the clock however many substeps this frame ran (a teleport arrives with prevPos = pos)
+          p = { pos: lerp3(c.prevPos, cur.pos, a), fwd: norm(lerp3(c.prevFwd || cur.fwd, cur.fwd, a)), up: norm(lerp3(c.prevUp || cur.up, cur.up, a)) };
+        }
         if (e.prev && e.prevT !== snap.t) {
           var jump = Math.hypot(cur.pos[0] - e.prev.pos[0], cur.pos[1] - e.prev.pos[1], cur.pos[2] - e.prev.pos[2]);
-          if (jump < 12) p = { pos: lerp3(e.prev.pos, cur.pos, a), fwd: norm(lerp3(e.prev.fwd, cur.fwd, a)), up: norm(lerp3(e.prev.up, cur.up, a)) };
+          if (jump < 12) { if (!c.prevPos) p = { pos: lerp3(e.prev.pos, cur.pos, a), fwd: norm(lerp3(e.prev.fwd, cur.fwd, a)), up: norm(lerp3(e.prev.up, cur.up, a)) }; }
           else if (c.isPlayer || c.id === snap.playerId) { R.rig.init = false; R.fpUp = null; R.camCut = true; }   // warp / respawn: cut, no swing
         }
         if (e.prevT !== snap.t) { e.prev = cur; e.prevT = snap.t; }

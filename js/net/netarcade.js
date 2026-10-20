@@ -22,8 +22,10 @@
            {role:'follower'}): no rolls, no hits — the host's pack / events bring those in; only the own car's
            self-caused effects are predicted (nitro burn, powerslide turbo, landings, pads / rings).
            Reconciliation: the host reports the car's state after tick N and its D; the client compares it with its
-           own history at tick N − D and blends the difference into the car (~0.12 s), snapping when it is large
-           (or the ground / air mode disagrees).
+           own history at tick N − E and blends the difference into the car. Stunt: in track space on the road,
+           world space in the air, phase mismatches (launch / landing a few ticks apart) deferred, rare snaps
+           re-predicted to now and drawn through a decaying visual offset; puppets interpolated in track space
+           (ballistic in the air, warps as teleports). docs/ARCADE-SPEC.md §6 Reconciliation.
      Disconnects: a player who leaves is turned into an AI car (the host's AI drives it to the flag, marked AI).
      Bandwidth (8 cars): ~0.6 KB per snapshot -> ~12 KB/s down per client at 20 Hz; inputs ~1.5 KB/s up.
 
@@ -58,6 +60,7 @@ CB.net = CB.net || {};
                    relaySnapHz: 5, relayInputHz: 10, relayMaxD: 96, relayInterp: [0.3, 1.0] };
   var PHASES = ['grid', 'countdown', 'racing', 'finished'];
   var MAX_EXTRAP = 0.35;   // s a puppet may run on past the newest host snapshot
+  var MAX_EXTRAP_RELAY = 0.7;   // server relay (bursty, ~5 Hz): stunt puppets carry on along the road / their flight
   var GRADES = [0, 'none', 'good', 'perfect', 'over'];
   // gameplay events the client already predicts for its own car (never doubled from the host)
   var OWN_PREDICTED = { nitroStart: 1, nitroEnd: 1, driftStart: 1, driftTier: 1, driftEnd: 1, landing: 1, start: 1 };
@@ -158,7 +161,7 @@ CB.net = CB.net || {};
   function inputOf(qv) { return { steer: qv[0] / 127, throttle: qv[1] / 255, brake: qv[2] / 255, handbrake: !!(qv[3] & FB.handbrake) }; }
 
   /** Host-side input buffer of one remote player: tick-stamped changes, replayed at tick n − D. */
-  function InputBuffer() { this.maxD = DEFAULTS.maxD; this.inHz = DEFAULTS.inputHz; this.ch = []; this.known = -1; this.late = null; this.jit = 0; this.D = 8; this.target = 8; this.starved = 0; this.received = 0; this.lastArrival = -1e9; }
+  function InputBuffer() { this.maxD = DEFAULTS.maxD; this.inHz = DEFAULTS.inputHz; this.ch = []; this.known = -1; this.late = null; this.jit = 0; this.D = 8; this.E = null; this.lastAdj = 0; this.target = 8; this.starved = 0; this.received = 0; this.lastArrival = -1e9; }
   /** a: [[tick, steer, thr, brk, flags, itemSeq, grade], ...]; n: newest tick the client recorded; nowTick: host tick */
   InputBuffer.prototype.push = function (a, n, nowTick, nowS) {
     if (!isNum(n) || n <= this.known) return false;
@@ -223,13 +226,87 @@ CB.net = CB.net || {};
     return { x: a[1] / 100, y: a[2] / 100, h: a[3] / 1000, vx: a[4] / 100, vy: a[5] / 100, w: a[6] / 1000, rpm: a[7] * 10, gear: a[8],
              steer: a[9] / 1000, thr: a[10] / 100, brk: a[11] / 100, finished: !!(a[12] & 1), handbrake: !!(a[12] & 2), skid: !!(a[12] & 4) };
   }
-  function interpStunt(a, b, u, L) {
-    if (a.mode !== 'ground' || b.mode !== 'ground') return u < 0.5 ? a : b;
-    var o = assign({}, b);
-    o.dist = lerp(a.dist, b.dist, u); o.s = wrapS(a.s + wrapD(b.s - a.s, L) * u, L); o.lat = lerp(a.lat, b.lat, u);
-    o.psi = a.psi + wrapAngle(b.psi - a.psi) * u; o.v = lerp(a.v, b.v, u); o.rpm = lerp(a.rpm, b.rpm, u);
-    o.steerAngle = lerp(a.steerAngle, b.steerAngle, u); o.throttle = lerp(a.throttle, b.throttle, u); o.fade = lerp(a.fade, b.fade, u);
-    return o;
+  /* ---- stunt puppets: interpolation in TRACK space (loops / tubes / inversions follow the road, no chords or flips),
+          ballistic Hermite in the air, warps / respawn swaps as discontinuities (the car is shown on one side or the
+          other, never slid across the world) ---- */
+  function SP() { return CB.arcade && CB.arcade.stunt && CB.arcade.stunt.physics; }
+  function gAir() { var P = SP(); return P && isNum(P.G_AIR) ? P.G_AIR : 14.2; }
+  function herm(p0, m0, p1, m1, u) { var u2 = u * u, u3 = u2 * u; return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1; }
+  function isAirRow(o) { return !!(o && o.air && (o.mode === 'air' || o.mode === 'respawn')); }
+  /** rate of s (m/s) of a ground row: v·cos ψ / (1 − κ·lat), as stunt-physics integrates it */
+  function sdotOf(o, tr) {
+    var k = 0;
+    if (tr && typeof tr.sample === 'function') { var sm = tr.sample(o.s); k = num(sm && sm.kLeft, 0); }
+    return o.v * Math.cos(o.psi) / Math.max(0.35, 1 - k * o.lat);
+  }
+  /** world pose + velocity of an unpacked row (air: its flight state, ground: the road frame at s / lat / ψ) */
+  function worldOf(o, tr) {
+    if (isAirRow(o)) { var A = o.air; return { pos: [A.px, A.py, A.pz], vel: [A.vx, A.vy, A.vz], fwd: [A.fx, A.fy, A.fz], up: [A.ux, A.uy, A.uz], air: true }; }
+    var P = SP();
+    var ps = P ? P.pose(tr, { mode: 'ground', s: o.s, lat: o.lat, psi: o.psi }) : { pos: [0, 0, 0], fwd: [1, 0, 0], up: [0, 1, 0] };
+    return { pos: ps.pos.slice(), vel: [ps.fwd[0] * o.v, ps.fwd[1] * o.v, ps.fwd[2] * o.v], fwd: ps.fwd.slice(), up: ps.up.slice(), air: false };
+  }
+  function nrm3(a) { var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+  function nlerp3(a, b, u) { return nrm3([lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)]); }
+  function airFrom(w, takeoffS, airT) {
+    return { px: w.pos[0], py: w.pos[1], pz: w.pos[2], vx: w.vel[0], vy: w.vel[1], vz: w.vel[2], fx: w.fwd[0], fy: w.fwd[1], fz: w.fwd[2],
+             ux: w.up[0], uy: w.up[1], uz: w.up[2], airT: airT, takeoffS: takeoffS };
+  }
+  /** carry a row `tau` s forwards (tau < 0: backwards) along its own motion: ground in track space, air ballistic */
+  function carryRow(o, tau, L, tr) {
+    var r = assign({}, o);
+    if (isAirRow(o)) {
+      var A = assign({}, o.air), g = gAir();
+      A.px += A.vx * tau; A.pz += A.vz * tau; A.py += A.vy * tau - 0.5 * g * tau * tau; A.vy -= g * tau;
+      r.air = A;
+      return r;
+    }
+    var ds = (tr ? sdotOf(o, tr) : o.v * Math.cos(o.psi)) * tau;
+    r.s = wrapS(o.s + ds, L); r.dist = o.dist + ds; r.lat = o.lat + o.v * Math.sin(o.psi) * tau;
+    return r;
+  }
+  /** a: older row, b: newer row, u 0..1, L track length; dt (s between the rows) + tr (built track) enable the
+      Hermite / track-space / air paths (without them: plain linear ground interpolation, as before) */
+  function interpStunt(a, b, u, L, dt, tr) {
+    var smooth = isNum(dt) && dt > 0 && dt < 1.5 && tr && typeof tr.sample === 'function';
+    var aAir = isAirRow(a), bAir = isAirRow(b);
+    if (!aAir && !bAir) {
+      var o = assign({}, u < 0.5 ? a : b), ds = wrapD(b.s - a.s, L);
+      o.dist = lerp(a.dist, b.dist, u); o.s = wrapS(a.s + ds * u, L); o.lat = lerp(a.lat, b.lat, u);
+      if (smooth) {
+        var sa = sdotOf(a, tr), sb = sdotOf(b, tr), exp = 0.5 * (sa + sb) * dt;
+        // a respawn swap (s jumps back to a checkpoint) is a discontinuity: show one side, never slide along the road
+        if (Math.abs(ds - exp) > Math.max(20, 0.6 * Math.abs(exp))) return assign({}, u < 0.5 ? a : b);
+        if (Math.abs(ds - exp) < Math.max(2, 0.15 * Math.abs(ds))) {
+          var dS = herm(0, sa * dt, ds, sb * dt, u);
+          o.s = wrapS(a.s + dS, L); o.dist = a.dist + dS;
+          o.lat = herm(a.lat, a.v * Math.sin(a.psi) * dt, b.lat, b.v * Math.sin(b.psi) * dt, u);
+        }
+      }
+      o.psi = a.psi + wrapAngle(b.psi - a.psi) * u; o.v = lerp(a.v, b.v, u); o.rpm = lerp(a.rpm, b.rpm, u);
+      o.steerAngle = lerp(a.steerAngle, b.steerAngle, u); o.throttle = lerp(a.throttle, b.throttle, u); o.fade = lerp(a.fade, b.fade, u);
+      return o;
+    }
+    if (!smooth) return u < 0.5 ? a : b;
+    // at least one end in the air: world space (free flight), ground ends converted through the road frame
+    var wa = worldOf(a, tr), wb = worldOf(b, tr);
+    var miss = Math.hypot(wb.pos[0] - wa.pos[0] - 0.5 * (wa.vel[0] + wb.vel[0]) * dt, wb.pos[1] - wa.pos[1] - 0.5 * (wa.vel[1] + wb.vel[1]) * dt,
+                          wb.pos[2] - wa.pos[2] - 0.5 * (wa.vel[2] + wb.vel[2]) * dt);
+    if (miss > 20) {   // warp portal (or respawn) between the rows: the car is shown on one side, carried along its own motion
+      var uw = 0.5, dsAB = wrapD(b.s - a.s, L), W = tr.warps || [];
+      for (var i = 0; i < W.length; i++) { var dw = wrapD(W[i].s - a.s, L); if (dsAB > 0.5 && dw >= 0 && dw <= dsAB) { uw = clamp(dw / dsAB, 0, 1); break; } }
+      return u < uw ? carryRow(a, u * dt, L, tr) : carryRow(b, -(1 - u) * dt, L, tr);
+    }
+    var pos = [0, 1, 2].map(function (k) { return herm(wa.pos[k], wa.vel[k] * dt, wb.pos[k], wb.vel[k] * dt, u); });
+    var vel = [0, 1, 2].map(function (k) { return lerp(wa.vel[k], wb.vel[k], u); });
+    var r = assign({}, u < 0.5 ? a : b);
+    var src = aAir ? a.air : b.air;
+    r.mode = 'air'; r.inAir = true;
+    r.air = airFrom({ pos: pos, vel: vel, fwd: nlerp3(wa.fwd, wb.fwd, u), up: nlerp3(wa.up, wb.up, u) }, src.takeoffS, lerp(aAir ? a.air.airT : 0, bAir ? b.air.airT : src.airT, u));
+    var ds2 = wrapD(b.s - a.s, L);
+    r.s = wrapS(a.s + ds2 * u, L); r.dist = lerp(a.dist, b.dist, u); r.lat = lerp(a.lat, b.lat, u);
+    r.v = Math.hypot(vel[0], vel[1], vel[2]); r.rpm = lerp(a.rpm, b.rpm, u); r.throttle = lerp(a.throttle, b.throttle, u); r.fade = lerp(a.fade, b.fade, u);
+    return r;
   }
   function interpCircuit(a, b, u, dt) {
     var o = assign({}, b), dh = wrapAngle(b.h - a.h);
@@ -261,7 +338,7 @@ CB.net = CB.net || {};
     var inbufs = {}, gone = {}, evQueue = [], lastSnapT = -1e9, lastStT = -1e9, lastEvT = -1e9, snapCount = 0, firstFinishT = null;
     // client
     var snaps = [], snapLate = null, snapJit = 0, snapDry = 0, interpDelay = 0.12, interpTarget = null, hist = {}, histKeys = [], changes = [], lastQ = null, itemSeq = 0, prevItem = false;
-    var myGrade = 0, ackTick = -1, lastInSendT = -1e9, pendingCorr = null, mismatchN = 0, lastAckN = -1, lastSnapN = -1;
+    var myGrade = 0, ackTick = -1, lastInSendT = -1e9, pendingCorr = null, lastAckN = -1, lastSnapN = -1;
 
     /* ---------------- clocks ---------------- */
     function hostNow() { if (isHost) return link.now(); return link.now() + (clockOff !== null ? clockOff : (roughOff !== null ? roughOff : 0)); }
@@ -302,7 +379,7 @@ CB.net = CB.net || {};
         assists: { abs: true, tc: true, autoShift: true, racingLine: false, steeringAssist: false },
         steerAssist: 'off', arcade: jclone(sc.arcade) || {},   // one arcade handling model for everyone (no assist layer)
         hooks: hooks, persistGhost: false, storage: storage, stuckDnf_s: 0, finishTimeout_s: 1e7, rubberBanding: false, field: 'mixed',
-        lightsOutDelay_s: sc.lightsOutDelay_s, trackLimitsWarnings: 99, playerAutopilot: autopilot
+        lightsOutDelay_s: sc.lightsOutDelay_s, trackLimitsWarnings: 99, playerAutopilot: autopilot, netPlayer: !isHost
       };
       var M = CB.arcade && CB.arcade.mode;
       if (!M || typeof M.createSession !== 'function') throw new Error('CB.net.arcade: CB.arcade.mode is not loaded');
@@ -381,10 +458,38 @@ CB.net = CB.net || {};
       if (car.isPlayer === false && car.ctx && car === carsByLocal[car.id]) buf.adapt(tick);
       // stunt hazards (stunt-features.js) run on the car's own race clock: this copy drives the player's input of tick
       // n − D, so it meets every pendulum / piston phase exactly as the player's own prediction did at tick n − D
-      car.clockOffset = buf.D * STEP;
-      if (ph === 'grid' || ph === 'countdown' || goTick === null) return inp;
-      var m = tick - buf.D;
-      if (m < goTick) return holdInput(car);        // held until GO + D: the same start the player saw
+      var m;
+      if (kind === 'stunt') {
+        // stunt: ONE recorded input per physics step, always (E = tick - input index). D only steers E: a car that needs a
+        // larger delay skips its step for one tick (E + 1), one that may have a smaller delay steps twice in a tick (E − 1,
+        // stunt-session car.netSteps). So the host's copy is EXACTLY the player's own prediction shifted by E — no
+        // dropped / doubled input ticks at every D change (those were 1-tick = 0.4 m errors, corrected every 0.25 s,
+        // and they nudged launches / landings at ramps a tick apart).
+        if (car.netRep === 1 && buf.E !== null) buf.E--;
+        var e0 = buf.E !== null ? buf.E : buf.D;
+        car.clockOffset = e0 * STEP;
+        if (ph === 'grid' || ph === 'countdown' || goTick === null) return inp;
+        if (buf.E === null) { if (tick - buf.D < goTick) return holdInput(car); buf.E = buf.D; buf.lastAdj = tick; }
+        m = tick - buf.E;
+        car.clockOffset = buf.E * STEP;
+        if (car.netRep !== 1 && tick - buf.lastAdj >= 3) {
+          // (the drawn car on the host glides over the held / doubled step: visual offset of one step of travel)
+          var step1 = car.mode === 'ground' ? [num(car.v, 0) * Math.cos(num(car.psi, 0)) * STEP, 0] : null;
+          var step1w = car.mode === 'air' ? [num(car.vx, 0) * STEP, num(car.vy, 0) * STEP, num(car.vz, 0) * STEP] : null;
+          if (buf.D > buf.E) {                                                                // next tick: hold
+            car.netSteps = 0; buf.E++; buf.lastAdj = tick;
+            visQueue.push({ tick: tick + 1, w: step1w, t: step1, id: car.id });
+          } else if (buf.D < buf.E - 1 && tick - buf.lastAdj >= 60) {                         // next tick: catch up
+            car.netSteps = 2; buf.lastAdj = tick;
+            visQueue.push({ tick: tick + 1, w: step1w && [-step1w[0], -step1w[1], -step1w[2]], t: step1 && [-step1[0], 0], id: car.id });
+          }
+        }
+      } else {
+        car.clockOffset = buf.D * STEP;
+        if (ph === 'grid' || ph === 'countdown' || goTick === null) return inp;
+        m = tick - buf.D;
+        if (m < goTick) return holdInput(car);        // held until GO + D: the same start the player saw
+      }
       var rec = buf.at(m);
       if (!rec) return holdInput(car);
       if (gp) {
@@ -401,7 +506,7 @@ CB.net = CB.net || {};
     function stateRec(car) {
       if (kind === 'stunt') {
         var o = { mode: car.mode, s: car.s, dist: car.dist, lat: car.lat, psi: car.psi, v: car.v };
-        if (car.mode === 'air') { o.px = car.px; o.py = car.py; o.pz = car.pz; o.vx = car.vx; o.vy = car.vy; o.vz = car.vz; }
+        if (car.mode === 'air' || (car.mode === 'respawn' && car._air)) { o.px = car.px; o.py = car.py; o.pz = car.pz; o.vx = car.vx; o.vy = car.vy; o.vz = car.vz; }
         return o;
       }
       var st = car.state;
@@ -409,16 +514,17 @@ CB.net = CB.net || {};
     }
     function addCorr(o, c, k) {
       if (!c) return o;
-      if (kind === 'stunt') { o.s = wrapS(o.s + c.s * k, L); o.dist += c.s * k; o.lat += c.lat * k; o.psi += c.psi * k; o.v += c.v * k; return o; }
+      if (kind === 'stunt') { if (o.mode !== 'ground') return o; o.s = wrapS(o.s + c.s * k, L); o.dist += c.s * k; o.lat += c.lat * k; o.psi += c.psi * k; o.v += c.v * k; return o; }
       o.x += c.x * k; o.y += c.y * k; o.h += c.h * k; o.vx += c.vx * k; o.vy += c.vy * k; o.w += c.w * k; return o;
     }
     function clientRecord(car, inp, tick, ph) {
+      // a ground correction still being blended when the car leaves the road: applied at once (world offset in the air),
+      // the drawn car keeps its place through the visual offset
+      if (kind === 'stunt' && pendingCorr && car.mode !== 'ground') foldPendingCorr(car);
       // the state at the start of this tick == the state after tick-1 (incl. the pending correction still being blended)
-      if (pendingCorr === null || (kind === 'stunt' ? car.mode === 'ground' : true)) {
-        var rec = addCorr(stateRec(car), pendingCorr, 1);
-        hist[tick - 1] = rec; histKeys.push(tick - 1);
-        if (histKeys.length > 360) delete hist[histKeys.shift()];
-      }
+      var rec = addCorr(stateRec(car), pendingCorr, 1);
+      hist[tick - 1] = rec; histKeys.push(tick - 1);
+      if (histKeys.length > 360) delete hist[histKeys.shift()];
       applyPendingCorr(car);
       var btn = myButtons();
       var press = !!btn.item && !prevItem;
@@ -426,6 +532,7 @@ CB.net = CB.net || {};
       if (press) itemSeq++;
       if (!myGrade && gp) { var K = gp.kart('player'); if (K && K.startGrade) myGrade = Math.max(1, GRADES.indexOf(K.startGrade)); }
       var qv = quantInput(inp, btn);
+      rec.nin = qv;   // the input of tick `tick` (re-prediction after a snap)
       var chg = !lastQ || qv[0] !== lastQ[0] || qv[1] !== lastQ[1] || qv[2] !== lastQ[2] || qv[3] !== lastQ[3] || itemSeq !== lastQ[4] || myGrade !== lastQ[5];
       if (chg) { changes.push([tick, qv[0], qv[1], qv[2], qv[3], itemSeq, myGrade]); lastQ = [qv[0], qv[1], qv[2], qv[3], itemSeq, myGrade]; if (changes.length > 400) changes.splice(0, changes.length - 300); }
       if (ph === 'grid' || ph === 'countdown') return inp;   // the session holds the car; rev gauge reads the pedal
@@ -434,7 +541,7 @@ CB.net = CB.net || {};
     }
     function applyPendingCorr(car) {
       if (!pendingCorr) return;
-      var k = 1 - Math.exp(-STEP / 0.12), c = pendingCorr;
+      var k = 1 - Math.exp(-STEP / pendTau), c = pendingCorr;
       if (kind === 'stunt') {
         if (car.mode !== 'ground') return;
         car.s = wrapS(car.s + c.s * k, L); car.dist += c.s * k; car.lat += c.lat * k; car.psi += c.psi * k; car.v += c.v * k;
@@ -448,40 +555,166 @@ CB.net = CB.net || {};
       for (var key in c) { c[key] *= 1 - k; if (Math.abs(c[key]) > 1e-4) done = false; }
       if (done) pendingCorr = null;
     }
-    /** host state of my car after tick N (my history key N − D) -> correction */
+
+    /* ---- stunt own-car corrections in track space + phase-aware (docs/ARCADE-SPEC.md §6) ----
+       Errors are measured against the own history at the host's tick N − E (E = the delay the host's copy really runs at):
+         ground/ground  (s, lat, ψ, v) blended into the car (τ grows with the error: never > ~0.3 m per frame)
+         air/air        world position / velocity offset applied to the flight at once; the drawn car keeps its place
+                        (visual offset, decays) — once landed, the same error projected on the road (s, lat)
+         phase mismatch (one side launched / landed a few ticks earlier) is NOT corrected: the own sim converges within
+                        ~0.1–0.2 s; only a mismatch lasting PHASE_WAIT_S (or > 25 m) snaps — to the host state RE-PREDICTED
+                        forward to now with the recorded inputs, with the drawn car blended from where it was. */
+    var PHASE_WAIT_S = 0.4, SNAP_M = 14, DEAD_M = 0.02, pendTau = 0.12, mismatchSince = null;
+    var visQueue = [];   // host: offsets that start with a remote copy's held / doubled step (applied once that tick ran)
+    var visBy = {};   // per local car id: visual offset {w:[x,y,z] world, s / lat track, tau} — decays on the race clock
+    function TR() { return sim && sim.track; }
+    function worldPosOf(c) { var P = SP(), tr = TR(); return P && tr ? P.pose(tr, c).pos.slice() : [0, 0, 0]; }
+    function addVis(dw, track, id) {
+      id = id || 'player';
+      var vis = visBy[id] || (visBy[id] = { w: [0, 0, 0], s: 0, lat: 0, tau: 0.25, t: null });
+      if (track) { vis.s += track[0]; vis.lat += track[1]; }
+      if (dw) { vis.w[0] += dw[0]; vis.w[1] += dw[1]; vis.w[2] += dw[2]; }
+      var m = Math.hypot(vis.w[0], vis.w[1], vis.w[2]) + Math.hypot(vis.s, vis.lat);
+      if (m > 60) { delete visBy[id]; return; }   // a respawn / warp-sized jump: show it (the fade / portal covers it)
+      vis.tau = clamp(m / 15, 0.15, 1.5);         // ≤ ~0.3 m of visual catch-up per 60 Hz frame
+    }
+    function setPend(e) {
+      if (!pendingCorr) pendingCorr = {};
+      for (var k in e) pendingCorr[k] = (pendingCorr[k] || 0) + e[k];
+      pendTau = clamp(Math.hypot(pendingCorr.s || 0, pendingCorr.lat || 0) / 15, 0.12, 0.6);
+    }
+    function foldPendingCorr(car) {
+      var c = pendingCorr, tr = TR(); pendingCorr = null;
+      if (!c || !tr || car.mode !== 'air') return;
+      var sm = tr.sample(car.s), d = [0, 1, 2].map(function (k) { return sm.tangent[k] * c.s + sm.left[k] * c.lat; });
+      car.px += d[0]; car.py += d[1]; car.pz += d[2];
+      addVis([-d[0], -d[1], -d[2]]);
+    }
+    /** host state of my car after tick N (my history key N − E) -> correction */
     function reconcile(hostRow, N, D) {
       var me = carsByLocal.player;
       if (!me || !hostRow || me.finished) return;
-      var h = hist[N - D];
+      var k0 = N - D, h = hist[k0];
       if (!h) return;
       var e, mag;
-      if (kind === 'stunt') {
-        var hs = unpackStunt(hostRow);
-        if (hs.mode !== 'ground' || h.mode !== 'ground' || me.mode !== 'ground') {
-          var far = h.mode === hs.mode ? 0 : 1;
-          mismatchN = hs.mode !== h.mode ? mismatchN + 1 : 0;
-          if (far && (mismatchN >= 4 || Math.abs(hs.dist - h.dist) > 25)) hardSnap(hs);
-          return;
-        }
-        mismatchN = 0;
-        e = { s: wrapD(hs.s - h.s, L), lat: hs.lat - h.lat, psi: wrapAngle(hs.psi - h.psi), v: hs.v - h.v };
-        mag = Math.sqrt(e.s * e.s + e.lat * e.lat);
-      } else {
-        var hc = unpackCircuit(hostRow), c = Math.cos(hc.h), sn = Math.sin(hc.h);
-        var bvx = c * hc.vx + sn * hc.vy, bvy = -sn * hc.vx + c * hc.vy;
-        e = { x: hc.x - h.x, y: hc.y - h.y, h: wrapAngle(hc.h - h.h), vx: bvx - h.vx, vy: bvy - h.vy, w: hc.w - h.w };
-        mag = Math.sqrt(e.x * e.x + e.y * e.y);
-        if (mag > 14) { hardSnapCircuit(hc); return; }
-      }
-      if (kind === 'stunt' && mag > 14) { hardSnap(unpackStunt(hostRow)); return; }
+      if (kind === 'stunt') return reconcileStunt(me, unpackStunt(hostRow), h, k0);
+      var hc = unpackCircuit(hostRow), c = Math.cos(hc.h), sn = Math.sin(hc.h);
+      var bvx = c * hc.vx + sn * hc.vy, bvy = -sn * hc.vx + c * hc.vy;
+      e = { x: hc.x - h.x, y: hc.y - h.y, h: wrapAngle(hc.h - h.h), vx: bvx - h.vx, vy: bvy - h.vy, w: hc.w - h.w };
+      mag = Math.sqrt(e.x * e.x + e.y * e.y);
+      if (mag > 14) { hardSnapCircuit(hc); return; }
       if (mag > stats.maxErr) stats.maxErr = mag;
-      if (stats.errLog) stats.errLog.push([N, Math.round(mag * 1000) / 1000, JSON.stringify(e, function (k, v) { return typeof v === "number" ? Math.round(v * 1000) / 1000 : v; })]);
-      if (mag < 0.004 && Math.abs(kind === 'stunt' ? e.v : e.vx) < 0.01) return;
+      if (stats.errLog) stats.errLog.push([N, Math.round(mag * 1000) / 1000, 'c']);
+      if (mag < 0.004 && Math.abs(e.vx) < 0.01) return;
       stats.corrections++;
-      // the rest of the recorded trajectory moves with it (no double correction on the next snapshot)
-      for (var i = 0; i < histKeys.length; i++) if (histKeys[i] > N - D) addCorr(hist[histKeys[i]], e, 1);
+      for (var i = 0; i < histKeys.length; i++) if (histKeys[i] > k0) addCorr(hist[histKeys[i]], e, 1);
       if (!pendingCorr) pendingCorr = {};
       for (var k in e) pendingCorr[k] = (pendingCorr[k] || 0) + e[k];
+    }
+    function reconcileStunt(me, hs, h, k0) {
+      var hAir = hs.mode === 'air' || (hs.mode === 'respawn' && !!hs.air), mAir = !!(h.mode === 'air' || (h.mode === 'respawn' && isNum(h.px)));
+      if (hs.mode !== h.mode) {
+        // launch / landing / respawn timing differs: let the own sim converge, snap only if it does not
+        stats.phaseMismatch = (stats.phaseMismatch || 0) + 1;
+        if (mismatchSince === null) mismatchSince = k0;
+        if ((k0 - mismatchSince) * STEP >= PHASE_WAIT_S || Math.abs(hs.dist - h.dist) > 25) snapStunt(me, hs, k0, 'phase');
+        if (stats.errLog) stats.errLog.push([k0, -1, h.mode + '/' + hs.mode]);
+        return;
+      }
+      mismatchSince = null;
+      if (hs.mode === 'respawn') return;   // fading / swapping: nothing to blend
+      var tr = TR();
+      if (hAir && mAir && tr) {
+        var A = hs.air, ew = [A.px - h.px, A.py - h.py, A.pz - h.pz], ev = [A.vx - h.vx, A.vy - h.vy, A.vz - h.vz];
+        var em = Math.hypot(ew[0], ew[1], ew[2]);
+        if (stats.errLog) stats.errLog.push([k0, r3(em), 'air']);
+        if (em > stats.maxErr) stats.maxErr = em;
+        if (em > SNAP_M) { snapStunt(me, hs, k0, 'air'); return; }
+        if (em < DEAD_M && Math.hypot(ev[0], ev[1], ev[2]) < 0.05) return;
+        stats.corrections++; stats.airCorrections = (stats.airCorrections || 0) + 1;
+        for (var i = 0; i < histKeys.length; i++) {
+          var r = hist[histKeys[i]];
+          if (histKeys[i] <= k0 || !r) continue;
+          if (isNum(r.px)) { r.px += ew[0]; r.py += ew[1]; r.pz += ew[2]; r.vx += ev[0]; r.vy += ev[1]; r.vz += ev[2]; }
+          else if (r.mode === 'ground') { var sm0 = tr.sample(r.s); r.s = wrapS(r.s + dot3(ew, sm0.tangent), L); r.dist += dot3(ew, sm0.tangent); r.lat += dot3(ew, sm0.left); }
+        }
+        if (me.mode === 'air') {
+          me.px += ew[0]; me.py += ew[1]; me.pz += ew[2]; me.vx += ev[0]; me.vy += ev[1]; me.vz += ev[2];
+          addVis([-ew[0], -ew[1], -ew[2]]);
+        } else if (me.mode === 'ground') {   // landed since: the same error along the road
+          var sm = tr.sample(me.s);
+          setPend({ s: dot3(ew, sm.tangent), lat: dot3(ew, sm.left), psi: 0, v: 0 });
+        }
+        return;
+      }
+      if (hAir || mAir) return;   // respawn-in-air rows etc.
+      var e = { s: wrapD(hs.s - h.s, L), lat: hs.lat - h.lat, psi: wrapAngle(hs.psi - h.psi), v: hs.v - h.v };
+      var mag = Math.sqrt(e.s * e.s + e.lat * e.lat);
+      if (stats.errLog) stats.errLog.push([k0, r3(mag), 'g']);
+      if (mag > stats.maxErr) stats.maxErr = mag;
+      if (mag > SNAP_M) { snapStunt(me, hs, k0, 'far'); return; }
+      // dead band (the snapshot is quantised to 1 cm): a guest that never perturbs its own prediction stays bit-identical
+      // to the host's copy, so both meet every ramp lip / crest / landing on the same tick
+      if (mag < DEAD_M && Math.abs(e.v) < 0.03 && Math.abs(e.psi) < 0.003) return;
+      stats.corrections++;
+      // the rest of the recorded trajectory moves with it (no double correction on the next snapshot)
+      for (var j = 0; j < histKeys.length; j++) if (histKeys[j] > k0) addCorr(hist[histKeys[j]], e, 1);
+      if (me.mode === 'ground') setPend(e);
+      else if (me.mode === 'air' && tr) {   // took off since: shift the flight, keep the drawn car in place
+        var sa = tr.sample(me.s), d = [0, 1, 2].map(function (k) { return sa.tangent[k] * e.s + sa.left[k] * e.lat; });
+        me.px += d[0]; me.py += d[1]; me.pz += d[2];
+        addVis([-d[0], -d[1], -d[2]]);
+      }
+    }
+    function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    /** Snap the own car to the host's state at my tick k0 and RE-PREDICT it forward to now with my recorded inputs (the
+        host state is E ticks old: setting it directly put the car up to ~40 m back on a relay link). The drawn car is
+        blended from where it was (visual offset). */
+    function snapStunt(me, hs, k0, why) {
+      var tr = TR(), before = worldPosOf(me), beforeG = me.mode === 'ground' ? { s: me.s, lat: me.lat } : null;
+      stats.snaps++; stats.snapWhy = stats.snapWhy || {}; stats.snapWhy[why] = (stats.snapWhy[why] || 0) + 1;
+      pendingCorr = null; mismatchSince = null;
+      me.lane = 0; me.latV = 0;
+      me.mode = hs.mode; me.s = hs.s; me.dist = hs.dist; me.lat = hs.lat; me.psi = hs.psi; me.v = hs.v; me.fade = hs.fade;
+      if (hs.air) { assign(me, hs.air); me._air = hs.inAir || hs.mode === 'air'; } else me._air = false;
+      if (me.mode === 'respawn' && !(me.respawnT > 0)) me.respawnT = 0.5;
+      if (hs.air) { me.airS = me.s; me.prevH = 1; me.airHd = null; me.takeoffDist = me.dist - wrapD(me.s - num(hs.air.takeoffS, me.s), L); }
+      // re-predict k0+1 .. now
+      var keys = histKeys.filter(function (k) { return k >= k0; }), n = 0;
+      var canPredict = sim && typeof sim.netPredict === 'function';
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i], r = hist[k];
+        if (k > k0 && canPredict) {
+          var prev = hist[k - 1];
+          if (prev && prev.nin && me.mode !== 'respawn') { sim.netPredict(me, inputOf(prev.nin)); n++; }
+          else if (me.mode === 'respawn') { me.respawnT += STEP; }
+        }
+        var nr = stateRec(me); nr.nin = r && r.nin; hist[k] = nr;
+      }
+      var after = worldPosOf(me);
+      if (beforeG && me.mode === 'ground' && Math.abs(wrapD(beforeG.s - me.s, L)) < 30) addVis(null, [wrapD(beforeG.s - me.s, L), beforeG.lat - me.lat]);
+      else addVis([before[0] - after[0], before[1] - after[1], before[2] - after[2]]);
+      stats.repredicted = (stats.repredicted || 0) + n;
+    }
+    /** a car's visual offset applied to its snapshot entry (decays on the race clock): the own car after a correction /
+        snap (client), a remote player's copy after a hold / double step (host) */
+    function applyVis(c, id, car) {
+      var vis = visBy[id];
+      if (!vis) return;
+      var now = sim ? sim.time() + (typeof sim.alpha === 'function' ? num(safe(function () { return sim.alpha(); }, 0), 0) * STEP : 0) : 0;
+      var dt = vis.t === null ? 0 : clamp(now - vis.t, 0, 0.5); vis.t = now;
+      var kd = Math.exp(-dt / vis.tau);
+      vis.w[0] *= kd; vis.w[1] *= kd; vis.w[2] *= kd; vis.s *= kd; vis.lat *= kd;
+      var dw = vis.w.slice(), P = SP(), tr = TR();
+      if ((vis.s || vis.lat) && P && tr && car && car.mode === 'ground') {
+        var base = P.pose(tr, { mode: 'ground', s: car.s, lat: car.lat, psi: 0 }).pos, moved = P.pose(tr, { mode: 'ground', s: car.s + vis.s, lat: car.lat + vis.lat, psi: 0 }).pos;
+        dw[0] += moved[0] - base[0]; dw[1] += moved[1] - base[1]; dw[2] += moved[2] - base[2];
+      } else if (vis.s || vis.lat) { vis.s = 0; vis.lat = 0; }
+      if (Math.hypot(vis.w[0], vis.w[1], vis.w[2]) + Math.hypot(vis.s, vis.lat) < 1e-3) { delete visBy[id]; return; }
+      if (c.pos) { c.pos = [c.pos[0] + dw[0], c.pos[1] + dw[1], c.pos[2] + dw[2]]; }
+      if (c.prevPos) { c.prevPos = [c.prevPos[0] + dw[0], c.prevPos[1] + dw[1], c.prevPos[2] + dw[2]]; }
+      if (isNum(c.x)) { c.x += dw[0]; c.y -= dw[2]; }
+      if (isNum(c.prevX)) { c.prevX += dw[0]; c.prevY -= dw[2]; }
     }
     /** split lanes (stunt-features.js): a correction that moves the car across a divider re-latches its lane there
         (the lane is not part of the snapshot row; the physics latches it again from the corrected side) */
@@ -490,14 +723,6 @@ CB.net = CB.net || {};
       if (!P || typeof P.splitInfo !== 'function' || !tr || !tr.splits || !tr.splits.length) return;
       var si = P.splitInfo(tr, car.s);
       if (!si || (car.lat - si.sp.div) * car.lane < 0) car.lane = 0;
-    }
-    function hardSnap(hs) {
-      var me = carsByLocal.player; if (!me) return;
-      me.lane = 0; me.latV = 0;
-      stats.snaps++; pendingCorr = null; hist = {}; histKeys = []; mismatchN = 0;
-      me.mode = hs.mode; me.s = hs.s; me.dist = hs.dist; me.lat = hs.lat; me.psi = hs.psi; me.v = hs.v; me.fade = hs.fade;
-      if (hs.air) { assign(me, hs.air); me._air = hs.inAir || hs.mode === 'air'; }
-      if (me.mode === 'respawn' && !(me.respawnT > 0)) me.respawnT = 0.5;
     }
     function hardSnapCircuit(hc) {
       var me = carsByLocal.player; if (!me) return;
@@ -516,7 +741,7 @@ CB.net = CB.net || {};
       var a = snaps[i], b = snaps[Math.min(n - 1, i + 1)];
       // the playhead ran past the newest snapshot (a late burst): carry the cars on along their velocity for a moment
       // instead of freezing them and jumping when the next snapshot lands
-      if (a === b && tRender > a.t) return { a: a, b: a, u: 0, ext: Math.min(tRender - a.t, MAX_EXTRAP) };
+      if (a === b && tRender > a.t) return { a: a, b: a, u: 0, ext: Math.min(tRender - a.t, kind === 'stunt' && link.mode() === 'relay' ? MAX_EXTRAP_RELAY : MAX_EXTRAP) };
       if (tRender <= a.t || a === b) return { a: a, b: a, u: 0 };
       return { a: a, b: b, u: clamp((tRender - a.t) / Math.max(1e-6, b.t - a.t), 0, 1) };
     }
@@ -534,18 +759,77 @@ CB.net = CB.net || {};
     function posePuppetStunt(c) {
       var p = puppetSample(c);
       if (!p) { c.v = 0; return; }
-      var a = unpackStunt(p.a), b = unpackStunt(p.b), o = interpStunt(a, b, p.u, L);
-      if (p.ext > 0 && o.mode === 'ground') { var ds = o.v * Math.cos(o.psi) * p.ext; o = assign({}, o); o.s = wrapS(o.s + ds, L); o.dist += ds; }
+      var tr = sim && sim.track;
+      var a = unpackStunt(p.a), b = unpackStunt(p.b), o = interpStunt(a, b, p.u, L, p.dt, tr);
+      if (p.ext > 0) o = carryRow(o, p.ext, L, tr);   // ran past the newest snapshot: carry on along its motion (ballistic in the air)
+      o = smoothPuppet(c, o, tr);
       c.mode = o.mode; c.s = o.s; c.dist = o.dist; c.lat = o.lat; c.psi = o.psi; c.v = o.v; c.rpm = o.rpm; c.gear = o.gear; c.steerAngle = o.steerAngle;
       c.throttle = o.throttle; c.fade = o.fade; c.nitroOn = o.nitroOn; c.boostT = o.boosting ? 0.05 : 0; c.finished = o.finished;
       // hazard bonks / spins (stunt-features.js): the puppet plays a local cartoon 360 while the host flags it spinning
       if (o.spinning) { if (!(c.spinT > 0)) { c.spinT = 0.8; c.spinDur = 0.8; } else c.spinT = Math.max(0.02, c.spinT - STEP); } else c.spinT = 0;
       if (o.air) { assign(c, o.air); c._air = o.inAir || o.mode === 'air'; } else c._air = false;
+      // the own car never bumps a puppet here: puppets are drawn interpolation-delay + E behind the time the own car's
+      // state stands for, so a local contact was with where that car WAS (and the real one, decided by the host, came
+      // on top of it as a correction). Car-to-car contacts are the host's, they arrive as (blended) corrections.
+      c.noCollide = true;
       c.inputState = { throttle: o.throttle, brake: 0, steer: 0 };
       c.state = { vx: c.v, vy: 0, speed: Math.abs(c.v), mode: c.mode, airborne: c.mode === 'air', s: c.s, lat: c.lat, dist: c.dist };
       c.airborne = c.mode === 'air';
       c.input = c.inputState;
       c.params = c.params || { handling: 'arcade', arcade: {}, capabilities: { topSpeed_mps: num(c.drive && c.drive.vmax, 55) } };
+    }
+    /** Error-decay smoothing of a stunt puppet: any step-to-step discontinuity of the interpolated target (a new snapshot
+        replacing an extrapolation, a late burst, the playhead slewing) is absorbed into an offset that decays (PUP_TAU),
+        so the drawn car never jumps. Track space (s, lat) on the road — a loop / tube / wall stays on its surface — world
+        space in the air, converted at take-off / landing. A teleport (warp portal, respawn swap) is shown as one. */
+    var PUP_TAU = 0.2, PUP_EPS = 0.03, PUP_JUMP = 0.1, PUP_CUT = 15;
+    function smoothPuppet(c, o, tr) {
+      if (!tr || typeof tr.sample !== 'function') return o;
+      var S = c._pup || (c._pup = { offT: [0, 0], offW: [0, 0, 0] });
+      var air = isAirRow(o);
+      var w = air ? [o.air.px, o.air.py, o.air.pz] : tr.pointAt(o.s, o.lat, 0, [0, 0, 0]);
+      var chW = S.w ? [w[0] - S.w[0], w[1] - S.w[1], w[2] - S.w[2]] : null, chT = null, cut = false, sm;
+      if (!air) chT = S.mode === 'g' ? [wrapD(o.s - S.s, L), o.lat - S.lat] : null;
+      if (S.mode === 'g' && !air && chT && S.chT) {
+        var d0 = chT[0] - S.chT[0], d1 = chT[1] - S.chT[1], dm = Math.hypot(d0, d1);
+        if (dm > PUP_CUT) cut = true;
+        else if (dm > PUP_EPS) {
+          S.offT[0] -= d0; S.offT[1] -= d1;
+          // a position jump: keep the motion of before for ONE step (the next change is normal again); a lasting change
+          // of motion is then accepted (else the offset would grow for as long as it lasts)
+          if (dm > PUP_JUMP && !S.held) { chT = S.chT; chW = S.chW; S.held = true; } else S.held = false;
+        } else S.held = false;
+      } else if (chW && S.chW) {
+        var e = [chW[0] - S.chW[0], chW[1] - S.chW[1], chW[2] - S.chW[2]], em = Math.hypot(e[0], e[1], e[2]);
+        if (em > PUP_CUT) cut = true;
+        else {
+          if (air && S.mode === 'g') { sm = tr.sample(S.s); S.offW = [0, 1, 2].map(function (k) { return sm.tangent[k] * S.offT[0] + sm.left[k] * S.offT[1]; }); S.offT = [0, 0]; }
+          if (air) {
+            if (em > PUP_EPS) { for (var k = 0; k < 3; k++) S.offW[k] -= e[k]; if (em > PUP_JUMP && S.mode === 'a' && !S.held) { chW = S.chW; S.held = true; } else S.held = false; }
+            else S.held = false;
+          }
+          else {
+            var ow = S.mode === 'a' ? S.offW : [0, 0, 0];
+            if (em > PUP_EPS) ow = [ow[0] - e[0], ow[1] - e[1], ow[2] - e[2]];
+            if (S.mode === 'a') {
+              sm = tr.sample(o.s);
+              S.offT = [ow[0] * sm.tangent[0] + ow[1] * sm.tangent[1] + ow[2] * sm.tangent[2], ow[0] * sm.left[0] + ow[1] * sm.left[1] + ow[2] * sm.left[2]];
+              S.offW = [0, 0, 0];
+            }
+          }
+        }
+      }
+      if (cut) { S.offT = [0, 0]; S.offW = [0, 0, 0]; chW = null; chT = null; }
+      S.mode = air ? 'a' : 'g'; S.s = o.s; S.lat = o.lat; S.w = w; S.chW = chW; S.chT = chT;
+      // decay: a large offset (a long dry spell on a relay link) is caught up at ≤ ~0.25 m per 60 Hz frame
+      var om = Math.hypot(S.offT[0], S.offT[1]) + Math.hypot(S.offW[0], S.offW[1], S.offW[2]);
+      var kd = Math.exp(-STEP / clamp(om / 15, PUP_TAU, 0.6));
+      S.offT[0] *= kd; S.offT[1] *= kd; S.offW[0] *= kd; S.offW[1] *= kd; S.offW[2] *= kd;
+      if (Math.abs(S.offT[0]) + Math.abs(S.offT[1]) + Math.abs(S.offW[0]) + Math.abs(S.offW[1]) + Math.abs(S.offW[2]) < 1e-5) return o;
+      var r = assign({}, o);
+      if (air) { r.air = assign({}, o.air); r.air.px += S.offW[0]; r.air.py += S.offW[1]; r.air.pz += S.offW[2]; }
+      else { r.s = wrapS(o.s + S.offT[0], L); r.dist = o.dist + S.offT[0]; r.lat = o.lat + S.offT[1]; }
+      return r;
     }
     function posePuppetCircuit(car) {
       car.frozenUntil = 1e9; car.wrongT = 0; car.exc = null; car.progressT = car.ctx ? car.ctx.t : 0;
@@ -663,7 +947,7 @@ CB.net = CB.net || {};
         rows.push(kind === 'stunt' ? packStunt(i, car) : packCircuit(i, car));
       });
       var ack = {};
-      Object.keys(inbufs).forEach(function (id) { var b = inbufs[id]; ack[id] = [b.known, b.D]; });
+      Object.keys(inbufs).forEach(function (id) { var b = inbufs[id]; ack[id] = [b.known, b.E !== null ? b.E : b.D]; });   // the delay the host's copy really runs at
       var msg = { t: 'na.s', n: Math.round(sim.time() / STEP), rt: r3(tRace), ph: PHASES.indexOf(sim.getPhase ? sim.getPhase() : 'racing'), c: rows, a: ack };
       var relay = relayPeers();
       Object.keys(inbufs).forEach(function (id) { var e = gridById[id], rl = e && relay.indexOf(e.peerId) >= 0; inbufs[id].maxD = rl ? DEFAULTS.relayMaxD : DEFAULTS.maxD; inbufs[id].inHz = rl ? DEFAULTS.relayInputHz : DEFAULTS.inputHz; });
@@ -864,11 +1148,17 @@ CB.net = CB.net || {};
     function snapshot() {
       if (!sim) return { t: 0, phase: 'grid', countdown: { lightsOn: 0, lightsOut: false, goTime: null }, lapsTotal: start ? start.cfg.laps : 0, mode: 'race', cars: [], order: [], events: drain(), net: netSummary(), netMode: true };
       var snap = sim.snapshot();
+      if (visQueue.length) {
+        var tk = Math.round(sim.time() / STEP);
+        visQueue = visQueue.filter(function (q) { if (q.tick >= tk) return true;   // shown once the held step is the drawn (previous-substep) pose
+        addVis(q.w, q.t, q.id); return false; });
+      }
       var rows = {}, srows = standings && standings.rows ? standings.rows : null;
       if (srows) srows.forEach(function (rw) { rows[rw.id] = rw; });
       (snap.cars || []).forEach(function (c) {
         var netId = c.isPlayer ? myCarId : c.id, e = gridById[netId], rw = rows[netId];
         c.netId = netId; c.kind = e ? (gone[netId] ? 'ai' : e.kind) : 'ai';
+        if (kind === 'stunt' && visBy[c.id]) applyVis(c, c.id, carsByLocal[c.id]);
         if (!c.isPlayer) { c.remote = !isHost || (e && e.kind === 'human'); c.opacity = 1; }
         if (e && e.number != null) c.number = String(e.number);
         if (rw) {
@@ -990,7 +1280,7 @@ CB.net = CB.net || {};
         destroyed = true; link.close(); resultsFns = []; endFns = [];
         if (sim && sim.arcade && typeof sim.arcade.destroy === 'function') safe(function () { sim.arcade.destroy(); });
       },
-      _debug: function () { return { start: start, sim: sim, gp: gp, grid: grid, inbufs: inbufs, gone: gone, standings: standings, stats: stats, cars: carsByLocal, raceNow: raceNow, hist: hist, interpDelay: interpDelay, kind: kind, goTick: goTick, pendingCorr: pendingCorr }; }
+      _debug: function () { return { start: start, sim: sim, gp: gp, grid: grid, inbufs: inbufs, gone: gone, standings: standings, stats: stats, cars: carsByLocal, raceNow: raceNow, hist: hist, interpDelay: interpDelay, interpTarget: interpTarget, snaps: snaps, kind: kind, goTick: goTick, pendingCorr: pendingCorr, vis: visBy }; }
     };
 
     if (isHost) initHost();

@@ -361,10 +361,33 @@ same-device tabs all work; online rooms fall back to the server relay (`relay: t
   **follower** (`setNet({ role: 'follower' })`): no rolls, no hits; it predicts only the own car's nitro burn, powerslide
   turbo, landing / trick boosts and pads / rings, and merges the host's `gp.netPack()` (`gp.netApply`) + events
   (`gp.pushEvents`, `gp.applyHit` for hits on the own car).
-* **Reconciliation.** Each snapshot carries the host's tick N and per player `[ackTick, D]`; the client compares the host's
-  state of its car with its own history at N − D, shifts the later history by the difference and blends it into the car
-  (τ 0.12 s). Mode mismatch (ground / air) for 4 snapshots or > 14 m → hard snap. Without interaction the error is millimetres
-  (`tests/net-arcade.test.js`).
+* **Reconciliation.** Each snapshot carries the host's tick N and per player `[ackTick, E]` (E = the delay the host's copy
+  really runs at); the client compares the host's state of its car with its own history at N − E, shifts the later history
+  by the difference and blends it into the car. Without interaction the error is millimetres (`tests/net-arcade.test.js`).
+  Stunt tracks (2026-10, `tests/net-arcade-stunt-lag.test.js`):
+  - **Exact replay.** The host's copy of a stunt guest steps exactly ONE recorded input per physics step (input index =
+    tick − E). D only steers E: the car skips its step for a tick (E + 1, stunt-session `car.netSteps = 0`) or steps twice
+    (E − 1, `netSteps = 2`, ≤ 1 per 0.5 s); the host draws that car through it with a one-step visual offset. Hazard
+    clocks use E. (Replaying tick n − D dropped / doubled an input tick at every D change: ~0.4 m errors every 0.25 s
+    that nudged ramp launches / landings a tick apart.)
+  - **Track-space, phase-aware corrections.** ground/ground → (s, lat, ψ, v) blended (τ grows with the error, ≤ ~0.3 m per
+    frame); air/air → world position / velocity offset applied to the flight at once (projected on the road once landed);
+    a phase mismatch (one side launched / landed / respawned a few ticks earlier) is not corrected — the own sim converges —
+    and only snaps if it lasts 0.4 s (or > 25 m / > 14 m error): to the host state **re-predicted** forward E ticks with the
+    recorded inputs (`session.netPredict`), never to the E-ticks-old state. Every correction / snap moves the drawn car
+    through a decaying visual offset (track space on the road, world in the air; > 60 m = shown, e.g. a respawn).
+  - **Determinism helpers.** 1 cm dead band (the snapshot quantisation) so an undisturbed guest stays bit-identical to the
+    host's copy and meets every lip / crest / landing on the same tick; the own car keeps the human stunt helpers on
+    autopilot (`cfg.netPlayer`); puppets never collide with the own car locally (they are drawn interpolation-delay + E
+    behind it — contacts are the host's and arrive as corrections); `snapshot()` no longer writes `c.prevH` (it was also
+    stunt-physics' landing-test memory, so landings depended on when the renderer asked for a snapshot).
+  - **Puppets** interpolate in track space with Hermite tangents (sdot = v·cosψ / (1 − κ·lat)), ballistically (world
+    Hermite) when either end is airborne, extrapolate along the road / flight (≤ 0.7 s on relay links), show a warp portal
+    or respawn swap as a teleport (never slid across the world), and an error-decay smoother absorbs any remaining
+    step-to-step discontinuity (late bursts, playhead slew).
+  - **Rendering.** Stunt snapshots carry `prevPos / prevFwd / prevUp` (and `prevX / prevY / prevHeading`) = the pose before
+    the LAST substep; renderers lerp prev → current by alpha (it used to be the previous frame's pose lerped by a one-substep
+    alpha: every 1- or 3-substep frame was a 0.4–1.5 m jump of every car, ~78 / min for relayed guests).
 * **Messages.** `start{v:'redline-net-arcade/1', arcade:true, seed, t0, cfg{trackId, kind, laps, arcade, snapHz,
   lightsOutDelay_s}, grid, you}` · `na.s` (fast, `snapHz` 20 Hz / 15 Hz for > 5 cars: quantised pose arrays per
   grid index — stunt `[i, mode, s, dist, lat, psi, v, rpm, gear, steer, thr, flags, fade, (air pose)]`, circuit `[i, x, y, h,

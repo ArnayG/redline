@@ -21,7 +21,9 @@ packet with every car (forwarding per-car packets made them overwrite each other
 receive through one streamed response when the server streams (`relay.js` `streamDown`), relayed guests fan their own
 car out to each other (`client.sendTo`, server `fanout:true`; fast-only frames `{t:'_r', x:1, f}`), and every remote car
 plays from a jitter buffer sized from the measured arrival gaps (0.1 s direct … ≤1.2 s relay). `tests/net-lag.test.js`
-runs all of it on `loopback({relay})` (the real relay scheduler on a virtual server).
+runs all of it on `loopback({relay})` (the real relay scheduler on a virtual server); `tests/net-arcade-stunt-lag.test.js`
+does the same for arcade stunt races (exact input replay, track-space / phase-aware corrections, puppets in track space,
+warps as teleports — ARCADE-SPEC §6 Reconciliation).
 
 ## Files
 | File | Namespace | Purpose |
