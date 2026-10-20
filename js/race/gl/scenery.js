@@ -987,6 +987,10 @@ CB.gl.scenery = (function () {
     // ground floor: pillars, header, garage bays
     for (var i = 0; i < nb; i++) {
       var x0 = -L / 2 + i * bw, xc = x0 + bw / 2, team = TEAM[i % TEAM.length];
+      if (Array.isArray(o.teams) && o.teams.length) {   // F1 circuits: real team colours in box order (docs/F1-SPEC.md)
+        var ti = Math.min(o.teams.length - 1, Math.floor(i * o.teams.length / nb));
+        team = alb(lin(o.teams[o.side > 0 ? ti : o.teams.length - 1 - ti]), 0.8);
+      }
       wr.use('paint', 'all');
       wr.boxY(x0 + 0.3, -1, z0 + 0.4, 0.6, gH, 0.8, mul(body, 0.96));
       // interior (lit garage): back wall, floor, ceiling, side walls in team colour
@@ -1800,6 +1804,7 @@ CB.gl.scenery = (function () {
             break;
           case 'tent': wr.at(o.x, o.y, yawF, base); tent(B, o); break;
           case 'barrier': wr.at(o.x, o.y, yawF, base); wr.use('paint', 'all'); wr.boxY(0, -0.2, 0, o.l, o.h || 1, Math.min(o.w, 0.8), COL.concrete); break;
+          case 'f1-landmark': break;   // drawn by CB.gl.f1scenery.decorate (js/race/gl/f1-scenery.js)
           default: wr.at(o.x, o.y, yawF, base); wr.use('paint', 'all'); wr.boxY(0, -0.5, 0, o.l, o.h || 3, o.w, lin(o.color || '#b9b6ae')); break;
         }
         note(o.type, o.x, o.y, o.r || (isFinite(o.l) || isFinite(o.w) ? Math.max(fin(o.l, 0), fin(o.w, 0)) / 2 : 1), { authored: true, variant: o.variant, l: o.l, w: o.w, h: o.h, rot: fin(o.rot, yawF) });
@@ -1828,6 +1833,13 @@ CB.gl.scenery = (function () {
       var s0 = S[0];
       [gInfo.zl, gInfo.zr].forEach(function (z) { var px = s0.x - s0.nx * z, py = s0.y - s0.ny * z; occ.markCircle(px, py, 1.5); note('gantry-pillar', px, py, 0.8); });
     } catch (e) { gInfo = null; if (typeof console !== 'undefined' && console.warn) console.warn('[scenery] gantry', e); }
+    /* ---------- 2b. F1 circuits: pit wall / lane paint / team boxes / DRS + sector boards / landmarks (docs/F1-SPEC.md) ---------- */
+    if (def.f1 && CB.gl.f1scenery && typeof CB.gl.f1scenery.decorate === 'function') {
+      try {
+        stats.f1 = CB.gl.f1scenery.decorate({ wr: wr, B: B, geom: geom, def: def, occ: occ, note: note, gy: gy, quality: qn, Q: Q, night: night,
+          lin: lin, mix: mix, mul: mul, COL: COL, WHITE: WHITE, rnd: rnd });
+      } catch (eF) { if (typeof console !== 'undefined' && console.warn) console.warn('[scenery] f1', eF); }
+    }
 
     /* ---------- 3. footbridge over the track (one location) ---------- */
     (function () {

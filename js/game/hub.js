@@ -1444,6 +1444,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     moon: '<path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"/>',
     download: '<path d="M12 4v11M7 10l5 5 5-5M4 20h16"/>',
     bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+    f1: '<path d="M3 15h4l2-4h7l2 4h3"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="17.5" cy="16.5" r="2.5"/><path d="M11 11V8h5"/>',
     derby: '<path d="M12 2.5l1.8 5.2 5.2-2.3-2.4 5 5.2 1.8-5.2 1.8 2.4 5-5.2-2.3L12 21.5l-1.8-5.2-5.2 2.3 2.4-5L2.2 11.8l5.2-1.8-2.4-5 5.2 2.3z"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
     gauge: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6M8 17h8"/>',
@@ -2644,6 +2645,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         out.push({ id: 'drift', label: 'Drift', desc: 'Go sideways: scored 3D drift runs, free or tandem', icon: 'drift' });
         out.push({ id: 'arcade', label: 'Arcade', desc: 'No-grip-loss arcade racing: stunt tracks, boosts, every circuit', icon: 'bolt' });
         out.push({ id: 'derby', label: 'Demolition Derby', desc: 'Bolt on a flamethrower or a ram and wreck them all: last car standing', icon: 'derby' });
+        out.push({ id: 'f1', label: 'Formula 1', desc: 'Pick your team: identical F1 cars on the real circuits, weekends and championships', icon: 'f1' });
       } else if (m.id === 'atelier') out.push({ id: 'atelier', label: 'Garage', desc: 'Build and tune your car — what you build is what you drive', icon: 'wrench' });
       else out.push(m);
     });
@@ -2774,6 +2776,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           var router = routerMod();
           if (router && d.id === 'arcade') { router.go('arcade'); return; }
           if (router && d.id === 'derby') { router.go('derby'); return; }   // ARCADE-SPEC / DERBY-SPEC: their own modes, never career-recorded
+          if (router && d.id === 'f1') { router.go('f1'); return; }   // F1-SPEC: its own mode
           if (router && (d.id === 'race' || d.id === 'drift')) {
             if (CB.app && typeof CB.app.drive === 'function') CB.app.drive(d.id); else router.go(d.id);
             return;

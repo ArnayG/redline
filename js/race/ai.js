@@ -708,12 +708,33 @@ CB.race = CB.race || {};
       length: length, ds: length / n, hasWalls: hasWalls,
       grip: first(geom.surface && geom.surface.grip, geom.grip, geom.def && geom.def.surface && geom.def.surface.grip, 1),
     };
+    A.f1Circuit = !!(geom.def && (geom.def.f1Circuit || geom.def.f1));
+    // walled street circuits (Monaco, Marina Bay, Las Vegas, Montréal's walls): more room, a touch is a wall hit
+    var bar = geom.def && geom.def.barrier;
+    A.f1Street = A.f1Circuit && !!((geom.def.f1 && geom.def.f1.street) || (bar && Math.min(num(bar.left) ? bar.left : 99, num(bar.right) ? bar.right : 99) < 6));
     A.lineOff = racingLineOffsets(A, geom);
     buildLine(A);
     if (geomCache) geomCache.set(geom, A);
     return A;
   }
 
+  /** F1 circuits: keep F1_EDGE_MARGIN of room to the edge by SCALING the line toward the centre with a factor that
+      varies slowly along the lap (window min, then box blur ±F1_EDGE_WIN m): the apex is pulled in without the
+      curvature kink a per-sample clamp (or knee) puts into the line. */
+  function f1EdgeRoom(A, off) {
+    var n = A.n, i, d, f = new Float64Array(n), g = new Float64Array(n);
+    var w = Math.max(2, Math.round(F1_EDGE_WIN / Math.max(0.5, A.ds)));
+    var em = A.f1Street ? F1_EDGE_MARGIN_STREET : F1_EDGE_MARGIN;
+    for (i = 0; i < n; i++) { var ao = Math.abs(off[i]); f[i] = ao > 0.05 ? Math.min(1, Math.max(0, A.hw[i] - em) / ao) : 1; }
+    for (i = 0; i < n; i++) { var m = 1; for (d = -w; d <= w; d++) m = Math.min(m, f[(i + d + n) % n]); g[i] = m; }
+    for (var pass = 0; pass < 2; pass++) {
+      for (i = 0; i < n; i++) { var sum = 0; for (d = -w; d <= w; d++) sum += g[(i + d + n) % n]; f[i] = sum / (2 * w + 1); }
+      g.set(f);
+    }
+    for (i = 0; i < n; i++) off[i] *= g[i];
+  }
+  var F1_EDGE_WIN = 30, F1_EDGE_MARGIN_STREET = 1.4;
+  var F1_EDGE_MARGIN = 0.95, F1_PEAK_BIAS = 0, F1_SAT_THR = 0.985, F1_RISE_A = 14;   // F1 circuits: line edge room (m) and apex peak bias of the curvature
   function racingLineOffsets(A, geom) {
     var n = A.n, rl = geom.racingLine, off = new Float64Array(n), i;
     // Prefer full-precision racing-line points (tracks.js rounds the scalar offsets to 1 cm, which turns into
@@ -748,11 +769,14 @@ CB.race = CB.race || {};
         for (i = 0; i < n; i++) {
           // (fast sections only: the extra room is for kinks and sweepers, not for hairpins / kart-track corners)
           var kAbs = Math.abs(num(A.ck[i]) ? A.ck[i] : 0), fastW = 1 - clamp((kAbs - 0.006) / 0.014, 0, 1);
-          var EM = 1.15 + 0.8 * clamp((7.2 - A.hw[i]) / 2, 0, 1) * fastW;
+          // F1 circuits (docs/F1-SPEC.md §5): a single-spec, downforce-planted car tracks its line to a few cm, so it
+          // uses the circuit like the real cars do (a wheel on the paint) instead of a road-car safety metre
+          var EM = A.f1Circuit ? F1_EDGE_MARGIN : 1.15 + 0.8 * clamp((7.2 - A.hw[i]) / 2, 0, 1) * fastW;
           var limE = A.hw[i] - EM, knee = limE - 0.8, ao = Math.abs(off[i]);
-          if (ao > knee) off[i] = sign(off[i]) * (knee + 0.8 * Math.tanh((ao - knee) / 0.8));
-          off[i] = clamp(off[i], -A.hw[i] + 0.8, A.hw[i] - 0.8);
+          if (ao > knee && !A.f1Circuit) off[i] = sign(off[i]) * (knee + 0.8 * Math.tanh((ao - knee) / 0.8));
+          off[i] = clamp(off[i], -A.hw[i] + 0.25, A.hw[i] - 0.25);
         }
+        if (A.f1Circuit) f1EdgeRoom(A, off);
         return off;
       }
     }
@@ -812,7 +836,7 @@ CB.race = CB.race || {};
     for (i = 0; i < n; i++) {
       var mx = 0;
       for (d = -pw; d <= pw; d++) { var v = sm[(i + d + n) % n]; if (Math.abs(v) > Math.abs(mx)) mx = v; }
-      lk[i] = 0.65 * sm[i] + 0.35 * mx;
+      lk[i] = A.f1Circuit ? (1 - F1_PEAK_BIAS) * sm[i] + F1_PEAK_BIAS * mx : 0.65 * sm[i] + 0.35 * mx;
     }
     var lh = new Float64Array(n);
     for (i = 0; i < n; i++) { var nx1 = (i + 1) % n, pv1 = (i - 1 + n) % n; lh[i] = Math.atan2(ly[nx1] - ly[pv1], lx[nx1] - lx[pv1]); }
@@ -958,6 +982,15 @@ CB.race = CB.race || {};
     L.weightFront = clamp(first(params.weightFront, num(params.weightFront_pct) ? params.weightFront_pct / 100 : undefined,
       m && num(m.weightFront_pct) ? m.weightFront_pct / 100 : undefined, 0.52), 0.25, 0.75);
     L.rearDrive = layout === 'fwd' ? 0 : layout === 'awd' ? clamp(1 - first(params.splitF, 0.4), 0, 1) : 1;
+    // single-spec F1 car (js/f1/f1-car.js, params.f1): plans that credit its downforce where road-car plans stay static
+    L.f1 = !!params.f1;
+    if (L.f1) {
+      // the F1 car's real numbers (seamless gearbox, ~0.94 driveline, rear-driven with ~3x its weight in downforce,
+      // carbon brakes that are tyre-limited, not torque-limited): the road-car haircuts made the plan ~10 % slow
+      L.power = pw * 0.94; L.driveFrac = 0.72;
+      if (num(params.brakeForceMax) && params.brakeForceMax > 0) L.brakeHW = params.brakeForceMax / L.mass * 0.95;
+    }
+    L.dfFrontFrac = clamp(first(params.dfFrontFrac, 0.45), 0.1, 0.9);
     L.balTable = axleBalanceTable(params, L);
     L.usK = understeerGradient(params, L);
     if (params.handling === 'arcade' && isObj(params.arcade)) {
@@ -1027,7 +1060,8 @@ CB.race = CB.race || {};
       var df = 0.5 * RHO * clA * v * v, FzF = mg * wf + df * dfFF, FzR = mg * (1 - wf) + df * (1 - dfFF);
       // drive force the rear has to make just to hold speed (drag + rolling): spent from the friction circle
       var fxR = (L.dragK * v * v + L.rr * (mg + df)) * L.rearDrive;
-      var lo = [0, 0], hi = [4 * G, 4 * G];
+      var gMax = L.f1 ? 8 * G : 4 * G;   // F1: 5+ g at speed (a 4 g search bound capped its fast corners)
+      var lo = [0, 0], hi = [gMax, gMax];
       for (var it = 0; it < 26; it++) {
         for (var ax = 0; ax < 2; ax++) {
           var ay = 0.5 * (lo[ax] + hi[ax]), latT = m * ay * p.cgHeight / p.track, ok;
@@ -1063,7 +1097,7 @@ CB.race = CB.race || {};
     // lumped figure (it ran wide on the speedway banking at the planned speed).
     if (L.balTable) {
       var t = L.balTable, f = clamp(v / 5, 0, t.length - 1.001), i = Math.floor(f);
-      a = Math.min(a, lerp(t[i].ay, t[i + 1].ay, f - i) * 0.93 * gripScale);
+      a = Math.min(a, lerp(t[i].ay, t[i + 1].ay, f - i) * (L.f1 ? L.f1Bal || 1 : 0.93) * gripScale);
     }
     return a;
   }
@@ -1087,6 +1121,7 @@ CB.race = CB.race || {};
   function highSpeedMargin(v, L) {
     if (L && L.arcade) return 1 - 0.06 * smoothstep(25, 55, v);   // no snap at the limit: only a tracking margin (2.2 g arcade grip)
     var ov = L ? oversteerFactor(L, v) : 0;
+    if (L && L.f1) return 1 - (L.f1Margin != null ? L.f1Margin : 0.02) * smoothstep(30, 60, v) - 0.04 * ov;   // F1: downforce-planted at speed
     return 1 - (0.07 + 0.06 * ov) * smoothstep(30, 52, v) - 0.03 * ov;
   }
 
@@ -1103,8 +1138,15 @@ CB.race = CB.race || {};
       var k = Math.abs(A.lineK[i]), vi = L.vTop;
       // narrow road: less room to absorb a tracking error at speed (Nordschleife-style 11 m ribbon)
       var narrow = clamp((7.2 - A.hw[i]) / 2, 0, 1);
-      for (var it = 0; it < 4; it++) {
-        var muE = L.mu * gripScale * latUse * highSpeedMargin(vi, L) * (1 - NARROW_MARGIN * narrow * smoothstep(28, 50, vi));
+      for (var it = 0; it < (L.f1 ? 8 : 4); it++) {
+        var marg = latUse * highSpeedMargin(vi, L) * (1 - NARROW_MARGIN * narrow * smoothstep(28, 50, vi));
+        if (L.f1) {
+          // F1: the axle-balance table (load sensitivity at 3x the car's weight in downforce) is the limit, not the
+          // lumped mu x (mg + df) estimate (~10 % optimistic at 300 km/h); fixed point v = sqrt(ay(v) / k)
+          vi = k < 1e-6 ? L.vTop : Math.min(L.vTop, Math.sqrt(latAccel(L, Math.min(vi, L.vTop), gripScale) * marg / k));
+          continue;
+        }
+        var muE = L.mu * gripScale * marg;
         var denom = k - muE * L.dfK / L.mass;
         vi = denom <= 1e-7 ? L.vTop : Math.min(L.vTop, Math.sqrt(muE * G / denom));
       }
@@ -1120,7 +1162,10 @@ CB.race = CB.race || {};
         // let go (rear unloads under brake), so fast corners are planned with straight-line braking.
         // An oversteer-limited car (rear saturates first) gets even less: braking unloads exactly that axle.
         var hs = smoothstep(28, 48, v[j]), ovj = oversteerFactor(L, v[j]);
-        circ = Math.sqrt(Math.max(0.12 * (1 - hs) * (1 - 0.5 * ovj), 1 - Math.pow(aLat / Math.max(0.1, aLatMax * (1 - (0.42 + 0.15 * ovj) * hs - 0.12 * ovj)), 2)));
+        // (F1: a downforce car is planted under braking at speed: it trail-brakes into fast corners, L.f1Trail of the
+        // lateral grip stays usable instead of 0.58, docs/F1-SPEC.md §5)
+        var hsCut = L.f1 ? num(L.f1Trail, 0.12) : 0.42;
+        circ = Math.sqrt(Math.max(0.12 * (1 - hs) * (1 - 0.5 * ovj), 1 - Math.pow(aLat / Math.max(0.1, aLatMax * (1 - (hsCut + 0.15 * ovj) * hs - 0.12 * ovj)), 2)));
         var vb = Math.sqrt(v[j] * v[j] + 2 * brakeAccel(L, v[j], gripScale) * brakeScale * latUse * circ * A.lineSeg[i]);
         if (v[i] > vb) v[i] = vb;
       }
@@ -1184,10 +1229,17 @@ CB.race = CB.race || {};
     var rng = makeRng(first(opponent.seed, hashStr(opponent.id || opponent.name || 'ai')));
     var selfId = opts.id != null ? opts.id : (opponent.id != null ? opponent.id : null);
     var rubberBandOpt = !!(opts.rubberBand != null ? opts.rubberBand : opponent.rubberBand);
+    // pace multiplier on the speed plan (default 1; F1 difficulty / tyre management via setPace, docs/F1-SPEC.md §5)
+    var paceK = clamp(first(opts.paceScale, opponent.paceScale, 1), 0.5, 1.1);
 
     // Grip usage & braking confidence scale with skill.
-    var latUse = lerp(0.8, 0.93, skill);
-    var brakeUse = lerp(0.7, 0.9, skill) * pers.brakeBias;
+    // F1 (params.f1): the single-spec car is planted and predictable at the limit; difficulty spreads the field through
+    // the pace factor (setPace) instead, so every F1 driver plans close to what the car can do
+    var F1U = { lat: [0.9, 0.985], brake: [0.84, 0.97] };
+    function latUseOf(sk) { return L.arcade ? lerp(0.84, 0.94, sk) : L.f1 ? lerp(F1U.lat[0], F1U.lat[1], sk) : lerp(0.8, 0.93, sk); }
+    function brakeUseOf(sk) { return (L.arcade ? lerp(0.8, 0.95, sk) : L.f1 ? lerp(F1U.brake[0], F1U.brake[1], sk) : lerp(0.7, 0.9, sk)) * pers.brakeBias; }
+    var latUse = latUseOf(skill);
+    var brakeUse = brakeUseOf(skill);
     // arcade cars cannot spin: drivers lean harder on the grip and brake later
     var arcadeK = null;
     if (L.arcade) {
@@ -1208,6 +1260,28 @@ CB.race = CB.race || {};
     }
 
     var profileCache = {};
+    // F1 braking-distance table: D[v] = ∫_0^v u du / a(u) at grip 1 (1 m/s steps) and its inverse
+    var f1D = null;
+    function f1Table() {
+      if (f1D) return f1D;
+      f1D = new Float64Array(131);
+      var acc = 0;
+      for (var vv = 1; vv <= 130; vv++) {
+        var um = vv - 0.5;
+        acc += um / Math.max(1, brakeAccel(L, um, 1));
+        f1D[vv] = acc;
+      }
+      return f1D;
+    }
+    function f1Dof(v) { var D = f1Table(), x = clamp(v, 0, 129.999), i = Math.floor(x); return D[i] + (D[i + 1] - D[i]) * (x - i); }
+    /** speed from which the car can brake down to vt within an "effective" distance dEff (metres at grip 1) */
+    function f1BrakeV(vt, dEff) {
+      var D = f1Table(), target = f1Dof(vt) + dEff;
+      if (target >= D[130]) return 130;
+      var lo = Math.floor(clamp(vt, 0, 129)), hi = 130;
+      while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (D[mid] < target) lo = mid; else hi = mid; }
+      return lo + (target - D[lo]) / Math.max(1e-9, D[hi] - D[lo]);
+    }
     function profileFor(gripScale, brakeScale) {
       var gk = Math.round(gripScale * 50) / 50, bk = Math.round((brakeScale == null ? 1 : brakeScale) * 25) / 25;
       var key = gk + ':' + bk;
@@ -1217,7 +1291,8 @@ CB.race = CB.race || {};
       var prof = new Float64Array(A.n);
       for (var i = 0; i < A.n; i++) {
         // track helper (contract) used as a sanity cap on the downforce-aware internal profile
-        var t = tp ? tp[i] * Math.sqrt(latUse) * 1.04 : Infinity;
+        // (F1: the constant-g helper cannot see downforce growing with speed, it would cap every fast corner)
+        var t = tp && !L.f1 ? tp[i] * Math.sqrt(latUse) * 1.04 : Infinity;
         prof[i] = Math.max(4, Math.min(inner[i], t));
       }
       profileCache[key] = prof;
@@ -1404,7 +1479,7 @@ CB.race = CB.race || {};
       if (myLap !== S.lastLap) { S.lastLap = myLap; S.lapForm = 1 + rng.gauss() * (1 - consistency) * 0.006; }
 
       // ---- speed scale (skill/pace noise/form/rubber band/cool-down)
-      var speedScale = paceNoise(pr.s) * S.lapForm;
+      var speedScale = paceNoise(pr.s) * S.lapForm * paceK;
       var rubber = ctx.rubberBand != null ? !!ctx.rubberBand : rubberBandOpt;
       if (rubber && player && me && num(player.s) && num(me.s)) {
         var gapM = ((player.lap || 0) - (me.lap || 0)) * A.length + (player.s - me.s);  // + = player ahead
@@ -1415,6 +1490,10 @@ CB.race = CB.race || {};
       // ---- recovery state machine
       var surface = pr.surface || (pr.onTrack ? 'asphalt' : 'grass');
       var offTrack = !pr.onTrack || surface === 'grass' || surface === 'sand' || surface === 'wall';
+      // F1 circuits: running wide onto PAVED run-off (Silverstone, Paul Ricard-style tarmac) is not an excursion that
+      // needs the slow rejoin: the car keeps its pace and steers back (grass / gravel / walls still count)
+      if (offTrack && A.f1Circuit && pr.onTrack === false && (surface === 'asphalt' || surface === 'kerb' || surface === 'pit' || surface === 'tarmac') &&
+          Math.abs(lat) < A.hw[idx] + 4) offTrack = false;
       S.offT = offTrack ? S.offT + dt : Math.max(0, S.offT - dt * 2);
 
       // progress monitor
@@ -1983,8 +2062,11 @@ CB.race = CB.race || {};
       // tyre saturation vs the vehicle's peak slip angles (both axles near peak = neutral 4-wheel slide)
       var satF = Math.abs(first(vs.slipAngleF, 0)) / L.alphaPkF, satR = Math.abs(first(vs.slipAngleR, 0)) / L.alphaPk;
       var tyreSat = vAbs > 12 && !recovering ? Math.max(satF, satR) : 0;
-      if (tyreSat > 0.78) S.gripLearn = Math.max(0.75, S.gripLearn - dt * 0.06 * clamp((tyreSat - 0.78) / 0.12, 0, 3));
-      else if (tyreSat > 0.25 && tyreSat < 0.6) S.gripLearn = Math.min(1, S.gripLearn + dt * 0.003);
+      // F1: a hairpin at 50-70 km/h saturates the fronts on geometry alone (full lock, ~20 m radius); that says nothing
+      // about the 250 km/h corners, so slow-corner saturation teaches little and the plan recovers faster
+      var learnK = L.f1 ? smoothstep(14, 32, vAbs) : 1, recoverK = L.f1 ? 4 : 1;
+      if (tyreSat > 0.78) S.gripLearn = Math.max(0.75, S.gripLearn - dt * 0.06 * learnK * clamp((tyreSat - 0.78) / 0.12, 0, 3));
+      else if (tyreSat > 0.25 && tyreSat < 0.6) S.gripLearn = Math.min(1, S.gripLearn + dt * 0.003 * recoverK);
       S.tyreSat = tyreSat;
       // Oversteer evidence must not depend on our own counter-steer (front slip drops the moment we catch,
       // which would read as "even more oversteer" and latch full opposite lock): rear saturation vs its peak,
@@ -2040,6 +2122,7 @@ CB.race = CB.race || {};
       /* ------------------------------------------------ speed target with brake-point anticipation */
       var aBrakeNow = brakeAccel(L, vAbs, gripScale) * brakeUse * (S.brakeLearn || 1);
       if (mistakeIs('lateBrake')) aBrakeNow *= 1 + 0.32 * S.mistake.mag;
+      var f1BrakeK = L.f1 ? aBrakeNow / Math.max(1, brakeAccel(L, vAbs, 1)) : 1;
       var horizon = clamp(vAbs * vAbs / (2 * Math.max(2, aBrakeNow * 0.8)) + 25, 30, 450);
       var vAllowed = Infinity, ffDecel = 0, j = idx, distAcc = 0, guard = A.n;
       var devPlan = !recovering && Math.abs(devTot) > 0.5;
@@ -2063,10 +2146,15 @@ CB.race = CB.race || {};
             }
           }
         }
-        var va = Math.sqrt(vt * vt + 2 * aBrakeNow * Math.max(0, distAcc - 1.0));
+        var va;
+        if (L.f1) {
+          // F1: deceleration falls from ~5 g to ~2 g as the downforce goes, so the braking distance is the integral
+          // D(v) = ∫ u du / a(u) (table), scaled by this step's grip / confidence; brake at the limit from there
+          va = f1BrakeV(vt, Math.max(0, distAcc - (1.0 + vAbs * 0.06)) * f1BrakeK);
+        } else va = Math.sqrt(vt * vt + 2 * aBrakeNow * Math.max(0, distAcc - 1.0));
         if (va < vAllowed) {
           vAllowed = va;
-          if (vAbs > vt && distAcc > 0.5) ffDecel = Math.max(ffDecel, (vAbs * vAbs - vt * vt) / (2 * distAcc));
+          if (vAbs > vt && distAcc > 0.5) ffDecel = Math.max(ffDecel, L.f1 && va < vAbs + 1.5 ? aBrakeNow : (vAbs * vAbs - vt * vt) / (2 * distAcc));
         }
         for (var st = 0; st < step; st++) { distAcc += A.lineSeg[j]; j = (j + 1) % A.n; }
         guard -= step;
@@ -2099,13 +2187,15 @@ CB.race = CB.race || {};
           S.dbg.wide = wide; wideAmt = wide; S.edgeRoomNow = edgeRoom;
         }
       }
-      if (S.tyreSat > 0.72) limCut = Math.min(limCut, vAbs - (S.tyreSat - 0.72) * lerp(6, 10, skill));   // at the limit: ease off
+      // (F1: the plan itself runs the tyres at ~0.9 of their lateral grip, so only real over-saturation is a symptom)
+      var satThr = L.f1 ? F1_SAT_THR : 0.72;
+      if (S.tyreSat > satThr) limCut = Math.min(limCut, vAbs - (S.tyreSat - satThr) * lerp(6, 10, skill));   // at the limit: ease off
       // rear stepping out: plan a gentle speed reduction (the pedal logic below makes it a lift, not a stab)
       if (S.rearLed > 0.1) limCut = Math.min(limCut, vAbs - S.rearLed * 3);
       // Limit cuts (running wide, tyres saturated, rear stepping out) release progressively: snapping the target
       // back to the plan the instant the symptom clears means a stab of full throttle on a car that is still
       // loaded up and carrying a set — power understeer or a snap the other way.
-      var riseA = 2.5;
+      var riseA = L.f1 ? F1_RISE_A : 2.5;
       if (limCut < Infinity && !recovering) S.limCap = Math.min(limCut, S.limCap != null && S.limCap < Infinity ? Math.max(S.limCap, limCut) : limCut);
       else if (S.limCap != null && S.limCap < Infinity) {
         // release rate: slow while the car is still loaded up, quick once the lateral load has gone
@@ -2187,9 +2277,14 @@ CB.race = CB.race || {};
       if (!L.arcade && vAbs > 12 && !recovering && phase === 'racing') {
         var gLongM = num(vs.gLong) ? -vs.gLong * G : NaN;
         var bl = S.brakeLearn;
-        if (num(gLongM) && S.brake > 0.75 && latFrac < 0.35) {
+        // F1: ~4.5 g of deceleration takes a moment to build (brake torque + aero platform); only a settled brake is
+        // evidence (the onset read as a 40 % brake deficit and cut every braking zone of the lap)
+        S.firmT = S.brake > 0.75 ? (S.firmT || 0) + dt : 0;
+        var settled = !L.f1 || S.firmT > 0.3;
+        if (num(gLongM) && S.brake > 0.75 && latFrac < 0.35 && settled) {
           var aExp = Math.max(1, brakeAccel(L, vAbs, gripScale) * Math.min(1, S.brake / 0.95));
           var ratio = clamp(gLongM / aExp, 0.5, 1.1);
+          S.bRatio = ratio;
           if (ratio < bl) bl += (ratio - bl) * clamp(dt * 1.2, 0, 1);
           else bl += (Math.min(ratio, 1) - bl) * clamp(dt * 0.15, 0, 1);
         }
@@ -2230,6 +2325,9 @@ CB.race = CB.race || {};
           // off in 6-car packs (exits taken at the rear's limit leave nothing for a car alongside).
           var rearShare = 1 - L.weightFront;
           var fxBudget = Math.sqrt(Math.max(0, 1 - latFracR * latFracR)) * L.mu * gripScale * G * rearShare;   // per kg
+          // F1: the rear axle's aero load is most of its grip at speed (static share alone capped the throttle at ~80 %
+          // on a 300 km/h straight)
+          if (L.f1) fxBudget *= 1 + L.dfK * vAbs * vAbs * (1 - L.dfFrontFrac) / (L.mass * G * rearShare);
           var fFull = Math.max(0.5, Math.min(L.power / (L.mass * Math.max(vAbs, 5)), L.mu * gripScale * G * L.driveFrac * 1.2)) * L.rearDrive;
           // the oversteer-limited car keeps a bigger reserve on the axle that lets go first
           var margin = lerp(0.95, 0.8, oversteerFactor(L, vAbs));
@@ -2245,7 +2343,7 @@ CB.race = CB.race || {};
 
       // throttle modulation via slip (driver-side traction control)
       var spin = first(vs.wheelspin, 0), skid = first(vs.skidding, 0);
-      if (spin > 0.12 && !mistakeIs('wheelspin')) S.tcCap = Math.max(0.2, S.tcCap - dt * (2 + spin * 6) * lerp(0.6, 1.4, skill));
+      if (spin > (L.f1 ? 0.3 : 0.12) && !mistakeIs('wheelspin')) S.tcCap = Math.max(0.2, S.tcCap - dt * (2 + spin * 6) * lerp(0.6, 1.4, skill));
       else S.tcCap = Math.min(1, S.tcCap + dt * lerp(0.8, 1.6, skill));
       thr = Math.min(thr, S.tcCap);
       if (Math.abs(beta) > 0.1) thr *= clamp(1 - (Math.abs(beta) - 0.1) * 4 * skill, 0.1, 1);   // lift in oversteer
@@ -2275,10 +2373,10 @@ CB.race = CB.race || {};
       }
 
       S.dbg = {
-        mode: S.mode, tactic: S.tacMode, side: S.tacSide, targetSpeed: vCmd, profileSpeed: profile[idx] * speedScale,
+        mode: S.mode, tactic: S.tacMode, side: S.tacSide, targetSpeed: vCmd, profileSpeed: profile[idx] * speedScale, limCap: S.limCap, vAllowed: vAllowed, tacticalCap: tacticalCap, tcCap: S.tcCap,
         lateral: lat, latTarget: S.latTarget, mistake: S.mistake ? S.mistake.type : null, index: idx, s: pr.s,
         offTrack: offTrack, avoid: avoidPush, ttc: minTTC, steerRatio: S.steerRatio,
-        eLat: eLat, psiE: psiE, sat: S.tyreSat, bl: S.brakeLearn, rearLed: S.rearLed, betaDot: S.betaDot, gl: S.gripLearn, ovs: S.oversteer, brkLimit: brkLimit, yawExcess: yawExcess, wPP: wPP, kTrack: kTrack, kappa: kappa, kFF: kFF, latRef: latRef, dev: S.dev, wide: S.dbg.wide || 0, crawl: obstacleCrawl, stuckT: S.stuckT, stuckCycles: S.stuckCycles || 0, aheadId: ahead ? ahead.key : null, aheadSpd: ahead ? ahead.speed : null,
+        eLat: eLat, psiE: psiE, sat: S.tyreSat, bl: S.brakeLearn, rearLed: S.rearLed, betaDot: S.betaDot, gl: S.gripLearn, ovs: S.oversteer, brkLimit: brkLimit, yawExcess: yawExcess, wPP: wPP, kTrack: kTrack, kappa: kappa, kFF: kFF, latRef: latRef, dev: S.dev, wide: S.dbg.wide || 0, crawl: obstacleCrawl, stuckT: S.stuckT, stuckCycles: S.stuckCycles || 0, bRatio: S.bRatio, aheadId: ahead ? ahead.key : null, aheadSpd: ahead ? ahead.speed : null,
       };
       return finish(input, dt);
     }
@@ -2317,10 +2415,12 @@ CB.race = CB.race || {};
       control: control,
       reset: function () { reset(); frameLatch = {}; frameVotes = {}; },
       setRubberBand: function (on) { rubberBandOpt = !!on; },
+      setPace: function (k) { paceK = clamp(num(k) ? k : 1, 0.5, 1.1); },
+      getPace: function () { return paceK; },
       setSkill: function (v) {
         skill = clamp(v, 0, 1);
-        latUse = L.arcade ? lerp(0.84, 0.94, skill) : lerp(0.8, 0.93, skill);
-        brakeUse = (L.arcade ? lerp(0.8, 0.95, skill) : lerp(0.7, 0.9, skill)) * pers.brakeBias; profileCache = {};
+        latUse = latUseOf(skill);
+        brakeUse = brakeUseOf(skill); profileCache = {};
       },
       profile: function (gripScale) { return profileFor(gripScale == null ? 1 : gripScale); },
       debug: function () { return S.dbg; },

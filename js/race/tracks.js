@@ -409,6 +409,18 @@ CB.race.tracks = (function () {
       });
     }
 
+    // 7b. zone overrides (F1 circuits): no gravel where the run-off is tarmac / a wall is close
+    var zones = Array.isArray(def.zones) ? def.zones : null;
+    if (zones) for (i = 0; i < N; i++) {
+      var zl = zoneFor(zones, i / N, 1), zr = zoneFor(zones, i / N, -1);
+      if (zl && zl.gravel === false) sandL[i] = 0;
+      if (zr && zr.gravel === false) sandR[i] = 0;
+      if (zl && zl.kerb === false) kerbL[i] = 0;
+      if (zr && zr.kerb === false) kerbR[i] = 0;
+    }
+    var pit = pitStrip(def, samples, L);
+    if (pit) for (i = 0; i < N; i++) if (pit[i]) { if (pit[i].side > 0) { sandL[i] = 0; } else { sandR[i] = 0; } }
+
     // 8. spatial hash + crossings (figure-8 bridge)
     var grid = makeGrid(samples, GRID_CELL);
     var crossings = findCrossings(samples, grid, L);
@@ -431,8 +443,9 @@ CB.race.tracks = (function () {
     for (i = 0; i < N; i++) {
       var sm = samples[i];
       var edgeL = sm.hw + kerbL[i], edgeR = sm.hw + kerbR[i];
-      var wl = edgeL + sandL[i] + barrier.left;
-      var wr2 = edgeR + sandR[i] + barrier.right;
+      var zbl = zones ? zoneFor(zones, i / N, 1) : null, zbr = zones ? zoneFor(zones, i / N, -1) : null;
+      var wl = edgeL + sandL[i] + (zbl && isFinite(zbl.barrier) ? zbl.barrier : barrier.left);
+      var wr2 = edgeR + sandR[i] + (zbr && isFinite(zbr.barrier) ? zbr.barrier : barrier.right);
       if (isFinite(free.left[i])) wl = Math.min(wl, sm.hw + Math.max(0.6, (free.left[i] - sm.hw) / 2));
       if (isFinite(free.right[i])) wr2 = Math.min(wr2, sm.hw + Math.max(0.6, (free.right[i] - sm.hw) / 2));
       wallL[i] = Math.max(sm.hw + 0.6, wl);
@@ -451,6 +464,22 @@ CB.race.tracks = (function () {
       sx.sandL = round2(clamp(sandL[i], 0, Math.max(0, sx.wallL - sx.hw - sx.leftKerb - 1.0)));
       sx.sandR = round2(clamp(sandR[i], 0, Math.max(0, sx.wallR - sx.hw - sx.rightKerb - 1.0)));
       sx.runoffL = runoff.left; sx.runoffR = runoff.right;
+      if (zones) {
+        var rzl = zoneFor(zones, i / N, 1), rzr = zoneFor(zones, i / N, -1);
+        if (rzl && rzl.runoff) sx.runoffL = rzl.runoff;
+        if (rzr && rzr.runoff) sx.runoffR = rzr.runoff;
+      }
+    }
+    // pit lane: tarmac strip on the pit side, the barrier (garage front) just beyond its outer edge
+    if (pit) {
+      for (i = 0; i < N; i++) {
+        var pq = pit[i];
+        if (!pq) continue;
+        var sp = samples[i], need = pq.outer + 1.2;
+        if (pq.side > 0) { sp.wallL = round2(Math.max(sp.wallL, need)); sp.runoffL = 'tarmac'; sp.sandL = 0; }
+        else { sp.wallR = round2(Math.max(sp.wallR, need)); sp.runoffR = 'tarmac'; sp.sandR = 0; }
+        sp.pit = { side: pq.side, inner: round2(pq.inner), outer: round2(pq.outer), centre: round2(pq.centre), t: round2(pq.t) };
+      }
     }
 
     // 10. racing line
@@ -504,6 +533,36 @@ CB.race.tracks = (function () {
   }
 
   /* ---------------------------------------------------------- build parts */
+
+  /* lap-fraction range test (wraps across the start line) */
+  function inU(u, u0, u1) { u = mod(u, 1); u0 = mod(u0, 1); u1 = mod(u1, 1); return u0 <= u1 ? (u >= u0 && u <= u1) : (u >= u0 || u <= u1); }
+  /** def.zones override [{ u0, u1, left?: { barrier, runoff, gravel }, right?: {...} }] for side (+1 left / -1 right) at u */
+  function zoneFor(zones, u, side) {
+    if (!zones) return null;
+    var out = null;
+    for (var z = 0; z < zones.length; z++) {
+      var zn = zones[z], o = zn && (side > 0 ? zn.left : zn.right);
+      if (o && inU(u, zn.u0, zn.u1)) out = Object.assign(out || {}, o);
+    }
+    return out;
+  }
+  /** Pit lane strip (def.f1.pit / def.pitLane: { side, entry, exit (u), offset_m, width_m, taper_m }) -> per sample
+      { side, inner, outer } absolute lateral range of the lane surface, or null. Lane centre ramps over taper_m. */
+  function pitStrip(def, samples, L) {
+    var pl = (def.f1 && def.f1.pit) || def.pitLane;
+    if (!pl || !isFinite(pl.entry) || !isFinite(pl.exit)) return null;
+    var N = samples.length, side = pl.side > 0 ? 1 : -1, wid = pl.width_m || 11, taper = pl.taper_m || 140;
+    var e0 = mod(pl.entry, 1) * L, e1 = mod(pl.exit, 1) * L, len = mod(e1 - e0, L), out = new Array(N);
+    for (var i = 0; i < N; i++) {
+      var d = mod(samples[i].s - e0, L);
+      if (d > len) { out[i] = null; continue; }
+      var hw = samples[i].hw, off = pl.offset_m || (hw + 4 + wid / 2);
+      var t = Math.min(1, d / taper, (len - d) / taper), tt = smoothstep(t);
+      var centre = lerp(hw - 1.5, off, tt), half = lerp(2.5, wid / 2, tt);
+      out[i] = { side: side, inner: Math.max(hw * 0.5, centre - half), outer: centre + half, centre: centre, t: tt };
+    }
+    return out;
+  }
 
   function forRange(a, b, N, fn) {
     var len = mod(b - a, N) + 1;
@@ -1023,7 +1082,7 @@ CB.race.tracks = (function () {
         l: round2(along), w: round2(depth), r: shape === 'circle' ? (it.r || 1) : round2(Math.hypot(along, depth) / 2),
         h: it.h != null ? it.h : defaultHeight(it.type), s: round2(s), lat: round2(lateral), side: side
       };
-      ['color', 'accent', 'variant', 'text', 'lit', 'seats', 'flip', 'name'].forEach(function (key) {
+      ['color', 'accent', 'variant', 'text', 'lit', 'seats', 'flip', 'name', 'teams'].forEach(function (key) {
         if (it[key] != null) o[key] = it[key];
       });
       if (sceneryClear(geom, o)) out.push(o);
@@ -1166,8 +1225,10 @@ CB.race.tracks = (function () {
     else if (al <= sm.hw + kerb) surface = 'kerb';
     else if (sand > 0 && al <= sm.hw + kerb + sand) surface = 'sand';
     else surface = run === 'tarmac' ? 'asphalt' : run === 'sand' ? 'sand' : 'grass';
+    var inPit = !!(sm.pit && sm.pit.side === side && al > sm.hw + kerb && al >= sm.pit.inner && al <= sm.pit.outer && al < wall);
+    if (inPit) surface = 'pit';
     return {
-      index: res.index, s: res.s, lateral: lat, onTrack: al <= sm.hw + kerb,
+      index: res.index, s: res.s, lateral: lat, onTrack: al <= sm.hw + kerb || inPit, pitLane: inPit,
       surface: surface, distance: res.dist, halfWidth: sm.hw, width: sm.width,
       edgeDist: sm.hw - al, wallDist: wall - al, heading: res.heading, layer: sm.layer,
       sector: sm.sector, racingLine: sm.racingLine
@@ -1292,7 +1353,47 @@ CB.race.tracks = (function () {
      Each track: layout (turtle), metadata, theme, scenery recipe.
   ======================================================================== */
 
+  /* Surveyed layouts (F1 circuits, docs/F1-SPEC.md §2): o.points = closed control polygon (metres, race direction,
+     first point on the start line) instead of a turtle layout. Straights / corners for the scenery recipe are
+     classified from the spline curvature; o.cornerNames = [[u, name], ...] names corners near lap fraction u. */
+  function turtleFromPoints(points, o) {
+    var dn = sampleCentripetal(points, 1), M = dn.xs.length, Lt = dn.length;
+    var hd = new Array(M), k = new Array(M), i;
+    for (i = 0; i < M; i++) {
+      var a = mod(i - 3, M), b = (i + 3) % M;
+      hd[i] = Math.atan2(dn.ys[b] - dn.ys[a], dn.xs[b] - dn.xs[a]);
+    }
+    for (i = 0; i < M; i++) {
+      var dsk = (dn.cum[Math.min(i + 4, M)] - dn.cum[Math.max(i - 4, 0)]) || 8;
+      k[i] = wrapAngle(hd[(i + 4) % M] - hd[mod(i - 4, M)]) / dsk;
+    }
+    k = smoothCircular(k, 6);
+    var kTh = 1 / (o.cornerRadius || 320), segs = [], cur = null;
+    for (i = 0; i < M; i++) {
+      var f = Math.abs(k[i]) > kTh ? (k[i] > 0 ? 1 : -1) : 0;
+      if (!cur || cur.f !== f) { if (cur) segs.push(cur); cur = { f: f, i0: i, i1: i }; } else cur.i1 = i;
+    }
+    if (cur) segs.push(cur);
+    if (segs.length > 1 && segs[0].f === segs[segs.length - 1].f) { var last = segs.pop(); segs[0].i0 = last.i0 - M; }
+    var names = (o.cornerNames || []).map(function (c) { return { u: c[0], name: c[1] }; });
+    var meta = segs.map(function (sg) {
+      var s0 = sg.i0 < 0 ? dn.cum[sg.i0 + M] - Lt : dn.cum[sg.i0], s1 = dn.cum[sg.i1 + 1];
+      var turn = 0, kmax = 0;
+      for (var j = sg.i0; j <= sg.i1; j++) { var kk = k[mod(j, M)]; turn += kk * (dn.cum[mod(j, M) + 1] - dn.cum[mod(j, M)]); kmax = Math.max(kmax, Math.abs(kk)); }
+      var kind = sg.f > 0 ? 'L' : sg.f < 0 ? 'R' : 'S', i0 = mod(sg.i0, M);
+      return { kind: kind, s0: s0, s1: s1, len: s1 - s0, r: kind === 'S' ? Infinity : 1 / Math.max(kmax, 1e-6), deg: Math.abs(turn) / DEG,
+        dir: sg.f, opts: {}, name: null, heading0: hd[i0], x0: dn.xs[i0], y0: dn.ys[i0] };
+    });
+    names.forEach(function (nm) {
+      var s = nm.u * Lt, best = null, bd = Infinity;
+      meta.forEach(function (sg) { if (sg.kind === 'S') return; var d = arcDist((sg.s0 + sg.s1) / 2, s, Lt); if (d < bd) { bd = d; best = sg; } });
+      if (best && !best.name) { best.name = nm.name; best.opts = { name: nm.name }; }
+    });
+    return { points: points.map(function (p) { return [round2(p[0]), round2(p[1])]; }), segments: meta, length: Lt, closureGap: 0, autoDelta: [], turning: 0 };
+  }
+
   function makeTrack(o) {
+    if (o.points && !o.layout) return makeTrackFromPoints(o);
     var layout = o.layout;
     if (o.scale && o.scale !== 1) {
       // uniform layout scale (straight lengths + arc radii); segments flagged noScale keep their
@@ -1337,6 +1438,30 @@ CB.race.tracks = (function () {
     if (o.scenery) o.scenery(ctx);
     def.scenery = ctx.items;
     def.length_m = Math.round(splineLength(t.points));
+    return def;
+  }
+
+  function makeTrackFromPoints(o) {
+    var pts = o.points;
+    if (o.scale && o.scale !== 1) pts = pts.map(function (p) { return [p[0] * o.scale, p[1] * o.scale]; });
+    var t = turtleFromPoints(pts, o), Lt = t.length;
+    var keys = Array.isArray(o.widthKeys) && o.widthKeys.length ? o.widthKeys.map(function (kk) { return [clamp(kk[0], 0, 0.999999), kk[1]]; }) : [[0, o.width_m]];
+    var named = (o.cornerNames || []).map(function (c) { return { u: c[0], name: c[1], span: 70 }; });
+    var def = {
+      id: o.id, name: o.name, short: o.short || o.name, country: o.country, city: o.city || '',
+      desc: o.desc, difficulty: o.difficulty, surface: o.surface, theme: o.theme,
+      width_m: o.width_m, points: t.points, pitStraight: 0, length_m: 0,
+      style: o.style || {}, kerbs: o.kerbs, runoff: o.runoff, barrier: o.barrier, gravel: o.gravel,
+      wallType: o.wallType || 'armco', crossing: o.crossing || null, crossings: o.crossing ? 1 : 0,
+      bridgeUpper: o.bridgeUpper, defaultLaps: o.defaultLaps || 3, timeOfDay: o.timeOfDay || 'day',
+      tags: o.tags || [], record: o.record || null, widthKeys: dedupeKeys(keys), corners: named,
+      sectors: o.sectors, layout: null, layoutScale: o.scale || 1, layoutLength: Lt, elevation_m: o.elevation_m || 0,
+      zones: o.zones || null, gridSlots: o.gridSlots, scenery: []
+    };
+    var ctx = sceneryContext(def, t, rngFor(o.id + ':scenery'));
+    if (o.scenery) o.scenery(ctx);
+    def.scenery = ctx.items;
+    def.length_m = Math.round(Lt);
     return def;
   }
 
@@ -1864,6 +1989,7 @@ CB.race.tracks = (function () {
     previewPath: previewPath,
     turtle: turtle,
     makeTrack: makeTrack,
+    turtleFromPoints: turtleFromPoints,
     splineLength: splineLength,
     SAMPLE_SPACING: SAMPLE_SPACING
   };

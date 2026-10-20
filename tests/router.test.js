@@ -101,7 +101,7 @@ test('router: hub screens are router screens (family mapping both ways)', () => 
 });
 
 test('router: the global nav bar offers Garage, Race, Drift, Multiplayer, Career, My Cars', () => {
-  const nav = _.NAV.filter((n) => n.route !== 'arcade' && n.route !== 'derby');   // the Arcade mode slots in next to Race / Drift
+  const nav = _.NAV.filter((n) => n.route !== 'arcade' && n.route !== 'derby' && n.route !== 'f1');   // Arcade + Demolition Derby slot in next to Race / Drift
   assert.deepEqual(nav.map((n) => n.route), ['atelier', 'race', 'drift', 'multiplayer', 'career', 'garage']);
   assert.deepEqual(nav.map((n) => n.label), ['Garage', 'Race', 'Drift', 'Multiplayer', 'Career', 'My Cars']);
   assert.equal(R.labels.atelier, 'Garage');

@@ -4683,8 +4683,38 @@ var CB = (globalThis.CB = globalThis.CB || {});
       model: { id: sm.id, make: sm.make, name: sm.name, style: sm.style }
     };
   }
+  /* ================================================================ Formula 1 car (docs/F1-SPEC.md)
+     builds from CB.f1.teams (build.f1 / body.model 'f1-2026') are the hand-authored low-poly F1 car of
+     js/race/gl/f1-car-mesh.js (CB.gl.f1car), in CB.lowpoly part format. Feature-detected: without it the build
+     falls through to the normal paths. */
+  function f1Geometry(build, opts) {
+    var F = CB.gl.f1car;
+    if (!F || typeof F.build !== 'function' || !F.isF1(build)) return null;
+    var lp = F.build(build, { lod: opts.lod === 'low' ? 'low' : 'high', number: opts.number, color: opts.color, accent: opts.accent, isPlayer: opts.isPlayer, id: opts.id });
+    if (!lp || !lp.parts || !lp.parts.length) return null;
+    var parts = [], tris = 0;
+    lp.parts.forEach(function (q) {
+      var p = { geo: geoFromArrays(q), material: q.material, kind: q.kind, local: m4(), castShadow: q.castShadow !== false, transparent: !!q.transparent, attach: q.attach || 'body' };
+      if (q.wheel) { p.wheel = q.wheel; p.local[12] = q.wheel.x; p.local[13] = q.wheel.y; p.local[14] = q.wheel.z; }
+      if (q.wing) p.wing = q.wing;
+      if (q.texture) p.texture = q.texture;
+      if (q.stripe) p.stripe = true;
+      tris += q.triangles;
+      parts.push(p);
+    });
+    return {
+      S: lp.S, parts: parts, dims: lp.dims, lod: lp.lod, lowpoly: true, f1: true,
+      cockpitEye: lp.cockpitEye, hoodCam: lp.hoodCam, bumperCam: lp.bumperCam, anchors: lp.anchors,
+      stats: { triangles: tris, parts: parts.length },
+      susp: { omega: TAU * 3.2, zeta: 0.7, rollGain: 0.006, pitchGain: 0.005, pivotY: 0.3 },
+      model: { id: lp.dims.model, make: lp.dims.make, name: 'Formula 1', style: 'formula' }
+    };
+  }
   function buildGeometry(build, opts) {
     opts = opts || {};
+    var f1g = null;
+    try { f1g = f1Geometry(build, opts); } catch (eF1) { if (typeof console !== 'undefined' && console.warn) console.warn('[car-mesh] f1', eF1 && eF1.message); }
+    if (f1g) return f1g;
     if (lowpolyOn(opts)) {
       var sm0 = shapeModelFor(build, opts);
       if (sm0) {
@@ -4908,7 +4938,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
         else if (name === 'carbonN') t = typeof T.carbonNormal === 'function' ? T.carbonNormal(ctx) : null;
         else if (name === 'carbonO') t = typeof T.carbonOrm === 'function' ? T.carbonOrm(ctx) : null;
         else if (name === 'tire') t = T.tireSidewall(ctx, { stripe: desc.S.compound === 'slick' || desc.S.compound === 'track' ? (desc.S.compound === 'slick' ? '#f2c200' : '#d01818') : undefined });
-        else if (name === 'number') t = T.carNumber(ctx, desc.S.number, desc.S.numberColor);
+        else if (name === 'number') t = T.carNumber(ctx, desc.S.number, desc.S.numberColor, desc.S.numberStyle ? { style: desc.S.numberStyle } : undefined);
+        else if (name.indexOf('f1badge:') === 0 && CB.gl.f1car && CB.gl.f1car.badgeTexture) t = CB.gl.f1car.badgeTexture(ctx, desc.S, name);
         else if (name === 'plate' && typeof T.numberPlate === 'function') t = T.numberPlate(ctx, 'FG ' + ('00' + String(desc.S.number || 7).replace(/[^0-9A-Za-z]/g, '')).slice(-3));
       } catch (e) { t = null; }
       texCache[name] = t || null;
@@ -4987,7 +5018,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       }
       parts.push({
         mesh: mesh, material: mat, local: p.local, kind: p.kind, castShadow: p.castShadow, transparent: p.transparent,
-        attach: p.attach, wheel: p.wheel, wing: p.wing, lightKey: p.lightKey, triangles: geo.triangleCount, geometry: canMesh ? undefined : geo
+        attach: p.attach, wheel: p.wheel, wing: p.wing, lightKey: p.lightKey, stripe: p.stripe, triangles: geo.triangleCount, geometry: canMesh ? undefined : geo
       });
     });
     var model = {
@@ -5037,6 +5068,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       engine: b.engine && { type: b.engine.type, layout: b.engine.layout, aspiration: b.engine.aspiration, exhaust: b.engine.exhaust, position: b.engine.position },
       weight: b.weight && { rollCage: b.weight.rollCage, glass: b.weight.glass }, interior: b.interior && { primaryColor: b.interior.primaryColor, accentColor: b.interior.accentColor, harness: b.interior.harness },
       drivetrain: b.drivetrain && b.drivetrain.layout,
+      f1: b.f1 && { t: b.f1.teamId, s: b.f1.seat, n: b.f1.number, l: b.f1.livery, h: b.f1.helmet },
       o: [opts.number, opts.color, opts.accent, opts.lod === 'low' ? 'low' : 'high', opts.length_m, opts.width_m, opts.isPlayer === true ? 1 : 0, opts.bodyStyle, lowpolyOn(opts) ? 'lp' : 'dt'],
       m: (function () { var sm = shapeModelFor(b, opts); return sm ? sm.id : null; })()
     };
@@ -5085,6 +5117,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         mm.emissive = [0, 0, 0]; mm.uEmissive = mm.emissive;
         st.mats[p.lightKey || p.kind] = mm; mat = mm;
       }
+      if (p.stripe) { var ms = {}; for (var ks in mat) ms[ks] = mat[ks]; ms.baseColor = ms.uBaseColor = ms.color = [1, 1, 1, 1]; mat = ms; }   // F1 tyre stripe: per-car compound tint
       st.items.push({ mesh: p.mesh, material: mat, model: m4(), kind: p.kind, castShadow: p.castShadow !== false, transparent: !!p.transparent, part: p });
     });
   }
@@ -5169,8 +5202,20 @@ var CB = (globalThis.CB = globalThis.CB || {});
         var steer = W.front ? st.steer : 0;
         wheelLocal(st.mP, W.x, W.y, W.z - (W.side || (W.z < 0 ? -1 : 1)) * (W.inset || 0), steer, W.camber || 0, p.attach === 'wheel' ? (W.front ? st.spinF : st.spinR) : 0);
         m4mul(it.model, st.mW, st.mP);
+        if (p.stripe && CB.gl.f1car) {
+          var f1c = c.endurance && c.endurance.f1, cmp = (f1c && f1c.compound) || c.compound || 'medium';
+          if (it._cmp !== cmp) { it._cmp = cmp; var cc = CB.gl.f1car.compoundColor(cmp); it.material.baseColor = it.material.uBaseColor = it.material.color = [cc[0], cc[1], cc[2], 1]; }
+        }
       } else if (p.attach === 'car') {
         m4copy(it.model, st.mW);
+      } else if (p.wing && p.wing.drs) {
+        // F1 DRS flap (docs/F1-SPEC.md): opens while carSnap.endurance.f1.drs.open (or carSnap.drsOpen)
+        var f1s = c.endurance && c.endurance.f1, dOpen = !!(c.drsOpen || (f1s && f1s.drs && f1s.drs.open));
+        var dT = dOpen ? p.wing.open : p.wing.base;
+        if (st.drsAng == null || dt === 0) st.drsAng = dT;
+        st.drsAng += clamp(dT - st.drsAng, -6 * dt, 6 * dt);
+        rotZabout(st.mP, st.drsAng, p.wing.pivot[0], p.wing.pivot[1]);
+        m4mul(it.model, st.mB, st.mP);
       } else if (p.wing && p.wing.active) {
         var tgt = p.wing.base;
         if (spd > 22 && brake > 0.55) tgt = 48 * DEG; else if (spd > 58) tgt = p.wing.base * 0.3;

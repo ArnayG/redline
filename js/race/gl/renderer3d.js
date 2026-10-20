@@ -2299,7 +2299,7 @@ CB.race.renderer3d = (function () {
       var L = num(d.length, num(c.length_m, 4.5)), W = num(d.width, num(c.width_m, 1.9));
       return {
         length: L, width: W, height: num(d.height, 1.3), wheelbase: num(d.wheelbase, L * 0.6), track: num(d.track, W * 0.84),
-        wheelRadius: num(d.wheelRadius, 0.33)
+        wheelRadius: num(d.wheelRadius, 0.33), f1: !!d.f1
       };
     }
     /** Fill e.view (car snapshot copy with interpolated pose & render hints) */
@@ -2387,7 +2387,7 @@ CB.race.renderer3d = (function () {
       });
     }
     // first person is always available: CB.gl.cockpit when present, otherwise the built-in interior
-    function hasCockpitNow() { return true; }
+    function hasCockpitNow() { return !S.cockpitBroken; }   // false after a cockpit failure (render() fell back to chase)
 
     function updateCamera(dt, snap, player, e, pose) {
       var C = S.cam, mode = S.mode, model = e && (e.models.high || e.models.low);
@@ -2450,6 +2450,7 @@ CB.race.renderer3d = (function () {
         if (snapNow || Math.abs(wrapAngle(yawT - C.yaw.x)) > 2.6) springSet(C.yaw, yawT);
         var yaw = spring(C.yaw, C.yaw.x + wrapAngle(yawT - C.yaw.x), far1 ? 3.6 : 5.2, dt);
         var dBase = far1 ? dims.length * 1.6 + 5.5 : dims.length * 1.05 + 2.4;
+        if (dims.f1) dBase *= far1 ? 0.88 : 0.84;   // F1 (docs/F1-SPEC.md): long low car, a closer and lower chase camera
         var dWant = dBase + speed * (far1 ? 0.02 : 0.012) + clamp(longG, -1, 1.5) * 0.35;
         var cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
         var hint = player ? sampleIndexAt(geom, player.s) : null;
@@ -2458,7 +2459,7 @@ CB.race.renderer3d = (function () {
         if (snapNow || dEff < C.dist.x) springSet(C.dist, snapNow ? dEff : lerp(C.dist.x, dEff, clamp01(dt * 18)));
         else spring(C.dist, dEff, 2.8, dt);
         var d = C.dist.x;
-        var hgt = (far1 ? 2.4 + dims.height * 0.8 : 1.15 + dims.height * 0.5) + Math.max(0, dWant - d) * 0.22;
+        var hgt = (far1 ? 2.4 + dims.height * 0.8 : 1.15 + dims.height * 0.5) * (dims.f1 ? 0.82 : 1) + Math.max(0, dWant - d) * 0.22;
         eye[0] = px - cyaw * d; eye[2] = -(py - syaw * d); eye[1] = elev + hgt;
         var gY = S.world.groundY ? num(call4('groundY', S.world, S.world.groundY, eye[0], eye[2], undefined, undefined, 0), 0) : 0;
         eye[1] = Math.max(eye[1], gY + 0.5);
@@ -3592,7 +3593,14 @@ CB.race.renderer3d = (function () {
     var api = {
       render: function (snap, alpha) {
         try { render(snap, alpha); }
-        catch (e) { warn('render', e); throw e; }
+        catch (e) {
+          warn('render', e);
+          // a failing first-person view (cockpit build / pose) must not freeze the race: drop to the chase camera
+          // for the rest of the session and redraw this frame
+          if (S.mode !== 'cockpit') throw e;
+          S.cockpitBroken = true; S.mode = 'chase'; S.cam.snap = true;
+          render(snap, alpha);
+        }
       },
       setCamera: setCamera,
       cycleCamera: cycleCamera,

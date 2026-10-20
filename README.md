@@ -87,6 +87,7 @@ docs/                 design specs per subsystem and the README screenshots
 | `#/drift` | Drift setup (track, score attack / free run / tandem, duration, tune, assist), then a 3D drift run |
 | `#/arcade` | Arcade setup (stunt track or circuit, race / time trial, items, nitro, speed class, AI difficulty), then an Arcade race |
 | `#/derby` (`?quick=1&arena=<id>`) | Demolition Derby setup (car, accessories loadout, arena, rules), then a last-car-standing derby (see *Demolition Derby*) |
+| `#/f1` (`?quick=1&circuit=<id>&team=<id>&laps=<n>`) | Formula 1: pick a team, a real circuit and a format (quick race, race weekend, championship), then race the 22-car single-spec grid (see *Formula 1*) |
 | `#/multiplayer` (`#/multiplayer/<CODE>` joins room CODE) | Multiplayer lobby: create / join a room, ready up, race or drift with friends |
 | `#/career` | Championships, tiers, calendar, standings |
 | `#/challenges` | Launch, braking, top-speed and drift-school challenges |
@@ -111,6 +112,16 @@ The old pages are redirect stubs, so old links still work: `hub.html` → `#/men
 - **Controls:** W/↑ throttle · S/↓ brake, then reverse · A D / ← → steer · Space handbrake · **F / J = ACTION 1** · **G / K = ACTION 2** · **Shift / L = RAM BOOST** (hold; charges over time and from hits) · R flip / unstick · C camera · B look back · Esc pause · M mute. Gamepad: RT / LT, left stick, A handbrake, X action 1, B action 2, RB ram boost, Y camera, Start pause, D-pad ◀ ▶ spectate. Touch: steering pad, BRAKE/REV and GAS pedals, HB, two ACTION buttons labelled with your accessories, and a round BOOST button with a charge ring. Phone wheel: ITEM = action 1, NITRO (hold) = ram boost, swipe ITEM back = action 2 (on a sim without ram boost, NITRO stays action 2). Webcam and mouse steering work as in Race. Once you are out you spectate (◀ ▶ to change car, Enter for the results).
 - **Feel:** big hits involving your car freeze the action for 60–90 ms (hit-stop), shake and kick the camera away from the impact and flash the screen (white when you hit, red when you are hit). Points pop up over the car you hit (T-BONE!, SANDWICH, REAR-ENDER, AIRBORNE HIT, REVENGE!…) and stack into combos. An announcer calls FIRST BLOOD, DOUBLE TAKEDOWN, RAMPAGE, UNSTOPPABLE and WRECKING MACHINE, and your takedowns, your own wreck and the final kill replay in slow motion (any key or tap skips). AI taunts show in the kill feed in purple. In sudden death the safe ring shows on the minimap, and the screen edge pulses red when you are outside it. Sound is synthesised and layered (thump, metal crunch, panel ring, glass and debris rattle), with a voice limit on phones.
 - Results show placing, score with a breakdown by hit type, coins earned (credited to your profile, more on harder AI), MVP, best hit, damage dealt and taken, hits, eliminations and T-bones. Derbies count towards profile stats (`derby_*`, including `derby_score_best`) and the *Demolition Derby* achievements.
+
+## Formula 1
+
+`#/f1` (nav item **Formula 1**, main-menu tile *Formula 1*; spec: `docs/F1-SPEC.md`). Every car is the same ~1000 hp hybrid F1 car, so the difficulty changes only the AI drivers. Pick one of the 11 teams (real liveries as colours, text badges, fictional drivers) and the seat you take, then a circuit: faithful layouts of Monza, Silverstone, Spa, Monaco, Suzuka, Interlagos, the Red Bull Ring, Montréal, Bahrain, Zandvoort, COTA, Marina Bay and Las Vegas, with night races under the lights by default.
+
+- Formats: **Quick race**, **Race weekend** (practice → a short timed qualifying that sets the grid → race) and **Championship** (choose the calendar; drivers' and constructors' standings, 25-18-15-12-10-8-6-4-2-1 points plus an optional fastest-lap point). Race length in laps or % of the real distance; weather; time of day; starting tyre; assists (braking line, ABS, TC, auto gears, auto DRS).
+- Tyres (soft / medium / hard / inter / wet) heat up and wear, DRS opens within 1 s at the detection point, ERS stores and deploys, pit stops take ~2.5 s in your team's box.
+- HUD: steering-wheel dash (shift lights, gear, DRS, ERS, tyre temps and wear), timing tower, sectors in purple / green / yellow, track map with DRS zones, race control and team radio.
+- Keys: **F** DRS, **N** (hold) ERS boost, **V** ERS mode, **I** box this lap, **O** pit tyre. Pad: RB DRS, LB boost, Back box. Phones get DRS / ERS / BOX buttons; on the phone wheel ITEM is DRS and NITRO is ERS boost.
+- Runs in progress are saved (`forge.f1.*`); F1 best laps, stats and the *Formula 1* achievements are kept separately from the Race mode.
 
 ## Which car you drive
 

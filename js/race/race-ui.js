@@ -604,6 +604,7 @@ CB.race = CB.race || {};
     // fill any holes from the reference shape so downstream modules never see undefined sections
     b = deepMerge(fallbackBuild(), b);
     try { if (CB.state && typeof CB.state.normalize === 'function') { var n = CB.state.normalize(b); if (isPlain(n) && n.engine) b = n; } } catch (e3) { /* ignore */ }
+    if (isPlain(build) && isPlain(build.f1) && !b.f1) { b.f1 = deepClone(build.f1); if (build.body && b.body) b.body.model = build.body.model; }   // F1 (docs/F1-SPEC.md): normalize drops the team block + 'f1-2026' model
     return b;
   }
 
@@ -1268,6 +1269,8 @@ CB.race = CB.race || {};
     return discipline === 'drift' ? drift.concat(other) : other.concat(drift);
   }
   function findTrack(id) {
+    var PLt = pluginOf();
+    if (PLt && typeof PLt.findTrack === 'function') { try { var pt = PLt.findTrack(id); if (pt) return pt; } catch (eP) { /* fall through */ } }
     if (U && isArcadeS(U.settings)) { var ad = arcadeTrack(id); if (ad) return ad; }
     var l = getTrackList();
     for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
@@ -2248,6 +2251,7 @@ CB.race = CB.race || {};
     if (!(o.settings && ids(STEER_ASSISTS).indexOf(o.settings.steerAssist) >= 0)) syncAssist(U.settings);
     if (o.discipline === 'arcade' && !(o.context && o.context.kind)) enterArcadeSettings(U.settings, o.settings || {});
     U.records = isArcadeS(U.settings) ? arcadeRecords() : api.records;
+    if (o.plugin && o.plugin.records && typeof o.plugin.records.submit === 'function') U.records = o.plugin.records;   // F1: its own best laps
   }
   /** Launch settings minus the discipline (applied by launchDiscipline through setDiscipline so each discipline keeps its circuit). */
   function launchSettings(o) {
@@ -3429,7 +3433,8 @@ CB.race = CB.race || {};
         if (R.isDrift || R.net) { R.opponents = []; return; }   // net: the host's grid (players + AI fill) is in the session   // the drift session adds its own tandem lead car
         var L0 = launchCfg(def);
         if (L0 && Array.isArray(L0.opponents) && L0.opponents.length && R.settings.mode === 'race') {
-          R.opponents = L0.opponents.slice(0, Math.max(1, isNum(R.settings.opponents) ? R.settings.opponents : L0.opponents.length));
+          var oppCap = isNum(L0.maxOpponents) ? L0.maxOpponents : (isNum(R.settings.opponents) ? R.settings.opponents : L0.opponents.length);   // plugin grids (F1: 21)
+          R.opponents = L0.opponents.slice(0, Math.max(1, oppCap));
           return;
         }
         if (R.settings.mode !== 'time-trial' && moduleStatus().ai) {
@@ -3462,7 +3467,7 @@ CB.race = CB.race || {};
         var L1 = launchCfg(def);
         if (L1) {
           ['extras', 'hooks', 'seed', 'startPosition', 'maxTime_s', 'gridOrder', 'playerTeam', 'challengeId', 'lightsOutDelay_s',
-           'persistGhost', 'trackLimitsWarnings', 'stuckDnf_s', 'career'].forEach(function (k) { if (L1[k] !== undefined) cfg[k] = L1[k]; });
+           'persistGhost', 'trackLimitsWarnings', 'stuckDnf_s', 'career', 'maxOpponents'].forEach(function (k) { if (L1[k] !== undefined) cfg[k] = L1[k]; });
           if (L1.playerName) cfg.playerName = L1.playerName;
           if (L1.challenge && !(cfg.extras && cfg.extras.challenge)) cfg.extras = Object.assign({}, cfg.extras || {}, { challenge: L1.challenge });
         }
@@ -3470,8 +3475,11 @@ CB.race = CB.race || {};
         if (R.challenge && typeof R.challenge.reset === 'function') { try { R.challenge.reset(); } catch (e) { /* ignore */ } }
         R.challengeEval = null; R.challengeDoneAt = null;
         try { R.replayBaseline = CB.game && CB.game.replay && typeof CB.game.replay.last === 'function' ? CB.game.replay.last() : null; } catch (eRb) { R.replayBaseline = null; }
+        var cfgP = pluginCall('configure', [cfg, R]);
+        if (cfgP && typeof cfgP === 'object') cfg = cfgP;
         R.session = createRaceSession(R, def, cfg);
         if (!R.session || typeof R.session.update !== 'function' || typeof R.session.snapshot !== 'function') throw new Error('engine.createSession returned an invalid session');
+        pluginCall('attach', [R.session, R]);
         R.geom = R.session.geom || (CB.race.tracks.build ? CB.race.tracks.build(def) : null);
       },
       function () { // renderer + HUD
@@ -3481,8 +3489,11 @@ CB.race = CB.race || {};
         if (R.challenge && typeof R.challenge.setUnits === 'function') { try { R.challenge.setUnits(S2.units); } catch (e4) { /* ignore */ } }
         if (moduleStatus().hud) {
           try { var L2 = launchCfg(def);
-            R.hud = CB.race.hud.create(U.canvas, R.geom, def, { units: S2.units, mode: S2.mode, assists: S2.assists,
-              playerName: (L2 && L2.playerName) || (U.opts && U.opts.playerName) || 'You' }); } catch (e2) { R.hud = null; if (typeof console !== 'undefined') console.warn('[race-ui] hud.create failed', e2); }
+            var hudO = { units: S2.units, mode: S2.mode, assists: S2.assists,
+              playerName: (L2 && L2.playerName) || (U.opts && U.opts.playerName) || 'You' };
+            var PLh = pluginOf();
+            if (PLh && isPlain(PLh.hudOptions)) Object.assign(hudO, PLh.hudOptions);
+            R.hud = CB.race.hud.create(U.canvas, R.geom, def, hudO); } catch (e2) { R.hud = null; if (typeof console !== 'undefined') console.warn('[race-ui] hud.create failed', e2); }
         }
         if (!R.hud || typeof R.hud.draw !== 'function') { R.hud = createFallbackHud(S2.units); R.fallbackHud = true; }
         if (R.isDrift) createDriftHud(R, def);
@@ -3889,6 +3900,7 @@ CB.race = CB.race || {};
       if (camGotIdx >= 0) R.cameraIdx = camGotIdx;
     } catch (e) { /* ignore */ }
     if (R.challenge && typeof R.challenge.setRenderer === 'function') { try { R.challenge.setRenderer(R.renderer); } catch (e5) { /* ignore */ } }
+    pluginCall('setRenderer', [R.renderer, R]);
     attachDriftCamera(R);
     R.lookBack = false;
     if (R.isArcade && R.session && R.session.arcade && typeof R.session.arcade.setRenderer === 'function') { try { R.session.arcade.setRenderer(R.renderer); } catch (eA) { /* ignore */ } }
@@ -4182,6 +4194,8 @@ CB.race = CB.race || {};
           else R.hud.draw(ctx, snap);
           if (R.isArcade) drawArcadeLayer(R, ctx, snap, cw, U.canvas.clientHeight || 1);
           if (R.net) drawNetTags(R, ctx, snap, cw, U.canvas.clientHeight || 1);
+          if (U.opts && U.opts.plugin) pluginCall('drawHud', [ctx, snap, { width: cw, height: U.canvas.clientHeight || 1, renderer: R.renderer, units: R.settings.units,
+            paused: !!R.paused, screen: U.screen, cockpit: isCockpitView(R), project: arcadeProjector(R, cw, U.canvas.clientHeight || 1), R: R }]);
         } finally { ctx.restore(); }
         if (R.challenge) {
           ctx.save();
@@ -4244,6 +4258,7 @@ CB.race = CB.race || {};
         if (o && o.id === c.id) { if (o.carName) return String(o.carName); b = o.build || null; break; }
       }
     }
+    if (b && b.f1 && (b.f1.chassis || b.f1.carName)) return String(b.f1.chassis || b.f1.carName);   // F1 cars (docs/F1-SPEC.md): the team's chassis
     if (!b || !b.body || !CB.shapes || typeof CB.shapes.getModel !== 'function') return '';
     try {
       var m = CB.shapes.getModel(b, { strict: true });
@@ -5024,6 +5039,7 @@ CB.race = CB.race || {};
     cancelAnimationFrame(R.raf);
     if (U.pauseRefs) U.pauseRefs = null;
     captureReplay(R);
+    pluginCall('results', [raw, res, snap]);
     reportFinish(raw, res, snap);
     showResults(res, myRow, snap);
   }
@@ -5079,7 +5095,10 @@ CB.race = CB.race || {};
     }
   }
   /** Career rounds and events count once: the race UI never offers a re-run of the same round. */
-  function oneShotLaunch() { var k = U && U.opts && U.opts.context && U.opts.context.kind; return k === 'career' || k === 'event' || k === 'challenge'; }
+  function oneShotLaunch() {
+    if (U && U.opts && typeof U.opts.oneShot === 'boolean') return U.opts.oneShot;   // plugin launches (F1 weekend sessions)
+    var k = U && U.opts && U.opts.context && U.opts.context.kind; return k === 'career' || k === 'event' || k === 'challenge';
+  }
 
   /** Hand the classification to the launcher (hub / career) once per finished session. */
   function reportFinish(raw, res, snap) {
@@ -5125,6 +5144,14 @@ CB.race = CB.race || {};
     try { document.dispatchEvent(new CustomEvent('cb:race-finished', { detail: { results: out } })); } catch (e4) { /* ignore */ }
   }
   /** Engine cfg overrides from the launcher, applicable to this circuit (null when the player picked another track). */
+  /** Mode plugin of the launch (docs/F1-SPEC.md §6): { id, findTrack, configure, attach, setRenderer, drawHud, hudOptions,
+      results, resultsPanel, records, detach }. Every member optional; failures never stop the session. */
+  function pluginOf() { var p = U && U.opts && U.opts.plugin; return p && typeof p === 'object' ? p : null; }
+  function pluginCall(fn, args) {
+    var p = pluginOf();
+    if (!p || typeof p[fn] !== 'function') return undefined;
+    try { return p[fn].apply(p, args || []); } catch (e) { if (typeof console !== 'undefined') console.warn('[race-ui] plugin.' + fn, e); return undefined; }
+  }
   function launchCfg(def) {
     var L = U && U.opts;
     if (!L) return null;
@@ -5244,11 +5271,12 @@ CB.race = CB.race || {};
         }));
       sectorsBox.appendChild(h('div', { class: 'rx-tile', style: { 'grid-column': '1 / -1' } }, h('div', { class: 'rx-stat-l', text: 'Ideal lap (sum of best sectors)' }), h('div', { class: 'rx-stat-v rx-num', text: fmtTime(ideal) })));
     }
-    var side = h('div', { class: 'rx-res-side rx-scroll' }, tiles, lapChart, posChart, sectorsBox);
+    var plPanel = pluginCall('resultsPanel', [res, R.rawResults, myRow]);
+    var side = h('div', { class: 'rx-res-side rx-scroll' }, plPanel && plPanel.nodeType === 1 ? plPanel : null, tiles, lapChart, posChart, sectorsBox);
     var main = h('div', { class: 'rx-res-main' }, tableWrap, side);
 
     var oneShot = oneShotLaunch();
-    var backBtn = h('button', { class: 'cb-btn rx-btn' + (oneShot ? ' primary big' : ''), type: 'button', onclick: isGameLaunch() ? close : goAtelier, title: isGameLaunch() ? 'Return to career' : 'Back to the Garage to tune your car' }, icon(isGameLaunch() ? 'back' : 'wrench', 16), isGameLaunch() ? (oneShot ? 'Continue · rewards' : backLabel()) : 'Tune car · Garage');
+    var backBtn = h('button', { class: 'cb-btn rx-btn' + (oneShot ? ' primary big' : ''), type: 'button', onclick: isGameLaunch() ? close : goAtelier, title: isGameLaunch() ? ((U.opts && U.opts.backLabel) || 'Return to career') : 'Back to the Garage to tune your car' }, icon(isGameLaunch() ? 'back' : 'wrench', 16), isGameLaunch() ? (oneShot ? ((U.opts && U.opts.continueLabel) || 'Continue · rewards') : backLabel()) : 'Tune car · Garage');
     var again = oneShot ? backBtn : h('button', { class: 'cb-btn rx-btn primary big', type: 'button', onclick: startRace }, icon('restart', 16), 'Race again');
     var hasReplay = !!(R.replay && replayMod());
     var foot = h('footer', { class: 'rx-res-foot' },
@@ -5355,7 +5383,7 @@ CB.race = CB.race || {};
       h('div', { class: 'rx-res-side rx-scroll' }, nextBox, tandem));
 
     var oneShot = oneShotLaunch();
-    var backBtn = h('button', { class: 'cb-btn rx-btn' + (oneShot ? ' primary big' : ''), type: 'button', onclick: isGameLaunch() ? close : goAtelier }, icon(isGameLaunch() ? 'back' : 'wrench', 16), isGameLaunch() ? (oneShot ? 'Continue · rewards' : backLabel()) : 'Tune car · Garage');
+    var backBtn = h('button', { class: 'cb-btn rx-btn' + (oneShot ? ' primary big' : ''), type: 'button', onclick: isGameLaunch() ? close : goAtelier }, icon(isGameLaunch() ? 'back' : 'wrench', 16), isGameLaunch() ? (oneShot ? ((U.opts && U.opts.continueLabel) || 'Continue · rewards') : backLabel()) : 'Tune car · Garage');
     var again = oneShot ? backBtn : h('button', { class: 'cb-btn rx-btn primary big', type: 'button', onclick: startRace }, icon('restart', 16), 'Go again');
     var hasReplay = !!(R.replay && replayMod());
     var foot = h('footer', { class: 'rx-res-foot' },
@@ -5528,6 +5556,7 @@ CB.race = CB.race || {};
     U.race = null;
     R.running = false;
     if (R.raf) cancelAnimationFrame(R.raf);
+    pluginCall('detach', [R]);
     if (R.net) netClose(R, true);   // left without the results button (nav, route change): still hand back to the lobby
     if (R.hintsTimer) clearTimeout(R.hintsTimer);
     learnAutoQuality(R);

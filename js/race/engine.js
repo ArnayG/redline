@@ -24,7 +24,9 @@
      cfg.hooks  = hook object | array of hook objects, each optionally providing
                   carCreated(car), preStep(car, input, dt) -> input?, postStep(car, dt), modifiers(car) -> mods,
                   vehicleParams(car, params) -> params, vehicleEnv(car, env) -> env, onImpact(car, impulse, localDir, opts),
-                  snapshot(car) -> object (snapshot cars gain `endurance`), pitStop(car, request), advice(car, ctx)
+                  snapshot(car) -> object (snapshot cars gain `endurance`), pitStop(car, request), advice(car, ctx),
+                  wrapDriver(driver, car, entrant, isAutopilot) -> driver (F1 racecraft), pitBox(car, laneInfo) -> s of the car's box;
+                  cfg.maxOpponents (default 11) widens the grid
      When extras ask for wear / fuel / damage / pit stops and no hook supplies vehicleParams, CB.game.endurance.createHooks
      is attached automatically. Mods from hooks without vehicleParams are baked in via CB.game.endurance.applyToParams
      (aero drag is a parameter change — CB.race.vehicle's env.dragMult is a surface term and is never touched).
@@ -1162,7 +1164,10 @@ CB.race = CB.race || {};
         }
         return;
       }
-      if (car.pitPhase === 'lane' && passed(prev, s, info.box_s)) {
+      // per-car pit box (F1: one box per team, docs/F1-SPEC.md): hook pitBox(car, info) -> s of the car's box
+      var boxS = hookList.length ? callHooks('pitBox', [car, info]) : null;
+      if (!isNum(boxS)) boxS = info.box_s;
+      if (car.pitPhase === 'lane' && passed(prev, s, boxS)) {
         var r = callHooks('pitStop', [car, car.pitRequest || {}]) || {};
         var dur = clamp(num(r.duration_s, 8), 2, 120);
         car.pitPhase = 'stopped'; car.frozenUntil = sess.t + dur; car.pitDuration = dur;
@@ -1226,9 +1231,10 @@ CB.race = CB.race || {};
     function resolveOpponents(playerBuild) {
       if (cfg.mode === 'time-trial') return [];
       var o = cfg.opponents;
-      if (Array.isArray(o)) return o.slice(0, 11);
+      var maxOpp = isNum(cfg.maxOpponents) ? clamp(Math.round(cfg.maxOpponents), 0, 31) : 11;   // F1 grids: 21 (docs/F1-SPEC.md)
+      if (Array.isArray(o)) return o.slice(0, maxOpp);
       var count = isNum(o) ? o : isNum(cfg.opponentCount) ? cfg.opponentCount : (cfg.mode === 'practice' ? 0 : 5);
-      count = clamp(Math.round(count), 0, 11);
+      count = clamp(Math.round(count), 0, maxOpp);
       if (!count) return [];
       if (mods.aiGrid) {
         try {
@@ -1335,7 +1341,10 @@ CB.race = CB.race || {};
         } catch (e) { drv = null; }
         if (drv && typeof drv !== 'function' && typeof drv.control !== 'function') drv = null;
       }
-      return drv || new FallbackDriver(sess, car, entrant);
+      drv = drv || new FallbackDriver(sess, car, entrant);
+      // hooks may wrap the driver (F1 racecraft: docs/F1-SPEC.md) — wrapDriver(driver, car, entrant, isAutopilot) -> driver
+      if (hookList.length) { var wd = callHooks('wrapDriver', [drv, car, entrant, !!isAutopilot]); if (wd && (typeof wd === 'function' || typeof wd.control === 'function')) drv = wd; }
+      return drv;
     }
 
     function playerAutopilot() {
@@ -1883,7 +1892,7 @@ CB.race = CB.race || {};
         var lat = car.lateral + (c * lx - s * ly) * nx + (s * lx + c * ly) * ny;
         if (lat > edgeL) { off++; offSide += 1; } else if (lat < -edgeR) { off++; offSide -= 1; }
       }
-      car.offTrack = off === 4;
+      car.offTrack = off === 4 && car.surface !== 'pit' && !car.pitPhase && !car.pitLaneDrive;   // the pit lane (and a hook's pit entry / exit run, car.pitLaneDrive) is never a track-limits excursion
       // inside of the corner (= cutting it, gaining an advantage) vs running wide (losing time on the run-off)
       var kk = A.K[i], inside = car.offTrack && Math.abs(kk) > 1 / 400 && sign(offSide) === sign(kk);
       var sp = Math.abs(num(st.speed, Math.hypot(car.wvx, car.wvy)));

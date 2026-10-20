@@ -5,6 +5,7 @@
    Contract (docs/RACE-SPEC.md, "Inter-module contracts"):
      CB.race.hud.create(canvas, geom, trackDef, opts {units:'kph'|'mph'})
        -> { draw(ctx, snap), setUnits(u), destroy() }
+     opts.timing / tower / cluster / minimap === false hide those widgets (mode HUDs such as F1 draw their own)
    draw() is called after renderer.render(); ctx is already in CSS-pixel
    transform, so all layout uses canvas.clientWidth / clientHeight.
 
@@ -1781,14 +1782,17 @@ CB.race = CB.race || {};
       // --- top-right: timing
       var timingW = (compact ? 178 : 268) * k;
       var tx = W - M - timingW;
-      var th = drawTiming(ctx, snap, player, tx, M, k, compact, !!strip);
+      // opts.timing / tower / cluster === false: a mode HUD draws its own (F1: js/f1/f1-hud.js, docs/F1-SPEC.md §6)
+      var th = opts.timing === false ? 0 : drawTiming(ctx, snap, player, tx, M, k, compact, !!strip);
       var stripY = M + th;
-      stripY += drawTrackLimitsStrip(ctx, player, tx, stripY, k);
-      stripY += drawPenaltyOnly(ctx, player, tx, stripY, k);
+      if (opts.timing !== false) {
+        stripY += drawTrackLimitsStrip(ctx, player, tx, stripY, k);
+        stripY += drawPenaltyOnly(ctx, player, tx, stripY, k);
+      }
 
       // --- top-left: tower (race) or minimap in compact
       var towerH = 0;
-      if (mode === 'race' || (snap.cars || []).length > 1) {
+      if (opts.tower !== false && (mode === 'race' || (snap.cars || []).length > 1)) {
         var maxH = compact ? H * (strip && layout.noMinimap ? 0.36 : 0.42) : H * 0.62;
         towerH = drawTower(ctx, snap, player, M, M, k, maxH, compact);
       }
@@ -1819,7 +1823,9 @@ CB.race = CB.race || {};
       if (compact) { cx = W / 2; cy = H - M - R * 1.0; }
       else { cx = W - M - R * 1.12; cy = H - M - R * 1.0; }
       var kk = compact ? R / 104 : k;
-      if (strip) {
+      if (opts.cluster === false) {
+        S.speedDisp = Math.abs(num(player.speed, 0)) * (units === 'mph' ? 2.23694 : 3.6); S.rpmDisp = num(player.rpm, S.rpmDisp);
+      } else if (strip) {
         if (cockpitView || snap.cockpit) {
           S.speedDisp = Math.abs(num(player.speed, 0)) * (units === 'mph' ? 2.23694 : 3.6); S.rpmDisp = num(player.rpm, S.rpmDisp);
         } else drawStrip(ctx, snap, player, strip, k);   // touch pedals show their own fill: no pedal bars

@@ -109,6 +109,7 @@ CB.game = CB.game || {};
     { id: 'milestones', name: 'Milestones', desc: 'Long-haul career statistics.' },
     { id: 'media', name: 'Replays & Photo', desc: 'Capture and relive the moments.' },
     { id: 'derby', name: 'Demolition Derby', desc: 'Wrecks, T-bones and the last car standing.' },
+    { id: 'f1', name: 'Formula 1', desc: 'Poles, podiums and titles on the real circuits.' },
     { id: 'meta', name: 'Meta', desc: 'Achievements about achievements.' }
   ];
 
@@ -432,7 +433,8 @@ CB.game = CB.game || {};
     drift: 'drift', endurance: 'endurance', pit: 'endurance',
     replay: 'replay', photo: 'photo',
     profile: 'profile', session: 'session', meta: 'meta', boot: 'session',
-    derby: 'derby', 'derby-finished': 'derby'   // Demolition Derby (docs/DERBY-SPEC.md)
+    derby: 'derby', 'derby-finished': 'derby',   // Demolition Derby (docs/DERBY-SPEC.md)
+    f1: 'f1', 'f1-finished': 'f1'   // Formula 1 (docs/F1-SPEC.md)
   };
 
   function safeCompute(fnHolder, fnName, args) {
@@ -734,6 +736,12 @@ CB.game = CB.game || {};
       var dr = ev.results || ev, dp = dr.player || {}, dst = dp.stats || {};
       ctx.dd = { won: !!dr.won, arenaId: dr.arenaId || null, kills: num(dst.kills, 0), tbones: num(dst.tbones, 0), flameDmg: num(dst.flameDmg, 0),
         health: num(dp.health, 0), launches: num(ev.launches, 0), dealt: num(dst.dealt, 0) };
+    }
+    if (kind === 'f1') {   // {type:'f1', session?, position, status, gained, fastestLap, pitStops, teamId, circuitId, title, pole, stats}
+      var fst = ev.stats || {};
+      ctx.f = { race: ev.session !== 'qualifying', position: num(ev.position, 99), finished: ev.status !== 'dnf' && ev.status !== 'dsq', gained: num(ev.gained, 0),
+        fastestLap: !!ev.fastestLap, pitStops: num(ev.pitStops, 0), teamId: ev.teamId || null, circuitId: ev.circuitId || null, title: !!ev.title, pole: !!ev.pole,
+        difficulty: ev.difficulty || null, weather: ev.weather || null, wins: num(fst.wins, 0), races: num(fst.races, 0), circuitsWon: Array.isArray(fst.circuitsWon) ? fst.circuitsWon.length : 0 };
     }
     if (kind === 'endurance') ctx.en = { pit: ev.action === 'pit' || ev.type === 'pit' || !!ev.pitStop };
     if (kind === 'race' && ctx.r && isNum(ctx.r.drift)) ctx.d = { score: ctx.r.drift, combo: num(get(ev, 'stats.driftCombo'), 0), duration: 0 };
@@ -1099,6 +1107,26 @@ CB.game = CB.game || {};
   ddIs('derby-flying', 'Flying Lessons', 'Launch a car into the air with the Front Ramp.', 'bronze', 'wing', function (d) { return d.launches >= 1; });
   counter('derby-wrecker', 'Wrecking Crew', 'Eliminate 25 cars in Demolition Derby.', 'gold', 'burst', 'derby', null, 25, 'derby', function (ctx) { return ctx.dd ? ctx.dd.kills : 0; });
   collect('derby-expert', 'Demolition Expert', 'Win a derby in all six arenas.', 'platinum', 'crown', 'derby', 'derby', function (ctx) { return ctx.dd && ctx.dd.won ? ctx.dd.arenaId : null; }, 6);
+
+  /* ------------------------------------------------------------------ Formula 1 (docs/F1-SPEC.md) */
+
+  function f1Is(id, name, desc, tier, glyph, fn, extra) {
+    return when(id, name, desc, tier, glyph, 'f1', 'f1', function (ctx) { return !!ctx.f && !!fn(ctx.f, ctx); }, extra);
+  }
+  function f1Race(f) { return f.race && f.finished; }
+  f1Is('f1-lights-out', 'Lights Out', 'Finish a Formula 1 race.', 'bronze', 'flag', function (f) { return f1Race(f); });
+  f1Is('f1-points', 'On the Board', 'Score points in a Formula 1 race (top 10).', 'bronze', 'medal', function (f) { return f1Race(f) && f.position <= 10; });
+  f1Is('f1-podium', 'Champagne', 'Finish on the podium in Formula 1.', 'silver', 'podium', function (f) { return f1Race(f) && f.position <= 3; });
+  f1Is('f1-win', 'Grand Prix Winner', 'Win a Formula 1 race.', 'gold', 'trophy', function (f) { return f1Race(f) && f.position === 1; });
+  f1Is('f1-pole', 'Pole Sitter', 'Take pole position in F1 qualifying.', 'silver', 'stopwatch', function (f) { return f.pole; });
+  f1Is('f1-fastest-lap', 'Purple Sectors', 'Set the fastest lap of a Formula 1 race.', 'silver', 'stopwatch', function (f) { return f1Race(f) && f.fastestLap; });
+  f1Is('f1-charge', 'Through the Field', 'Gain 10 places in one Formula 1 race.', 'gold', 'road', function (f) { return f1Race(f) && f.gained >= 10; });
+  f1Is('f1-pit-master', 'Box, Box', 'Make a pit stop and still finish in the points.', 'bronze', 'pit', function (f) { return f1Race(f) && f.pitStops >= 1 && f.position <= 10; });
+  f1Is('f1-rain-master', 'Rain Master', 'Win a wet Formula 1 race.', 'gold', 'drop', function (f) { return f1Race(f) && f.position === 1 && f.weather === 'wet'; });
+  f1Is('f1-legend', 'Legendary', 'Win a Formula 1 race on Legend difficulty.', 'platinum', 'crown', function (f) { return f1Race(f) && f.position === 1 && f.difficulty === 'alien'; });
+  f1Is('f1-champion', 'World Champion', 'Win a Formula 1 drivers\' championship.', 'platinum', 'laurel', function (f) { return f.title; });
+  collect('f1-backmarker-hero', 'Every Garage', 'Finish an F1 race with five different teams.', 'silver', 'helmet', 'f1', 'f1', function (ctx) { return ctx.f && f1Race(ctx.f) ? ctx.f.teamId : null; }, 5);
+  collect('f1-globetrotter', 'Globetrotter', 'Win Formula 1 races on 8 different circuits.', 'platinum', 'globe', 'f1', 'f1', function (ctx) { return ctx.f && f1Race(ctx.f) && ctx.f.position === 1 ? ctx.f.circuitId : null; }, 8);
 
   /* ------------------------------------------------------------------ Secret / time-based */
 

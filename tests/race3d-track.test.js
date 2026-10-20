@@ -17,11 +17,18 @@ var test = standalone
   }
   : globalThis.test;
 
-var geoms = {}, built = {};
+var geoms = {}, built = {}, builtOrder = [];
 function geomOf(def) { return geoms[def.id] || (geoms[def.id] = T.build(def)); }
+// small LRU: the tests walk one circuit at a time, so 4 entries (one circuit's qualities) keep every hit while the
+// full 10 circuits x 4 qualities cache held ~2.4 GB for the rest of the single-process suite (tests/run.js shares one heap)
+var BUILT_MAX = 4;
 function meshOf(def, q) {
   var k = def.id + ':' + q;
-  return built[k] || (built[k] = TM.buildGeometry(geomOf(def), def, { quality: q }));
+  if (built[k]) return built[k];
+  built[k] = TM.buildGeometry(geomOf(def), def, { quality: q });
+  builtOrder.push(k);
+  while (builtOrder.length > BUILT_MAX) delete built[builtOrder.shift()];
+  return built[k];
 }
 // lateral (+left) of a sim point relative to sample i
 function latAt(sm, x, y) { return (x - sm.x) * sm.nx + (y - sm.y) * sm.ny; }

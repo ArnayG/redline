@@ -46,7 +46,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
   function lerp(a, b, t) { return a + (b - a) * t; }
   function num(v, d) { v = +v; return isFinite(v) ? v : d; }
   function smoothstep(e0, e1, x) { var t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
-  function wrapPi(a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; }
+  // modulo, not a while loop: a huge / non-finite heading must never spin the frame forever
+  function wrapPi(a) { if (!isFinite(a)) return 0; a = (a + PI) % TAU; if (a < 0) a += TAU; return a - PI; }
 
   /* ------------------------------------------------------------------ colour */
   function hexRgb(hex, fb) {
@@ -812,7 +813,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       for (var k = 0; k < pts.length - 1; k++) {
         var a = pts[k], b = pts[k + 1], d = len(sub(b, a)), t = 0;
         while (t < d) {
-          var step = Math.min(on ? dash : gap, d - t);
+          var step = Math.max(1e-4, Math.min(on ? dash : gap, d - t));
           if (on && step > dash * 0.4) {
             var p0 = vlerp(a, b, t / d), p1 = vlerp(a, b, (t + step) / d);
             if (LOWPOLY) {
@@ -2439,6 +2440,32 @@ var CB = (globalThis.CB = globalThis.CB || {});
     '}'
   ].join('\n');
 
+  /* ---------------- Formula 1 onboard (docs/F1-SPEC.md) */
+  function f1CockpitBuild(b) {
+    var o = {};
+    for (var k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k];
+    o.body = Object.assign({}, b.body || {}, { style: 'roadster', seats: 1 });
+    o.interior = Object.assign({}, b.interior || {}, { steering: 'race-quick-release', harness: true });
+    o.transmission = Object.assign({}, b.transmission || {}, { type: 'sequential' });
+    o.tech = Object.assign({}, b.tech || {}, { screen_in: 0, hud: false });
+    return o;
+  }
+  /** F1 driving position: the wheel close in front of the chest, nearly upright; mirror glasses on the sidepod pods */
+  function f1Layout(L, dims) {
+    var e = L.eye, ex = e[0], ey = e[1];
+    L.wheel.c = [ex + 0.42, ey - 0.21, 0];
+    L.wheel.R = 0.125; L.wheel.tilt = 0.24; L.wheel.ratio = 8;
+    L.shoulders = [[ex - 0.06, ey - 0.3, -0.19], [ex - 0.06, ey - 0.3, 0.19]];
+    var mp = dims && Array.isArray(dims.mirrors) && dims.mirrors.length ? dims.mirrors : [{ pos: [0.47, 0.8, 0.53], side: 1 }, { pos: [0.47, 0.8, -0.53], side: -1 }];
+    L.sideMirrors = mp.map(function (m) {
+      var p = [m.pos[0] - 0.052, m.pos[1] + 0.012, m.pos[2]];
+      return { pos: p, normal: norm(add(norm(sub(e, p)), [-1.4, 0, 0])), width: 0.15, height: 0.055, side: m.side < 0 ? -1 : 1 };
+    });
+    // rear-view render target: a camera on the halo looking back over the car (both glasses sample its halves)
+    L.mirror = { pos: [ex + 0.3, ey + 0.1, 0], normal: norm([-1, -0.2, 0]), up: [0, 1, 0], width: 0.2, height: 0.06, fovY: 24 };
+    L.open = true; L.nearPlane = 0.03;
+  }
+
   function build(ctx, buildObj, opts) {
     opts = opts || {};
     var gl = ctx && ctx.gl ? ctx.gl : ctx;
@@ -2584,12 +2611,18 @@ var CB = (globalThis.CB = globalThis.CB || {});
     function assemble() {
       meshes.forEach(function (m) { if (m && m.destroy) m.destroy(); });
       meshes = []; items = []; glowK = -1;
-      Lay = layout(buildObj, { eye: opts.eye, dims: opts.dims });
+      // F1 car (docs/F1-SPEC.md): the onboard view keeps the car's own bodywork (nose, halo, sidepod mirrors) and adds
+      // only a race steering wheel with its display, gloves / arms and the two mirror glasses on the sidepod pods
+      var F1 = !!(CB.gl.f1car && typeof CB.gl.f1car.isF1 === 'function' && CB.gl.f1car.isF1(buildObj));
+      var cbObj = F1 ? f1CockpitBuild(buildObj) : buildObj;
+      Lay = layout(cbObj, { eye: opts.eye, dims: opts.dims });
+      if (F1) f1Layout(Lay, opts.dims);
       hideBack = null; lookBackState = false; if (hideFwd) self.hideKinds = hideFwd;
       Pal = palette(buildObj, { gammaVertexColors: opts.gammaVertexColors, color: opts.color });
       ensureDyn();
       makeMaterials();
-      geo = buildGeometry(buildObj, Lay, Pal);
+      geo = buildGeometry(cbObj, Lay, Pal);
+      if (F1) { assembleF1(); return; }
       var G = geo.groups, kindOf = { seatD: 'seat-driver-cockpit', seatDc: 'seat-driver-cockpit', harnessD: 'seat-driver-cockpit' };
       ['soft', 'liner', 'plastic', 'matte', 'trim', 'carbon', 'metal', 'paint', 'cage', 'harness', 'seatD', 'seatDc', 'harnessD', 'glow', 'leds', 'stars'].forEach(function (k) {
         if (G[k]) addItem(k, mkMesh(G[k]), mats[k], IDENT, kindOf[k], k === 'seatD' || k === 'seatDc' || k === 'harnessD' ? { driverSeat: true } : null);
@@ -2621,6 +2654,37 @@ var CB = (globalThis.CB = globalThis.CB || {});
       self.nearPlane = Lay.nearPlane; self.layout = Lay;
       self.items = items; self.parts = items;
       self.stats = { items: items.length, triangles: meshesTris() };
+      wheelMatrix(wheelM, steer.rot); poseHands(); poseArms(); poseLever(0);
+    }
+    /** F1 onboard: wheel + display + hands + arms + sidepod mirror glasses only (the car body stays visible) */
+    function assembleF1() {
+      var W = geo.wheel;
+      if (W.rim) addItem('wheel-rim', mkMesh(W.rim), mats.carbon || mats.soft, wheelM, 'cockpit-steering');
+      if (W.hard) addItem('wheel-hard', mkMesh(W.hard), mats.plastic, wheelM, 'cockpit-steering');
+      if (W.trim) addItem('wheel-trim', mkMesh(W.trim), mats.trim, wheelM, 'cockpit-steering');
+      if (W.carbon) addItem('wheel-carbon', mkMesh(W.carbon), mats.carbon, wheelM, 'cockpit-steering');
+      if (W.metal) addItem('wheel-metal', mkMesh(W.metal), mats.metal, wheelM, 'cockpit-steering');
+      if (W.leds) addItem('wheel-leds', mkMesh(W.leds), mats.leds, wheelM, 'cockpit-steering');
+      if (geo.panels.wheelDisplay && tex.wheel) addItem('wheel-display', mkMesh(geo.panels.wheelDisplay, true), mats.wheelDisplay, wheelM, 'cockpit-steering');
+      geo.hands.forEach(function (h, i) { addItem('hand-' + i, mkMesh(h), mats.glove, handM[i], 'cockpit-hands'); });
+      var up = mkMesh(geo.arms.upper), fo = mkMesh(geo.arms.fore);
+      for (var a = 0; a < 2; a++) { addItem('arm-upper-' + a, up, mats.sleeve, armM[a * 2], 'cockpit-arms'); addItem('arm-fore-' + a, fo, mats.sleeve, armM[a * 2 + 1], 'cockpit-arms'); }
+      var mg = new Geo();
+      Lay.sideMirrors.forEach(function (sm) {
+        var F = faceFrame(sm.pos, add(sm.pos, sm.normal));
+        panel(mg, sm.pos, F, sm.width, sm.height, sm.side < 0 ? [0.0, 0.08, 0.58, 0.92] : [0.42, 0.08, 1.0, 0.92]);
+      });
+      geo.panels.mirror = mg;
+      self._mirrorItem = addItem('mirror', mkMesh(mirrorGeo(), true), mats.mirror, IDENT, 'cockpit-mirror');
+      self.eye = Lay.eye.slice(); self.cockpitEye = self.eye;
+      self.mirror = { pos: Lay.mirror.pos.slice(), normal: Lay.mirror.normal.slice(), up: [0, 1, 0], width: Lay.mirror.width, height: Lay.mirror.height, fovY: Lay.mirror.fovY };
+      self.sideMirrors = Lay.sideMirrors.map(function (s) { return { pos: s.pos.slice(), normal: s.normal.slice(), width: s.width, height: s.height, side: s.side }; });
+      self.nearPlane = Lay.nearPlane; self.layout = Lay; self.f1 = true;
+      hideFwd = hideBack = ['driver', 'helmet'];
+      self.hideKinds = hideFwd;
+      self.items = items; self.parts = items;
+      var t = 0; for (var w in geo.wheel) t += geo.wheel[w].tris();
+      self.stats = { items: items.length, triangles: Math.round(t) };
       wheelMatrix(wheelM, steer.rot); poseHands(); poseArms(); poseLever(0);
     }
     function meshesTris() { var t = 0; for (var k in geo.groups) t += geo.groups[k].tris(); for (var w in geo.wheel) t += geo.wheel[w].tris(); return Math.round(t); }
@@ -2692,7 +2756,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       }
     }
     function nextTurn(s) {
-      if (!turns || !isFinite(s)) return null;
+      if (!turns || !isFinite(s) || !(turns.ds > 0.05) || !(turns.L > 0)) return null;
       var S = turns.S, n = S.length, i0 = Math.floor((((s % turns.L) + turns.L) % turns.L) / turns.ds);
       for (var d = 15; d < 260; d += turns.ds) {
         var k = S[(i0 + Math.round(d / turns.ds)) % n], c = num(k && k.curvature, 0);
@@ -2731,7 +2795,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var t = num(snap && snap.t, gauge.time);
       if (hist.t !== null && t > hist.t && t - hist.t < 0.5) {
         var ds = t - hist.t, dv = num(v.speed, 0) - hist.speed;
-        var dh = num(v.heading, 0) - hist.heading; while (dh > PI) dh -= TAU; while (dh < -PI) dh += TAU;
+        var dh = wrapPi(num(v.heading, 0) - hist.heading);
         var rl = clamp(dv / ds / 9.81, -3, 3), rlat = clamp(num(v.speed, 0) * dh / ds / 9.81, -3.5, 3.5);
         var kk = 1 - Math.exp(-ds * 8);
         hist.longG += (rl - hist.longG) * kk; hist.latG += (rlat - hist.latG) * kk;
@@ -2897,7 +2961,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     layout: layout, palette: palette, buildGeometry: buildGeometry, Geo: Geo, M4: M4,
     headModel: headModel, viewBasis: viewBasis, steerWheelAngle: steerWheelAngle, rimPath: rimPath,
     drawCluster: drawCluster, drawCenterScreen: drawCenterScreen, drawHud: drawHud, drawLeds: drawLeds, drawWheelDisplay: drawWheelDisplay, drawTrim: drawTrim,
-    minimapFrom: minimapFrom, fmtTime: fmtTime, gearLabel: gearLabel, upholsteryKind: upholsteryKind, drawUpholstery: drawUpholstery, HIDE_KINDS: HIDE_KINDS, lookBackHideKinds: lookBackHideKinds
+    minimapFrom: minimapFrom, fmtTime: fmtTime, gearLabel: gearLabel, upholsteryKind: upholsteryKind, drawUpholstery: drawUpholstery, HIDE_KINDS: HIDE_KINDS, lookBackHideKinds: lookBackHideKinds,
+    wrapPi: wrapPi, f1CockpitBuild: f1CockpitBuild, f1Layout: f1Layout
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.gl.cockpit;
 })();
