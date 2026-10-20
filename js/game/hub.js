@@ -1021,8 +1021,8 @@ background:var(--accent-softer,rgba(201,165,107,.07));transition:color .3s}
 #game-hub .gh-main{position:relative;z-index:2;flex:1;overflow:auto;overflow-x:hidden;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#333 transparent}
 #game-hub .gh-screen{padding:28px 40px 60px;max-width:1500px;margin:0 auto;animation:gh-in .42s cubic-bezier(.2,.8,.2,1) both}
 #game-hub.is-back .gh-screen{animation-name:gh-in-back}
-@keyframes gh-in{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
-@keyframes gh-in-back{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes gh-in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes gh-in-back{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 #game-hub .gh-foot{position:relative;z-index:3;display:flex;align-items:center;gap:22px;height:40px;padding:0 28px;border-top:1px solid var(--gh-line);
 font-size:11.5px;color:var(--gh-dim);background:var(--glass,rgba(18,19,23,.72))}
 #game-hub .gh-foot kbd{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;margin-right:6px;border:1px solid var(--gh-line2);border-bottom-width:2px;border-radius:5px;
@@ -1108,8 +1108,9 @@ background:var(--gh-panel2);border:1px solid var(--gh-line);color:var(--gh-dim);
 #game-hub .gh-title-logo{position:relative;font-size:clamp(52px,11.5vw,170px);font-weight:700;letter-spacing:.04em;line-height:.9;display:flex;margin-top:-6vh}
 #game-hub .gh-title-logo span{display:inline-block;background:var(--accent-grad,linear-gradient(180deg,#fff 0%,#e9e3d6 38%,#8d877a 52%,#efe7d6 64%,#a8a091 100%));-webkit-background-clip:text;background-clip:text;color:transparent;
 filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));opacity:0;transform:translateY(40px);animation:gh-letter .9s cubic-bezier(.2,.9,.2,1) forwards}
-#game-hub .gh-title-logo::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.55) 50%,transparent 60%);mix-blend-mode:overlay;
--webkit-mask:linear-gradient(#000,#000);background-size:250% 100%;animation:gh-sheen 4.5s 1.4s ease-in-out infinite;pointer-events:none}
+#game-hub .gh-title-logo::after{content:"REDLINE";position:absolute;inset:0;display:flex;letter-spacing:inherit;color:transparent;-webkit-text-fill-color:transparent;
+background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.5) 50%,transparent 58%) no-repeat;background-size:250% 100%;background-position:150% 0;-webkit-background-clip:text;background-clip:text;
+opacity:0;animation:gh-fade .01s 1.4s forwards,gh-sheen 4.5s 1.4s ease-in-out infinite;pointer-events:none}
 #game-hub .gh-title-logo span.is-red{background:linear-gradient(180deg,#ff8a6a 0%,#ff4b33 40%,#c22a17 58%,#ff6a4d 72%,#a8200f 100%);-webkit-background-clip:text;background-clip:text}
 @keyframes gh-letter{to{opacity:1;transform:none}}
 @keyframes gh-sheen{0%{background-position:150% 0}55%,100%{background-position:-60% 0}}
@@ -1125,34 +1126,74 @@ filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));opacity:0;transform:translateY(40
 #game-hub .gh-wheel-spin{animation:gh-spin .5s linear infinite}
 #game-hub .gh-car-sheen{animation:gh-carsheen 5s ease-in-out infinite}
 @keyframes gh-carsheen{0%,100%{transform:translateX(-30%)}50%{transform:translateX(30%)}}
-/* menu */
-#game-hub .gh-menu{display:grid;grid-template-columns:minmax(320px,440px) 1fr;gap:40px;align-items:stretch;min-height:calc(100vh - 200px);min-height:calc(100dvh - 200px)}
-#game-hub .gh-menu-list{display:flex;flex-direction:column;gap:6px;justify-content:center}
-#game-hub .gh-mi{position:relative;display:flex;align-items:center;gap:16px;width:100%;padding:11px 16px 11px 18px;background:transparent;border:1px solid transparent;border-radius:var(--gh-r-sm);cursor:pointer;text-align:left;
-transition:background .2s,border-color .2s,padding .2s}
-#game-hub .gh-mi::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--accent-grad,var(--gh-accent));transform:scaleY(0);transition:transform .2s}
-#game-hub .gh-mi .ix{font:700 11px var(--gh-mono);color:var(--gh-mute);width:22px}
-#game-hub .gh-mi .lbl{display:block;font-size:19px;font-weight:650;letter-spacing:-.01em;line-height:1.15}
-#game-hub .gh-mi .ds{display:block;font-size:11.5px;color:var(--gh-dim);margin-top:2px;max-height:0;overflow:hidden;transition:max-height .25s}
-#game-hub .gh-mi .ic{margin-left:auto;opacity:0;transform:translateX(-8px);transition:.2s;color:var(--gh-accent)}
-#game-hub .gh-mi:hover,#game-hub .gh-mi.is-focus{background:var(--accent-soft,rgba(201,165,107,.14));border-color:color-mix(in srgb,var(--gh-accent) 30%,transparent);padding-left:24px;box-shadow:none!important}
-#game-hub .gh-mi:hover::before,#game-hub .gh-mi.is-focus::before{transform:none}
-#game-hub .gh-mi:hover .ds,#game-hub .gh-mi.is-focus .ds{max-height:40px}
-#game-hub .gh-mi:hover .ic,#game-hub .gh-mi.is-focus .ic{opacity:1;transform:none}
-#game-hub .gh-mi.is-focus .lbl{color:var(--gh-accent)}
-#game-hub .gh-mi .badge{font:700 10px var(--gh-mono);padding:2px 7px;border-radius:10px;background:var(--gh-accent);color:var(--accent-ink,#17130b);margin-left:8px;vertical-align:middle;font-style:normal}
-#game-hub .gh-menu-hero{position:relative;display:flex;flex-direction:column;justify-content:center;border-left:1px solid var(--gh-line);padding-left:40px}
-#game-hub .gh-menu-hero .car{position:relative;margin:12px 0 18px}
-#game-hub .gh-menu-hero .car svg{width:100%;max-width:720px;height:auto;filter:drop-shadow(0 24px 30px rgba(0,0,0,.65))}
-#game-hub .gh-hero-name{font-size:28px;font-weight:650;letter-spacing:-.02em;line-height:1.1;font-family:var(--serif,var(--gh-font))}
+/* menu (home): hero with the build + Quick race / Continue career, mode tiles, compact rows */
+#game-hub .gh-home{display:flex;flex-direction:column;max-width:1400px;margin:0 auto}
+#game-hub .gh-home .gh-h2{margin:26px 0 12px}
+#game-hub .gh-home-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:32px;align-items:center;padding:28px 32px;border:1px solid var(--gh-line);border-radius:var(--radius-xl,22px);
+background:radial-gradient(90% 120% at 85% 60%,var(--accent-softer,rgba(201,165,107,.07)),transparent 60%),linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));box-shadow:var(--shadow,none);overflow:hidden}
+#game-hub .gh-home-hero::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--gh-accent),var(--gh-hot) 70%,transparent)}
+#game-hub .gh-home-txt{min-width:0;display:flex;flex-direction:column;gap:12px}
+#game-hub .gh-home-txt .gh-kicker{margin:0}
+#game-hub .gh-hero-name{font-size:var(--fs-3xl,38px);font-weight:600;letter-spacing:-.02em;line-height:1.05;font-family:var(--serif,var(--gh-font));overflow-wrap:anywhere}
+#game-hub .gh-home-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#game-hub .gh-home-cta{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin-top:6px}
+#game-hub .gh-btn.big{min-height:var(--control-h-lg,46px);padding:6px 18px;font-size:14px;border-radius:12px;text-align:left;gap:10px}
+#game-hub .gh-btn.big>span{display:flex;flex-direction:column;line-height:1.2}
+#game-hub .gh-btn.big small{font-size:11px;font-weight:500;letter-spacing:0;opacity:.72;white-space:nowrap}
+#game-hub .gh-home-prog{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:1px;margin-top:10px;background:var(--gh-line);border:1px solid var(--gh-line);border-radius:var(--gh-r);overflow:hidden}
+#game-hub .gh-home-prog>div{background:var(--gh-panel);padding:10px 14px;min-width:0;font-size:12.5px}
+#game-hub .gh-home-lv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+#game-hub .gh-home-lv .gh-num{color:var(--gh-dim);font-size:11px}
+#game-hub .gh-home-lv .gh-bar{grid-column:1/-1}
+#game-hub .gh-home-stat small{display:block;font-size:var(--fs-2xs,10.5px);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim);margin-bottom:2px}
+#game-hub .gh-home-stat span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#game-hub .gh-home-car{min-width:0}
+#game-hub .gh-home-car .car{position:relative;margin:-6px 0 12px}
+#game-hub .gh-home-car .car::after{content:"";position:absolute;left:8%;right:8%;bottom:2%;height:16%;background:radial-gradient(closest-side,rgba(0,0,0,.45),transparent);z-index:-1}
+#game-hub .gh-home-car .car svg{width:100%;max-width:720px;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 24px 30px rgba(0,0,0,.55))}
+#game-hub .gh-home-car .car.is-3d::after{content:none}
+#game-hub .gh-hero-img{display:block;width:100%;max-width:760px;height:auto;margin:0 auto;animation:gh-fade .35s both;opacity:0;
+-webkit-mask-image:radial-gradient(75% 85% at 50% 48%,#000 62%,transparent 100%);mask-image:radial-gradient(75% 85% at 50% 48%,#000 62%,transparent 100%)}
 #game-hub .gh-hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--gh-line);border:1px solid var(--gh-line);border-radius:var(--gh-r);overflow:hidden;margin-top:6px}
-#game-hub .gh-hero-stats div{background:var(--gh-panel);padding:12px 14px}
-#game-hub .gh-hero-stats b{display:block;font:700 20px var(--gh-mono);font-variant-numeric:tabular-nums}
+#game-hub .gh-hero-stats div{background:var(--gh-panel);padding:10px 14px}
+#game-hub .gh-hero-stats b{display:block;font:700 18px var(--gh-mono);font-variant-numeric:tabular-nums}
 #game-hub .gh-hero-stats small{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim)}
-#game-hub .gh-news{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
-#game-hub .gh-news .gh-panel{padding:14px}
-#game-hub .gh-news h4{margin:0 0 4px;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-accent)}
-#game-hub .gh-news p{margin:0;font-size:12.5px;color:var(--gh-dim)}
+#game-hub .gh-modes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+#game-hub .gh-mode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:132px;padding:16px;text-align:left;cursor:pointer;overflow:hidden;
+border:1px solid var(--gh-line);border-radius:var(--gh-r);background:linear-gradient(165deg,var(--mcs,var(--accent-soft)),transparent 62%),linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));
+transition:transform .2s var(--ease,ease),border-color .2s,box-shadow .25s}
+#game-hub .gh-mode::before{content:"";position:absolute;left:16px;right:16px;top:0;height:2px;border-radius:0 0 2px 2px;background:var(--mc,var(--gh-accent));opacity:.85}
+#game-hub .gh-mode-art{position:absolute;right:-22px;bottom:-26px;color:var(--mc,var(--gh-accent));opacity:.07;transition:opacity .25s,transform .35s var(--ease-out,ease)}
+#game-hub .gh-mode-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;margin-bottom:auto;color:var(--mc,var(--gh-accent));background:var(--mcs,var(--accent-soft));border:1px solid color-mix(in srgb,var(--mc,var(--gh-accent)) 30%,transparent)}
+#game-hub .gh-mode-lbl{position:relative;margin-top:14px;font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:1.2;white-space:nowrap}
+#game-hub .gh-mode-ds{position:relative;font-size:11.5px;color:var(--gh-dim);line-height:1.35;min-height:2.7em}
+#game-hub .gh-mode:hover,#game-hub .gh-mode.is-focus{transform:translateY(-3px);border-color:color-mix(in srgb,var(--mc,var(--gh-accent)) 55%,var(--gh-line));box-shadow:0 18px 36px -22px var(--mc,var(--gh-accent))}
+#game-hub .gh-mode:hover .gh-mode-art,#game-hub .gh-mode.is-focus .gh-mode-art{opacity:.18;transform:rotate(-6deg) scale(1.05)}
+#game-hub .gh-mode:active{transform:translateY(-1px) scale(.99)}
+#game-hub .gh-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#game-hub .gh-link,#game-hub .gh-mode,#game-hub .gh-home-cta .gh-btn{min-width:0}
+#game-hub .gh-link{display:flex;align-items:center;gap:12px;min-height:58px;padding:10px 12px;text-align:left;cursor:pointer;border:1px solid var(--gh-line);border-radius:var(--gh-r-sm);
+background:var(--gh-panel);transition:border-color .2s,background .2s}
+#game-hub .gh-link-ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:9px;background:var(--gh-panel2);color:var(--gh-accent);border:1px solid var(--gh-line)}
+#game-hub .gh-link-txt{min-width:0;flex:1}
+#game-hub .gh-link-txt b{display:block;font-size:13.5px;font-weight:650}
+#game-hub .gh-link-txt small{display:block;font-size:11.5px;color:var(--gh-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#game-hub .gh-link-go{color:var(--gh-mute);transition:transform .2s,color .2s}
+#game-hub .gh-link:hover,#game-hub .gh-link.is-focus{border-color:color-mix(in srgb,var(--gh-accent) 40%,var(--gh-line));background:var(--gh-panel2)}
+#game-hub .gh-link:hover .gh-link-go,#game-hub .gh-link.is-focus .gh-link-go{transform:translateX(3px);color:var(--gh-accent)}
+#game-hub .gh-home .badge{font:700 10px var(--gh-mono);padding:2px 7px;border-radius:10px;background:var(--gh-accent);color:var(--accent-ink,#17130b);margin-left:8px;vertical-align:2px;font-style:normal}
+@media (max-width:1179px){#game-hub .gh-modes{grid-template-columns:repeat(4,minmax(0,1fr))}}
+#game-hub .gh-home-lv>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1100px){#game-hub .gh-home-hero{grid-template-columns:1fr;gap:8px}#game-hub .gh-home-car{order:-1}#game-hub .gh-home-car .car svg{max-width:520px}#game-hub .gh-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){#game-hub .gh-home-hero{padding:18px 16px;border-radius:var(--radius-lg,16px)}#game-hub .gh-hero-name{font-size:26px}
+#game-hub .gh-home-cta{display:grid;grid-template-columns:minmax(0,1fr)}#game-hub .gh-home-cta .gh-btn{justify-content:flex-start}
+#game-hub .gh-home-prog{grid-template-columns:1fr 1fr}#game-hub .gh-home-lv{grid-column:1/-1}
+#game-hub .gh-hero-stats div{padding:8px 10px}#game-hub .gh-hero-stats b{font-size:15px}#game-hub .gh-hero-stats small{font-size:9px;letter-spacing:.1em}
+#game-hub .gh-modes{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#game-hub .gh-mode{min-height:112px;padding:14px}#game-hub .gh-mode-lbl{margin-top:10px}
+#game-hub .gh-links{grid-template-columns:minmax(0,1fr)}
+#game-hub .gh-btn.big small{white-space:normal}#game-hub .gh-home-hero{grid-template-columns:minmax(0,1fr)}
+#game-hub .gh-title-tag{letter-spacing:.36em;font-size:11px;padding-left:.36em;text-align:center}}
+@media (max-height:520px) and (min-width:641px){#game-hub .gh-home-hero{grid-template-columns:1fr 1fr;padding:16px 20px}#game-hub .gh-home-car{order:0}#game-hub .gh-hero-name{font-size:24px}#game-hub .gh-home-prog{display:none}}
 /* tabs */
 /* tabs = the Atelier's .cb-tab-list / .cb-tab */
 #game-hub .gh-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--gh-bg2);border:1px solid var(--gh-line);border-radius:12px;margin:6px 0 22px;overflow-x:auto;max-width:100%}
@@ -1405,7 +1446,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
     derby: '<path d="M12 2.5l1.8 5.2 5.2-2.3-2.4 5 5.2 1.8-5.2 1.8 2.4 5-5.2-2.3L12 21.5l-1.8-5.2-5.2 2.3 2.4-5L2.2 11.8l5.2-1.8-2.4-5 5.2 2.3z"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
-    gauge: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6M8 17h8"/>'
+    gauge: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6M8 17h8"/>',
+    users: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>'
   };
   function icon(name, size) {
     size = size || 18;
@@ -2564,13 +2606,14 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     title: 'Redline',
     render: function (host) {
       var b = activeBuild(), p = P();
+      var coarse = hasDOM && window.matchMedia ? safe(function () { return window.matchMedia('(pointer: coarse)').matches; }, false) : false;
       host.className = 'gh-title';
       host.style.padding = '0';
       var letters = 'REDLINE'.split('').map(function (c, i) { return '<span' + (i >= 3 ? ' class="is-red"' : '') + ' style="animation-delay:' + (0.15 + i * 0.09) + 's">' + c + '</span>'; }).join('');
       host.innerHTML = '<div class="gh-title-logo" aria-label="Redline">' + letters + '</div>' +
-        '<div class="gh-title-tag">Build · Race · Drift</div>' +
+        '<div class="gh-title-tag">Build it · Race it · Drift it</div>' +
         '<div class="gh-title-car">' + carArt(b, { spin: true, uid: 'title', own: !(CB.render && CB.render.thumbnail) }) + '</div>' +
-        '<div class="gh-title-press">Press any key' + (H.pad.active ? ' · Ⓐ' : '') + '</div>' +
+        '<div class="gh-title-press">' + (coarse ? 'Tap to start' : 'Press any key') + (H.pad.active ? ' · Ⓐ' : '') + '</div>' +
         '<div class="gh-title-meta"><span>' + esc(p.driverName || 'Driver') + ' · Level ' + (p.level || 1) + '</span><span>' + esc(buildName(b, '')) + '</span><span>© Redline</span></div>';
       host.addEventListener('click', function () { sfx('select'); show('menu', null, { replace: true }); });
     }
@@ -2605,6 +2648,27 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       else out.push(m);
     });
     return out;
+  }
+  /** The menu hero shows the same low-poly 3D car the game drives: one still from the Garage studio renderer
+      (CB.studio3d.still), cached per build / theme / size; the 2D drawing stays when WebGL is unavailable. */
+  var HERO_STILL = { key: '', url: null };
+  function heroStill(el, b) {
+    var S3 = CB.studio3d;
+    if (!el || !b || !hasDOM || !S3 || typeof S3.still !== 'function') return;
+    var apply = function (url) {
+      if (!url || !el.isConnected) return;
+      el.innerHTML = '<img class="gh-hero-img" alt="' + esc(buildName(b)) + ' — 3D studio render" src="' + url + '">';
+      el.classList.add('is-3d');
+    };
+    var w = Math.min(760, Math.max(260, el.clientWidth || 640)), hh = Math.round(w * 0.4);
+    var key = hashStr(safe(function () { return JSON.stringify(b); }, '') || '') + '|' + appTheme() + '|' + Math.round(w / 40);
+    if (HERO_STILL.key === key) { apply(HERO_STILL.url); return; }
+    setTimeout(function () {   // after the menu has painted: building the mesh takes a few tens of ms
+      if (!el.isConnected) return;
+      var url = safe(function () { return S3.still(b, { width: w, height: hh }); }, null);
+      HERO_STILL = { key: key, url: url };
+      apply(url);
+    }, 80);
   }
   function openAtelier(mode, extra) {
     var app = appMod();
@@ -2649,25 +2713,62 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var model = careerModel(career(), p);
       var nextChamp = null;
       model.tiers.forEach(function (t) { t.championships.forEach(function (c) { if (!nextChamp && !c.locked && c.started) nextChamp = c; }); });
-      host.innerHTML = '<div class="gh-menu"><div class="gh-menu-list" role="menu">' + menuItems().map(function (m, i) {
-        var badge = '';
-        if (m.id === 'garage' && car && num(car.condition, 1) < 0.6) badge = '<span class="badge">!</span>';
-        if (m.id === 'career' && nextChamp) badge = '<span class="badge">R' + (nextChamp.roundsDone + 1) + '</span>';
-        return '<button class="gh-mi" role="menuitem" data-nav data-key="mi-' + m.id + '" data-act="go" data-id="' + m.id + '"' + (i === 0 ? ' data-autofocus' : '') + '>' +
-          '<span class="ix">' + (i < 9 ? '0' : '') + (i + 1) + '</span><span><span class="lbl">' + esc(m.label) + badge + '</span><span class="ds">' + esc(m.desc) + '</span></span>' +
-          '<span class="ic">' + icon(m.icon, 22) + '</span></button>';
-      }).join('') + '</div>' +
-        '<div class="gh-menu-hero"><div class="gh-kicker">' + (heroCar ? 'Active car' : 'Your build') + (b ? ' · ' + esc(modelName(b) || titleCase(bodyStyleOf(b))) : '') + '</div>' +
-        '<div class="gh-hero-name">' + esc(heroCar ? heroCar.name : buildName(b)) + '</div>' +
-        '<div style="display:flex;gap:8px;margin-top:10px">' + (b ? piBadge(b) : '') + (heroCar ? '<span class="gh-chip ' + conditionLabel(heroCar.condition).kind + '">' + conditionLabel(heroCar.condition).label + ' · ' + pct(heroCar.condition) + '</span><span class="gh-chip">' + fmtDist(heroCar.odometer_km, setting('units')) + '</span>'
-          : ab ? '<span class="gh-chip">Race · Drift drive this build</span>' + (car ? '<span class="gh-chip">Career car · ' + esc(car.name) + '</span>' : '') : '<span class="gh-chip warn">Not owned</span>') + '</div>' +
-        '<div class="car">' + carArt(b, { uid: 'menu' }) + '</div>' + (b ? carStatsStrip(b) : '') +
-        '<div class="gh-news">' +
-        '<div class="gh-panel"><h4>Level ' + li.level + ' · ' + esc(levelTitle(li.level)) + '</h4><div class="gh-bar" style="margin:8px 0"><i style="width:' + (li.progress * 100).toFixed(1) + '%"></i></div><p>' + (li.maxed ? 'Max level' : fmtInt(li.remaining) + ' XP to level ' + (li.level + 1)) + '</p></div>' +
-        '<div class="gh-panel"><h4>' + (nextChamp ? 'Continue career' : 'Next unlock') + '</h4><p>' + (nextChamp ? esc(nextChamp.name) + ' — round ' + (nextChamp.roundsDone + 1) + ' of ' + nextChamp.rounds.length
-          : next.length ? esc(next[0].name || titleCase(next[0].id)) + ' at level ' + next[0].level : 'Everything unlocked') + '</p></div>' +
-        '<div class="gh-panel"><h4>Achievements</h4><p>' + (sum ? sum.unlocked + ' / ' + sum.total + ' unlocked · ' + pct(sum.pct) : 'Module loading…') + '</p></div>' +
-        '</div></div></div>';
+      var items = menuItems(), byId = {};
+      items.forEach(function (m) { byId[m.id] = m; });
+      var badgeOf = function (id) {
+        if (id === 'garage' && car && num(car.condition, 1) < 0.6) return '<span class="badge" title="Your career car needs a repair">!</span>';
+        if (id === 'career' && nextChamp) return '<span class="badge">R' + (nextChamp.roundsDone + 1) + '</span>';
+        return '';
+      };
+      // Play: every driving mode as a tile (mode accent = --mode-* tokens, css/styles.css § 01); the rest as compact rows
+      var PLAY = [
+        { id: 'race', short: 'Full grid, 3D circuits', mc: 'race' }, { id: 'drift', short: 'Scored runs, free or tandem', mc: 'drift' },
+        { id: 'arcade', short: 'Stunt tracks, nitro and items', mc: 'arcade' }, { id: 'derby', short: 'Weapons on, last car standing', mc: 'derby' },
+        { id: 'f1', short: 'Pick a team, real circuits', mc: 'f1' }, { id: 'timetrial', short: 'Hot laps against your ghost', mc: 'career' }
+      ];
+      var playIds = {};
+      var tiles = PLAY.filter(function (t) { return byId[t.id]; }).map(function (t) {
+        var m = byId[t.id]; playIds[t.id] = 1;
+        return '<button class="gh-mode" role="menuitem" data-nav data-key="mi-' + m.id + '" data-act="go" data-id="' + m.id + '" title="' + esc(m.desc) + '" style="--mc:var(--mode-' + t.mc + ');--mcs:var(--mode-' + t.mc + '-soft)">' +
+          '<span class="gh-mode-art" aria-hidden="true">' + icon(m.icon, 120) + '</span><span class="gh-mode-ic">' + icon(m.icon, 20) + '</span>' +
+          '<span class="gh-mode-lbl">' + esc(m.id === 'derby' ? 'Derby' : m.label) + badgeOf(m.id) + '</span><span class="gh-mode-ds">' + esc(t.short) + '</span></button>';
+      });
+      if (routerMod()) {
+        tiles.push('<button class="gh-mode" role="menuitem" data-nav data-key="mi-multiplayer" data-act="go" data-id="multiplayer" title="Peer-to-peer races with friends, each in their own build" style="--mc:var(--mode-online);--mcs:var(--mode-online-soft)">' +
+          '<span class="gh-mode-art" aria-hidden="true">' + icon('users', 120) + '</span><span class="gh-mode-ic">' + icon('users', 20) + '</span>' +
+          '<span class="gh-mode-lbl">Multiplayer</span><span class="gh-mode-ds">Race friends online</span></button>');
+      }
+      var links = items.filter(function (m) { return !playIds[m.id]; }).map(function (m) {
+        return '<button class="gh-link" role="menuitem" data-nav data-key="mi-' + m.id + '" data-act="go" data-id="' + m.id + '">' +
+          '<span class="gh-link-ic">' + icon(m.icon, 18) + '</span><span class="gh-link-txt"><b>' + esc(m.label) + badgeOf(m.id) + '</b><small>' + esc(m.desc) + '</small></span>' +
+          '<span class="gh-link-go" aria-hidden="true">' + icon('chev', 16) + '</span></button>';
+      });
+      var careerCta = nextChamp
+        ? '<button class="gh-btn big" data-nav data-key="cta-career" data-act="go" data-id="career">' + icon('career', 18) + '<span>Continue career<small>' + esc(nextChamp.name) + ' · round ' + (nextChamp.roundsDone + 1) + ' of ' + nextChamp.rounds.length + '</small></span></button>'
+        : '<button class="gh-btn big" data-nav data-key="cta-career" data-act="go" data-id="career">' + icon('career', 18) + '<span>Start career<small>Rookie Cup to Hypercar Masters</small></span></button>';
+      var quickCta = routerMod() && CB.app && typeof CB.app.drive === 'function'
+        ? '<button class="gh-btn primary big" data-nav data-key="cta-quick" data-act="quick" data-autofocus>' + icon('play', 18) + '<span>Quick race<small>Your last setup, straight to the grid</small></span></button>'
+        : '<button class="gh-btn primary big" data-nav data-key="cta-quick" data-act="go" data-id="' + (byId.race ? 'race' : 'quickrace') + '" data-autofocus>' + icon('play', 18) + '<span>Quick race<small>Pick a circuit and go</small></span></button>';
+      host.innerHTML = '<div class="gh-home" role="menu" aria-label="Main menu">' +
+        '<section class="gh-home-hero">' +
+          '<div class="gh-home-txt"><div class="gh-kicker">' + (heroCar ? 'Active car' : 'Your build') + (b ? ' · ' + esc(modelName(b) || titleCase(bodyStyleOf(b))) : '') + '</div>' +
+          '<div class="gh-hero-name">' + esc(heroCar ? heroCar.name : buildName(b)) + '</div>' +
+          '<div class="gh-home-chips">' + (b ? piBadge(b) : '') + (heroCar ? '<span class="gh-chip ' + conditionLabel(heroCar.condition).kind + '">' + conditionLabel(heroCar.condition).label + ' · ' + pct(heroCar.condition) + '</span>'
+            : ab ? (car ? '<span class="gh-chip" title="Career championships use your active career car">Career car · ' + esc(car.name) + '</span>' : '') : '<span class="gh-chip warn">Not owned</span>') +
+            '<button class="gh-btn ghost small" data-nav data-key="cta-garage" data-act="go" data-id="atelier">' + icon('wrench', 14) + 'Tune in Garage</button></div>' +
+          '<div class="gh-home-cta">' + quickCta + careerCta + '</div>' +
+          '<div class="gh-home-prog">' +
+            '<div class="gh-home-lv"><span><b>Level ' + li.level + '</b> · ' + esc(levelTitle(li.level)) + '</span><span class="gh-num">' + (li.maxed ? 'Max level' : fmtInt(li.remaining) + ' XP to go') + '</span>' +
+              '<div class="gh-bar"><i style="width:' + (li.progress * 100).toFixed(1) + '%"></i></div></div>' +
+            '<div class="gh-home-stat"><small>' + 'Next unlock' + '</small><span>' + (next.length ? esc(next[0].name || titleCase(next[0].id)) + ' · Lv ' + next[0].level : 'Everything unlocked') + '</span></div>' +
+            '<div class="gh-home-stat"><small>Achievements</small><span>' + (sum ? sum.unlocked + ' / ' + sum.total + ' · ' + pct(sum.pct) : 'Loading…') + '</span></div>' +
+          '</div></div>' +
+          '<div class="gh-home-car"><div class="car" data-gh-hero3d>' + carArt(b, { uid: 'menu' }) + '</div>' + (b ? carStatsStrip(b) : '') + '</div>' +
+        '</section>' +
+        '<h2 class="gh-h2">Play</h2><div class="gh-modes">' + tiles.join('') + '</div>' +
+        '<h2 class="gh-h2">Progress &amp; garage</h2><div class="gh-links">' + links.join('') + '</div>' +
+        '</div>';
+      heroStill(host.querySelector('[data-gh-hero3d]'), b);
       onAct(host, {
         go: function (d) {
           var router = routerMod();
@@ -2693,6 +2794,11 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
             return;
           }
           show(d.id);
+        },
+        quick: function () {
+          // Quick race: the race setup's last settings, straight to the grid (CB.app.drive autoStart)
+          if (CB.app && typeof CB.app.drive === 'function') { sfx('select'); CB.app.drive('race', { quick: true }); return; }
+          show('quickrace');
         },
         showroom: function () { show('showroom'); }, 'register-entry': registerEntry
       });
@@ -4619,7 +4725,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     t = t === 'light' ? 'light' : 'dark';
     if (CB.app && typeof CB.app.setTheme === 'function') { safe(function () { CB.app.setTheme(t); }); return; }
     if (hasDOM) document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem('forge.theme.v1', t); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('forge.theme.v1', JSON.stringify(t)); } catch (e) { /* ignore */ }   // app.js reads it with JSON.parse
   }
   function saveSetting(path, value, silentRerender) {
     setSetting(path, value);

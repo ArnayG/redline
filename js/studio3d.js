@@ -1243,8 +1243,47 @@ var CB = (globalThis.CB = globalThis.CB || {});
     };
   }
 
+  /**
+   * One still frame of a build as an image (the menu hero): renders the studio car once on a throw-away offscreen
+   * canvas and returns a PNG data URL (null when WebGL / the low-poly kit is unavailable). Synchronous; the live
+   * Atelier turntable (if mounted) is parked for the duration and untouched. opts {width, height (CSS px), yaw,
+   * pitch, distK}; the device pixel ratio is the studio's (capped at 2).
+   */
+  function still(build, opts) {
+    if (!HAS_DOM || !build || !isSupported() || !document.body) return null;
+    opts = opts || {};
+    var w = Math.max(64, Math.round(num(opts.width, 720))), hgt = Math.max(48, Math.round(num(opts.height, 300)));
+    var saved = st, url = null, box = document.createElement('div');
+    box.setAttribute('aria-hidden', 'true');
+    box.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + w + 'px;height:' + hgt + 'px;padding:0;opacity:0;pointer-events:none;contain:strict';
+    document.body.appendChild(box);
+    st = null;
+    try {
+      if (mount(box, { view: 'side' }) && st) {
+        if (st.raf) { try { window.cancelAnimationFrame(st.raf); } catch (e0) { /* ignore */ } st.raf = 0; }
+        st.reduce = true; st.auto.on = false;
+        var c = st.cam, a = viewAngles('side');
+        c.yaw = isFinite(opts.yaw) ? +opts.yaw : a.yaw + 28; c.pitch = isFinite(opts.pitch) ? +opts.pitch : 9; c.distK = isFinite(opts.distK) ? +opts.distK : 1.08;
+        st.pendingBuild = build; st.pendingMetrics = null; st.pendingSpec = null;
+        var t = nowMs();
+        applyPending(t);
+        if (st.car) {
+          st.dimsShown = st.dimsShown || { length: st.car.r.dims.length, width: st.car.r.dims.width, height: st.car.r.dims.height };
+          step(0, t);
+          render(t, true);
+          url = st.canvas.toDataURL('image/png');
+        }
+      }
+    } catch (e) { url = null; try { console.warn('[studio3d] still failed', e); } catch (e2) { /* ignore */ } }
+    try { if (st) destroy(); } catch (e3) { /* ignore */ }
+    st = saved;
+    if (box.parentNode) box.parentNode.removeChild(box);
+    return url && url.length > 2000 ? url : null;
+  }
+
   CB.studio3d = {
     version: '1.0.0',
+    still: still,
     isSupported: isSupported,
     mount: mount,
     update: update,

@@ -1244,10 +1244,10 @@ window.CB = window.CB || {};
   function openDriveMenu(anchor) {
     if (!anchor) { drive('race'); return; }
     popover(anchor, [
-      { label: 'Race', hint: 'R · grid race, 3D', icon: 'check', run: function () { drive('race'); } },
-      { label: 'Drift', hint: 'D · scored drift run, 3D', icon: 'spark', run: function () { drive('drift'); } },
-      { label: 'Arcade', hint: 'A · stunt tracks, nitro and items', icon: 'spark', run: function () { drive('arcade'); } },
-      routedActive() ? { label: 'Multiplayer', hint: 'Race friends online in this car', icon: 'check', run: function () { closePop(); CB.router.go('multiplayer'); } } : null
+      { label: 'Race', hint: 'R · grid race, 3D', icon: 'flag', run: function () { drive('race'); } },
+      { label: 'Drift', hint: 'D · scored drift run, 3D', icon: 'drift', run: function () { drive('drift'); } },
+      { label: 'Arcade', hint: 'A · stunt tracks, nitro and items', icon: 'bolt', run: function () { drive('arcade'); } },
+      routedActive() ? { label: 'Multiplayer', hint: 'Race friends online in this car', icon: 'users', run: function () { closePop(); CB.router.go('multiplayer'); } } : null
     ].filter(Boolean), 'menu-pop drive-pop');
   }
 

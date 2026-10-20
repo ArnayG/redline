@@ -112,6 +112,37 @@
   --studio-grid: rgba(255, 255, 255, .06);
   --studio-horizon: rgba(201, 165, 107, .28);
 
+  /* ---- shared scales (one product family: Garage, hub, race / drift / arcade / derby / F1 setups, lobby) ----
+     Use these instead of literal px so every mode reads as the same game. */
+  /* type scale (1.2 minor third around 14px body) */
+  --fs-2xs: 10.5px;   /* eyebrows, kickers, table heads (uppercase, +.18em tracking) */
+  --fs-xs: 11.5px;    /* hints, meta, chip text */
+  --fs-sm: 12.5px;    /* secondary copy, buttons in dense rows */
+  --fs-md: 14px;      /* body, default buttons */
+  --fs-lg: 16px;      /* card titles */
+  --fs-xl: 20px;      /* section titles */
+  --fs-2xl: 28px;     /* screen titles (serif) */
+  --fs-3xl: clamp(30px, 3.4vw, 40px); /* hero titles (serif) */
+  --tracking-caps: .18em;
+  /* spacing scale (4px grid) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  /* control heights; --touch-min is the floor for anything tappable on a coarse pointer */
+  --control-h-sm: 30px; --control-h-md: 38px; --control-h-lg: 46px; --touch-min: 44px;
+  /* elevation: 1 = resting card, 2 = raised / hover, 3 = popover / sheet */
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow);
+  --elev-3: var(--shadow-lg);
+  /* mode accents: each mode keeps the gold brand for primary actions and uses its accent for identity
+     (tile art, eyebrow, active tab underline, HUD highlights). -soft = tinted surface, -ink = text on the accent. */
+  --mode-race: #e0412f;   --mode-race-soft: rgba(224, 65, 47, .14);
+  --mode-drift: #ff7a2b;  --mode-drift-soft: rgba(255, 122, 43, .14);
+  --mode-arcade: #5b8cff; --mode-arcade-soft: rgba(91, 140, 255, .15);
+  --mode-derby: #f0582a;  --mode-derby-soft: rgba(240, 88, 42, .14);
+  --mode-f1: #ff1e3c;     --mode-f1-soft: rgba(255, 30, 60, .13);
+  --mode-online: #3fbfa0; --mode-online-soft: rgba(63, 191, 160, .14);
+  --mode-career: var(--accent); --mode-career-soft: var(--accent-soft);
+  --mode-ink: #fff;
+
   accent-color: var(--accent);
 }
 
@@ -172,6 +203,14 @@
   --studio-spot-2: rgba(42, 111, 176, .06);
   --studio-grid: rgba(30, 24, 12, .075);
   --studio-horizon: rgba(154, 116, 54, .25);
+
+  /* mode accents, darkened for AA text contrast on the light panels */
+  --mode-race: #c22d1b;   --mode-race-soft: rgba(194, 45, 27, .1);
+  --mode-drift: #c2520f;  --mode-drift-soft: rgba(194, 82, 15, .1);
+  --mode-arcade: #2f5fd6; --mode-arcade-soft: rgba(47, 95, 214, .1);
+  --mode-derby: #c43d12;  --mode-derby-soft: rgba(196, 61, 18, .1);
+  --mode-f1: #d1102b;     --mode-f1-soft: rgba(209, 16, 43, .09);
+  --mode-online: #13836a; --mode-online-soft: rgba(19, 131, 106, .1);
 }
 
 /* ==========================================================================
@@ -3696,6 +3735,10 @@ html.cb-routed .gnav::after {
 .gnav-chip[hidden] { display: none; }
 .gnav-level { color: var(--text-dim); font-family: var(--font); font-weight: 650; }
 .gnav-icon.is-active { color: var(--accent); background: var(--accent-soft); }
+.gnav-s { display: none; }
+/* the brand is the way home: lit while the main menu is showing */
+.gnav-brand.is-active { background: var(--accent-softer); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent); }
+.gnav-brand:focus-visible, .gnav-link:focus-visible, .gnav-chip:focus-visible { outline: none; box-shadow: var(--focus); }
 html.cb-driving .gnav { display: none; }
 
 /* ---------------------------------------------------------------- screen layers */
@@ -3720,6 +3763,21 @@ html.cb-routed:not(.cb-driving) body #screen-f1.cb-screen {
 }
 html.cb-routed:not([data-route="atelier"]) body { overflow: hidden; }
 
+/* route changes: the incoming layer fades in (opacity only: a transform would re-anchor the Garage's fixed bars) */
+@media (prefers-reduced-motion: no-preference) {
+  html.cb-routed:not(.cb-driving) .cb-screen:not([hidden]) { animation: cb-screen-in var(--dur-3) var(--ease-out) both; }
+}
+@keyframes cb-screen-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* < 1200 (tablets, phones): 9 full labels no longer fit one row, so each link is an icon over a short label
+   (Garage · Race · … · F1 · Online · Cars): still readable without hover tooltips */
+@media (max-width: 1199.98px) {
+  html.cb-routed .gnav-link .gnav-l { display: none; }
+  html.cb-routed .gnav-link .gnav-s { display: block; }
+  html.cb-routed .gnav-link { flex-direction: column; justify-content: center; gap: 3px; height: 42px; min-width: 46px; padding: 0 6px; font-size: 10px; font-weight: 650; letter-spacing: .01em; }
+  html.cb-routed .gnav-link.is-active::after { bottom: -5px; }
+}
+
 /* the Atelier layer: its top bar docks under the nav bar; the nav's FORGE mark replaces the Atelier brand */
 html.cb-routed #topbar { top: var(--gnav-h); }
 html.cb-routed #layout { height: calc(100vh - var(--topbar-h) - var(--gnav-h)); height: calc(100dvh - var(--topbar-h) - var(--gnav-h)); }
@@ -3728,8 +3786,6 @@ html.cb-routed #topbar .brand-sub { margin-left: 0; color: var(--text); }
 html.cb-routed #btn-menu, html.cb-routed #btn-hub { display: none !important; }
 @media (max-width: 899.98px) {
   html.cb-routed #layout { height: auto; }
-  html.cb-routed .gnav-link span { display: none; }
-  html.cb-routed .gnav-link { padding: 0 10px; }
   html.cb-routed .gnav-level { display: none; }
   /* the brand's only visible piece (.brand-sub) is hidden < 900, so drop the build-title divider too */
   html.cb-routed #topbar .brand { display: none; }
@@ -3764,8 +3820,17 @@ html.cb-routed #btn-menu, html.cb-routed #btn-hub { display: none !important; }
   @supports (padding-top: env(safe-area-inset-top)) { :root { --gnav-h: calc(98px + env(safe-area-inset-top, 0px)); } }
   html.cb-routed .gnav { flex-wrap: wrap; align-content: center; row-gap: 4px; }
   html.cb-routed .gnav-links { order: 10; flex: 1 0 100%; justify-content: space-between; overflow: visible; }
-  html.cb-routed .gnav-links .gnav-link { flex: 1 1 0; min-width: 40px; padding: 0; }
-  html.cb-routed .gnav-link.is-active::after { bottom: -4px; }
+  html.cb-routed .gnav-links .gnav-link { flex: 1 1 0; min-width: 34px; padding: 0; height: 44px; }
+  html.cb-routed .gnav-link.is-active::after { bottom: -3px; }
+  html.cb-routed .gnav-link .gnav-s { font-size: 9.5px; max-width: 100%; overflow: hidden; text-overflow: clip; }
+}
+/* phones in landscape: one slim nav row so the short viewport keeps its height for the screen */
+@media (max-height: 520px) and (max-width: 1024px) {
+  :root { --gnav-h: 44px; }
+  @supports (padding-top: env(safe-area-inset-top)) { :root { --gnav-h: calc(44px + env(safe-area-inset-top, 0px)); } }
+  html.cb-routed .gnav-link { height: 40px; gap: 2px; }
+  html.cb-routed .gnav-chip { height: 30px; }
+  html.cb-routed .gnav-link.is-active::after { bottom: -3px; }
 }
 
 /* the Atelier's "Drive it" call to action (Race / Drift with this exact build) */

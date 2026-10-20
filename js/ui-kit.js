@@ -67,6 +67,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     redo: svgIcon('<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>'),
     reset: svgIcon('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
     spark: svgIcon('<path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/>'),
+    // drive modes (same glyphs as the global nav bar, js/router.js)
+    flag: svgIcon('<path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/>'),
+    drift: svgIcon('<path d="M4 18c3-7 8-11 16-12"/><path d="M14 4l6 2-2 6"/><circle cx="6" cy="20" r="1.2"/>'),
+    bolt: svgIcon('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>'),
+    users: svgIcon('<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>'),
     lock: svgIcon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>')
   };
 

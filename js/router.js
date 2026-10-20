@@ -80,9 +80,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
     { route: 'drift', label: 'Drift', icon: '<path d="M4 18c3-7 8-11 16-12"/><path d="M14 4l6 2-2 6"/><circle cx="6" cy="20" r="1.2"/>' },
     { route: 'arcade', label: 'Arcade', icon: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>' },
     { route: 'derby', label: 'Derby', icon: '<path d="M12 2.5l1.8 5.2 5.2-2.3-2.4 5 5.2 1.8-5.2 1.8 2.4 5-5.2-2.3L12 21.5l-1.8-5.2-5.2 2.3 2.4-5L2.2 11.8l5.2-1.8-2.4-5 5.2 2.3z"/>' },
-    { route: 'multiplayer', label: 'Multiplayer', icon: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>' },
+    { route: 'multiplayer', label: 'Multiplayer', short: 'Online', icon: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>' },
     { route: 'career', label: 'Career', icon: '<path d="M6 3h12v4a6 6 0 0 1-12 0z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 13v8"/>' },
-    { route: 'garage', label: 'My Cars', icon: '<path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-7h10v7M7 17h10"/>' }
+    { route: 'garage', label: 'My Cars', short: 'Cars', icon: '<path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-7h10v7M7 17h10"/>' }
   ];
 
   function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
@@ -350,10 +350,12 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var nav = document.getElementById('gnav');
     if (!nav) return;
     nav.innerHTML =
-      '<a class="gnav-brand" href="#/menu" data-go="menu" title="Main menu" aria-label="Redline — main menu">' + brandMark(26) +
+      '<a class="gnav-brand" href="#/menu" data-go="menu" data-nav-route="menu" title="Main menu" aria-label="Redline — main menu">' + brandMark(26) +
         '<span class="gnav-name">RED<b>LINE</b></span></a>' +
       '<nav class="gnav-links" aria-label="Main">' + NAV.map(function (n) {
-        return '<a class="gnav-link" href="' + format(n.route) + '" data-go="' + n.route + '" data-nav-route="' + n.route + '">' + svg(n.icon, 16) + '<span>' + esc(n.label) + '</span></a>';
+        // phones show the short label under the icon (.gnav-s, aria-hidden); the full label stays for screen readers
+        return '<a class="gnav-link" href="' + format(n.route) + '" data-go="' + n.route + '" data-nav-route="' + n.route + '" title="' + esc(n.label) + '">' + svg(n.icon, 16) +
+          '<span class="gnav-l">' + esc(n.label) + '</span><span class="gnav-s" aria-hidden="true">' + esc(n.short || n.label) + '</span></a>';
       }).join('') + '</nav>' +
       '<div class="gnav-spacer"></div>' +
       '<a class="gnav-chip" href="#/profile" data-go="profile" data-nav-route="profile" title="Profile & stats"><span class="gnav-credits">—</span><span class="gnav-level"></span></a>' +

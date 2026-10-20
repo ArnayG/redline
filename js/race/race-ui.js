@@ -1570,6 +1570,14 @@ CB.race = CB.race || {};
     '#race-root.is-routed{position:absolute;inset:0;z-index:auto;width:100%;height:100%}',
     '#race-root.is-routed .rx-brand{display:none}',
     '#race-root .rx-disc-switch{flex:none}#race-root .rx-disc-switch .cb-tab-list{min-width:200px}#race-root .rx-disc-switch .cb-tab{min-width:90px;cursor:pointer}',
+    /* each tab carries its mode accent (--mode-* tokens, css/styles.css § 01): icon tint + active underline */
+    '#race-root .rx-disc-switch .cb-tab .rx-icon{color:var(--mc,currentColor);opacity:.85}#race-root .rx-disc-switch .cb-tab.is-active .rx-icon{opacity:1}',
+    '#race-root .rx-disc-switch .cb-tab.is-active::after{background:var(--mc,var(--accent-grad))}',
+    '@media (max-width:640px){#race-root .rx-disc-switch .cb-tab-list{min-width:0}#race-root .rx-disc-switch .cb-tab{min-width:0;padding:0 10px}}',
+    /* short landscape phones: a slimmer setup header (the step pills duplicate the switch) */
+    '@media (max-height:500px){#race-root .rx-topbar{padding-top:8px;padding-bottom:8px}#race-root .rx-topbar .rx-steps{display:none}#race-root .rx-topbar>.rx-btn:last-child{margin-left:auto}}',
+    /* phones: the back button keeps its icon (the label stays for screen readers and in the title) */
+    '@media (max-width:560px){#race-root .rx-topbar>.rx-btn:last-child{font-size:0;gap:0;min-width:40px;padding:0 10px;margin-left:auto}#race-root .rx-topbar>.rx-btn:last-child .rx-kbd{display:none}}',
     '#race-root .rx-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}',
     '#race-root .rx-layer{position:absolute;inset:0}',
     '#race-root[data-screen="setup"] .rx-canvas,#race-root[data-screen="discipline"] .rx-canvas,#race-root[data-screen="results-only"] .rx-canvas{visibility:hidden}',
@@ -2751,6 +2759,7 @@ CB.race = CB.race || {};
     var top = h('header', { class: 'rx-topbar' },
       h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: 'Arcade Mode' }))),
+      isGameLaunch() ? null : disciplineTabs('arcade'),
       h('nav', { class: 'rx-steps' },
         h('span', { class: 'rx-step is-on', html: '<b>01</b>Arcade' }),
         h('span', { class: 'rx-step is-on', html: '<b>02</b>Track' }),
@@ -2979,10 +2988,13 @@ CB.race = CB.race || {};
   function disciplineTabs(active) {
     var hasDrift = !!driftMod();
     var list = h('div', { class: 'cb-tab-list rx-disc-tabs', role: 'tablist', 'aria-label': 'Discipline' });
-    [{ id: 'race', name: 'Race', icon: 'flag' }, { id: 'drift', name: 'Drift', icon: 'drift' }].forEach(function (d) {
+    var discs = [{ id: 'race', name: 'Race', icon: 'flag' }, { id: 'drift', name: 'Drift', icon: 'drift' }];
+    // routed (#/race, #/drift, #/arcade): the three setups share one switch; Arcade is its own route
+    if (U && U.layer && routerApi()) discs.push({ id: 'arcade', name: 'Arcade', icon: 'bolt' });
+    discs.forEach(function (d) {
       var off = d.id === 'drift' && !hasDrift;
       list.appendChild(h('button', { class: 'cb-tab' + (d.id === active ? ' is-active' : ''), type: 'button', role: 'tab',
-        'aria-selected': d.id === active ? 'true' : 'false', disabled: off ? true : null,
+        'aria-selected': d.id === active ? 'true' : 'false', disabled: off ? true : null, style: { '--mc': 'var(--mode-' + d.id + ')' },
         title: off ? 'Drift modules (js/race/drift/*) are not loaded' : d.name + ' mode',
         onclick: function () { if (d.id !== active) switchDiscipline(d.id); } }, icon(d.icon, 15), d.name));
     });
@@ -2991,6 +3003,7 @@ CB.race = CB.race || {};
   function switchDiscipline(id) {
     if (!U) return;
     if (id === 'drift' && !driftMod()) { toast(icon('warn', 14), 'Drift modules are not loaded'); return; }
+    if (id === 'arcade' && !(U.layer && !isGameLaunch())) return;   // Arcade is reached through its route only
     if (U.layer && !isGameLaunch()) {
       // carry the launcher's callbacks (e.g. the Atelier's onFinish) and return point over to the other route
       var keep = {}, o = U.opts || {};
