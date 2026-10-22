@@ -19,7 +19,9 @@
    wheelie bars on RWD cars, tyre smoke (lane.smoke / lane.burnout), exhaust flames ('bang' / 'launch' events),
    nitrous flames (lane.nitrous.active) and purge, parachute (lane.chute 0..1).
    Cameras: 'chase' (frames the tree while staging), 'low', 'side' (TV tracking shot), 'bumper', 'cockpit'
-   (CB.gl.cockpit interior when available, else a hood cam). Pure helpers in `_` load in Node.
+   (CB.gl.cockpit interior when available, else a hood cam). In the cockpit the dash gets drag readouts (`_.dragDash`)
+   and the mirrors a live rear view (`_.mirrorPlan`: small render target by tier, static tint on low; setMirror(bool),
+   mirrorState()). Pure helpers in `_` load in Node.
    ========================================================================== */
 var CB = (globalThis.CB = globalThis.CB || {});
 CB.drag = CB.drag || {};
@@ -30,10 +32,12 @@ CB.drag = CB.drag || {};
   var MODES = ['chase', 'low', 'side', 'bumper', 'cockpit'];
   var LABELS = { chase: 'Chase', low: 'Low chase', side: 'Side (TV)', bumper: 'Bumper', cockpit: 'Cockpit' };
   var QUALITY = {
-    low: { dpr: 1, scale: 0.8, shadow: 0, post: false, particles: 500, far: 2600, smoke: 0.45 },
-    medium: { dpr: 1.25, scale: 1, shadow: 1024, post: true, particles: 1200, far: 3200, smoke: 0.75 },
-    high: { dpr: 1.5, scale: 1, shadow: 2048, post: true, particles: 2200, far: 3800, smoke: 1 },
-    ultra: { dpr: 2, scale: 1, shadow: 2048, post: true, particles: 3200, far: 4200, smoke: 1.25 }
+    // mirror: rear-view render-target width (px; height from the glass aspect), mirrorEvery: frames between updates
+    // (0 = no live mirror: the glass gets a static dark tint)
+    low: { dpr: 1, scale: 0.8, shadow: 0, post: false, particles: 500, far: 2600, smoke: 0.45, mirror: 0, mirrorEvery: 0 },
+    medium: { dpr: 1.25, scale: 1, shadow: 1024, post: true, particles: 1200, far: 3200, smoke: 0.75, mirror: 192, mirrorEvery: 2 },
+    high: { dpr: 1.5, scale: 1, shadow: 2048, post: true, particles: 2200, far: 3800, smoke: 1, mirror: 256, mirrorEvery: 1 },
+    ultra: { dpr: 2, scale: 1, shadow: 2048, post: true, particles: 3200, far: 4200, smoke: 1.25, mirror: 320, mirrorEvery: 1 }
   };
   var MPH = 2.236936;
   function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
@@ -116,6 +120,56 @@ CB.drag = CB.drag || {};
     var target = [tx + 1.2, 0.75, both ? (pos[2] + opp[2]) / 2 : pos[2]];
     var d = Math.hypot(target[0] - eye[0], target[2] - eye[2]);
     return { eye: eye, target: target, up: [0, 1, 0], fov: clamp(2 * Math.atan((both ? 6.4 : 3.6) / Math.max(2, d)) / DEG, 34, 78) };
+  }
+
+  /** Rear-view mirror plan (pure): live render target or the static dark-tint fallback.
+      caps { cockpit: bool (an interior is up), fbo: bool (render targets work; false after a failure), aspect }.
+      -> { live, fallback, w, h, every, reason } */
+  function mirrorPlan(quality, caps) {
+    caps = caps || {};
+    var q = QUALITY[quality] || QUALITY.high;
+    if (!caps.cockpit) return { live: false, fallback: false, w: 0, h: 0, every: 0, reason: 'no-cockpit' };
+    if (!(q.mirror > 0) || !(q.mirrorEvery >= 1)) return { live: false, fallback: true, w: 0, h: 0, every: 0, reason: 'tier' };
+    if (caps.fbo === false) return { live: false, fallback: true, w: 0, h: 0, every: 0, reason: 'no-fbo' };
+    var asp = clamp(num(caps.aspect, 2.67), 1.5, 6), w = Math.round(q.mirror / 8) * 8, h = Math.max(24, Math.round(w / asp / 8) * 8);
+    return { live: true, fallback: false, w: w, h: h, every: Math.max(1, Math.round(q.mirrorEvery)), reason: 'ok' };
+  }
+  /** does the mirror pass run this frame (pure) */
+  function mirrorDue(plan, frame) { return !!(plan && plan.live) && num(frame, 0) % Math.max(1, plan.every) === 0; }
+  /** car-local mirror camera (pure): the eye -> glass ray reflected about the glass normal; the camera sits on the
+      glass looking along the reflection. m = { pos, normal, up?, fovY? } (CB.gl.cockpit mirror pose), eye car-local. */
+  function mirrorView(m, eye) {
+    var p = m && m.pos, n = m && m.normal;
+    if (!p || !n || !eye) return { pos: [num(eye && eye[0], 0) + 0.25, num(eye && eye[1], 1.1) + 0.12, 0], dir: [-1, -0.03, 0], up: [0, 1, 0], fov: 17 };
+    var d = norm(sub(p, eye)), nn = norm(n), dn = dot(d, nn);
+    var r = norm([d[0] - 2 * dn * nn[0], d[1] - 2 * dn * nn[1], d[2] - 2 * dn * nn[2]]);
+    var fov = num(m.fovY, 17); if (fov < 3.2) fov /= DEG;
+    return { pos: p.slice(), dir: r, up: m.up ? m.up.slice() : [0, 1, 0], fov: clamp(fov, 8, 40) };
+  }
+  /** What the drag dash shows (pure): the player's lane + snapshot -> CB.gl.cockpit drawDragCluster state. */
+  function dragDash(lane, snap, opp) {
+    lane = lane || {}; snap = snap || {};
+    var li = num(lane.lane, 0), tree = snap.tree || {}, TL = (tree.lanes || [])[li] || {}, gT = tree.greenT ? tree.greenT[li] : null, ph = snap.phase || 'staging';
+    var pre = ph === 'burnout' || ph === 'staging' || ph === 'tree';
+    var L = lane.launch || {}, sl = lane.shiftLight || {};
+    var et = null, live = false;
+    if (typeof lane.et === 'number' && isFinite(lane.et)) et = lane.et;
+    else if (gT != null && typeof lane.rt === 'number' && lane.left && !pre) { et = Math.max(0, num(snap.t, 0) - gT - lane.rt); live = true; }
+    var decided = snap.winner != null && (ph === 'shutdown' || ph === 'done' || lane.finished);
+    var result = decided ? (opp ? (snap.winner === li ? 'win' : 'loss') : 'solo') : (lane.finished && !opp ? 'solo' : null);
+    var dist = snap.distance || {};
+    var os = opp && opp.splits || [];
+    return {
+      phase: ph, pre: pre, preStage: !!(TL.preStage || (lane.preStaged && !lane.deep)), stage: !!(TL.stage || lane.staged), deep: !!lane.deep,
+      amber: (TL.amber || [false, false, false]).map(function (a) { return !!a; }), green: !!TL.green, red: !!(TL.red || lane.red), armed: !!tree.armed, flag: tree.flag || null,
+      band: !L.ev && !L.lc && num(L.hi, 0) > num(L.lo, 0) ? { lo: L.lo, hi: L.hi, best: L.best } : null, lc: !!L.lc, ev: !!L.ev, held: !!L.held,
+      shift: { level: clamp01(num(sl.level, 0)), flash: !!sl.flash },
+      et: et, live: live, final: !!(lane.finished && typeof lane.et === 'number'), rt: typeof lane.rt === 'number' && isFinite(lane.rt) ? lane.rt : null,
+      trap: typeof lane.trap === 'number' && isFinite(lane.trap) && lane.trap > 0 ? lane.trap : null, result: result,
+      distance: dist.name || dist.label || null,
+      splits: (lane.splits || []).filter(function (s) { return s && s.id !== dist.id; }).slice(0, 4).map(function (s, i) { return { label: s.label, t: s.t, ot: os[i] && os[i].id === s.id ? os[i].t : null }; }),
+      opp: opp ? { name: opp.name, et: typeof opp.et === 'number' ? opp.et : null, trap: opp.trap || null, rt: typeof opp.rt === 'number' ? opp.rt : null } : null
+    };
   }
 
   function isSupported() {
@@ -543,6 +597,106 @@ CB.drag = CB.drag || {};
       cam.forward = norm(sub(target, eye)); cam.near = near; cam.far = Q.far;
       return cam;
     }
+    /* ---- rear-view mirror (cockpit): a small render target drawn with a reverse camera from the interior mirror
+       glass (horizontally mirrored projection) and a reduced list (strip, boards, the other car: no particles, no
+       cockpit, no own car). Double-buffered like renderer3d: the cockpit samples the previous result (sampling a
+       target rendered earlier in the same frame was unreliable on ANGLE/Metal). The side-mirror glasses sample the
+       left / right halves of the same texture. Low tier / no render targets: a static dark-tint texture. ---- */
+    var MR = { targets: null, failed: false, fbTex: undefined, ck: null, tex: undefined, enabled: opts.mirror !== false, list: [], ms: 0, state: 'off', frames: 0, plan: null };
+    var mcam = { view: M4.create(), proj: M4.create(), viewProj: M4.create(), position: [0, 0, 0], mirror: true };
+    function destroyMirrorTargets() {
+      if (MR.targets) MR.targets.forEach(function (t) { try { t.destroy(); } catch (e) { /* ignore */ } });
+      MR.targets = null;
+    }
+    function mirrorTargets(plan) {
+      if (MR.targets && (MR.targets[0].w !== plan.w || MR.targets[0].h !== plan.h)) { destroyMirrorTargets(); MR.tex = undefined; }
+      if (!MR.targets) {
+        try {
+          if (typeof G.createRenderTarget !== 'function') throw new Error('no render targets');
+          var a = G.createRenderTarget(ctx, plan.w, plan.h, { depth: true, samples: 0 }), b = G.createRenderTarget(ctx, plan.w, plan.h, { depth: true, samples: 0 });
+          MR.targets = [a, b];
+          if (!a.ok || !b.ok) throw new Error('mirror target incomplete');
+        } catch (e) { destroyMirrorTargets(); MR.failed = true; return null; }
+      }
+      return MR.targets;
+    }
+    /** static fallback glass: a dark tinted sky-over-strip gradient (reads as glass, costs nothing) */
+    function mirrorFallbackTex() {
+      if (MR.fbTex !== undefined) return MR.fbTex || null;
+      MR.fbTex = false;
+      try {
+        var cv = doc.createElement('canvas'); cv.width = 64; cv.height = 32;
+        var g2 = cv.getContext('2d');
+        if (g2) {
+          var gr = g2.createLinearGradient(0, 0, 0, 32);
+          gr.addColorStop(0, R.night ? '#0b0f18' : '#44505e'); gr.addColorStop(0.55, R.night ? '#111521' : '#2b333d'); gr.addColorStop(0.56, '#15181c'); gr.addColorStop(1, '#0a0b0d');
+          g2.fillStyle = gr; g2.fillRect(0, 0, 64, 32);
+          g2.fillStyle = 'rgba(255,255,255,0.07)'; g2.beginPath(); g2.moveTo(10, 0); g2.lineTo(22, 0); g2.lineTo(6, 32); g2.lineTo(-6, 32); g2.closePath(); g2.fill();
+          MR.fbTex = G.createTexture(ctx, cv, { wrap: 'clamp', mipmaps: false });
+          MR.fbNight = R.night;
+        }
+      } catch (e) { MR.fbTex = false; }
+      return MR.fbTex || null;
+    }
+    function setMirrorTex(ck, tex) {
+      if (MR.ck === ck && MR.tex === tex) return;
+      MR.ck = ck; MR.tex = tex;
+      try { if (typeof ck.setMirrorTexture === 'function') ck.setMirrorTexture(tex || null, { flipU: false }); else ck.mirrorTexture = tex || null; } catch (e) { /* ignore */ }
+    }
+    /** -> true when a live pass ran this frame */
+    function mirrorPass(pe, pv, laneViews, env, tod, weather, fogColor) {
+      var ck = pe.cockpit, t0 = now();
+      if (!ck) { MR.state = 'off'; return false; }
+      if (MR.fbTex && MR.fbNight !== R.night) { try { gl.deleteTexture(MR.fbTex); } catch (e) { /* ignore */ } MR.fbTex = undefined; MR.tex = undefined; }
+      var m = ck.mirror || {};
+      var plan = MR.plan = mirrorPlan(R.quality, { cockpit: MR.enabled, fbo: !MR.failed, aspect: num(m.width, 0.25) / Math.max(0.01, num(m.height, 0.072)) });
+      if (!plan.live) { MR.state = plan.fallback ? 'fallback' : 'off'; setMirrorTex(ck, plan.fallback ? mirrorFallbackTex() : null); return false; }
+      var T = mirrorTargets(plan);
+      if (!T) { MR.state = 'fallback'; setMirrorTex(ck, mirrorFallbackTex()); return false; }
+      MR.state = 'live';
+      setMirrorTex(ck, MR.frames > 0 ? T[0].tex : mirrorFallbackTex());   // the last completed image (fallback tint until the first one)
+      if (!mirrorDue(plan, R.frame)) return false;
+      var eye = (ck.camera && ck.camera.eye) || pe.model.cockpitEye || [0, 1.1, 0];
+      var mv = mirrorView(m, eye);
+      var pW = toWorld(pe, mv.pos[0], mv.pos[1], mv.pos[2]);
+      var tW = toWorld(pe, mv.pos[0] + mv.dir[0] * 20, mv.pos[1] + mv.dir[1] * 20, mv.pos[2] + mv.dir[2] * 20);
+      var uW = norm(sub(toWorld(pe, mv.pos[0] + mv.up[0], mv.pos[1] + mv.up[1], mv.pos[2] + mv.up[2]), pW));
+      M4.lookAt(mcam.view, pW, tW, uW);
+      M4.perspective(mcam.proj, mv.fov * DEG, plan.w / plan.h, 0.3, Math.min(700, Q.far));
+      mcam.proj[0] = -mcam.proj[0];   // mirrored left / right
+      M4.multiply(mcam.viewProj, mcam.proj, mcam.view);
+      mcam.position[0] = pW[0]; mcam.position[1] = pW[1]; mcam.position[2] = pW[2];
+      mcam.eye = mcam.position; mcam.target = tW; mcam.up = uW; mcam.fovDeg = mv.fov; mcam.aspect = plan.w / plan.h;
+      mcam.viewMatrix = mcam.view; mcam.projMatrix = mcam.proj; mcam.uView = mcam.view; mcam.uProj = mcam.proj; mcam.uCamPos = mcam.position;
+      mcam.forward = norm(sub(tW, pW)); mcam.near = 0.3; mcam.far = Math.min(700, Q.far);
+      // reduced list: the strip, the boards, the other car(s)
+      var L = MR.list; L.length = 0;
+      for (var i = 0; i < world.items.length; i++) L.push(world.items[i]);
+      for (i = 0; i < boards.length; i++) if (boards[i].item) L.push(boards[i].item);
+      for (i = 0; i < laneViews.length; i++) if (laneViews[i] !== pv) { var cl = carLists[i] || []; for (var q = 0; q < cl.length; q++) L.push(cl[q]); }
+      var back = T[1];
+      try {
+        back.bind();
+        gl.disable(gl.SCISSOR_TEST); gl.depthMask(true); gl.colorMask(true, true, true, true);
+        gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.frontFace(gl.CW);   // the flipped projection reverses the winding
+        var lin = env.linearOutput; env.linearOutput = false;
+        try {
+          if (fx && typeof fx.drawSky === 'function') { if (fx.setLinearOutput) fx.setLinearOutput(false); fx.drawSky(mcam, tod, weather); }
+          else if (G.drawSky) G.drawSky(ctx, mcam, env, { night: R.night ? 1 : 0 });
+        } catch (e) { /* sky optional */ }
+        G.drawList(ctx, L, mcam, env);
+        env.linearOutput = lin;
+      } catch (e) { MR.failed = true; }
+      gl.frontFace(gl.CCW);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.flush();
+      if (MR.failed) { destroyMirrorTargets(); MR.state = 'fallback'; setMirrorTex(ck, mirrorFallbackTex()); return false; }
+      MR.targets = [back, T[0]];
+      MR.frames++;
+      MR.ms = now() - t0;
+      return true;
+    }
     function smoothVec(st, key, v, rate, dt) {
       if (!st[key]) { st[key] = v.slice(); return st[key]; }
       var k = 1 - Math.exp(-rate * dt), c = st[key];
@@ -674,7 +828,8 @@ CB.drag = CB.drag || {};
       if (R.mode === 'cockpit' && pe.cockpit) {
         try {
           // drag: exaggerated head pitch-back on launch / forward on braking (the race head model is tuned for ~1 g corners)
-          var csnap = { speed: num(pv.lane.speed, 0), rpm: num(pv.lane.rpm, 0), redline: pv.lane.redline, gear: pv.lane.gear, throttle: pv.lane.throttle, brake: pv.lane.brake, steerAngle: 0, longG: clamp(num(pv.lane.gLong, 0) * 2.4, -3, 3), latG: 0, headlights: R.night };
+          var csnap = { speed: num(pv.lane.speed, 0), rpm: num(pv.lane.rpm, 0), redline: pv.lane.redline, gear: pv.lane.gear, throttle: pv.lane.throttle, brake: pv.lane.brake, steerAngle: 0, longG: clamp(num(pv.lane.gLong, 0) * 2.4, -3, 3), latG: 0, headlights: R.night, maxGear: pv.lane.maxGear,
+            drag: dragDash(pv.lane, snap, ov ? ov.lane : null) };
           if (pe.cockpit.update) pe.cockpit.update(csnap, dt, R.time, snap);
           var cki = pe.cockpit.drawItems ? pe.cockpit.drawItems(pe.CW) : [];
           for (var c2 = 0; c2 < cki.length; c2++) main.push(cki[c2]);
@@ -729,6 +884,12 @@ CB.drag = CB.drag || {};
       if (shadow) {
         try { if (shadow.render(casters, { center: pv.pose.pos, sunDir: Lt.sunDir, radius: 60 })) env.shadow = shadow; } catch (e2b) { shadow = null; }
       }
+      R.stats.mirror = 'off'; R.stats.mirrorMs = 0;
+      if (R.mode === 'cockpit' && pe.cockpit) {
+        var mran = false;
+        try { mran = mirrorPass(pe, pv, laneViews, env, tod, weather, Lt.fogColor); } catch (em) { MR.failed = true; }
+        R.stats.mirror = MR.state; R.stats.mirrorMs = mran ? MR.ms : 0; R.stats.mirrorSize = MR.plan && MR.plan.live ? MR.plan.w + 'x' + MR.plan.h + '/' + MR.plan.every : '';
+      }
       var usePost = !!post;
       if (usePost) { try { var pb = post.begin(size.w, size.h); env.linearOutput = !!(pb && pb.linearOutput); } catch (e3) { usePost = false; post = null; } }
       if (!usePost) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, size.w, size.h); }
@@ -781,11 +942,16 @@ CB.drag = CB.drag || {};
         return q;
       },
       setAutoQuality: function (b) { opts.autoQuality = !!b; },
+      /** live rear-view mirror on / off (off = the static tint; also the before / after cost switch) */
+      setMirror: function (b) { MR.enabled = b !== false; MR.tex = undefined; if (!MR.enabled) destroyMirrorTargets(); return MR.enabled; },
+      mirrorState: function () { return { state: MR.state, enabled: MR.enabled, failed: MR.failed, frames: MR.frames, plan: MR.plan, ms: MR.ms }; },
       stats: function () { return Object.assign({ quality: R.quality, camera: R.mode, frame: R.frame, venue: R.venue, night: R.night }, R.stats); },
       camera: function () { return cam; },
       destroy: function () {
         try { if (world) world.destroy(); } catch (e) { /* ignore */ }
         destroyBoards();
+        destroyMirrorTargets();
+        if (MR.fbTex) try { gl.deleteTexture(MR.fbTex); } catch (e) { /* ignore */ }
         Object.keys(R.cars).forEach(function (k) { var c = R.cars[k]; if (c.cockpit && c.cockpit.destroy) try { c.cockpit.destroy(); } catch (e) { /* ignore */ } });
         if (shadow) try { shadow.destroy(); } catch (e) { /* ignore */ }
         if (post) try { post.destroy(); } catch (e) { /* ignore */ }
@@ -847,7 +1013,7 @@ CB.drag = CB.drag || {};
 
   CB.drag.renderer = {
     isSupported: isSupported, create: create, createPreview: createPreview, MODES: MODES, LABELS: LABELS, QUALITY: QUALITY,
-    _: { boardInfo: boardInfo, fmtET: fmtET, fmtMPH: fmtMPH, wheeliePitch: wheeliePitch, smokeRate: smokeRate, flagArm: flagArm, smokeAxles: smokeAxles, chaseEye: chaseEye, sideEye: sideEye, drawBoard: drawBoard }
+    _: { mirrorPlan: mirrorPlan, mirrorDue: mirrorDue, mirrorView: mirrorView, dragDash: dragDash, boardInfo: boardInfo, fmtET: fmtET, fmtMPH: fmtMPH, wheeliePitch: wheeliePitch, smokeRate: smokeRate, flagArm: flagArm, smokeAxles: smokeAxles, chaseEye: chaseEye, sideEye: sideEye, drawBoard: drawBoard }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.drag.renderer;
 })();

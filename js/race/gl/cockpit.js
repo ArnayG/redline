@@ -1955,6 +1955,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       count, lapTime, lastLap, bestLap, latG, longG, digital, phase, limiter, time}; theme {accent, ambient} css colours. */
   function drawCluster(g, W, H, st, theme) {
     st = st || {}; theme = theme || {};
+    if (st.drag) return drawDragCluster(g, W, H, st, theme);
     var acc = theme.accent || '#c8a24a', red = Math.max(1000, num(st.redline, 7500)), rpm = clamp(num(st.rpm, 0), 0, red * 1.08);
     var f = clamp(num(st.needle, rpm / red), 0, 1.08), spd = speedVal(st), gear = gearLabel(st);
     var limiter = f > 0.985 && (Math.floor(num(st.time, 0) * 12) & 1) === 0;
@@ -2093,6 +2094,159 @@ var CB = (globalThis.CB = globalThis.CB || {});
     g.restore();
   }
 
+  /* ---------------- drag cluster (docs/DRAG-SPEC.md §9). st.drag = CB.drag.renderer._.dragDash(lane, snap):
+     { phase, pre, preStage, stage, deep, amber [b, b, b], green, red, armed, flag, band {lo, hi}|null, lc, ev, held,
+       shift { level, flash }, et, live, final, rt, trap, result 'win'|'loss'|'solo'|null, distance, opp {name, et, trap, rt}|null, splits } */
+  /** cache key of the drag readouts (pure; '' outside drag so the race keys are unchanged) */
+  function dragKey(d, time) {
+    if (!d) return '';
+    var k = '|D' + d.phase + (d.preStage ? 1 : 0) + (d.stage ? 1 : 0) + (d.amber ? d.amber.map(function (a) { return a ? 1 : 0; }).join('') : '') + (d.green ? 1 : 0) + (d.red ? 1 : 0) +
+      (d.held ? 1 : 0) + '|' + (d.et != null ? Math.round(d.et * 100) : '-') + '|' + Math.round(num(d.shift && d.shift.level, 0) * 15) + (d.result || '') + '|' + (d.trap != null ? Math.round(d.trap * 10) : '');
+    if (d.shift && d.shift.flash) k += Math.floor(num(time, 0) * 12) & 1;
+    return k;
+  }
+  function fmtEt(t, dec) { return typeof t === 'number' && isFinite(t) && t >= 0 ? t.toFixed(dec == null ? 3 : dec) : '-.---'; }
+  function lamp(g, x, y, r, on, col, offCol) {
+    if (on) {
+      var gl0 = grad(g, 'r', x, y, r * 2.1, 0, [[0, col], [1, 'rgba(0,0,0,0)']]);
+      if (gl0) { g.globalAlpha = 0.45; g.fillStyle = gl0; g.beginPath(); g.arc(x, y, r * 2.1, 0, TAU); g.fill(); g.globalAlpha = 1; }
+    }
+    g.fillStyle = on ? col : (offCol || '#1a1d22');
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    g.strokeStyle = on ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.12)'; g.lineWidth = Math.max(2, r * 0.1); g.stroke();
+  }
+  /** Drag-race instrument cluster: big tach (redline + launch band), full-width shift lights, gear, speed, staging /
+      tree lamps while staging, the live ET timer on the run, ET / trap / result after it. Sized for ~240 px on screen. */
+  function drawDragCluster(g, W, H, st, theme) {
+    // The binnacle hood / wheel rim cover roughly the top quarter of the panel from the driver's eye and the wheel hub
+    // the bottom centre, so every readout lives in the band ~0.3..0.97 H (sides) / 0.3..0.85 H (centre).
+    var d = st.drag || {}, acc = theme.accent || '#c8a24a', red = Math.max(1000, num(st.redline, 7500));
+    var rpm = clamp(num(st.rpm, 0), 0, red * 1.08), spd = speedVal(st), gear = gearLabel(st), time = num(st.time, 0);
+    var sh = d.shift || {}, blinkOn = (Math.floor(time * 12) & 1) === 0, post = !!d.final || d.phase === 'done';
+    var mph = st.units === 'mph', lx = W * 0.035, lw = W * 0.28, rx = W * 0.965, rw = W * 0.28;
+    g.save();
+    g.fillStyle = grad(g, 'r', W / 2, H * 0.6, W * 0.62, 0, [[0, '#0d1117'], [0.6, '#06080b'], [1, '#020304']]) || '#05070a';
+    g.fillRect(0, 0, W, H);
+    // ---- shift-light bar: 14 LEDs split across the two side panels (fills left -> right, all blue in the window)
+    var n = 14, lv = clamp(num(sh.level, 0), 0, 1), ly = H * 0.34, lr = H * 0.042;
+    for (var i = 0; i < n; i++) {
+      var half = i < n / 2, j = half ? i : i - n / 2, x0 = half ? lx : rx - lw, gx = lw / (n / 2);
+      var on = sh.flash ? blinkOn : lv * n >= i + 0.5, col = sh.flash ? '#4ea8ff' : i < n * 0.43 ? '#36e06a' : i < n * 0.75 ? '#ffb020' : '#ff3826';
+      lamp(g, x0 + gx * (j + 0.5), ly, lr, on, col, '#121519');
+    }
+    // ---- tach (270 deg, redline zone, launch band on the outer ring)
+    var cx = W / 2, cy = H * 0.64, R = H * 0.32, a0 = PI * 0.75, a1 = PI * 2.25, kmax = Math.ceil(red / 1000) + (red % 1000 > 600 ? 1 : 0);
+    var full = kmax * 1000;
+    function A(v) { return a0 + (a1 - a0) * clamp(v / full, 0, 1); }
+    g.lineCap = 'butt'; g.lineWidth = R * 0.16; g.strokeStyle = '#141920';
+    g.beginPath(); g.arc(cx, cy, R * 0.9, a0, a1); g.stroke();
+    g.strokeStyle = '#7a1612'; g.beginPath(); g.arc(cx, cy, R * 0.9, A(red), a1); g.stroke();
+    var band = d.band, inB = !!(band && rpm >= band.lo && rpm <= band.hi);
+    if (band && band.hi > band.lo && (d.pre || d.held)) {
+      g.strokeStyle = inB ? '#5dff7a' : 'rgba(70,224,90,0.85)'; g.lineWidth = R * 0.13;
+      g.beginPath(); g.arc(cx, cy, R * 1.07, A(band.lo), A(band.hi)); g.stroke();
+    }
+    var pf = clamp(num(st.needle, rpm / red) * red, 0, full);
+    g.lineWidth = R * 0.16;
+    g.strokeStyle = sh.flash && blinkOn ? '#4ea8ff' : grad(g, 'l', cx - R, 0, cx + R, 0, [[0, acc], [0.7, '#f4efe6'], [1, '#ff3826']]) || acc;
+    g.beginPath(); g.arc(cx, cy, R * 0.9, a0, A(pf)); g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '700 ' + Math.round(R * 0.2) + 'px ' + FONT;
+    for (var k = 0; k <= kmax; k++) {
+      var a = A(k * 1000), redZ = k * 1000 >= red - 1;
+      g.strokeStyle = redZ ? '#ff4b3a' : '#d8d2c6'; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * R * 0.7, cy + Math.sin(a) * R * 0.7); g.lineTo(cx + Math.cos(a) * R * 0.8, cy + Math.sin(a) * R * 0.8); g.stroke();
+      if (k % (kmax > 9 ? 2 : 1) === 0) { g.fillStyle = redZ ? '#ff6a5a' : '#c9c4ba'; g.fillText(String(k), cx + Math.cos(a) * R * 0.56, cy + Math.sin(a) * R * 0.56); }
+    }
+    var an = A(pf);
+    g.lineCap = 'round'; g.strokeStyle = 'rgba(255,80,40,0.3)'; g.lineWidth = 14;
+    g.beginPath(); g.moveTo(cx + Math.cos(an) * R * 0.4, cy + Math.sin(an) * R * 0.4); g.lineTo(cx + Math.cos(an) * R * 1.0, cy + Math.sin(an) * R * 1.0); g.stroke();
+    g.strokeStyle = '#ff5a2a'; g.lineWidth = 6; g.stroke();
+    g.fillStyle = '#07090c'; g.beginPath(); g.arc(cx, cy, R * 0.45, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.1)'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = sh.flash ? (blinkOn ? '#4ea8ff' : '#f4efe6') : rpm > red * 0.93 ? '#ff4b3a' : '#f4efe6';
+    g.font = '800 ' + Math.round(R * 0.74) + 'px ' + FONT; g.fillText(gear, cx, cy + R * 0.03);
+    // ---- left panel: staging lamps + tree before the run; the ET timer during / after it
+    g.textBaseline = 'middle';
+    if (d.pre) {
+      var br = H * 0.052, bx0 = lx + br * 1.1, bx1 = bx0 + br * 2.5;
+      [['PRE', d.preStage, H * 0.5], ['STAGE', d.stage, H * 0.65]].forEach(function (row) {
+        lamp(g, bx0, row[2], br, row[1], '#ffe9a0'); lamp(g, bx1, row[2], br, row[1], '#ffe9a0');
+        g.textAlign = 'left'; g.fillStyle = row[1] ? '#ffe9a0' : '#6f6c66'; g.font = '800 ' + Math.round(H * 0.1) + 'px ' + FONT;
+        g.fillText(row[0], bx1 + br * 1.6, row[2] + H * 0.005);
+      });
+      var am = d.amber || [], ty = H * 0.8, tr = H * 0.048, tg = (lw - tr * 2) / 4;
+      for (var t = 0; t < 3; t++) lamp(g, lx + tr + tg * t, ty, tr, !!am[t], '#ffa21a');
+      lamp(g, lx + tr + tg * 3, ty, tr, !!d.green, '#3dff6a');
+      lamp(g, lx + tr + tg * 4, ty, tr, !!d.red, '#ff2a1a');
+      var status = d.red ? 'RED LIGHT' : d.green ? 'GO!' : d.armed ? 'WATCH TREE' : d.stage ? 'STAGED' : d.preStage ? 'PRE-STAGED' : d.phase === 'burnout' ? 'BURNOUT' : 'ROLL IN';
+      g.textAlign = 'left'; g.fillStyle = d.red ? '#ff4b3a' : d.green ? '#5dff7a' : d.armed ? '#ffb020' : '#c9c4ba';
+      g.font = '800 ' + Math.round(H * 0.095) + 'px ' + FONT; g.fillText(status, lx, H * 0.93, lw);
+    } else {
+      g.textAlign = 'left'; g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.085) + 'px ' + FONT;
+      g.fillText(post ? 'ET' : 'ELAPSED', lx, H * 0.47);
+      g.fillStyle = d.red ? '#ff4b3a' : post ? '#ffb21e' : '#f4efe6'; g.font = '700 ' + Math.round(H * 0.19) + 'px ' + MONO;
+      g.fillText(d.red && d.et == null ? 'RED' : fmtEt(d.et, post ? 3 : 2), lx, H * 0.62, lw);
+      g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.085) + 'px ' + FONT; g.fillText('R/T', lx, H * 0.79);
+      g.textAlign = 'right'; g.fillStyle = d.red ? '#ff4b3a' : '#d8d2c6'; g.font = '700 ' + Math.round(H * 0.11) + 'px ' + MONO;
+      g.fillText(d.rt != null && isFinite(d.rt) ? (d.rt < 0 ? '-' : '') + Math.abs(d.rt).toFixed(3) : '-.---', lx + lw, H * 0.79);
+      if (d.distance) { g.textAlign = 'left'; g.fillStyle = '#6f6c66'; g.font = '700 ' + Math.round(H * 0.075) + 'px ' + FONT; g.fillText(String(d.distance).toUpperCase(), lx, H * 0.92, lw); }
+    }
+    // ---- right panel: launch rpm while staging, speed on the run, trap + result after it
+    g.textAlign = 'right';
+    if (d.pre) {
+      g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.085) + 'px ' + FONT; g.fillText('LAUNCH', rx, H * 0.47);
+      g.fillStyle = d.lc || d.ev ? (d.held ? '#5dff7a' : '#c9c4ba') : inB ? '#5dff7a' : '#ffb020'; g.font = '800 ' + Math.round(H * 0.13) + 'px ' + (d.lc || d.ev ? FONT : MONO);
+      g.fillText(d.lc ? (d.held ? '2-STEP ON' : '2-STEP') : d.ev ? 'EV LAUNCH' : band && band.hi > band.lo ? (band.lo / 1000).toFixed(1) + '–' + (band.hi / 1000).toFixed(1) + 'k' : '--', rx, H * 0.62, rw);
+      g.fillStyle = '#f4efe6'; g.font = '700 ' + Math.round(H * 0.13) + 'px ' + MONO; g.fillText(String(Math.round(rpm / 10) * 10), rx - W * 0.075, H * 0.82);
+      g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.07) + 'px ' + FONT; g.fillText('RPM', rx, H * 0.83);
+    } else if (post && d.trap != null) {
+      g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.085) + 'px ' + FONT; g.fillText('TRAP ' + (mph ? 'MPH' : 'KM/H'), rx, H * 0.47);
+      g.fillStyle = '#ff6a4a'; g.font = '700 ' + Math.round(H * 0.17) + 'px ' + MONO;
+      g.fillText((d.trap * (mph ? 2.23694 : 3.6)).toFixed(1), rx, H * 0.62, rw);
+    } else {
+      g.fillStyle = '#f4efe6'; g.font = '700 ' + Math.round(H * 0.21) + 'px ' + MONO; g.fillText(String(Math.round(spd)), rx, H * 0.6, rw);
+      g.fillStyle = '#8a867e'; g.font = '700 ' + Math.round(H * 0.085) + 'px ' + FONT; g.fillText(mph ? 'MPH' : 'KM/H', rx, H * 0.77);
+    }
+    if (d.result) {
+      g.fillStyle = d.result === 'win' ? '#5dff7a' : d.result === 'loss' ? '#ff5a4a' : '#ffb21e'; g.font = '900 ' + Math.round(H * 0.14) + 'px ' + FONT;
+      g.fillText(d.result === 'win' ? 'WIN' : d.result === 'loss' ? 'LOSS' : 'DONE', rx, H * 0.85, rw);
+    }
+    g.fillStyle = grad(g, 'l', 0, 0, 0, H, [[0, 'rgba(255,255,255,0.05)'], [0.35, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0)']]) || 'rgba(0,0,0,0)';
+    g.fillRect(0, 0, W, H);
+    g.restore();
+  }
+  /** Centre screen in drag sessions: a live timeslip (RT, splits, ET, trap) for both lanes. */
+  function drawDragScreen(g, W, H, st, theme) {
+    var d = st.drag || {}, acc = theme.accent || '#c8a24a', hh = Math.round(Math.min(W, H) * 0.13);
+    g.save();
+    g.fillStyle = grad(g, 'l', 0, 0, 0, H, [[0, '#0b0f15'], [1, '#040507']]) || '#07090c';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(0, 0, W, hh);
+    g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = acc; g.font = '800 ' + Math.round(hh * 0.5) + 'px ' + FONT;
+    g.fillText('TIMESLIP', hh * 0.4, hh / 2);
+    g.textAlign = 'right'; g.fillStyle = '#c9c4ba'; g.font = '600 ' + Math.round(hh * 0.42) + 'px ' + FONT;
+    g.fillText(String(d.distance || 'DRAG').toUpperCase(), W - hh * 0.4, hh / 2);
+    var rows = [['R/T', d.rt, d.opp && d.opp.rt]];
+    (d.splits || []).forEach(function (s) { rows.push([String(s.label).toUpperCase(), s.t, s.ot]); });
+    rows.push(['ET', d.final ? d.et : null, d.opp && d.opp.et]);
+    var x0 = hh * 0.4, c1 = W * 0.62, c2 = W - hh * 0.4, y = hh * 1.6, rh = Math.min(hh * 0.95, (H - hh * 2.2) / Math.max(1, rows.length + 1));
+    g.font = '700 ' + Math.round(rh * 0.42) + 'px ' + FONT; g.fillStyle = '#7d7a74';
+    g.textAlign = 'right'; g.fillText('YOU', c1, y); if (d.opp) g.fillText(String(d.opp.name || 'OPP').toUpperCase().slice(0, 10), c2, y);
+    rows.forEach(function (r, i) {
+      var yy = y + (i + 1) * rh, last = i === rows.length - 1;
+      g.textAlign = 'left'; g.fillStyle = last ? '#f4efe6' : '#9a968e'; g.font = '700 ' + Math.round(rh * (last ? 0.55 : 0.45)) + 'px ' + FONT; g.fillText(r[0], x0, yy);
+      g.textAlign = 'right'; g.font = '700 ' + Math.round(rh * (last ? 0.62 : 0.5)) + 'px ' + MONO;
+      g.fillStyle = last ? '#ffb21e' : '#f4efe6'; g.fillText(r[1] != null && isFinite(r[1]) ? (r[1] < 0 ? '-' : '') + Math.abs(r[1]).toFixed(3) : '—', c1, yy);
+      if (d.opp) { g.fillStyle = '#c9c4ba'; g.fillText(r[2] != null && isFinite(r[2]) ? (r[2] < 0 ? '-' : '') + Math.abs(r[2]).toFixed(3) : '—', c2, yy); }
+    });
+    if (d.trap != null) {
+      g.textAlign = 'left'; g.fillStyle = '#ff6a4a'; g.font = '700 ' + Math.round(rh * 0.5) + 'px ' + MONO;
+      g.fillText((d.trap * (st.units === 'mph' ? 2.23694 : 3.6)).toFixed(2) + (st.units === 'mph' ? ' MPH' : ' KM/H'), x0, H - hh * 0.5);
+    }
+    if (d.result) { g.textAlign = 'right'; g.fillStyle = d.result === 'win' ? '#5dff7a' : d.result === 'loss' ? '#ff5a4a' : '#ffb21e'; g.font = '900 ' + Math.round(rh * 0.6) + 'px ' + FONT; g.fillText(d.result === 'win' ? 'WIN' : d.result === 'loss' ? 'LOSS' : 'DONE', c2, H - hh * 0.5); }
+    g.restore();
+  }
+
   /** Precompute a normalised minimap polyline from track geometry. */
   function minimapFrom(geom) {
     var S = geom && (geom.samples || geom.points);
@@ -2114,6 +2268,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   /** Centre screen: header, minimap with all cars, standings, big speed + lap tiles. */
   function drawCenterScreen(g, W, H, st, theme, mm, cars) {
     st = st || {}; theme = theme || {};
+    if (st.drag) return drawDragScreen(g, W, H, st, theme);
     var acc = theme.accent || '#c8a24a', portrait = H > W;
     g.save();
     g.fillStyle = grad(g, 'l', 0, 0, 0, H, [[0, '#0b0f15'], [1, '#040507']]) || '#07090c';
@@ -2198,7 +2353,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       g.font = '600 ' + Math.round(H * 0.11) + 'px ' + FONT; g.fillText(Math.round(st.nextTurn.dist) + ' m', ax, ay + s + H * 0.14);
     }
     g.globalAlpha = 0.8; g.fillStyle = col; g.font = '600 ' + Math.round(H * 0.11) + 'px ' + FONT;
-    g.fillText('P' + (st.position || '-') + (st.count ? '/' + st.count : ''), W * 0.8, H * 0.72);
+    g.fillText(st.drag ? (st.drag.et != null ? fmtEt(st.drag.et, st.drag.final ? 3 : 2) : '') : 'P' + (st.position || '-') + (st.count ? '/' + st.count : ''), W * 0.8, H * 0.72);
     if (f > 0.96) { g.globalAlpha = (Math.floor(num(st.time, 0) * 10) & 1) ? 0.9 : 0.4; g.fillStyle = '#ff5a3a'; g.fillRect(bx, H * 0.06, bw, H * 0.04); }
     g.restore();
   }
@@ -2218,6 +2373,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
     g.textAlign = 'left'; g.fillText(String(Math.round(speedVal(st))), W * 0.05, H * 0.55);
     g.fillStyle = '#8a867e'; g.font = '600 ' + Math.round(H * 0.11) + 'px ' + FONT; g.fillText(st.units === 'mph' ? 'MPH' : 'KPH', W * 0.05, H * 0.75);
     g.textAlign = 'right'; g.fillStyle = '#c9c4ba'; g.font = '600 ' + Math.round(H * 0.15) + 'px ' + MONO;
+    if (st.drag) {
+      g.fillText(st.drag.et != null ? fmtEt(st.drag.et, 2) : 'ET', W * 0.95, H * 0.5);
+      g.restore(); return;
+    }
     g.fillText('P' + (st.position || '-'), W * 0.95, H * 0.5);
     var d = num(st.delta, NaN);
     g.fillStyle = isFinite(d) ? (d <= 0 ? '#36e06a' : '#ff4b3a') : '#8a867e'; g.font = '600 ' + Math.round(H * 0.13) + 'px ' + MONO;
@@ -2774,7 +2933,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
         position: v.position, count: cars ? cars.length : 0, lapTime: num(v.currentLap_s, 0), lastLap: v.lastLap_s, bestLap: v.bestLap_s,
         gapAhead: num(v.gapAhead_s, NaN), latG: hist.latG, longG: hist.longG, digital: Lay.digital, phase: snap ? snap.phase : 'racing',
         time: gauge.time, weather: snap && snap.weather, tyres: [0.45 + num(v.skidding, 0) * 0.45, 0.45 + num(v.wheelspin, 0) * 0.5],
-        nextTurn: nextTurn(num(v.s, NaN))
+        nextTurn: nextTurn(num(v.s, NaN)),
+        // drag sessions (js/race/gl/drag-renderer.js dragDash): the cluster / screen / HUD switch to drag readouts
+        drag: v.drag && typeof v.drag === 'object' ? v.drag : null
       };
     }
     function refresh(t, dt, rate, keyFn, drawFn) {
@@ -2837,13 +2998,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
       gauge.needle += (rf - gauge.needle) * clamp(dt * 16, 0, 1);
       var hz = quality === 'low' ? 20 : 30, gs = null;
       function GS() { return gs || (gs = gaugeState(v, snap)); }
-      refresh(tex.cluster, dt, hz, function () { var q = GS(); return Math.round(q.needle * 400) + '|' + Math.round(speedVal(q)) + '|' + gearLabel(q) + '|' + Math.round(q.lapTime * 20) + '|' + q.position + '|' + Math.round(q.throttle * 20) + Math.round(q.brake * 20) + '|' + Math.round(q.latG * 20) + Math.round(q.longG * 20) + (q.needle > 0.985 ? Math.floor(q.time * 12) : ''); },
+      refresh(tex.cluster, dt, hz, function () { var q = GS(); return Math.round(q.needle * 400) + '|' + Math.round(speedVal(q)) + '|' + gearLabel(q) + '|' + Math.round(q.lapTime * 20) + '|' + q.position + '|' + Math.round(q.throttle * 20) + Math.round(q.brake * 20) + '|' + Math.round(q.latG * 20) + Math.round(q.longG * 20) + (q.needle > 0.985 ? Math.floor(q.time * 12) : '') + dragKey(q.drag, q.time); },
         function (g2, W2, H2) { drawCluster(g2, W2, H2, GS(), theme); });
-      refresh(tex.screen, dt, quality === 'low' ? 6 : 12, function () { return String(Math.floor(gauge.time * 12)); },
+      refresh(tex.screen, dt, quality === 'low' ? 6 : 12, function () { return String(Math.floor(gauge.time * 12)) + dragKey(GS().drag, 0); },
         function (g2, W2, H2) { drawCenterScreen(g2, W2, H2, GS(), theme, minimap, snap && snap.cars); });
-      refresh(tex.hud, dt, hz, function () { var q = GS(); return Math.round(speedVal(q)) + '|' + gearLabel(q) + '|' + Math.round(q.needle * 100) + '|' + (q.nextTurn ? q.nextTurn.dir + ':' + Math.round(q.nextTurn.dist / 5) : '') + '|' + q.position + (q.needle > 0.96 ? Math.floor(q.time * 10) : ''); },
+      refresh(tex.hud, dt, hz, function () { var q = GS(); return Math.round(speedVal(q)) + '|' + gearLabel(q) + '|' + Math.round(q.needle * 100) + '|' + (q.nextTurn ? q.nextTurn.dir + ':' + Math.round(q.nextTurn.dist / 5) : '') + '|' + q.position + (q.needle > 0.96 ? Math.floor(q.time * 10) : '') + dragKey(q.drag, 0); },
         function (g2, W2, H2) { drawHud(g2, W2, H2, GS(), theme); });
-      refresh(tex.wheel, dt, hz, function () { var q = GS(); return Math.round(q.needle * 200) + '|' + gearLabel(q) + '|' + Math.round(speedVal(q)) + '|' + Math.round(q.lapTime * 10) + (q.needle > 0.985 ? Math.floor(q.time * 12) : ''); },
+      refresh(tex.wheel, dt, hz, function () { var q = GS(); return Math.round(q.needle * 200) + '|' + gearLabel(q) + '|' + Math.round(speedVal(q)) + '|' + Math.round(q.lapTime * 10) + (q.needle > 0.985 ? Math.floor(q.time * 12) : '') + dragKey(q.drag, 0); },
         function (g2, W2, H2) { drawWheelDisplay(g2, W2, H2, GS(), theme); });
     };
     self.impulse = function (k) { head.impulse(k); };
@@ -2960,7 +3121,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     build: build,
     layout: layout, palette: palette, buildGeometry: buildGeometry, Geo: Geo, M4: M4,
     headModel: headModel, viewBasis: viewBasis, steerWheelAngle: steerWheelAngle, rimPath: rimPath,
-    drawCluster: drawCluster, drawCenterScreen: drawCenterScreen, drawHud: drawHud, drawLeds: drawLeds, drawWheelDisplay: drawWheelDisplay, drawTrim: drawTrim,
+    drawCluster: drawCluster, drawDragCluster: drawDragCluster, drawDragScreen: drawDragScreen, dragKey: dragKey, drawCenterScreen: drawCenterScreen, drawHud: drawHud, drawLeds: drawLeds, drawWheelDisplay: drawWheelDisplay, drawTrim: drawTrim,
     minimapFrom: minimapFrom, fmtTime: fmtTime, gearLabel: gearLabel, upholsteryKind: upholsteryKind, drawUpholstery: drawUpholstery, HIDE_KINDS: HIDE_KINDS, lookBackHideKinds: lookBackHideKinds,
     wrapPi: wrapPi, f1CockpitBuild: f1CockpitBuild, f1Layout: f1Layout
   };

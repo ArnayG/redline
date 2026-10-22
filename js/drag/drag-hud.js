@@ -86,6 +86,27 @@ CB.drag = CB.drag || {};
     }
     return out;
   }
+  /** first person: the launch-rpm and tyre gauges move off the bottom centre (where the dash cluster with the tach,
+   *  staging lamps and ET sits) to the lower left over the door; on touch screens to the upper left, clear of the pads. */
+  function fpGauges(Lo, w, h, view) {
+    view = view || {};
+    var s = view.safe || {}, L = num(s.l, 0), T = num(s.t, 0), B = num(s.b, 0);
+    if (view.touch) {
+      var tw = clamp(w * 0.3, 160, 260);
+      // below the prompt line, right of the (practice) tree column, above the N2O button
+      Lo.launch = { x: 74 + L, y: 88 + T, w: tw, h: 34 };
+      Lo.heat = { x: 74 + L, y: 88 + T + 38, w: tw, h: 22 };
+    } else if (Lo.compact) {
+      var cw = clamp(w * 0.3, 170, 250);
+      Lo.launch = { x: 10 + L, y: h - 48 - B, w: cw, h: 38 };
+      Lo.heat = { x: 10 + L, y: h - 80 - B, w: cw, h: 26 };
+    } else {
+      var lw = clamp(w * 0.28, 260, 380);
+      Lo.launch = { x: 20 + L, y: h - 84 - B, w: lw, h: 54 };
+      Lo.heat = { x: 20 + L, y: h - 136 - B, w: lw, h: 40 };
+    }
+    return Lo;
+  }
   /** on-screen controls (phone landscape first): BRAKE bottom-left, THROTTLE bottom-right, shift ▲/▼ beside the
    *  throttle, N2O above the brake, pause / camera top-right. Every target ≥ 44 px. */
   function touchLayout(w, h, safe) {
@@ -397,6 +418,7 @@ CB.drag = CB.drag || {};
       if (fp) {
         Lo.lights = compact ? { x: w / 2 - 110, y: h * 0.6, w: 220, h: 11 } : { x: w / 2 - 170, y: h * 0.605, w: 340, h: 16 };
         if (view.touch) Lo.lights = { x: Lo.tach.x - 8, y: Lo.tach.y + Lo.tach.h - 14, w: Lo.tach.w + 16, h: 12 };
+        fpGauges(Lo, w, h, view);   // keep the launch / tyre gauges off the dash cluster
       }
       ctx.save();
       var treeOn = (snap.phase === 'burnout' || snap.phase === 'staging' || snap.phase === 'tree' || snap.phase === 'run' && t - num((snap.tree && snap.tree.greenT && snap.tree.greenT[pl]), t) < 3) && (!fp || view.showTree || snap.treeType === 'flag');
@@ -477,6 +499,6 @@ CB.drag = CB.drag || {};
     return { draw: draw, reset: reset, popups: function () { return H.pops.slice(); }, ticker: function () { return H.ticker.slice(); }, _H: H };
   }
 
-  CB.drag.hud = { rtGrade: rtGrade, shortName: shortName, layout: layout, touchLayout: touchLayout, prompt: prompt, fmtSpeed: fmtSpeed, gradeColor: gradeColor, create: create, roundRect: rr, laneFrac: laneFrac };
+  CB.drag.hud = { rtGrade: rtGrade, shortName: shortName, layout: layout, fpGauges: fpGauges, touchLayout: touchLayout, prompt: prompt, fmtSpeed: fmtSpeed, gradeColor: gradeColor, create: create, roundRect: rr, laneFrac: laneFrac };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.drag.hud;
 })();

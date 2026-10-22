@@ -207,7 +207,28 @@ property (the same in every mode), so it is left alone here.
   (wheel + hands, A-pillars, mirrors, cluster with tach and gear), the tree in the windscreen, head pitch-back on launch /
   forward on braking (longG × 2.4 into the cockpit head model), shake on launch / shifts / bangs (renderer), FOV
   stretch with speed + launch kick. The HUD goes minimal: a dash-mounted shift-light bar, gear + rpm while staging, the
-  live ET / speed counter; the big tach and the HUD tree return in the other cameras (C cycles chase, low, side, bumper).
+  live ET / speed counter; the launch-rpm and tyre gauges move off the cluster (lower left over the door; upper left on
+  touch, `CB.drag.hud.fpGauges`); the big tach and the HUD tree return in the other cameras (C cycles chase, low, side, bumper).
+* **Drag dash** (`CB.drag.renderer._.dragDash(lane, snap, oppLane)` → `cockpit.update(v)` as `v.drag`): when `v.drag` is
+  set, `CB.gl.cockpit` draws drag readouts instead of the race ones (race sessions never pass it, so the race cluster is
+  unchanged). Cluster (`drawDragCluster`): big 270° tach with the redline zone, the green launch-rpm band on the outer
+  ring while staging, a 14-LED shift-light bar across the side panels (blue flash in the shift window), huge gear in the
+  hub; left panel = PRE / STAGE lamps, the tree (3 ambers, green, red) and a status (ROLL IN / PRE-STAGED / STAGED /
+  WATCH TREE / GO! / RED LIGHT) while staging, then the live ELAPSED timer (t − green − RT) + R/T, then the final ET;
+  right panel = launch band / 2-STEP / EV + rpm while staging, speed on the run, TRAP + WIN / LOSS / DONE after it.
+  Every readout sits in the band the binnacle hood and wheel hub leave visible (~0.3–0.95 of the panel height). The
+  centre screen becomes a live timeslip (`drawDragScreen`: R/T, splits, ET for both lanes, trap, result); the windscreen
+  HUD and race-wheel display show the ET in place of the race position.
+* **Mirrors**: the interior mirror (and the door mirrors, which sample its left / right halves) shows a live rear view:
+  `mirrorPlan(quality, { cockpit, fbo, aspect })` → high / ultra 256 / 320 px wide every frame, medium 192 px every 2nd
+  frame, height from the glass aspect (256×72 on most cars); low tier, or when render targets fail, a static dark-tint
+  texture. The pass draws the strip, the timing boards and the other car (no particles, cockpit or own car) from a
+  camera on the glass along the reflected eye ray (`mirrorView`) with a horizontally flipped projection, into one of two
+  render targets (the cockpit samples the previous result, as in renderer3d). `renderer.setMirror(bool)`,
+  `mirrorState()`, `stats().mirror` ('live' | 'fallback' | 'off') / `mirrorMs`. Measured (headless Chrome, Apple GPU,
+  60 synced frames): ~0.4–0.6 ms / frame on high, ~0.4 ms on medium (every other frame), 0 on low; fps unchanged
+  (vsync 60 desktop, ~48–49 in the 4× CPU-throttled phone profile before and after). Race / F1 cockpits already had
+  live mirrors (renderer3d's own mirror pass) and are untouched.
 * **HUD**: tach + 12-LED shift lights (flash in the perfect window), launch-rpm gauge with the green band, tyre-heat meter,
   the tree (bulbs pop + glow as they light; flagger on the street), live splits for both lanes, lane race bar with the gap,
   live ET + speed counter, reaction readout on launch ("0.012 — PERFECT!" / GREAT / GOOD / OK / SLOW), PERFECT SHIFT /
