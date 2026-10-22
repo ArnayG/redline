@@ -532,11 +532,6 @@
         // red tow hooks, rock rails
         { t: 'box', mat: 'tail', mirror: true, c: [2.25, 0.505, 0.40], s: [0.04, 0.06, 0.07] },
         { t: 'box', mat: 'black', mirror: true, c: [0.0, 0.40, 0.855], s: [2.0, 0.085, 0.09] },
-        // low LOD only: the 6-station decimation keeps x 0.70 then the bumper ring at -2.21, so the tub top
-        // collapses into one long sky-lit ramp down to the bumper (read pink from the chase cam) and the tailgate
-        // face disappears; two body-colour boxes restore the box tub above the arches and the upright tailgate
-        { t: 'box', mat: 'paint', low: 'only', c: [-0.75, 1.13, 0], s: [2.90, 0.42, 1.74] },
-        { t: 'box', mat: 'paint', low: 'only', c: [-2.075, 0.98, 0], s: [0.25, 0.72, 1.74] },
         // hidden body-colour fillers inside the steel bumper and the spare tyre: the painted shell must span the
         // full length (bumper face to spare) so the body part is centred like the real car's bounding box
         { t: 'box', mat: 'paint', c: [2.20, 0.55, 0], s: [0.08, 0.06, 0.06] },

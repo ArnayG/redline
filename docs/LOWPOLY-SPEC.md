@@ -3,7 +3,10 @@
 Goal: every car is a clean, deliberately faceted **low-poly model of the real car** (think premium low-poly art: crisp planar
 facets, flat shading, flat material colours, no decals, no texture tearing). Likeness comes from silhouette, proportions,
 glasshouse shape, and the signature light/grille shapes modelled as small flat-coloured polygons — not from fine detail.
-Target 600–2,500 triangles per car (wheels included), identical model for player and AI (a ~300-tri LOD for far cars).
+Target 600–2,500 triangles per car (wheels included), identical model for player and AI (a 300–500-tri LOD for far cars).
+The low LOD keeps 6–10 body stations: always the first and last, then the sections worst reproduced by
+interpolation (ranked against 5 cm, 1.5 cm in the first / last 35 cm), so bumper faces, tailgate folds and raked tail
+lips survive and the far car keeps the near car's silhouette at both ends — no low-only filler boxes needed.
 
 ## Files
 - `js/race/gl/lowpoly.js` → `CB.lowpoly` — registry, generator, auto-fallback, car-mesh integration (core agent).

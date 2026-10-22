@@ -24,7 +24,9 @@ function errors(build) {
   return list.filter((i) => i.severity === 'error');
 }
 function describe(errs) { return errs.map((e) => e.id + ': ' + String(e.message || '').slice(0, 100)).join(' | '); }
-function fresh() { ST.reset(); ST.clearHistory(); return ST.get(); }
+// the generic default build (ST.reset() starts a NEW build from a factory car — CB.stock — once stock specs + physics
+// are loaded by any suite; these tests are about real dims / fitment from the catalog default)
+function fresh() { ST.replace(ST.normalize(ST.defaultBuild()), { resetHistory: true, label: 'fresh' }); ST.clearHistory(); return ST.get(); }
 /** Registered models of catalog body styles (other test files register '_test' fixtures in the shared registry). */
 const realModels = () => SH.list().filter((m) => m && m.ref && D.bodyStyles.some((s) => s.id === m.style));
 const ready = () => CB.rules && typeof CB.rules.validate === 'function' && SH && typeof SH.list === 'function';

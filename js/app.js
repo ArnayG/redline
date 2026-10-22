@@ -1426,7 +1426,7 @@ window.CB = window.CB || {};
       var items = [
         { label: 'Surprise me', hint: 'Random, valid build', icon: 'spark', run: function () { openGarage('surprise'); } },
         { label: 'Save build', hint: 'Ctrl/⌘ S', icon: 'check', run: function () { if (CB.garage && CB.garage.save) CB.garage.save(); else { CB.state.saveLocal(); toast('Build saved', 'success'); } } },
-        { label: 'New build', hint: 'Start from the default car', icon: 'reset', run: newBuild },
+        { label: 'New build', hint: 'Start from the factory car', icon: 'reset', run: newBuild },
         stockAvailable() ? { label: 'Auto-config: stock spec', hint: 'F', run: applyStock } : null,
         { sep: true },
         { label: 'Export JSON', hint: 'Download this build', run: function () { openGarage('exportJSON'); } },
@@ -1447,7 +1447,8 @@ window.CB = window.CB || {};
   function newBuild() {
     var go = function () {
       CB.state.reset({ label: 'New build' });
-      toast('Started a new build', 'info', { action: { label: 'Undo', onClick: function () { CB.state.undo(); } } });
+      var nm = safe(function () { return CB.state.get().meta.name; }, '');
+      toast(nm ? 'Started a new build: ' + nm : 'Started a new build', 'info', { action: { label: 'Undo', onClick: function () { CB.state.undo(); } } });
     };
     if (CB.ui && CB.ui.confirm) CB.ui.confirm({ title: 'Start a new build?', message: 'Your current configuration stays in the undo history, and you can save it to your saved builds first.', okLabel: 'Start new build' }).then(function (ok) { if (ok) go(); });
     else go();

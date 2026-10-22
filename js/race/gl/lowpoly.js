@@ -1516,7 +1516,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     // ---- body shell (+ wells)
     var bodyFit = fitShell(C.body), body = C.body;
     var K = low ? 2 : 5;
-    if (low) bodyFit = decimateStations(bodyFit, 6);
+    if (low) bodyFit = decimateStations(bodyFit, 6, 4);
     var WG = body.wells ? wellGrid(bodyFit, arches, K) : { grid: bodyFit.map(function (s) { return { x: s.x, pts: s.pts, well: null }; }), clamped: bodyFit.map(function (s) { return s.pts.map(function () { return false; }); }) };
     var grid = WG.grid, wells = body.wells;
     var ringIdx = null;
@@ -1565,7 +1565,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     // ---- cabin
     if (C.cabin) {
       var cabFit = fitShell(C.cabin), cab = C.cabin;
-      if (low) cabFit = decimateStations(cabFit, 5);
+      if (low) cabFit = decimateStations(cabFit, 5, 1);
       var cg = cabFit.map(function (s) { return { x: s.x, pts: s.pts }; });
       var stC = C.cabin.stations.map(function (s) { return { x: mx(s.x) + dx }; });
       emitShell(B, cg, function (i, j, Q, i2) { return matAt(cab.mats, rowOf(stC, (cg[i].x + cg[i2].x) / 2), j, 'paint'); }, { capF: cab.capF, capR: cab.capR, seed: 7, jitter: low ? 0.04 : 0.07 });
@@ -1756,12 +1756,45 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var d = (worst + 0.006) * (rear ? -1 : 1);
     return out.map(function (q) { return [q[0] + d, q[1], q[2]]; });
   }
-  /** keep n stations (ends + evenly spread interior) for the low LOD */
-  function decimateStations(st, n) {
+  /** low LOD stations: always the first and last, then greedily the station worst reproduced by interpolating
+      between its kept neighbours, until n are kept and then up to `extra` more while a miss is over tolerance (5 cm,
+      1.5 cm in the first / last 35 cm). The miss is the section's envelope (top, bottom, half width) error, with a
+      third weight on the per-point ring error so the outline shape counts too, and it is ranked relative to the
+      tolerance, so the end zones win. The abrupt sections that define the nose / tail faces (bumper -> body steps,
+      tailgate folds, spare carriers, raked tail lips) are the worst-interpolated ones, so the low shell keeps the
+      high shell's silhouette at both ends; the old evenly spaced pick dropped them (the Wrangler lost its tailgate
+      face, raked tails pulled in under their low-LOD decals). */
+  function decimateStations(st, n, extra) {
     if (st.length <= n) return st;
-    var out = [];
-    for (var i = 0; i < n; i++) out.push(st[Math.round(i * (st.length - 1) / (n - 1))]);
-    return out;
+    function env(s) {
+      var e = [-Infinity, Infinity, -Infinity];
+      s.pts.forEach(function (p) { e[0] = Math.max(e[0], p[0]); e[1] = Math.min(e[1], p[0]); e[2] = Math.max(e[2], p[1]); });
+      return e;
+    }
+    var E = st.map(env);
+    function miss(k, a, b) {
+      var A = st[a], Bs = st[b], S = st[k], t = A.x === Bs.x ? 0.5 : (A.x - S.x) / (A.x - Bs.x), e = 0, v = 0;
+      for (var j = 0; j < S.pts.length; j++) {
+        var dy = S.pts[j][0] - lerp(A.pts[j][0], Bs.pts[j][0], t), dz = S.pts[j][1] - lerp(A.pts[j][1], Bs.pts[j][1], t);
+        e = Math.max(e, Math.sqrt(dy * dy + dz * dz));
+      }
+      for (var c = 0; c < 3; c++) v = Math.max(v, Math.abs(E[k][c] - lerp(E[a][c], E[b][c], t)));
+      return Math.max(v, e * 0.35);
+    }
+    var keep = [0, st.length - 1], max = Math.min(st.length, n + (extra || 0)), x0 = st[0].x, x1 = st[st.length - 1].x;
+    // the last / first 35 cm (tail lip, bumper face) are held to 1.5 cm: decals there sit on the low shell
+    function tolAt(k) { return Math.min(x0 - st[k].x, st[k].x - x1) < 0.35 ? 0.015 : 0.05; }
+    while (keep.length < max) {
+      var best = -1, bestE = 0;
+      for (var q = 0; q < keep.length - 1; q++) for (var k = keep[q] + 1; k < keep[q + 1]; k++) {
+        var e = miss(k, keep[q], keep[q + 1]) / tolAt(k);
+        if (e > bestE) { bestE = e; best = k; }
+      }
+      if (best < 0 || (keep.length >= n && bestE < 1)) break;
+      keep.push(best);
+      keep.sort(function (a, b) { return a - b; });
+    }
+    return keep.map(function (k) { return st[k]; });
   }
   /** low LOD ring: keep the well points + rocker, belt, roof edge and top centre of the authored ring */
   function decimateRing(grid, keepIdx) {
@@ -2120,6 +2153,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   LP.list = function () { return Object.keys(defs); };
   LP.errors = function (id) { return errorsById[id] || []; };
   LP.validate = validate;
+  LP._decimateStations = decimateStations;   // tests
   LP.autoDef = autoDef;
   LP.build = build;
   LP.carStyle = carStyle;

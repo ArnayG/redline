@@ -7,7 +7,7 @@
      set(path, value, opts)             immutable leaf update. opts: { silent, noHistory, label, noCoalesce }
      patch(partial, opts)               deep merge. opts as above
      replace(build, opts)               whole replacement. opts also { resetHistory }
-     reset(opts)                        replace with defaultBuild()
+     reset(opts)                        replace with starterBuild(current model) ("New build": a factory car)
      subscribe(fn)                      fn(build, change) — change = { path, value, label, type, paths }
                                         type: 'set' | 'patch' | 'replace' | 'undo' | 'redo' | 'boot'
      undo() / redo() / canUndo() / canRedo()
@@ -20,7 +20,8 @@
      exportJSON(build?) / importJSON(str)
      boot({force})                      restore order: '#b=' hash → autosave 'forge.current.v1' → default
      flushAutosave()
-     defaultBuild()                     CB.data.defaultBuild() at the default real model's dimensions (reset/boot use it)
+     defaultBuild()                     CB.data.defaultBuild() at the default real model's dimensions (fallback; share-code base)
+     starterBuild(model?)               factory (CB.stock) spec of model / the default model, "Stock <car>" (new builds, first boot)
      realDims(model|id|build)           partial build with the real car's wheelbase/track/ride height/wheel Ø/tyres (CB.shapes.refBuild)
      applyModel(id, opts)               pick a real model (+ its style) and its real dims as ONE undo step
      matchRealDims(opts)                snap the build to its shown model's real dims (one step; false when nothing changes)
@@ -245,6 +246,30 @@ if (typeof window !== 'undefined') window.CB = CB;
     var b = D().defaultBuild();
     var dims = realDims({ body: { style: b.body.style, model: b.body.model } });
     return dims ? U.deepMerge(b, dims) : b;
+  }
+  /**
+   * starterBuild(model?) — what a NEW build starts from: the factory (stock) spec of a real car (CB.stock, Auto-config)
+   * — by default the default model (Porsche 911 Carrera S), so the Simple Garage shows real levels ("Stock") from the
+   * first visit instead of "Custom". Named like Auto-config names it ("Stock <car>") with a fresh meta. Falls back to
+   * defaultBuild() when CB.stock / CB.physics are not loaded (Node suites, pages without stock specs) or the model has
+   * no factory spec. Share codes still diff against CB.data.defaultBuild(), so links are unaffected.
+   */
+  function starterBuild(model) {
+    var St = CB.stock;
+    if (!St || typeof St.build !== 'function' || typeof St.has !== 'function' || !CB.physics || typeof CB.physics.compute !== 'function') return defaultBuild();
+    var id = null;
+    try {
+      var m = model ? modelOf(model) : null;
+      if (!m || !St.has(m.id)) m = modelOf(defaultBuild());
+      id = m && St.has(m.id) ? m.id : null;
+    } catch (e) { id = null; }
+    if (!id) return defaultBuild();
+    var res = null;
+    try { res = St.build(id); } catch (e) { res = null; }
+    if (!res || !U.isPlainObject(res.build)) return defaultBuild();
+    var b = U.deepClone(res.build), t = Date.now();
+    b.meta = { name: ('Stock ' + (res.title || id)).slice(0, 60), id: U.uid('b'), created: t, modified: t, presetId: null };
+    return b;
   }
   /**
    * When a set/patch changes which real model the build shows (picking body.model, or a body style that resolves to
@@ -694,7 +719,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     return patch(p, Object.assign({ label: 'Model → ' + (m.make ? m.make + ' ' : '') + (m.name || m.id), realDims: false }, opts));
   }
 
-  function reset(opts) { return replace(defaultBuild(), Object.assign({ label: 'New build' }, opts || {})); }
+  /** New build: the factory spec of the car the build currently shows (starterBuild), else the default build. */
+  function reset(opts) { return replace(starterBuild(current ? modelOf(current) : null), Object.assign({ label: 'New build' }, opts || {})); }
 
   function subscribe(fn) {
     if (typeof fn !== 'function') return function () {};
@@ -877,7 +903,7 @@ if (typeof window !== 'undefined') window.CB = CB;
         try { build = normalize(U.deepMerge(D().defaultBuild(), saved.build)); source = 'autosave'; } catch (e) { build = null; }
       }
     }
-    if (!build) { build = normalize(defaultBuild()); source = 'default'; }
+    if (!build) { build = normalize(starterBuild()); source = 'default'; }
     current = build;
     past = []; future = []; lastCommit = null;
     bootInfo = { source: source, build: build };
@@ -900,7 +926,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     get: get, set: set, patch: patch, replace: replace, reset: reset, subscribe: subscribe,
     undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo, history: history, historyDetail: historyDetail, clearHistory: clearHistory,
     normalize: normalize, leafPaths: leafPaths,
-    defaultBuild: defaultBuild, realDims: realDims, modelOf: modelOf, dimsDeviation: dimsDeviation, matchRealDims: matchRealDims,
+    defaultBuild: defaultBuild, starterBuild: starterBuild, realDims: realDims, modelOf: modelOf, dimsDeviation: dimsDeviation, matchRealDims: matchRealDims,
     applyModel: applyModel, REAL_DIM_PATHS: REAL_DIM_PATHS.slice(),
     encode: encode, decode: decode, shareURL: shareURL, exportJSON: exportJSON, importJSON: importJSON,
     saveLocal: saveLocal, listLocal: listLocal, loadLocal: loadLocal, deleteLocal: deleteLocal, renameLocal: renameLocal, duplicateLocal: duplicateLocal,
@@ -913,6 +939,24 @@ if (typeof window !== 'undefined') window.CB = CB;
 
   // Browser: restore immediately so every later module sees the right build on load.
   if (hasWindow) { try { boot(); } catch (e) { if (typeof console !== 'undefined') console.error(e); init(); } }
+  // A first visit (nothing saved, no share link) boots on defaultBuild() above because physics.js (which the factory
+  // spec's calibration needs) loads after this file; once every script has loaded, swap that untouched build for the
+  // factory car (starterBuild) as the boot build — saved builds, autosaves and share links are never touched.
+  function promoteStarter() {
+    if (!bootInfo || bootInfo.source !== 'default' || bootInfo.starter || past.length || current !== bootInfo.build) return;
+    var b = null;
+    try { b = normalize(starterBuild()); } catch (e) { b = null; }
+    if (!b || sameIgnoringModified(b, current)) return;
+    current = b; future = []; lastCommit = null;
+    bootInfo = { source: 'default', build: b, starter: true };
+    emit({ type: 'boot', path: '*', value: null, paths: ['*'], label: 'Boot (factory car)' });
+  }
+  if (hasWindow && typeof document !== 'undefined' && document.addEventListener) {
+    try {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', promoteStarter);
+      else setTimeout(promoteStarter, 0);
+    } catch (e) { /* ignore */ }
+  }
   else init();
 })();
 

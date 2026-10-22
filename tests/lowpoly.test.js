@@ -449,3 +449,29 @@ test('lowpoly: text badges (stroke font) sit flat on the rear, low:true parts dr
   var base = lp('porsche-911-992', 'high');
   assert.ok(hi.stats.triangles > base.stats.triangles + 30, 'text + lens adds geometry at high LOD');
 });
+
+test('lowpoly: low-LOD station decimation keeps the ends — nose / tail sections match the authored shell (Wrangler tailgate)', function () {
+  function env(s) { var e = [-Infinity, Infinity, -Infinity]; s.pts.forEach(function (p) { e[0] = Math.max(e[0], p[0]); e[1] = Math.min(e[1], p[0]); e[2] = Math.max(e[2], p[1]); }); return e; }
+  shipped().forEach(function (m) {
+    var def = LP.get(m.id);
+    if (!def) return;
+    var st = def.body.stations.map(function (s) { return { x: +s.x, pts: s.pts }; }).sort(function (a, b) { return b.x - a.x; });
+    var dec = LP._decimateStations(st, 6, 4), x0 = st[0].x, x1 = st[st.length - 1].x;
+    assert.ok(dec[0] === st[0] && dec[dec.length - 1] === st[st.length - 1], m.id + ' first / last station kept');
+    assert.ok(dec.length >= Math.min(6, st.length) && dec.length <= 10, m.id + ' ' + dec.length + ' stations');
+    // every authored section in the first / last 35 cm (bumper faces, tailgate folds, raked tail lips) is
+    // reproduced by the low shell's interpolation within 5 cm (top, bottom, half width)
+    st.forEach(function (S) {
+      if (Math.min(x0 - S.x, S.x - x1) >= 0.35) return;
+      for (var i = 0; i < dec.length - 1; i++) {
+        var A = dec[i], B = dec[i + 1];
+        if (S.x > A.x + 1e-9 || S.x < B.x - 1e-9) continue;
+        var t = A.x === B.x ? 0 : (A.x - S.x) / (A.x - B.x), es = env(S), ea = env(A), eb = env(B);
+        for (var c = 0; c < 3; c++) assert.ok(Math.abs(es[c] - (ea[c] + (eb[c] - ea[c]) * t)) < 0.05, m.id + ' end section x ' + S.x + ' missed by the low shell');
+        break;
+      }
+    });
+  });
+  // the Wrangler needs no low-only body-colour boxes any more: its tub and upright tailgate come from the shell
+  assert.ok(!LP.get('jeep-wrangler-rubicon-jl').parts.some(function (p) { return p.t === 'box' && p.low === 'only' && p.mat === 'paint'; }), 'no Wrangler low-LOD workaround boxes');
+});

@@ -1440,12 +1440,14 @@ if (typeof window !== 'undefined') window.CB = CB;
     return presetCache[id];
   }
 
-  /** Unsaved = differs from its garage entry; if never saved, differs from its preset / the default build. */
+  /** Unsaved = differs from its garage entry; if never saved, differs from its preset / its factory spec / the default build. */
   function isDirty(b) {
     b = b || current();
     var e = entry(b.meta.id);
     if (e) return !sameBuild(b, e.build);
     if (b.meta.presetId) { var p = presetBuildCached(b.meta.presetId); if (p && sameBuild(b, p)) return false; }
+    // an untouched factory car (a new build / first visit starts as one) is not unsaved work
+    if (CB.stock && typeof CB.stock.isStock === 'function') { try { if (CB.stock.isStock(b)) return false; } catch (eS) { /* ignore */ } }
     return !sameBuild(b, normalize(D().defaultBuild()));
   }
 

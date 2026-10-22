@@ -27,7 +27,9 @@ function expected(m, base) {
   raw.body.wheelbase_mm = rb.body.wheelbase_mm; raw.body.trackWidth_mm = rb.body.trackWidth_mm;
   return pick(ST.normalize(raw, { paths: DIMS.concat(['body.style', 'body.model', 'wheels.staggered']), prev: base }));
 }
-function fresh() { ST.reset(); ST.clearHistory(); return ST.get(); }
+// the generic default build (ST.reset() starts a NEW build from a factory car — CB.stock — once stock specs + physics
+// are loaded by any suite; these tests are about real dims / fitment from the catalog default)
+function fresh() { ST.replace(ST.normalize(ST.defaultBuild()), { resetHistory: true, label: 'fresh' }); ST.clearHistory(); return ST.get(); }
 function withoutShapes(fn) { const saved = CB.shapes; try { CB.shapes = undefined; return fn(); } finally { CB.shapes = saved; } }
 
 T('exports the real-dimension API', () => {
