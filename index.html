@@ -25,7 +25,7 @@
 <body>
   <!-- Boot screen: painted as soon as the stylesheet arrives, while the ~90 classic scripts below download and run
        (several seconds on a phone network). Self-contained styles; removed after DOMContentLoaded. -->
-  <div id="cb-boot" role="status" aria-live="polite" data-scripts="132">
+  <div id="cb-boot" role="status" aria-live="polite" data-scripts="144">
     <style>#cb-boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:#0b0b0d;color:#e9e6df;font:600 13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.04em;transition:opacity .35s ease;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}#cb-boot.is-done{opacity:0;pointer-events:none}#cb-boot .cbb{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(260px,70vw)}#cb-boot .cbb-bar{width:100%;height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}#cb-boot .cbb-bar i{display:block;height:100%;width:3%;background:#c9a96e;border-radius:2px;transition:width .2s ease}#cb-boot .cbb-t{opacity:.72;font-variant-numeric:tabular-nums}#cb-boot svg{opacity:.9}@media (prefers-reduced-motion:reduce){#cb-boot,#cb-boot .cbb-bar i{transition:none}}</style>
     <div class="cbb">
       <svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true"><path d="M8 44a24 24 0 0 1 40.4-17.6" fill="none" stroke="#c9a96e" stroke-width="5" stroke-linecap="round"/><path d="M51.4 30.3A24 24 0 0 1 56 44" fill="none" stroke="#e0412f" stroke-width="5" stroke-linecap="round"/><path d="M32 44l12-14" stroke="#e9e6df" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="44" r="4" fill="#e9e6df"/></svg>
@@ -179,6 +179,7 @@
   <section id="screen-drift" class="cb-screen" data-route="drift" aria-label="Drift" hidden></section>
   <section id="screen-derby" class="cb-screen" data-route="derby" aria-label="Demolition Derby" hidden></section>
   <section id="screen-arcade" class="cb-screen" data-route="arcade" aria-label="Arcade" hidden></section>
+  <section id="screen-drag" class="cb-screen" data-route="drag" aria-label="Drag Racing" hidden></section>
   <section id="screen-f1" class="cb-screen" data-route="f1" aria-label="Formula 1" hidden></section>
   <!-- #/menu, #/career, #/challenges, #/cars, #/achievements, #/replays, #/profile, #/settings — CB.game.hub screens -->
   <section id="screen-hub" class="cb-screen" data-route="hub" aria-label="Game" hidden></section>
@@ -320,6 +321,18 @@
   <script src="js/derby/derby-hud.js" charset="utf-8"></script>
   <script src="js/derby/derby-sfx.js" charset="utf-8"></script>
   <script src="js/derby/derby-ui.js" charset="utf-8"></script>
+  <!-- Drag Racing (docs/DRAG-SPEC.md): strip → tree → timing → launch → AI → session → GL strip mesh / renderer → HUD → SFX → UI (#/drag). -->
+  <script src="js/drag/drag-strip.js" charset="utf-8"></script>
+  <script src="js/drag/drag-tree.js" charset="utf-8"></script>
+  <script src="js/drag/drag-timing.js" charset="utf-8"></script>
+  <script src="js/drag/drag-launch.js" charset="utf-8"></script>
+  <script src="js/drag/drag-ai.js" charset="utf-8"></script>
+  <script src="js/drag/drag-session.js" charset="utf-8"></script>
+  <script src="js/race/gl/drag-strip-mesh.js" charset="utf-8"></script>
+  <script src="js/race/gl/drag-renderer.js" charset="utf-8"></script>
+  <script src="js/drag/drag-hud.js" charset="utf-8"></script>
+  <script src="js/drag/drag-sfx.js" charset="utf-8"></script>
+  <script src="js/drag/drag-ui.js" charset="utf-8"></script>
   <script src="js/race/race-ui.js" charset="utf-8"></script>
   <!-- F1: HUD (steering-wheel dash, timing tower) → #/f1 screens (launch race-ui with the F1 plugin) -->
   <script src="js/f1/f1-hud.js" charset="utf-8"></script>
@@ -342,6 +355,7 @@
   <script src="js/net/transport.js" charset="utf-8"></script>
   <script src="js/net/netrace.js" charset="utf-8"></script>
   <script src="js/net/netarcade.js" charset="utf-8"></script>
+  <script src="js/net/netdrag.js" charset="utf-8"></script>
   <script src="js/net/lobby.js" charset="utf-8"></script>
 
   <!-- Phone steering (README "Phone steering wheel"): analog input hub → tilt-to-steer → QR encoder → phone-as-wheel

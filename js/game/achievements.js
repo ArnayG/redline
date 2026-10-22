@@ -109,6 +109,7 @@ CB.game = CB.game || {};
     { id: 'milestones', name: 'Milestones', desc: 'Long-haul career statistics.' },
     { id: 'media', name: 'Replays & Photo', desc: 'Capture and relive the moments.' },
     { id: 'derby', name: 'Demolition Derby', desc: 'Wrecks, T-bones and the last car standing.' },
+    { id: 'drag', name: 'Drag Racing', desc: 'Reaction times, holeshots and quarter-mile timeslips.' },
     { id: 'f1', name: 'Formula 1', desc: 'Poles, podiums and titles on the real circuits.' },
     { id: 'meta', name: 'Meta', desc: 'Achievements about achievements.' }
   ];
@@ -434,6 +435,7 @@ CB.game = CB.game || {};
     replay: 'replay', photo: 'photo',
     profile: 'profile', session: 'session', meta: 'meta', boot: 'session',
     derby: 'derby', 'derby-finished': 'derby',   // Demolition Derby (docs/DERBY-SPEC.md)
+    drag: 'drag', 'drag-finished': 'drag',   // Drag Racing (docs/DRAG-SPEC.md)
     f1: 'f1', 'f1-finished': 'f1'   // Formula 1 (docs/F1-SPEC.md)
   };
 
@@ -736,6 +738,12 @@ CB.game = CB.game || {};
       var dr = ev.results || ev, dp = dr.player || {}, dst = dp.stats || {};
       ctx.dd = { won: !!dr.won, arenaId: dr.arenaId || null, kills: num(dst.kills, 0), tbones: num(dst.tbones, 0), flameDmg: num(dst.flameDmg, 0),
         health: num(dp.health, 0), launches: num(ev.launches, 0), dealt: num(dst.dealt, 0) };
+    }
+    if (kind === 'drag') {   // {type:'drag', won, et, trap_mph, rt, red, holeshot, distanceId, shifts {perfect, total}, burnoutBonus, ladderChampion, tournamentWon, bracket}
+      var dsh = ev.shifts || {};
+      ctx.dg = { won: !!ev.won, et: isNum(ev.et) ? ev.et : null, trap_mph: num(ev.trap_mph, 0), rt: isNum(ev.rt) ? ev.rt : null, red: !!ev.red, holeshot: !!ev.holeshot,
+        distanceId: ev.distanceId || null, perfect: num(dsh.perfect, 0), shifts: num(dsh.total, 0), burnoutBonus: num(ev.burnoutBonus, 0),
+        ladderChampion: !!ev.ladderChampion, tournamentWon: !!ev.tournamentWon, bracket: !!ev.bracket, opponent: ev.opponent || null };
     }
     if (kind === 'f1') {   // {type:'f1', session?, position, status, gained, fastestLap, pitStops, teamId, circuitId, title, pole, stats}
       var fst = ev.stats || {};
@@ -1107,6 +1115,26 @@ CB.game = CB.game || {};
   ddIs('derby-flying', 'Flying Lessons', 'Launch a car into the air with the Front Ramp.', 'bronze', 'wing', function (d) { return d.launches >= 1; });
   counter('derby-wrecker', 'Wrecking Crew', 'Eliminate 25 cars in Demolition Derby.', 'gold', 'burst', 'derby', null, 25, 'derby', function (ctx) { return ctx.dd ? ctx.dd.kills : 0; });
   collect('derby-expert', 'Demolition Expert', 'Win a derby in all six arenas.', 'platinum', 'crown', 'derby', 'derby', function (ctx) { return ctx.dd && ctx.dd.won ? ctx.dd.arenaId : null; }, 6);
+
+  /* ------------------------------------------------------------------ Drag Racing (docs/DRAG-SPEC.md) */
+
+  function dgIs(id, name, desc, tier, glyph, fn, extra) {
+    return when(id, name, desc, tier, glyph, 'drag', 'drag', function (ctx) { return !!ctx.dg && !!fn(ctx.dg, ctx); }, extra);
+  }
+  function dgQuarter(d) { return d.distanceId === 'quarter' && !d.red && d.et != null; }
+  dgIs('drag-first-win', 'Win Light', 'Win a drag race.', 'bronze', 'flag', function (d) { return d.won && d.opponent !== 'none'; });
+  dgIs('drag-sub-12', 'Twelve-Second Car', 'Run a quarter mile in under 12 seconds.', 'bronze', 'stopwatch', function (d) { return dgQuarter(d) && d.et < 12; });
+  dgIs('drag-sub-10', 'Ten-Second Club', 'Run a quarter mile in under 10 seconds.', 'gold', 'stopwatch', function (d) { return dgQuarter(d) && d.et < 10; });
+  dgIs('drag-perfect-light', 'Perfect Light', 'Cut a reaction time between 0.000 and 0.010 s.', 'gold', 'target', function (d) { return !d.red && d.rt != null && d.rt >= 0 && d.rt <= 0.010; });
+  dgIs('drag-holeshot', 'Holeshot', 'Win with the slower ET thanks to a better reaction time.', 'silver', 'eye', function (d) { return d.won && d.holeshot; });
+  dgIs('drag-perfect-shifts', 'Money Shifts', 'Make every manual upshift of a run PERFECT (at least 3).', 'silver', 'gear', function (d) { return d.shifts >= 3 && d.perfect === d.shifts; });
+  dgIs('drag-200-mph', 'Double Ton', 'Trap at 200 mph or faster.', 'platinum', 'gauge', function (d) { return !d.red && d.trap_mph >= 200; });
+  dgIs('drag-burnout-master', 'Hot Rubber', 'Get the full burnout grip bonus.', 'bronze', 'tire', function (d) { return d.burnoutBonus >= 0.06; });
+  dgIs('drag-bracket', 'Dialed In', 'Win a bracket race without breaking out.', 'silver', 'target', function (d) { return d.won && d.bracket; });
+  dgIs('drag-ladder-champ', 'King of the Strip', 'Beat every rival on the drag ladder.', 'platinum', 'crown', function (d) { return d.ladderChampion; });
+  dgIs('drag-tournament', 'Eliminator', 'Win a drag elimination tournament.', 'gold', 'trophy', function (d) { return d.tournamentWon; });
+  dgIs('drag-red-light', 'Jumped the Tree', 'Leave before the green.', 'bronze', 'skull', function (d) { return d.red; }, { hidden: true, hint: 'Patience is a virtue on the tree.' });
+  counter('drag-regular', 'Strip Regular', 'Make 25 drag passes.', 'silver', 'road', 'drag', 'drag_runs', 25, 'drag', function (ctx) { return ctx.dg && !ctx.dg.red ? 1 : 0; });
 
   /* ------------------------------------------------------------------ Formula 1 (docs/F1-SPEC.md) */
 

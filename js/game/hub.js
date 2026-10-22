@@ -1446,6 +1446,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
     f1: '<path d="M3 15h4l2-4h7l2 4h3"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="17.5" cy="16.5" r="2.5"/><path d="M11 11V8h5"/>',
     derby: '<path d="M12 2.5l1.8 5.2 5.2-2.3-2.4 5 5.2 1.8-5.2 1.8 2.4 5-5.2-2.3L12 21.5l-1.8-5.2-5.2 2.3 2.4-5L2.2 11.8l5.2-1.8-2.4-5 5.2 2.3z"/>',
+    drag: '<path d="M4 20h16"/><path d="M12 3v13"/><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="10" r="1.6"/><circle cx="12" cy="14" r="1.6"/><path d="M8 17l-2 3M16 17l2 3"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
     gauge: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6M8 17h8"/>',
     users: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>'
@@ -2645,6 +2646,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         out.push({ id: 'drift', label: 'Drift', desc: 'Go sideways: scored 3D drift runs, free or tandem', icon: 'drift' });
         out.push({ id: 'arcade', label: 'Arcade', desc: 'No-grip-loss arcade racing: stunt tracks, boosts, every circuit', icon: 'bolt' });
         out.push({ id: 'derby', label: 'Demolition Derby', desc: 'Bolt on a flamethrower or a ram and wreck them all: last car standing', icon: 'derby' });
+        out.push({ id: 'drag', label: 'Drag Racing', desc: 'Burnout, stage, launch on green: quarter-mile timeslips, rivals and brackets', icon: 'drag' });
         out.push({ id: 'f1', label: 'Formula 1', desc: 'Pick your team: identical F1 cars on the real circuits, weekends and championships', icon: 'f1' });
       } else if (m.id === 'atelier') out.push({ id: 'atelier', label: 'Garage', desc: 'Build and tune your car — what you build is what you drive', icon: 'wrench' });
       else out.push(m);
@@ -2726,6 +2728,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var PLAY = [
         { id: 'race', short: 'Full grid, 3D circuits', mc: 'race' }, { id: 'drift', short: 'Scored runs, free or tandem', mc: 'drift' },
         { id: 'arcade', short: 'Stunt tracks, nitro and items', mc: 'arcade' }, { id: 'derby', short: 'Weapons on, last car standing', mc: 'derby' },
+        { id: 'drag', short: 'Christmas tree, quarter-mile slips', mc: 'drag' },
         { id: 'f1', short: 'Pick a team, real circuits', mc: 'f1' }, { id: 'timetrial', short: 'Hot laps against your ghost', mc: 'career' }
       ];
       var playIds = {};
@@ -2733,7 +2736,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         var m = byId[t.id]; playIds[t.id] = 1;
         return '<button class="gh-mode" role="menuitem" data-nav data-key="mi-' + m.id + '" data-act="go" data-id="' + m.id + '" title="' + esc(m.desc) + '" style="--mc:var(--mode-' + t.mc + ');--mcs:var(--mode-' + t.mc + '-soft)">' +
           '<span class="gh-mode-art" aria-hidden="true">' + icon(m.icon, 120) + '</span><span class="gh-mode-ic">' + icon(m.icon, 20) + '</span>' +
-          '<span class="gh-mode-lbl">' + esc(m.id === 'derby' ? 'Derby' : m.label) + badgeOf(m.id) + '</span><span class="gh-mode-ds">' + esc(t.short) + '</span></button>';
+          '<span class="gh-mode-lbl">' + esc(m.id === 'derby' ? 'Derby' : m.id === 'drag' ? 'Drag' : m.label) + badgeOf(m.id) + '</span><span class="gh-mode-ds">' + esc(t.short) + '</span></button>';
       });
       if (routerMod()) {
         tiles.push('<button class="gh-mode" role="menuitem" data-nav data-key="mi-multiplayer" data-act="go" data-id="multiplayer" title="Peer-to-peer races with friends, each in their own build" style="--mc:var(--mode-online);--mcs:var(--mode-online-soft)">' +
@@ -2775,6 +2778,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         go: function (d) {
           var router = routerMod();
           if (router && d.id === 'arcade') { router.go('arcade'); return; }
+          if (router && d.id === 'drag') { router.go('drag'); return; }   // DRAG-SPEC: its own mode
           if (router && d.id === 'derby') { router.go('derby'); return; }   // ARCADE-SPEC / DERBY-SPEC: their own modes, never career-recorded
           if (router && d.id === 'f1') { router.go('f1'); return; }   // F1-SPEC: its own mode
           if (router && (d.id === 'race' || d.id === 'drift')) {

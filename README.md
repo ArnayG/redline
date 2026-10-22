@@ -87,6 +87,7 @@ docs/                 design specs per subsystem and the README screenshots
 | `#/drift` | Drift setup (track, score attack / free run / tandem, duration, tune, assist), then a 3D drift run |
 | `#/arcade` | Arcade setup (stunt track or circuit, race / time trial, items, nitro, speed class, AI difficulty), then an Arcade race |
 | `#/derby` (`?quick=1&arena=<id>`) | Demolition Derby setup (car, accessories loadout, arena, rules), then a last-car-standing derby (see *Demolition Derby*) |
+| `#/drag` (`?quick=1&car=<stockId>&dist=<id>`) | Drag Racing: pick a car and an opponent, then burnout, stage, launch on green and shift your way down the strip (see *Drag Racing*) |
 | `#/f1` (`?quick=1&circuit=<id>&team=<id>&laps=<n>`) | Formula 1: pick a team, a real circuit and a format (quick race, race weekend, championship), then race the 22-car single-spec grid (see *Formula 1*) |
 | `#/multiplayer` (`#/multiplayer/<CODE>` joins room CODE) | Multiplayer lobby: create / join a room, ready up, race or drift with friends |
 | `#/career` | Championships, tiers, calendar, standings |
@@ -112,6 +113,16 @@ The old pages are redirect stubs, so old links still work: `hub.html` → `#/men
 - **Controls:** W/↑ throttle · S/↓ brake, then reverse · A D / ← → steer · Space handbrake · **F / J = ACTION 1** · **G / K = ACTION 2** · **Shift / L = RAM BOOST** (hold; charges over time and from hits) · R flip / unstick · C camera · B look back · Esc pause · M mute. Gamepad: RT / LT, left stick, A handbrake, X action 1, B action 2, RB ram boost, Y camera, Start pause, D-pad ◀ ▶ spectate. Touch: steering pad, BRAKE/REV and GAS pedals, HB, two ACTION buttons labelled with your accessories, and a round BOOST button with a charge ring. Phone wheel: ITEM = action 1, NITRO (hold) = ram boost, swipe ITEM back = action 2 (on a sim without ram boost, NITRO stays action 2). Webcam and mouse steering work as in Race. Once you are out you spectate (◀ ▶ to change car, Enter for the results).
 - **Feel:** big hits involving your car freeze the action for 60–90 ms (hit-stop), shake and kick the camera away from the impact and flash the screen (white when you hit, red when you are hit). Points pop up over the car you hit (T-BONE!, SANDWICH, REAR-ENDER, AIRBORNE HIT, REVENGE!…) and stack into combos. An announcer calls FIRST BLOOD, DOUBLE TAKEDOWN, RAMPAGE, UNSTOPPABLE and WRECKING MACHINE, and your takedowns, your own wreck and the final kill replay in slow motion (any key or tap skips). AI taunts show in the kill feed in purple. In sudden death the safe ring shows on the minimap, and the screen edge pulses red when you are outside it. Sound is synthesised and layered (thump, metal crunch, panel ring, glass and debris rattle), with a voice limit on phones.
 - Results show placing, score with a breakdown by hit type, coins earned (credited to your profile, more on harder AI), MVP, best hit, damage dealt and taken, hits, eliminations and T-bones. Derbies count towards profile stats (`derby_*`, including `derby_score_best`) and the *Demolition Derby* achievements.
+
+## Drag Racing
+
+`#/drag` (nav item **Drag**, main-menu tile *Drag Racing*; spec: `docs/DRAG-SPEC.md`). Heads-up drag racing on the real race vehicle model, so everything you tune in the Garage (power, weight, tyres, gearing, final drive, layout, launch control) shows up on the timeslip. The first time you race, a two-minute guided practice pass teaches the routine (replay it any time with *How to drag race*).
+
+- **The run:** burnout in the box (hold brake + gas; hot tyres grip, overheated ones don't), creep into the pre-stage and stage beams, rev on the brake into the green launch band, leave on green (Pro 0.4 s or Sportsman tree; a flagger on the street), shift when the lights flash (perfect / good / early / late), N2O in the Pro Mod class. First person by default, with the tree in the windscreen; C switches to chase, low, side (TV) or bumper cams.
+- **Opponents:** a ladder of ten rivals in stock cars (Sprinter to Chiron), a quick race against any stock car and AI level, 4- or 8-car elimination tournaments, bracket racing with dial-ins, a friend's ghost from a share code, solo passes and a practice mode with a slow-motion tree. Two players can race in the lobby (*Drag* mode).
+- **Distances:** 1/8, 1/4, 1/2 mile, 1 km, dig 0–200 km/h and roll 60–200 km/h. Prepped strip, street or wet surfaces, day or night.
+- **Timeslip:** reaction, 60 ft, 330 ft, 1/8 ET and mph, 1000 ft, 1/4 ET and trap, win / loss and margin, coach's notes on what to fix, personal bests per car and distance, copy / PNG / ghost code. Passes pay credits and count towards the *Drag Racing* achievements.
+- Physics check (`node tools/drag-report.js`): stock-spec 1/4-mile ETs land within ~1–7 % of magazine figures (table in the spec).
 
 ## Formula 1
 

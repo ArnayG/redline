@@ -2,7 +2,7 @@
    Redline — js/router.js
    CB.router : the single entry point's hash router (UNIFY-SPEC § Router).
 
-   Routes (hash):  #/menu  #/garage[/<panel>]  #/race  #/drift  #/arcade (ARCADE-SPEC)  #/derby (DERBY-SPEC)  #/f1 (F1-SPEC)  #/career  #/challenges  #/cars
+   Routes (hash):  #/menu  #/garage[/<panel>]  #/race  #/drift  #/arcade (ARCADE-SPEC)  #/derby (DERBY-SPEC)  #/drag (DRAG-SPEC)  #/f1 (F1-SPEC)  #/career  #/challenges  #/cars
                    #/achievements  #/replays  #/profile  #/settings        (default: #/menu)
                    #/multiplayer[/<ROOM>]   (CB.net.lobby, js/net/lobby.js: registers itself via CB.router.on)
    Sub screens:    #/<route>/<sub>?k=v   e.g. #/career/championship?id=rookie-cup, #/garage/engine
@@ -36,6 +36,7 @@
      race     -> #screen-race     (CB.race.ui mounts #race-root into it via CB.router.on('race', ...))
      drift    -> #screen-drift
      arcade   -> #screen-arcade    (CB.race.ui discipline 'arcade', docs/ARCADE-SPEC.md)
+     drag     -> #screen-drag      (CB.drag.ui, docs/DRAG-SPEC.md)
      f1       -> #screen-f1        (CB.f1.ui, docs/F1-SPEC.md; sessions run in CB.race.ui as an overlay)
      multiplayer -> #screen-multiplayer (CB.net.lobby renders into it; the sub path is the room code to join)
      hub      -> #screen-hub      (menu, career, challenges, garage, achievements, replays, profile, settings:
@@ -54,9 +55,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
   /* ======================================================================
      Route table (pure)
      ====================================================================== */
-  var ROUTES = ['menu', 'atelier', 'race', 'drift', 'arcade', 'derby', 'f1', 'multiplayer', 'career', 'challenges', 'garage', 'achievements', 'replays', 'profile', 'settings'];
+  var ROUTES = ['menu', 'atelier', 'race', 'drift', 'arcade', 'derby', 'drag', 'f1', 'multiplayer', 'career', 'challenges', 'garage', 'achievements', 'replays', 'profile', 'settings'];
   var LABELS = {
-    menu: 'Menu', atelier: 'Garage', race: 'Race', drift: 'Drift', arcade: 'Arcade', derby: 'Derby', f1: 'Formula 1', multiplayer: 'Multiplayer', career: 'Career', challenges: 'Challenges', garage: 'My Cars',
+    menu: 'Menu', atelier: 'Garage', race: 'Race', drift: 'Drift', arcade: 'Arcade', derby: 'Derby', drag: 'Drag', f1: 'Formula 1', multiplayer: 'Multiplayer', career: 'Career', challenges: 'Challenges', garage: 'My Cars',
     achievements: 'Achievements', replays: 'Replays', profile: 'Profile', settings: 'Settings'
   };
   /** Routes rendered by the game hub, and the hub screen each opens on. */
@@ -81,6 +82,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     { route: 'drift', label: 'Drift', icon: '<path d="M4 18c3-7 8-11 16-12"/><path d="M14 4l6 2-2 6"/><circle cx="6" cy="20" r="1.2"/>' },
     { route: 'arcade', label: 'Arcade', icon: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>' },
     { route: 'derby', label: 'Derby', icon: '<path d="M12 2.5l1.8 5.2 5.2-2.3-2.4 5 5.2 1.8-5.2 1.8 2.4 5-5.2-2.3L12 21.5l-1.8-5.2-5.2 2.3 2.4-5L2.2 11.8l5.2-1.8-2.4-5 5.2 2.3z"/>' },
+    { route: 'drag', label: 'Drag', icon: '<path d="M4 20h16"/><path d="M12 3v13"/><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="10" r="1.6"/><circle cx="12" cy="14" r="1.6"/><path d="M8 17l-2 3M16 17l2 3"/>' },
     { route: 'f1', label: 'Formula 1', short: 'F1', icon: '<path d="M3 15h4l2-4h7l2 4h3"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="17.5" cy="16.5" r="2.5"/><path d="M11 11V8h5"/>' },
     { route: 'multiplayer', label: 'Multiplayer', short: 'Online', icon: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 20c0-3.3 2.7-6 6-6"/>' },
     { route: 'career', label: 'Career', icon: '<path d="M6 3h12v4a6 6 0 0 1-12 0z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 13v8"/>' },
@@ -93,7 +95,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   function isRoute(r) { return ROUTES.indexOf(r) >= 0; }
   function isHubRoute(r) { return Object.prototype.hasOwnProperty.call(HUB_ROUTES, r); }
   /** Which layer renders a route. */
-  function layerOf(route) { return isHubRoute(route) ? 'hub' : route === 'atelier' || route === 'race' || route === 'drift' || route === 'arcade' || route === 'derby' || route === 'f1' || route === 'multiplayer' ? route : 'hub'; }
+  function layerOf(route) { return isHubRoute(route) ? 'hub' : route === 'atelier' || route === 'race' || route === 'drift' || route === 'arcade' || route === 'derby' || route === 'drag' || route === 'f1' || route === 'multiplayer' ? route : 'hub'; }
 
   function parseQuery(q) {
     var out = {};
@@ -281,7 +283,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       root.id = 'app-root';
       document.body.insertBefore(root, document.body.firstChild);
     }
-    ['atelier', 'race', 'drift', 'arcade', 'derby', 'f1', 'multiplayer', 'hub'].forEach(function (id) {
+    ['atelier', 'race', 'drift', 'arcade', 'derby', 'drag', 'f1', 'multiplayer', 'hub'].forEach(function (id) {
       var el = document.getElementById('screen-' + id);
       if (!el) {
         el = document.createElement('section');
@@ -529,6 +531,16 @@ var CB = (globalThis.CB = globalThis.CB || {});
       renderMissing(el, 'Demolition Derby (js/derby/derby-ui.js) did not load on this page.');
     }, 600);
   }
+  /** #/drag is rendered by CB.drag.ui (js/drag/drag-ui.js registers itself via CB.router.on, docs/DRAG-SPEC.md). */
+  var dragFallbackTimer = null;
+  function enterDrag(t) {
+    var el = layers.drag;
+    clearTimeout(dragFallbackTimer);
+    dragFallbackTimer = setTimeout(function () {
+      if (!cur || cur.route !== t.route || !el || userHandlers('drag').length || el.children.length) return;
+      renderMissing(el, 'Drag Racing (js/drag/drag-ui.js) did not load on this page.');
+    }, 600);
+  }
   /** #/f1 is rendered by CB.f1.ui (js/f1/f1-ui.js registers itself via CB.router.on, docs/F1-SPEC.md). */
   var f1FallbackTimer = null;
   function enterF1(t) {
@@ -594,7 +606,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         if (prevLayer !== nextLayer) {
           if (prevLayer === 'hub') leaveHub(t, opts);
           else if (prevLayer === 'race' || prevLayer === 'drift' || prevLayer === 'arcade') leaveDrive(prev);
-          else if (prevLayer === 'derby') setDriving(false);
+          else if (prevLayer === 'derby' || prevLayer === 'drag') setDriving(false);
           else if (prevLayer === 'f1') { setDriving(false); if (CB.race && CB.race.ui && typeof CB.race.ui.isOpen === 'function' && CB.race.ui.isOpen()) safe(function () { CB.race.ui.close(); }, 'race.ui.close'); }
         }
       }
@@ -605,6 +617,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       else if (nextLayer === 'hub') enterHub(cur);
       else if (nextLayer === 'multiplayer') enterMultiplayer(cur);
       else if (nextLayer === 'derby') enterDerby(cur);
+      else if (nextLayer === 'drag') enterDrag(cur);
       else if (nextLayer === 'f1') enterF1(cur);
       else enterDrive(cur);
       var ctx = { route: cur.route, sub: cur.sub, from: prev ? prev.route : null };
@@ -614,7 +627,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     } finally {
       transitioning = false;
     }
-    if (nextLayer !== 'race' && nextLayer !== 'drift' && nextLayer !== 'arcade' && nextLayer !== 'derby' && nextLayer !== 'f1') setDriving(false);
+    if (nextLayer !== 'race' && nextLayer !== 'drift' && nextLayer !== 'arcade' && nextLayer !== 'derby' && nextLayer !== 'drag' && nextLayer !== 'f1') setDriving(false);
     updateNav();
     if (routeChanged && hasDOM && nextLayer !== 'atelier') safe(function () { window.scrollTo(0, 0); });
     emit('cb:route', { route: cur.route, sub: cur.sub, params: cur.params, from: prev ? prev.route : null });

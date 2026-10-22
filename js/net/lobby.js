@@ -73,8 +73,13 @@ CB.net = CB.net || {};
     { id: 'race', name: 'Race', desc: 'Wheel to wheel, standing start, first past the flag' },
     { id: 'drift', name: 'Drift battle', desc: 'Tandem lead / chase scoring, roles swap every run' },
     { id: 'free', name: 'Free roam', desc: 'No clock, no rules — just drive together' },
-    { id: 'arcade', name: 'Arcade', desc: 'Stunt tracks and circuits with nitro, item boxes and power-ups (arcade grip)' }
+    { id: 'arcade', name: 'Arcade', desc: 'Stunt tracks and circuits with nitro, item boxes and power-ups (arcade grip)' },
+    { id: 'drag', name: 'Drag', desc: 'Heads-up drag race for two: burnout, staging, the tree, a timeslip (js/net/netdrag.js)' }
   ];
+  // Drag (docs/DRAG-SPEC.md §7): distance / venue / surface for a 2-player heads-up run
+  var DRAG_DIST = [{ id: 'eighth', name: '1/8 mile' }, { id: 'quarter', name: '1/4 mile' }, { id: 'half', name: '1/2 mile' }, { id: 'km', name: '1 km' }];
+  var DRAG_VENUE = [{ id: 'strip', name: 'Drag strip' }, { id: 'street', name: 'Street' }];
+  var DRAG_SURF = [{ id: 'prepped', name: 'Prepped' }, { id: 'street', name: 'Street' }, { id: 'wet', name: 'Wet' }];
   // Arcade rules (ARCADE-SPEC §3/§7; CB.arcade.mode.optionDefs() when the arcade modules are loaded)
   var ARCADE_OPTS = [
     { id: 'items', name: 'Items', type: 'toggle', default: true },
@@ -222,7 +227,7 @@ CB.net = CB.net || {};
     return {
       mode: 'race', trackId: t ? t.id : 'forge-ring', laps: 3, ai: 3, weather: 'dry', timeOfDay: 'day',
       assists: { abs: true, tc: true, autoShift: true, racingLine: true }, maxSteerAssist: 'auto', collisions: true,
-      arcade: normArcade({}), difficulty: 'amateur'
+      arcade: normArcade({}), difficulty: 'amateur', dragDistance: 'quarter', dragVenue: 'strip', dragSurface: 'prepped'
     };
   }
   /** normalizeSettings(next, prev?) -> a complete, valid settings object (unknown values fall back to prev / defaults). */
@@ -251,6 +256,9 @@ CB.net = CB.net || {};
     o.collisions = typeof s.collisions === 'boolean' ? s.collisions : d.collisions !== false;
     o.arcade = normArcade(s.arcade, d.arcade);
     o.difficulty = ids(ARCADE_DIFF).indexOf(s.difficulty) >= 0 ? s.difficulty : (ids(ARCADE_DIFF).indexOf(d.difficulty) >= 0 ? d.difficulty : 'amateur');
+    o.dragDistance = ids(DRAG_DIST).indexOf(s.dragDistance) >= 0 ? s.dragDistance : (d.dragDistance || 'quarter');
+    o.dragVenue = ids(DRAG_VENUE).indexOf(s.dragVenue) >= 0 ? s.dragVenue : (d.dragVenue || 'strip');
+    o.dragSurface = ids(DRAG_SURF).indexOf(s.dragSurface) >= 0 ? s.dragSurface : (d.dragSurface || 'prepped');
     return o;
   }
 
@@ -427,9 +435,11 @@ CB.net = CB.net || {};
     function raceConfig() {
       var s = st.settings;
       var racers = st.players.slice().sort(function (a, b) { return a.joinedAt - b.joinedAt; });
+      if (s.mode === 'drag') racers = racers.slice(0, 2);   // heads-up: the host + the first guest (others watch)
       return {
         mode: s.mode, trackId: s.trackId, laps: s.mode === 'race' || s.mode === 'arcade' ? s.laps : 0,
-        ai: s.mode === 'free' ? 0 : Math.min(s.ai, Math.max(0, MAX_PLAYERS - racers.length)),
+        ai: s.mode === 'free' || s.mode === 'drag' ? 0 : Math.min(s.ai, Math.max(0, MAX_PLAYERS - racers.length)),
+        dragDistance: s.dragDistance, dragVenue: s.dragVenue, dragSurface: s.dragSurface,
         weather: s.weather, timeOfDay: s.timeOfDay, assists: Object.assign({}, s.assists), maxSteerAssist: s.maxSteerAssist,
         collisions: s.collisions, hostId: self.id, arcade: s.mode === 'arcade' ? Object.assign({}, s.arcade) : undefined, difficulty: s.difficulty,
         players: racers.map(function (p, i) { return { id: p.id, name: p.name, build: p.build, slot: i }; })
@@ -1428,6 +1438,36 @@ CB.net = CB.net || {};
       render();
       return;
     }
+    var NDg = CB.net && CB.net.drag;
+    if (c.mode === 'drag') {
+      var DU = CB.drag && CB.drag.ui;
+      if (!NDg || !DU || typeof DU.openNet !== 'function') {
+        A.notice = { kind: 'warn', text: 'Drag multiplayer (js/net/netdrag.js + the drag UI) is not loaded on this page, so the race cannot start.', back: true };
+        if (core.isHost()) core.raceEnded(undefined);
+        render();
+        return;
+      }
+      try {
+        var dcfg = { distanceId: c.dragDistance, venue: c.dragVenue, surface: c.dragSurface, night: c.timeOfDay === 'night', build: myBuild(), name: myName(), seed: info.seed,
+          assists: { autoShift: !!c.assists.autoShift, tc: c.assists.tc ? 'car' : 0 } };
+        session = core.isHost() && n.host
+          ? NDg.createHostSession(n.host, Object.assign(dcfg, { players: c.players.filter(function (p) { return p.id !== st.selfId; }).map(function (p) { return { peerId: p.id, name: p.name, build: p.build }; }) }))
+          : NDg.createClientSession(n.peer.raw, Object.assign(dcfg, { start: NDg.isDragStart(st.netStart) ? st.netStart : undefined }));
+      } catch (e) {
+        A.notice = { kind: 'bad', text: 'The drag race could not start: ' + ((e && e.message) || e), back: true };
+        if (core.isHost()) core.raceEnded(undefined);
+        render();
+        return;
+      }
+      A.session = session;
+      A.raceOpen = true;
+      hide();
+      try {
+        DU.openNet(session, Object.assign({}, c, { selfId: st.selfId, isHost: core.isHost(), selfLane: core.isHost() ? 0 : 1, distanceId: c.dragDistance, venue: c.dragVenue, surface: c.dragSurface,
+          onClose: function (results) { raceFinished(session, results); } }));
+      } catch (e) { A.raceOpen = false; open({}); A.notice = { kind: 'bad', text: 'The drag screen failed to open: ' + ((e && e.message) || e), back: true }; render(); }
+      return;
+    }
     try {
       if (c.mode === 'arcade' && core.isHost() && n.host) {
         session = NA.createHostSession(n.host, {
@@ -1708,6 +1748,14 @@ CB.net = CB.net || {};
     var checks = ASSISTS.map(function (a) {
       return '<label class="nl-check"><input type="checkbox" data-assist="' + a.id + '" data-k="a-' + a.id + '"' + (s.assists[a.id] ? ' checked' : '') + (locked ? ' disabled' : '') + '>' + esc(a.name) + '</label>';
     }).join('');
+    if (s.mode === 'drag') {
+      return '<div class="nl-field nl-wide"><span class="nl-label">Mode</span>' + seg('mode', MODES, s.mode, locked) + '<p class="nl-hint">' + esc(pick(MODES, s.mode).desc) + '</p></div>' +
+        '<div class="nl-field"><span class="nl-label">Distance</span>' + seg('dragDistance', DRAG_DIST, s.dragDistance, locked) + '</div>' +
+        '<div class="nl-field"><span class="nl-label">Venue</span>' + seg('dragVenue', DRAG_VENUE, s.dragVenue, locked) + '<p class="nl-hint">Strip: Pro tree. Street: flag start.</p></div>' +
+        '<div class="nl-field"><span class="nl-label">Surface</span>' + seg('dragSurface', DRAG_SURF, s.dragSurface, locked) + '</div>' +
+        '<div class="nl-field"><span class="nl-label">Time of day</span>' + seg('timeOfDay', TIMES, s.timeOfDay, locked) + '</div>' +
+        '<div class="nl-field nl-wide"><span class="nl-label">Allowed assists</span><div class="nl-checks">' + checks + '</div><p class="nl-hint">Two racers: the host and the first guest. Each car is simulated on its own driver\'s device; the host runs the tree.</p></div>';
+    }
     return '<div class="nl-field nl-wide"><span class="nl-label">Mode</span>' + seg('mode', MODES, s.mode, locked) + '<p class="nl-hint">' + esc(pick(MODES, s.mode).desc) + '</p></div>' +
       '<div class="nl-field nl-wide"><span class="nl-label">Track</span>' + tr + '</div>' +
       (s.mode === 'race' || s.mode === 'arcade' ? '<div class="nl-field"><span class="nl-label">Laps</span>' + stepper('laps', s.laps, 1, 20, 'laps') + '</div>' : '') +
