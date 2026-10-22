@@ -10,13 +10,16 @@
                   Forced induction multiplies the charge density: a boost term B·spool(u)·choke(u) on top of the
                   NA BMEP (turbo spool logistic driven by aspiration lag, compressor choke at high rpm,
                   positive-displacement supercharger rising linearly, twin-charging crossover, e-turbo instant spool)
-                  and turbo engines get an ECU torque plateau.  Modifiers: Otto efficiency vs compression ratio
+                  and turbo engines get an ECU torque plateau (capped by engine.torqueLimit_nm, the factory
+                  ECU torque ceiling the stock specs set to the quoted peak torque).  Modifiers: Otto efficiency vs compression ratio
                   (γ = 1.3), knock limit (effective CR = CR·√(1+boost) vs fuel knockLimit → ignition retard),
                   fuel power potential, tune & exhaust multipliers (NA engines realise less from a reflash).
                   T(rpm) = BMEP(rpm)·Vd / 4π.
    HYBRID         P2 motor at the crank: constant torque to 2,200 rpm then constant power, battery-discharge limited.
-   EV             Constant torque to the base speed (30 % / 36 % of 16,000 rpm for 400 / 800 V), constant power,
-                  field-weakening fade above 80 % of max speed, pack discharge (C-rate) limited.
+   EV             Constant torque to the base speed, constant power to the fade point, then field weakening
+                  P ∝ (fade/rpm)^k down to `top` × peak at 16,000 rpm (evMotorCurve: generic 30 % / 55 % / 60 %, or the
+                  build's engine.motorBase_pct / motorFade_pct / motorTopPower_pct), pack discharge limited (C-rate,
+                  or engine.batteryPower_kw).
    MASS           Component-by-component curb mass from the catalog (glider ∝ chassis material, engine ∝ displacement,
                   pack mass from Wh/kg, rims/tyres/rotors from their sizes …) with a longitudinal position and a
                   height for every item → weight distribution, CG height, yaw inertia, unsprung mass, breakdown.
@@ -362,6 +365,11 @@ if (typeof window !== 'undefined') window.CB = CB;
     }
     var plateau = boosted && aspId !== 'supercharged';
     var cap = plateau ? maxRaw * 0.95 : Infinity;
+    // ECU torque limiter (engine.torqueLimit_nm, 0 = none): boosted engines are calibrated to a torque ceiling
+    // (gearbox / driveline protection) — the plateau ends where the boost can no longer hold it, so peak power sits
+    // near the top of the rev range instead of a fat mid-range (Chiron: 1,600 Nm 2,000–6,000 rpm, 1,500 PS at 6,700)
+    var tqLim = num(e.torqueLimit_nm, 0);
+    if (tqLim > 0) cap = Math.min(cap, clamp(tqLim, 50, 3000) * Math.max(1, pm)); // a stage tune remaps the ceiling too
     // torque-based ECU boost control: below ~70 % of the rev range the wastegate is held shut beyond the nominal
     // boost target (compressor headroom) wherever the cam's VE is low, so the torque plateau starts as soon as the
     // turbine has spooled — quick-spooling systems (twin-scroll, e-turbo) therefore reach peak torque earlier.
@@ -397,6 +405,23 @@ if (typeof window !== 'undefined') window.CB = CB;
     return M;
   }
 
+  /** EV traction-motor envelope as fractions of the max motor speed (EV_MAX_RPM):
+   *  base — end of the constant-torque region (current-limited: peak torque from 0 rpm up to here);
+   *  fade — end of the constant-power region; above it field weakening at the (sagging) pack voltage can no longer
+   *         hold the current, so power falls: P(rpm) = Ppeak·(fade/rpm)^k;
+   *  top  — the share of peak power left at max motor speed (sets k).
+   *  Build fields engine.motorBase_pct / motorFade_pct / motorTopPower_pct (0 = generic motor; stock specs quote
+   *  the real car's). Generic: base 30 %, fade 55 %, 60 % of peak at max speed — a permanent-magnet drive unit on a
+   *  400–800 V pack (power peaks around 1.0–1.8× base speed, then falls with back-EMF and voltage sag). */
+  var EV_CURVE_DEFAULT = { base: 0.30, fade: 0.55, top: 0.60 };
+  function evMotorCurve(e) {
+    e = e || {};
+    var base = num(e.motorBase_pct, 0) > 0 ? clamp(num(e.motorBase_pct, 30) / 100, 0.12, 0.6) : EV_CURVE_DEFAULT.base;
+    var fade = num(e.motorFade_pct, 0) > 0 ? clamp(num(e.motorFade_pct, 55) / 100, base, 1) : Math.max(base, EV_CURVE_DEFAULT.fade);
+    var top = num(e.motorTopPower_pct, 0) > 0 ? clamp(num(e.motorTopPower_pct, 60) / 100, 0.2, 1) : EV_CURVE_DEFAULT.top;
+    return { base: base, fade: fade, top: top };
+  }
+
   function evModel(b, M) {
     var e = b.engine || {};
     var chem = opt('batteryChemistries', e.chemistry, 'nmc');
@@ -405,21 +430,24 @@ if (typeof window !== 'undefined') window.CB = CB;
     var kwh = clamp(num(e.battery_kwh, 85), 10, 250);
     var volt = num(e.voltage, 400) >= 600 ? 800 : 400;
     var motorKw = motors * perKw;
-    var battKw = kwh * num(chem.cRate, 4) * 2.5;
+    // pack discharge limit: the chemistry's C-rate burst, or the pack / inverter current limit the spec quotes
+    var battKw = num(e.batteryPower_kw, 0) > 0 ? num(e.batteryPower_kw, 0) : kwh * num(chem.cRate, 4) * 2.5;
     var Pkw = Math.min(motorKw, battKw);
     if (battKw < motorKw * 0.98) M.warnings.push('Battery discharge limit (' + Math.round(battKw) + ' kW at ' + num(chem.cRate, 4) + 'C) caps the ' + Math.round(motorKw) + ' kW of motors — add capacity or a higher-power chemistry');
-    var R = EV_MAX_RPM, base = R * 0.30;   // constant-torque region: ~30 % of max motor speed (motor design, 400 or 800 V alike)
+    var R = EV_MAX_RPM, mc = evMotorCurve(e), base = R * mc.base, fade = R * mc.fade;
     var P = Pkw * 1000, Tmax = P / (base * PI / 30);
+    // field-weakening exponent: P(rpm) = P·(fade/rpm)^kF above the fade point, so P(R) = top·P
+    var kF = mc.top < 1 && fade < R ? Math.log(1 / mc.top) / Math.log(R / fade) : 0;
     function torque(rpm) {
       rpm = clamp(rpm, 0, R);
       if (rpm <= base) return Tmax;
       var t = P / (rpm * PI / 30);
-      if (rpm > 0.8 * R) t *= 1 - 0.15 * (rpm - 0.8 * R) / (0.2 * R);
+      if (rpm > fade && kF > 0) t *= Math.pow(fade / rpm, kF);
       return t;
     }
     M.R = R; M.idle = 0; M.V = 0; M.torque = torque; M.iceTorque = torque; M.motorTorque = function () { return 0; };
     M.tau = 0; M.lag = 0; M.boosted = false; M.isDiesel = false; M.boost = 0; M.chem = chem; M.motors = motors; M.perKw = perKw;
-    M.kwh = kwh; M.volt = volt; M.motorKw = motorKw; M.battKw = battKw; M.baseRpm = base; M.inertia = 0.035 * motors;
+    M.kwh = kwh; M.volt = volt; M.motorKw = motorKw; M.battKw = battKw; M.baseRpm = base; M.fadeRpm = fade; M.motorCurve = mc; M.inertia = 0.035 * motors;
     M.coolingCapacity_kw = 1e9; M.knockOver = 0; M.knockF = 1; M.cyl = 0;
     M.exh = opt('exhausts', 'stock'); M.tune = opt('tunes', 'stock'); M.cool = opt('coolings', e.cooling, 'standard');
     finishCurve(M);
@@ -1634,6 +1662,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       kappaPeak: kappaPeak, forceFraction: forceFraction, tcForceFraction: tcForceFraction, driveMu: driveMu
     },
     tyreSpeedRating: function (compoundId) { return num(TYRE_SPEED_RATING[compoundId], 300); },
+    // EV motor envelope { base, fade, top } (fractions of evMaxRpm / of peak power) for an engine block
+    evMotorCurve: function (engine) { var c = evMotorCurve(engine); return { base: c.base, fade: c.fade, top: c.top }; },
     track: {
       name: 'Redline Ring', length_m: 5800,
       segments: TRACK_SEGMENTS.map(function (s) { return { name: s.name, len: s.len, radius: s.radius, sector: s.sector }; })

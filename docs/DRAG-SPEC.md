@@ -173,24 +173,27 @@ point), 1/4 mile, the unmodified race vehicle model:
 
 | Car | Real ET @ mph | Game ET @ mph | ET Δ | trap Δ |
 |---|---|---|---|---|
-| Tesla Model S Long Range (2021) | 11.2 @ 119 | 10.47 @ 135.1 | −6.5 % | +13.6 % |
-| Bugatti Chiron | 9.4 @ 156 | 8.82 @ 167.6 | −6.2 % | +7.5 % |
-| Porsche 911 Carrera S (992) | 11.3 @ 124 | 11.17 @ 125.8 | −1.1 % | +1.5 % |
+| Tesla Model S Long Range (2021) | 11.2 @ 119 | 10.98 @ 120.5 | −2.0 % | +1.2 % |
+| Bugatti Chiron | 9.4 @ 156 | 9.05 @ 162.9 | −3.8 % | +4.4 % |
+| Porsche 911 Carrera S (992) | 11.3 @ 124 | 11.17 @ 125.8 | −1.2 % | +1.5 % |
 | BMW M4 Competition (G82) | 11.7 @ 122 | 11.58 @ 121.6 | −1.0 % | −0.4 % |
 | Honda Civic Type R (FL5) | 13.4 @ 108 | 12.93 @ 109.4 | −3.5 % | +1.3 % |
-| Dodge Challenger SRT Hellcat | 11.8 @ 125 | 11.25 @ 128.5 | −4.6 % | +2.8 % |
-| Chevrolet Camaro ZL1 (10AT) | 11.4 @ 127 | 11.23 @ 129.7 | −1.5 % | +2.1 % |
+| Dodge Challenger SRT Hellcat | 11.8 @ 125 | 11.35 @ 127.0 | −3.8 % | +1.6 % |
+| Chevrolet Camaro ZL1 (10AT) | 11.4 @ 127 | 11.22 @ 129.7 | −1.5 % | +2.1 % |
 | Ford F-150 Raptor (gen 3) | 14.3 @ 97 | 13.85 @ 97.6 | −3.1 % | +0.6 % |
 | Mercedes Sprinter 2.0 diesel | 18.3 @ 77 | 18.34 @ 77.6 | +0.2 % | +0.8 % |
-| Nissan GT-R (R35) | 11.1 @ 124 | 10.51 @ 131.1 | −5.3 % | +5.7 % |
+| Nissan GT-R (R35) | 11.1 @ 124 | 10.78 @ 128.2 | −2.9 % | +3.4 % |
 | Chevrolet Corvette C8 Z51 | 11.2 @ 123 | 10.84 @ 127.8 | −3.2 % | +3.9 % |
 | Ford Mustang GT (S650, manual) | 12.4 @ 116 | 11.82 @ 118.1 | −4.7 % | +1.8 % |
 | VW Golf GTI (Mk8) | 14.0 @ 101 | 13.69 @ 103.0 | −2.2 % | +1.9 % |
 
-Mean |ET Δ| 3.3 % (4.3 % on the prepped strip with a burnout). The sim is a little quick overall (an ideal driver and an
-ideal 1-ft rollout vs magazine runs). Trap speeds are within 6 % except the two cars whose real power fades at speed:
-the Model S (battery sag) and the Chiron (the race model holds peak power to the top). That is a race-vehicle-model
-property (the same in every mode), so it is left alone here.
+Mean |ET Δ| 2.5 % (3.5 % on the prepped strip with a burnout); every trap within 5 %. The sim is a little quick overall
+(an ideal driver and an ideal 1-ft rollout vs magazine runs). The power delivery is the shared vehicle model's (the same
+in every mode, `CB.physics` curve → `CB.race.vehicle` torque table): the Model S's motors fade above ~35 % of max motor
+speed (field weakening at a sagging pack voltage, stock spec `mc`), and the Chiron's W16 is held to its 1,600 Nm ECU
+torque ceiling so its power peaks near 6,500 rpm instead of a fat mid-range (boosted stock engines get
+`engine.torqueLimit_nm` = the quoted peak torque). Before that fix the Model S trapped 135 mph (+13.6 %) and the Chiron
+167.6 mph (+7.5 %).
 
 ## 9. UI, HUD, first person and the tutorial (`js/drag/drag-ui.js`, `drag-hud.js`, `drag-sfx.js`)
 

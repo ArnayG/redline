@@ -25,6 +25,9 @@
      e     ICE: 'layout displacement aspiration redline [fuel]'   (fuel defaults to premium)
      hy    hybrid: [motors (1–3: P2 at the crank + front e-axle motors), total motor kW, battery kWh]   (with e)
      ev    electric: [motors, total kW, battery kWh, volts, chemistry]
+     mc    EV motor envelope [constant-torque end, power-fade start, power left at max rpm] in % (of max motor rpm /
+           of peak power; omitted = the generic motor, CB.physics.evMotorCurve)   bk  pack discharge limit, kW (optional)
+     (boosted ICE engines get engine.torqueLimit_nm = nm: the ECU torque ceiling that shapes the real torque plateau)
      g     gearbox 'type gears'                     d   drivetrain 'rwd' | 'fwd' | 'awd <front torque %>' | '4wd'
      c     equipment class (CLASS below) — suspension / brakes / tyres / cabin defaults
      p     paint [hex, finish] when the model itself carries no colour
@@ -96,7 +99,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       p: ['#1f6b4f', 'metallic'], x: { 'exterior.roof': 'carbon', 'suspension.type': 'magnetic' } },
     'mercedes-amg-c63-w206': { t: '', hp: 671, nm: 1020, kg: 2111, s: 3.4, v: 280, lim: 280, e: 'I4 2.0 electric-turbo 7200', hy: [1, 150, 6.1], g: 'auto 9', d: 'awd 35', c: 'gt',
       p: ['#6e7175', 'metallic'], x: { 'suspension.type': 'magnetic', 'drivetrain.rearDiff': 'e-diff', 'drivetrain.torqueVectoring': true } },
-    'tesla-model-s-2021': { t: 'Long Range', hp: 670, nm: 1000, kg: 2069, s: 3.2, v: 250, lim: 250, ev: [2, 500, 100, 400, 'nca'], g: 'single-speed 1', d: 'awd 45', c: 'ev',
+    'tesla-model-s-2021': { t: 'Long Range', hp: 670, nm: 1000, kg: 2069, s: 3.2, v: 250, lim: 250, ev: [2, 500, 100, 400, 'nca'], mc: [30, 35, 45], g: 'single-speed 1', d: 'awd 45', c: 'ev',
       p: ['#f2f1ec', 'pearl'], x: { 'interior.steering': 'yoke', 'tech.screen_in': 17 } },
     /* exotics & hypercars */
     'ferrari-sf90-stradale': { t: '', hp: 986, nm: 800, kg: 1770, s: 2.5, v: 340, e: 'V8 4.0 twin-turbo 8000', hy: [3, 162, 7.9], g: 'dct 8', d: 'awd 30', c: 'hyper',
@@ -110,7 +113,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     'ferrari-296-gtb': { t: '', hp: 819, nm: 740, kg: 1600, s: 2.9, v: 330, e: 'V6 3.0 twin-turbo 8500', hy: [1, 122, 7.45], g: 'dct 8', d: 'rwd', c: 'hyper',
       p: ['#d40000', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'aero.wing': 'active', 'aero.activeAero': true, 'engine.chemistry': 'nca' } },
     // Jesko: flex-fuel; on E85 the configurator's twin-turbo map reaches the 1,280 hp (95 RON) rating within the knock limit
-    'koenigsegg-jesko': { t: 'Attack', hp: 1280, nm: 1000, kg: 1420, s: 2.5, v: 350, e: 'V8 5.0 twin-turbo 8500 e85', g: 'dct 9', d: 'rwd', c: 'hyper',
+    'koenigsegg-jesko': { t: 'Attack', hp: 1280, nm: 1500, kg: 1420, s: 2.5, v: 350, e: 'V8 5.0 twin-turbo 8500 e85', g: 'dct 9', d: 'rwd', c: 'hyper',
       p: ['#f2f1ec', 'pearl'], x: { 'body.chassisMaterial': 'carbon-monocoque', 'aero.wing': 'swan-neck', 'aero.wingAngle_deg': 8, 'aero.splitter': 'race', 'aero.diffuser': 'race', 'aero.canards': true, 'tires.compound': 'track', 'suspension.type': 'pushrod', 'exterior.roof': 'carbon' } },
     'audi-r8-v10-gen2': { t: '', hp: 562, nm: 550, kg: 1640, s: 3.4, v: 324, e: 'V10 5.2 na 8700', g: 'dct 7', d: 'awd 30', c: 'hyper',
       p: ['#7d7f7d', 'metallic'], x: { 'body.chassisMaterial': 'aluminum', 'brakes.material': 'two-piece', 'aero.wing': 'lip-spoiler', 'drivetrain.centerDiff': 'lsd-clutch', 'interior.seatType': 'sport', 'interior.upholstery': 'leather' } },
@@ -306,6 +309,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       flat['engine.motors'] = sp.ev[0];
       flat['engine.motorPower_kw'] = clamp(Math.round(sp.ev[1] / sp.ev[0] / 5) * 5, 50, 500);
       flat['engine.battery_kwh'] = sp.ev[2]; flat['engine.voltage'] = sp.ev[3]; flat['engine.chemistry'] = sp.ev[4] || 'nmc';
+      if (Array.isArray(sp.mc)) { flat['engine.motorBase_pct'] = sp.mc[0]; flat['engine.motorFade_pct'] = sp.mc[1]; flat['engine.motorTopPower_pct'] = sp.mc[2]; }
+      if (sp.bk) flat['engine.batteryPower_kw'] = sp.bk;
       flat['engine.exhaust'] = 'stock'; flat['engine.tune'] = 'stock';
     } else {
       var e = String(sp.e).split(' ');
@@ -317,6 +322,8 @@ if (typeof window !== 'undefined') window.CB = CB;
       var asp = D().find('aspirations', e[2]) || {};
       flat['engine.boost_bar'] = e[2] === 'na' ? 0 : num(asp.typicalBoost_bar, 1);
       flat['engine.compression'] = flat['engine.fuel'] === 'diesel' ? 14 : e[2] === 'na' ? 12.0 : 9.5;
+      // boosted ICE: the factory ECU's torque ceiling is the quoted peak torque (hybrids quote system torque: none)
+      if (e[2] !== 'na' && !sp.hy && sp.nm > 0) flat['engine.torqueLimit_nm'] = sp.nm;
       if (sp.hy) {
         flat['engine.motors'] = sp.hy[0];
         flat['engine.motorPower_kw'] = clamp(Math.round(sp.hy[1] / sp.hy[0]), 10, 500);
@@ -397,6 +404,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (!target || !CB.physics) return b;
     function consider(c) {
       var mx = physics(norm(c));
+      if (mx && mx.knockMargin != null && mx.knockMargin < 0) return;   // never calibrate into knock (rule error)
       if (mx && (!best || Math.abs(mx.power_hp - target) < best.d)) best = { b: c, hp: mx.power_hp, d: Math.abs(mx.power_hp - target) };
     }
     if (b.engine.type === 'ev') return b;   // EV power = motors × kW (already the real figure)

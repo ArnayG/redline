@@ -525,7 +525,11 @@ CB.race = CB.race || {};
       var wF = num(ti.widthFront_mm, 245) / 245, wR = num(ti.widthRear_mm, 265) / 245;
       var prF = 1 - (num(ti.profileFront, 40) - 35) / 160, prR = 1 - (num(ti.profileRear, 40) - 35) / 160;
       var bm = catalogFind('brakeMaterials', br.material);
+      // EV motor envelope (CB.physics.evMotorCurve): power fades above the field-weakening point
+      var evc = ev && CB.physics && typeof CB.physics.evMotorCurve === 'function' ? CB.physics.evMotorCurve(eng) : { fade: 0.55, top: 0.6 };
+      var evK = ev && evc.top < 1 && evc.fade < 1 ? Math.log(1 / evc.top) / Math.log(1 / evc.fade) : 0;
       return Object.freeze({
+        evFade: ev ? evc.fade : 1, evK: evK,
         fallback: true, mass: mass, Iz: mass * a * b * 1.05, a: a, b: b, wb: wb, cgH: firstNum(metrics.cgHeight_mm, 500) / 1000,
         track: num(body.trackWidth_mm, 1600) / 1000, power: power, peakTorque: peakTorque, redline: redline, idle: ev ? 0 : 900,
         ratios: ratios, final: fin, rw: rw, eff: 0.88, shiftTime: firstNum(SHIFT_T[tr.type], 0.15), ev: ev,
@@ -587,7 +591,8 @@ CB.race = CB.race || {};
       var rn = clamp(rpm / p.redline, 0, 1.1);
       var shape = p.ev ? 1 : clamp(0.72 + 0.28 * (1 - Math.pow((rn - 0.62) / 0.62, 2)), 0.45, 1);
       var F = drive * p.peakTorque * shape * ratio * p.eff / p.rw;
-      F = Math.min(F, drive * p.power * 1000 * p.eff / Math.max(Math.abs(vx), 2.5));
+      var pFade = p.ev && p.evK > 0 && rn > p.evFade ? Math.pow(p.evFade / rn, p.evK) : 1;
+      F = Math.min(F, drive * p.power * 1000 * pFade * p.eff / Math.max(Math.abs(vx), 2.5));
       if (!st.reverse && rpm >= p.redline * 1.01) F = 0;
       if (st.shiftT > 0) F *= 0.12;
       if (st.reverse) F = -Math.min(F, p.mass * 3.2);

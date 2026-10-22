@@ -261,7 +261,7 @@ target × a small ripple; launch control holds its launch rpm with partial turbo
 (0.12 s LC / EV, 0.2 s auto / DCT, 0.35 s manual from 55 %) and the shift torque carry (DCT 0.55, auto 0.35 / 0.5 for
 8+ gears, manual 0) are the same numbers the race model uses; modern 8–10-speed automatics lose a little to converter
 slip in 1st / 2nd; commercial vans and pickups with an ICE automatic run a driveline-protection map (70 % / 90 % torque
-in 1st / 2nd, upshift by 78 % of the redline). EV motors are constant-torque to 30 % of the maximum motor speed.
+in 1st / 2nd, upshift by 78 % of the redline). EV motors are constant-torque to 30 % of the maximum motor speed, constant-power to the fade point (generic 55 %) and lose power above it (field weakening: 60 % of peak at max speed; stock specs carry the real car's envelope).
 `metrics.launch` = `{ rpm, lc, tc, preSpool, ramp, ramp0, converter, stallRpm, convMult, convCouple, carry, shiftCap,
 gearTorque, kappaPeak, slipTarget, lcSlip, tcForce, driveRatioF/R, driveRatioWarmF/R }`.
 

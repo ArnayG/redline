@@ -717,7 +717,11 @@ if (typeof window !== 'undefined') window.CB = CB;
       engine: {
         type: 'ice', layout: 'flat-6', displacement_l: 3.0, aspiration: 'twin-turbo', boost_bar: 0.7, compression: 10.0,
         fuel: 'premium', redline_rpm: 7500, position: 'rear', tune: 'stock', exhaust: 'sport', cooling: 'standard', speedLimiter_kph: 0,
-        motors: 2, motorPower_kw: 200, battery_kwh: 85, chemistry: 'nmc', voltage: 800, regen: 2
+        motors: 2, motorPower_kw: 200, battery_kwh: 85, chemistry: 'nmc', voltage: 800, regen: 2,
+        // factory calibration (0 = generic; CB.stock sets the real car's): ECU torque ceiling of a boosted engine (Nm),
+        // EV motor envelope (% of max motor rpm: constant-torque end, power-fade start; % of peak power left at max rpm)
+        // and the pack's discharge limit (kW). An engine / motor / battery edit in the Garage resets the matching ones.
+        torqueLimit_nm: 0, motorBase_pct: 0, motorFade_pct: 0, motorTopPower_pct: 0, batteryPower_kw: 0
       },
       transmission: { type: 'dct', gears: 8, ratios: [4.89, 3.17, 2.15, 1.56, 1.18, 0.94, 0.78, 0.64], finalDrive: 3.62, launchControl: true },
       drivetrain: { layout: 'rwd', frontDiff: 'open', rearDiff: 'lsd-clutch', centerDiff: 'none', torqueSplitFront_pct: 0, torqueVectoring: false, tractionControl: 2 },

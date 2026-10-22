@@ -324,8 +324,13 @@ test('physics: torque-curve shapes — NA peaky, turbo plateau, supercharged lin
   assert.equal(ev.curve[0].rpm, 0); assert.equal(ev.redlineRpm, 16000); assert.equal(ev.idleRpm, 0);
   assert.equal(ev.curve[0].nm, ev.torque_nm, 'EV full torque from standstill');
   assert.equal(ev.curve[4].nm, ev.torque_nm, 'EV constant torque region');
-  const hi = ev.curve.filter((p) => p.rpm > 7000 && p.rpm < 12500);
+  // constant power from base speed (30 %) to the field-weakening point (generic motor: 55 % of 16,000 rpm), then the
+  // power fades (back-EMF / pack-voltage limited) to 60 % of peak at max motor speed — tests/power-delivery.test.js
+  const hi = ev.curve.filter((p) => p.rpm > 5000 && p.rpm <= 8800);
   hi.forEach((p) => assert.ok(Math.abs(p.hp - ev.power_hp) / ev.power_hp < 0.02, 'EV constant power at ' + p.rpm));
+  const fw = ev.curve.filter((p) => p.rpm > 8800);
+  for (let i = 1; i < fw.length; i++) assert.ok(fw[i].hp < fw[i - 1].hp, 'EV power fades above the field-weakening point at ' + fw[i].rpm);
+  assert.ok(Math.abs(fw[fw.length - 1].hp / ev.power_hp - 0.6) < 0.02, 'EV 60 % of peak power at max motor speed');
   assert.ok(ev.efficiency_whkm > 100);
 });
 

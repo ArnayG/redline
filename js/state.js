@@ -440,6 +440,19 @@ if (typeof window !== 'undefined') window.CB = CB;
       e.battery_kwh = rng(e.battery_kwh, 'engine.battery_kwh', 85);
     }
 
+    // factory calibration (0 = generic): a Garage edit of what it was calibrated for voids it
+    function edited(pth) { return changed(ctx, pth) && !U.equal(prevVal(ctx, pth), U.get(b, pth)); }
+    function calib(v, lo, hi, step) { v = num(v, 0); return v > 0 ? clampStep(v, lo, hi, step, lo) : 0; }
+    e.torqueLimit_nm = calib(e.torqueLimit_nm, 50, 3000, 1);
+    e.motorBase_pct = calib(e.motorBase_pct, 12, 60, 1);
+    e.motorFade_pct = e.motorFade_pct > 0 ? calib(Math.max(num(e.motorFade_pct, 0), e.motorBase_pct || 12), 12, 100, 1) : 0;
+    e.motorTopPower_pct = calib(e.motorTopPower_pct, 20, 100, 1);
+    e.batteryPower_kw = calib(e.batteryPower_kw, 10, 3000, 1);
+    if (typeSwitched || ['engine.layout', 'engine.displacement_l', 'engine.aspiration', 'engine.boost_bar', 'engine.compression',
+      'engine.fuel', 'engine.redline_rpm', 'engine.tune'].some(edited)) e.torqueLimit_nm = 0;
+    if (typeSwitched) { e.motorBase_pct = 0; e.motorFade_pct = 0; e.motorTopPower_pct = 0; } // envelope = motor design (kW-independent)
+    if (typeSwitched || edited('engine.battery_kwh') || edited('engine.chemistry') || edited('engine.voltage')) e.batteryPower_kw = 0;
+
     /* ---- transmission */
     var t = b.transmission;
     t.type = optId('transmissions', t.type, 'dct');

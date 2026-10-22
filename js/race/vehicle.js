@@ -311,7 +311,7 @@ CB.race = CB.race || {};
     var e = build.engine || {};
     var type = e.type || 'ice';
     var motorKw = num(e.motors, 0) * num(e.motorPower_kw, 0);
-    if (type === 'ev') return clamp(motorKw || 300, 40, 2500);
+    if (type === 'ev') return clamp(Math.min(motorKw || 300, num(e.batteryPower_kw, 0) > 0 ? num(e.batteryPower_kw, 0) : Infinity), 40, 2500);
     var disp = clamp(num(e.displacement_l, 3.0), 0.6, 9.0);
     var red = clamp(num(e.redline_rpm, 7000), 4000, 10000);
     var asp = opt('aspirations', e.aspiration || 'na');
@@ -404,19 +404,29 @@ CB.race = CB.race || {};
     return clamp(f, 30, 68);
   }
 
+  /** EV motor envelope {base, fade, top} (fractions): CB.physics.evMotorCurve when loaded, else the same defaults. */
+  function evCurve(e) {
+    if (CB.physics && typeof CB.physics.evMotorCurve === 'function') return CB.physics.evMotorCurve(e);
+    var base = num(e.motorBase_pct, 0) > 0 ? clamp(num(e.motorBase_pct, 30) / 100, 0.12, 0.6) : 0.30;
+    var fade = num(e.motorFade_pct, 0) > 0 ? clamp(num(e.motorFade_pct, 55) / 100, base, 1) : Math.max(base, 0.55);
+    var top = num(e.motorTopPower_pct, 0) > 0 ? clamp(num(e.motorTopPower_pct, 60) / 100, 0.2, 1) : 0.60;
+    return { base: base, fade: fade, top: top };
+  }
+
   /** Synthesises a torque curve [{rpm, nm}] from the build. */
   function deriveCurve(build, powerKw, idle, redline, isEV) {
     var e = build.engine || {};
     var pts = [];
     var rpm, i;
     if (isEV) {
-      var maxR = 16000, baseR = 5200;
-      var w = baseR * RPM_TO_RADS;
-      var T = powerKw * 1000 / w;
+      // the Garage's motor envelope (CB.physics.evMotorCurve): constant torque to base, constant power to the fade
+      // point, then field weakening P ∝ (fade/rpm)^k down to `top` × peak at max motor speed
+      var mc = evCurve(e), maxR = 16000, baseR = maxR * mc.base, fadeR = maxR * mc.fade;
+      var kF = mc.top < 1 && fadeR < maxR ? Math.log(1 / mc.top) / Math.log(maxR / fadeR) : 0;
+      var T = powerKw * 1000 / (baseR * RPM_TO_RADS);
       for (rpm = 0; rpm <= maxR; rpm += 250) {
-        var x = Math.max(rpm, 1);
-        var tq = rpm <= baseR ? T : T * baseR / x;
-        tq *= 1 - 0.12 * smoothstep(0.85 * maxR, maxR, rpm);
+        var tq = rpm <= baseR ? T : T * baseR / rpm;
+        if (rpm > fadeR && kF > 0) tq *= Math.pow(fadeR / rpm, kF);
         pts.push({ rpm: rpm, nm: tq });
       }
       return pts;
@@ -438,8 +448,9 @@ CB.race = CB.race || {};
     var hybridKw = e.type === 'hybrid' ? num(e.motors, 1) * num(e.motorPower_kw, 0) * 0.85 : 0;
     var engineScale = hybridKw > 0 ? (powerKw - hybridKw) * 1000 / maxP : scale;
     var mT = hybridKw > 0 ? hybridKw * 1000 / (0.35 * redline * RPM_TO_RADS) : 0;
+    var tqLim = num(e.torqueLimit_nm, 0) > 0 ? num(e.torqueLimit_nm, 0) : Infinity; // ECU torque ceiling (ICE part)
     for (i = 0; i < raw.length; i++) {
-      var nm = raw[i][1] * engineScale;
+      var nm = Math.min(tqLim, raw[i][1] * engineScale);
       if (hybridKw > 0) {
         var wR = raw[i][0] * RPM_TO_RADS;
         nm += Math.min(mT, hybridKw * 1000 / Math.max(wR, 1));
