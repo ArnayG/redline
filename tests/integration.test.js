@@ -30,7 +30,7 @@ require('../js/garage.js');
 const CB = globalThis.CB;
 
 const CONFIG_FILES = ['util', 'data', 'state', 'physics', 'rules', 'pricing', 'ui-kit', 'render', 'charts',
-  'panels-powertrain', 'panels-chassis', 'panels-style', 'garage', 'app'];
+  'panels-powertrain', 'panels-chassis', 'panels-style', 'tune', 'panels-simple', 'garage', 'app'];
 const src = {};
 CONFIG_FILES.forEach((f) => { src[f] = fs.readFileSync(path.join(JS, f + '.js'), 'utf8'); });
 

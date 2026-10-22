@@ -426,9 +426,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
 
   function enterAtelier(t) {
     var A = app();
-    if (A && t.sub && CB.panels && CB.panels[t.sub] && typeof A.activePanel === 'function' && A.activePanel() !== t.sub) safe(function () { A.goto(t.sub); }, 'app.goto');
+    // a panel is a CB.panels section or (Simple Garage) a CB.simpleGarage category: A.hasPanel knows both
+    var known = function (id) { return !!(CB.panels && CB.panels[id]) || !!(A && typeof A.hasPanel === 'function' && safe(function () { return A.hasPanel(id); })); };
+    if (A && t.sub && known(t.sub) && typeof A.activePanel === 'function' && A.activePanel() !== t.sub) safe(function () { A.goto(t.sub); }, 'app.goto');
     // an unknown panel (#/garage/notapanel) shows the first panel: normalise the URL to it as well
-    var unknownSub = !!(t.sub && CB.panels && Object.keys(CB.panels).length && !CB.panels[t.sub]);
+    var unknownSub = !!(t.sub && CB.panels && Object.keys(CB.panels).length && !known(t.sub));
     if (A && typeof A.activePanel === 'function' && (!t.sub || unknownSub)) {
       var p = A.activePanel();
       if (p) { t.sub = p; writeUrl(format('atelier', p, t.params), true); }

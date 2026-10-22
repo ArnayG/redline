@@ -39,6 +39,7 @@ window.CB = window.CB || {};
   var LS_VIEW = 'forge.view.v1';
   var LS_FIN = 'forge.finance.v1';
   var LS_UI = 'forge.ui.v1';
+  var LS_MODE = 'forge.garage.mode.v1';   // { <profile id | 'local'>: 'simple' | 'advanced' }
 
   var reduceMotion = false;
   try { reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* ignore */ }
@@ -198,7 +199,60 @@ window.CB = window.CB || {};
   var active = { id: null, def: null, body: null, frame: null };
   var navItems = {};
 
+  /* ---------------------------------------------------------------- Simple / Advanced mode
+     Simple (default): the six CB.simpleGarage categories (few friendly choices, js/panels-simple.js + js/tune.js).
+     Advanced: the twelve full detail panels (CB.panels), unchanged. Remembered per player profile on this device. */
+  function simpleAvailable() { return !!(CB.simpleGarage && typeof CB.simpleGarage.panels === 'function' && CB.simpleGarage.panels().length); }
+  function modeKey() {
+    var p = has('game.profile.get') ? safe(function () { return CB.game.profile.get(); }, null) : null;
+    return (p && (p.id || p.name)) ? String(p.id || p.name) : 'local';
+  }
+  function mode() {
+    if (!simpleAvailable()) return 'advanced';
+    var m = lsGet(LS_MODE, {}) || {};
+    return m[modeKey()] === 'advanced' ? 'advanced' : 'simple';
+  }
+  function simpleOn() { return mode() === 'simple'; }
+  /** Map a panel id of either mode onto the current mode (an Advanced section opens its Simple category and back). */
+  function mapPanelId(id) {
+    if (!id) return id;
+    if (simpleOn()) {
+      if (CB.simpleGarage.panel(id)) return id;
+      return CB.simpleGarage.categoryOf(id) || null;
+    }
+    if (CB.panels && CB.panels[id]) return id;
+    var sp = simpleAvailable() ? CB.simpleGarage.panel(id) : null;
+    return sp && sp.sections && sp.sections[0] ? sp.sections[0] : null;
+  }
+  function setMode(m, opts) {
+    opts = opts || {};
+    m = m === 'advanced' || !simpleAvailable() ? 'advanced' : 'simple';
+    var all = lsGet(LS_MODE, {}) || {};
+    var was = mode();
+    all[modeKey()] = m;
+    lsSet(LS_MODE, all);
+    document.documentElement.setAttribute('data-garage-mode', m);
+    if (!booted) return m;
+    var target = opts.panel ? mapPanelId(opts.panel) : null;
+    if (!target) target = mapPanelId(active.id);
+    buildNav();
+    goto(target || orderedIds()[0], { force: was !== m || !!opts.panel, focus: !!opts.focus });
+    if (was !== m && !opts.silent) toast(m === 'simple' ? 'Simple tuning: a few clear choices per area' : 'Advanced: every setting, in full detail', 'info', { duration: 2400 });
+    return m;
+  }
+  function modeSwitch(extraClass) {
+    var wrap = el('div', { class: 'garage-mode' + (extraClass ? ' ' + extraClass : ''), role: 'radiogroup', 'aria-label': 'Tuning detail' });
+    [['simple', 'Simple', 'A few clear choices per area'], ['advanced', 'Advanced', 'Every setting, in full detail']].forEach(function (o) {
+      var on = mode() === o[0];
+      var b = el('button', { type: 'button', class: 'garage-mode-btn' + (on ? ' is-active' : ''), role: 'radio', 'aria-checked': on ? 'true' : 'false', title: o[2], dataset: { mode: o[0] } }, o[1]);
+      b.addEventListener('click', function () { if (mode() !== o[0]) setMode(o[0]); });
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
   function panels() {
+    if (simpleOn()) return CB.simpleGarage.panels();
     if (typeof CB.panelList === 'function') return safe(function () { return CB.panelList(); }, [], 'panelList');
     if (CB.panels) return Object.keys(CB.panels).map(function (k) { return CB.panels[k]; }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     return [];
@@ -220,7 +274,8 @@ window.CB = window.CB || {};
   var GROUP_NOTES = {
     Engineering: 'Body, power and how it reaches the road',
     Chassis: 'Suspension, brakes, wheels, aero and mass',
-    Design: 'Paint, cabin and technology'
+    Design: 'Paint, cabin and technology',
+    Tune: 'Pick a level in each area. Every change can be undone.'
   };
 
   function buildNav() {
@@ -229,6 +284,8 @@ window.CB = window.CB || {};
     U.clear(nav);
     if (bottom) U.clear(bottom);
     navItems = {};
+    document.documentElement.setAttribute('data-garage-mode', mode());
+    if (simpleAvailable()) nav.appendChild(modeSwitch('is-nav'));
     var list = panels();
     if (!list.length) {
       nav.appendChild(el('div', { class: 'nav-empty cb-hint' }, 'No configuration panels are loaded.'));
@@ -261,7 +318,7 @@ window.CB = window.CB || {};
         if (bottom) {
           mbadge = el('span', { class: 'nav-badge', hidden: true });
           mb = el('button', { type: 'button', class: 'bnav-item', dataset: { panel: p.id }, 'aria-label': p.title },
-            el('span', { class: 'nav-icon', html: p.icon || icon('spark') }), el('span', { class: 'bnav-title' }, p.title), mbadge);
+            el('span', { class: 'nav-icon', html: p.icon || icon('spark') }), el('span', { class: 'bnav-title' }, p.short || p.title), mbadge);
           mb.addEventListener('click', function () { goto(p.id); });
           bottom.appendChild(mb);
         }
@@ -296,6 +353,7 @@ window.CB = window.CB || {};
     var by = {};
     (issues || []).forEach(function (i) {
       var s = i.section || 'other';
+      if (simpleOn()) s = CB.simpleGarage.categoryOf(s) || s;
       by[s] = by[s] || { error: 0, warning: 0, info: 0 };
       by[s][i.severity === 'error' || i.severity === 'warning' ? i.severity : 'info']++;
     });
@@ -319,7 +377,9 @@ window.CB = window.CB || {};
     opts = opts || {};
     var list = panels();
     if (!list.length) return false;
-    var def = (CB.panels && CB.panels[id]) || null;
+    var def = null;
+    if (simpleOn()) def = CB.simpleGarage.panel(mapPanelId(id));
+    else def = (CB.panels && CB.panels[mapPanelId(id)]) || null;
     if (!def) def = list[0];
     if (active.id === def.id && !opts.force) { focusPanel(opts); return true; }
     mountPanel(def, opts);
@@ -349,17 +409,19 @@ window.CB = window.CB || {};
     destroyActive();
     U.clear(host);
     var ids = orderedIds(), idx = ids.indexOf(def.id);
-    var prevDef = idx > 0 ? CB.panels[ids[idx - 1]] : null;
-    var nextDef = idx >= 0 && idx < ids.length - 1 ? CB.panels[ids[idx + 1]] : null;
+    var byId = function (pid) { return simpleOn() ? CB.simpleGarage.panel(pid) : CB.panels[pid]; };
+    var prevDef = idx > 0 ? byId(ids[idx - 1]) : null;
+    var nextDef = idx >= 0 && idx < ids.length - 1 ? byId(ids[idx + 1]) : null;
 
     var body = el('div', { class: 'panel-body', dataset: { panel: def.id } });
     var head = el('header', { class: 'panel-head' },
       el('span', { class: 'panel-head-icon', html: def.icon || icon('spark') }),
       el('div', { class: 'panel-head-text' },
-        el('div', { class: 'panel-crumb' }, (def.group || 'Configuration') + ' / ' + 'section ' + (idx + 1) + ' of ' + ids.length),
+        el('div', { class: 'panel-crumb' }, def.simple ? 'Step ' + (idx + 1) + ' of ' + ids.length : (def.group || 'Configuration') + ' / ' + 'section ' + (idx + 1) + ' of ' + ids.length),
         el('h2', { class: 'panel-title', id: 'panel-title' }, def.title || def.id),
         def.subtitle ? el('p', { class: 'panel-subtitle' }, def.subtitle) : null),
       el('div', { class: 'panel-head-nav' },
+        simpleAvailable() ? modeSwitch('is-head') : null,
         navBtn(prevDef, -1, 'Previous section'),
         navBtn(nextDef, 1, 'Next section')));
     var foot = el('footer', { class: 'panel-foot' },
@@ -369,7 +431,7 @@ window.CB = window.CB || {};
         el('span', { class: 'panel-foot-dir' }, 'Continue to'), el('span', { class: 'panel-foot-name' }, nextDef.title))
         : el('button', { type: 'button', class: 'cb-btn primary panel-foot-next', onclick: function () { openGarage('openSpec'); } },
           el('span', { class: 'panel-foot-dir' }, 'Finished?'), el('span', { class: 'panel-foot-name' }, 'Review the spec sheet')));
-    var frame = el('article', { class: 'panel-frame', 'aria-labelledby': 'panel-title' }, head, body, foot);
+    var frame = el('article', { class: 'panel-frame' + (def.simple ? ' is-simple' : ''), 'aria-labelledby': 'panel-title' }, head, body, foot);
     host.appendChild(frame);
 
     active = { id: def.id, def: def, body: body, frame: frame };
@@ -2017,8 +2079,8 @@ window.CB = window.CB || {};
     buildNav();
 
     var params = parseHash();
-    var initial = params.p && CB.panels && CB.panels[params.p] ? params.p : (lsGet(LS_UI, {}).panel || null);
-    if (!initial || !CB.panels || !CB.panels[initial]) { var ids = orderedIds(); initial = ids[0]; }
+    var initial = mapPanelId(params.p) || mapPanelId(lsGet(LS_UI, {}).panel || null);
+    if (!initial) { var ids = orderedIds(); initial = ids[0]; }
     if (initial) goto(initial, { force: true, focus: false });
     else {
       var host2 = $('panel-host');
@@ -2035,7 +2097,7 @@ window.CB = window.CB || {};
     window.addEventListener('hashchange', function () {
       if (ignoreHash) { ignoreHash = false; return; }
       var p = parseHash();
-      if (p.p && p.p !== active.id && CB.panels && CB.panels[p.p]) goto(p.p);
+      if (p.p && p.p !== active.id && mapPanelId(p.p) && mapPanelId(p.p) !== active.id) goto(p.p);
       if (p.b) {
         var okCode = shareCodeValid(p.b);
         setTimeout(function () { bootStripped = true; writeHash({ p: active.id }); toast(okCode ? 'Loaded shared build' : BAD_SHARE_MSG, okCode ? 'success' : 'warning'); }, 0);
@@ -2086,6 +2148,8 @@ window.CB = window.CB || {};
     boot: boot,
     goto: goto, next: function () { step(1); }, prev: function () { step(-1); },
     activePanel: function () { return active.id; },
+    mode: mode, setMode: setMode, panelIds: orderedIds,
+    hasPanel: function (id) { return !!mapPanelId(id); },
     bundle: function () { return lastBundle || compute(CB.state.get()); },
     compute: compute,
     refresh: function () { bundleCache = { build: null, bundle: null }; scheduleFrame({ path: '*', type: 'refresh' }); },
