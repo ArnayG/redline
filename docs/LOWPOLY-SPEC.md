@@ -33,6 +33,13 @@ CB.lowpoly.register('porsche-911-992', {
                                    // skin (lamps / grilles straddling a bonnet or deck edge stay unsquashed). Layers
                                    // stack in authoring order: a maxTilt decal whose centre lies on an earlier decal of
                                    // the same view (lamp on its gloss surround) takes that plane and sits proud of it
+    { t:'text', view:'rear', str:'GT3 RS', at:[z,y], h:0.045, mat:'chrome', weight:0.15, width:1, spacing:1.3, skew:0.2, align:'center' },
+                                   // badge TEXT only (model / trim names, no logo artwork): blocky stroke font, one flat
+                                   // plane facing the view (stacked proud of a decal under it, e.g. a light bar); view
+                                   // coords as for decals, u = the viewer's right (rear +z, front -z, side +x, left -x)
+    { t:'poly', view:'rear', mat:'tail', low:true, ... },   // low:true also draws at the low LOD (low:'only': low LOD
+                                   // alone); any low lamp of a material replaces the automatic one-quad-per-side lamp,
+                                   // so far (chase-cam) cars keep their tail-light signature (light bar, L / C shapes)
   ],
   // flare() arch bands (4-point radial prisms round an arch) must start AT the arch cut radius (the fitted arch r the
   // well is cut at, >= wheel r + 25 mm, ~ wheel r x 1.1): the generator pushes any inner edge inside it out to it.
@@ -47,7 +54,7 @@ CB.lowpoly.register('porsche-911-992', {
 ```
 Materials: `paint` (build exterior colour + finish), `paint2` (second tone/roof), `glass`, `black` (trim/plastic),
 `gloss` (gloss black), `chrome`, `rubber`, `light` (headlight, emissive at night/DRL), `drl`, `tail` (emissive red,
-brighter when braking), `indicator`, `grille`, `carbon`, `plate` (white/yellow number plate), `badge`.
+brighter when braking), `lens` (unlit red lamp housing round the LED graphics), `smoke` (smoked / dark-tinted lens), `indicator`, `grille`, `carbon`, `plate` (white/yellow number plate), `badge`.
 Shading: FLAT (per-face normals, unwelded verts), subtle per-face value jitter allowed, no textures on bodies.
 
 ## Generator / integration (core)

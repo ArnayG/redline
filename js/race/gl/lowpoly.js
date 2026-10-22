@@ -23,7 +23,10 @@
    decal under them and sit proud of it, so mirrored lamp-on-surround pairs stay symmetric), def.exhaust tip override
    (exhaustTips), flare() bands clamped to the arch cut radius (clampFlare), mirror stalks (planMirrors), per-def
    factory wheel look def.wheels.stock = {rim:'#hex', material?, caliper:'#hex'} (applyStockWheels: used only while
-   the build keeps the generic default rim / material / calliper; CB.lowpoly.stockWheels(id) feeds CB.stock).
+   the build keeps the generic default rim / material / calliper; CB.lowpoly.stockWheels(id) feeds CB.stock),
+   badge text parts {t:'text', view, str, at:[u,v], h, mat?, weight?, skew?, align?} (textDecal: stroke font, text
+   only, one flat plane facing the view), parts flagged low:true / low:'only' drawn at the low LOD (they replace the
+   automatic one-quad-per-side lamp of their material), unlit lamp materials 'lens' (red housing) / 'smoke'.
    Geometry: car-local metres, +x forward, +y up (ground 0), +z right, origin = centre of the overall length
    (shape origin - fitted dims.centerX), same as CB.gl.car. Flat shading: every triangle has its own unwelded
    vertices and face normal; colours are per-face vertex colours (materials carry the PBR parameters only).
@@ -66,16 +69,20 @@ var CB = (globalThis.CB = globalThis.CB || {});
     rev: [0.8, 0.8, 0.82], indicator: [0.85, 0.33, 0.02], grille: [0.009, 0.009, 0.01], carbon: [0.012, 0.0125, 0.0145],
     plate: [0.80, 0.80, 0.76], badge: [0.55, 0.56, 0.58], well: [0.007, 0.007, 0.008], under: [0.012, 0.012, 0.013],
     white: [0.86, 0.86, 0.84], tyre: [0.026, 0.026, 0.028], disc: [0.28, 0.28, 0.29], hat: [0.09, 0.09, 0.1],
-    interior: [0.02, 0.02, 0.022]
+    interior: [0.02, 0.02, 0.022],
+    // unlit tail-lamp lens (red housing around the LED graphics) and smoked / dark-tinted lens: glossy, not emissive
+    lens: [0.11, 0.005, 0.007], smoke: [0.022, 0.006, 0.007]
   };
   var MATS = ['paint', 'paint2', 'glass', 'black', 'gloss', 'chrome', 'rubber', 'light', 'drl', 'tail', 'indicator', 'grille',
-    'carbon', 'plate', 'badge', 'rev', 'well', 'under', 'white', 'mirror', 'interior', 'stripe', 'accent', 'caliper', 'rim'];
+    'carbon', 'plate', 'badge', 'rev', 'well', 'under', 'white', 'mirror', 'interior', 'stripe', 'accent', 'caliper', 'rim', 'lens', 'smoke'];
   // material key -> geometry bucket
   var BUCKET = {
     paint: 'body', paint2: 'roof', glass: 'glass', black: 'trim', rubber: 'trim', grille: 'trim', plate: 'trim', well: 'trim',
     under: 'trim', white: 'trim', interior: 'trim', gloss: 'gloss', badge: 'gloss', indicator: 'gloss', chrome: 'chrome',
-    carbon: 'carbon', light: 'head', drl: 'drl', tail: 'tail', rev: 'rev', stripe: 'body', accent: 'body', caliper: 'gloss', rim: 'chrome'
+    carbon: 'carbon', light: 'head', drl: 'drl', tail: 'tail', rev: 'rev', stripe: 'body', accent: 'body', caliper: 'gloss', rim: 'chrome',
+    lens: 'gloss', smoke: 'gloss'
   };
+  var BADGE_DARK = [0.012, 0.012, 0.014];
   var FINISH = {
     solid: { m: 0.0, r: 0.32, cc: 0.7 }, metallic: { m: 0.45, r: 0.34, cc: 0.9 }, pearl: { m: 0.3, r: 0.3, cc: 0.9 },
     matte: { m: 0.1, r: 0.8, cc: 0.0 }, satin: { m: 0.25, r: 0.55, cc: 0.25 }, chrome: { m: 1.0, r: 0.08, cc: 0.4 },
@@ -948,7 +955,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       }
     }
     (def.parts || []).forEach(function (p, i) {
-      if (!p || ['poly', 'box', 'prism', 'cyl', 'mirrorAuto'].indexOf(p.t) < 0) { errs.push('parts[' + i + ']: unknown type ' + (p && p.t)); return; }
+      if (!p || ['poly', 'box', 'prism', 'cyl', 'mirrorAuto', 'text'].indexOf(p.t) < 0) { errs.push('parts[' + i + ']: unknown type ' + (p && p.t)); return; }
       if (p.mat && MATS.indexOf(p.mat) < 0) errs.push('parts[' + i + ']: unknown material ' + p.mat);
       if (p.t === 'poly') {
         if (p.view && !VIEWS[p.view]) errs.push('parts[' + i + ']: unknown view ' + p.view);
@@ -961,6 +968,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
         if (!Array.isArray(p.pts2d) || p.pts2d.length < 3 || !isFinite(+p.z0) || !isFinite(+p.z1)) errs.push('parts[' + i + ']: prism needs pts2d, z0, z1');
       } else if (p.t === 'cyl') {
         if (!Array.isArray(p.c) || !isFinite(+p.r) || !isFinite(+p.l)) errs.push('parts[' + i + ']: cyl needs c, r, l');
+      } else if (p.t === 'text') {
+        if (typeof p.str !== 'string' || !p.str.trim()) errs.push('parts[' + i + ']: text needs str');
+        if (!VIEWS[p.view || 'rear'] || p.view === 'top') errs.push('parts[' + i + ']: text view must be rear / front / side / left');
+        if (!Array.isArray(p.at) || p.at.length !== 2 || !p.at.every(function (v) { return isFinite(+v); })) errs.push('parts[' + i + ']: text needs at:[u, v] (view coords)');
+        if (!(+p.h > 0)) errs.push('parts[' + i + ']: text needs h > 0 (letter height, m)');
       }
     });
     return { ok: errs.length === 0, errors: errs };
@@ -1198,6 +1210,96 @@ var CB = (globalThis.CB = globalThis.CB || {});
     return def;
   }
 
+  /* ================================================================ text badges (stroke font) */
+  // blocky stroke font on a 4 x 6 grid (glyph width w, polylines); badge text only (model / trim names), no logos.
+  // Lower case is drawn as upper case; unknown characters advance like a space.
+  var FONT = {
+    A: [[[0, 0], [0, 6], [4, 6], [4, 0]], [[0, 3], [4, 3]]], B: [[[0, 0], [0, 6], [3, 6], [3, 3]], [[0, 3], [4, 3], [4, 0], [0, 0]]],
+    C: [[[4, 6], [0, 6], [0, 0], [4, 0]]], D: [[[0, 0], [0, 6], [3, 6], [4, 5], [4, 1], [3, 0], [0, 0]]],
+    E: [[[4, 6], [0, 6], [0, 0], [4, 0]], [[0, 3], [3, 3]]], F: [[[4, 6], [0, 6], [0, 0]], [[0, 3], [3, 3]]],
+    G: [[[4, 6], [0, 6], [0, 0], [4, 0], [4, 3], [2, 3]]], H: [[[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]],
+    I: [[[0, 0], [0, 6]]], J: [[[4, 6], [4, 0], [0, 0], [0, 2]]], K: [[[0, 0], [0, 6]], [[4, 6], [0, 3], [4, 0]]],
+    L: [[[0, 6], [0, 0], [4, 0]]], M: [[[0, 0], [0, 6], [2.5, 3], [5, 6], [5, 0]]], N: [[[0, 0], [0, 6], [4, 0], [4, 6]]],
+    O: [[[0, 0], [0, 6], [4, 6], [4, 0], [0, 0]]], P: [[[0, 0], [0, 6], [4, 6], [4, 3], [0, 3]]],
+    Q: [[[0, 0], [0, 6], [4, 6], [4, 0], [0, 0]], [[2.6, 1.4], [4.2, -0.6]]], R: [[[0, 0], [0, 6], [4, 6], [4, 3], [0, 3]], [[2, 3], [4, 0]]],
+    S: [[[4, 6], [0, 6], [0, 3], [4, 3], [4, 0], [0, 0]]], T: [[[0, 6], [4, 6]], [[2, 6], [2, 0]]], U: [[[0, 6], [0, 0], [4, 0], [4, 6]]],
+    V: [[[0, 6], [2, 0], [4, 6]]], W: [[[0, 6], [1.25, 0], [2.5, 4], [3.75, 0], [5, 6]]], X: [[[0, 0], [4, 6]], [[0, 6], [4, 0]]],
+    Y: [[[0, 6], [2, 3], [4, 6]], [[2, 3], [2, 0]]], Z: [[[0, 6], [4, 6], [0, 0], [4, 0]]],
+    0: [[[0, 0], [0, 6], [4, 6], [4, 0], [0, 0]]], 1: [[[0, 5], [1.2, 6], [1.2, 0]]], 2: [[[0, 6], [4, 6], [4, 3], [0, 3], [0, 0], [4, 0]]],
+    3: [[[0, 6], [4, 6], [4, 0], [0, 0]], [[1, 3], [4, 3]]], 4: [[[0, 6], [0, 2], [4, 2]], [[3, 4], [3, 0]]],
+    5: [[[4, 6], [0, 6], [0, 3], [4, 3], [4, 0], [0, 0]]], 6: [[[4, 6], [0, 6], [0, 0], [4, 0], [4, 3], [0, 3]]],
+    7: [[[0, 6], [4, 6], [4, 4], [1.5, 0]]], 8: [[[0, 0], [0, 6], [4, 6], [4, 0], [0, 0]], [[0, 3], [4, 3]]],
+    9: [[[4, 3], [0, 3], [0, 6], [4, 6], [4, 0], [0, 0]]], '-': [[[0, 3], [3, 3]]], '.': [[[0, 0], [0, 0.6]]],
+    '+': [[[0, 3], [4, 3]], [[2, 1], [2, 5]]], '/': [[[0, 0], [3, 6]]], '\'': [[[0, 6], [0, 4.5]]]
+  };
+  function glyphW(g) { var w = 0; g.forEach(function (pl) { pl.forEach(function (q) { w = Math.max(w, q[0]); }); }); return w; }
+  /** stroke quads [[u, v] x 4] of a text run (view coords: u to the viewer's right, v up), centred on at (align
+      'center' | 'left' | 'right'), letter height h (m), stroke weight wt (fraction of h), skew (italic, u per v) */
+  function textStrokes(str, at, h, o) {
+    o = o || {};
+    var vn = h / 6, un = vn * clamp(num(o.width, 1), 0.4, 3), wt = clamp(num(o.weight, 0.15), 0.05, 0.3) * h, gap = num(o.spacing, 1.3) * un + wt, sk = num(o.skew, 0);
+    var chars = String(str).toUpperCase().split(''), run = [], u = 0;
+    chars.forEach(function (ch, i) {
+      var g = FONT[ch];
+      if (!g) { u += 3 * un + gap; return; }
+      var w = glyphW(g) * un;
+      run.push({ g: g, u: u });
+      u += w + (i < chars.length - 1 ? gap : 0);
+    });
+    var total = u + wt, u0 = o.align === 'left' ? at[0] + wt / 2 : o.align === 'right' ? at[0] - total + wt / 2 : at[0] - total / 2 + wt / 2;
+    var v0 = at[1] - h / 2, out = [];
+    run.forEach(function (r) {
+      r.g.forEach(function (pl) {
+        for (var k = 0; k < pl.length - 1 || (pl.length === 1 && k === 0); k++) {
+          var a = pl[k], b = pl[Math.min(k + 1, pl.length - 1)];
+          var ax = u0 + r.u + a[0] * un, ay = v0 + a[1] * vn, bx = u0 + r.u + b[0] * un, by = v0 + b[1] * vn;
+          var dxx = bx - ax, dyy = by - ay, l = Math.hypot(dxx, dyy) || 1e-6, ex = dxx / l * wt / 2, ey = dyy / l * wt / 2;
+          if (l < 1e-5) { ex = 0; ey = wt / 2; }
+          var q = [[ax - ex + ey, ay - ey - ex], [bx + ex + ey, by + ey - ex], [bx + ex - ey, by + ey + ex], [ax - ex - ey, ay - ey + ex]];
+          out.push(q.map(function (p) { return [p[0] + sk * (p[1] - v0), p[1]]; }));
+          if (pl.length === 1) break;
+        }
+      });
+    });
+    return out;
+  }
+  /** { t:'text', view:'rear'|'front'|'side'|'left', str, at:[u, v], h, mat?, weight?, width? (letter width scale), spacing?, skew?, align?, offset?, maxTilt? }
+      -> flat poly3 strokes on one plane facing the view (the plane a maxTilt decal of the text's box would take,
+      stacked proud of an earlier decal under it, e.g. a badge plate / light bar). View coords as for decals: rear /
+      front [z, y], side / left [x, y]; u runs to the viewer's right (rear +z, front -z, side +x, left -x). */
+  function textDecal(all, p, placed) {
+    var view = p.view || 'rear', V = VIEWS[view];
+    if (!V || view === 'top') return [];
+    var flip = view === 'front' || view === 'left' ? -1 : 1, h = +p.h, at = [+p.at[0] * flip, +p.at[1]];
+    var S = textStrokes(p.str, at, h, p);
+    if (!S.length) return [];
+    var lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+    S.forEach(function (q) { q.forEach(function (r) { lo[0] = Math.min(lo[0], r[0]); lo[1] = Math.min(lo[1], r[1]); hi[0] = Math.max(hi[0], r[0]); hi[1] = Math.max(hi[1], r[1]); }); });
+    var box = [[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]].map(function (r) { return [r[0] * flip, r[1]]; });
+    var tilt = clamp(num(p.maxTilt, 60), 0, 80) * DEG, off = num(p.offset, 0.005);
+    var base = planeDecal(all, view, box, off, tilt, placed[view]);
+    if (!base.length) return [];
+    var n = base[0].n, P0 = base[0].pts[0], den = dot(V.dir, n);
+    if (Math.abs(den) < 1e-6) return [];
+    // chrome / badge lettering straight on the paint turns into 'badgeP' (resolved per build: chrome on dark paint,
+    // dark gloss on white / yellow / silver paint, so the name stays readable); on a lamp bar / trim it keeps its mat
+    var mat = p.mat || 'chrome';
+    if (mat === 'chrome' || mat === 'badge') {
+      var cx0 = (lo[0] + hi[0]) / 2 * flip, cy0 = (lo[1] + hi[1]) / 2, o1 = V.at(cx0, cy0, 0), org = [o1[0] - V.dir[0] * 50, o1[1] - V.dir[1] * 50, o1[2] - V.dir[2] * 50];
+      var hs = castRay(all, org, V.dir), hd = placed[view] && placed[view].length ? castRay(placed[view], org, V.dir) : null;
+      var under = hd && (!hs || hd.t <= hs.t + 0.03) ? hd.tri.mat : hs ? hs.tri.mat : null;
+      if (under === 'paint' || under === 'paint2' || under === 'stripe' || under === 'accent') mat = 'badgeP';
+    }
+    return S.map(function (q) {
+      var pts = q.map(function (r) {
+        var o0 = V.at(r[0] * flip, r[1], 0), o = [o0[0] - V.dir[0] * 50, o0[1] - V.dir[1] * 50, o0[2] - V.dir[2] * 50];
+        return add(o, scl(V.dir, (dot(P0, n) - dot(o, n)) / den));
+      });
+      if (dot(polyNormal(pts), n) < 0) pts.reverse();
+      return { t: 'poly3', mat: mat, pts: pts, n: n, low: p.low };
+    });
+  }
+
   /* ================================================================ compile (ref coords, once per def) */
   function compile(id, def) {
     var key = id + (def.auto ? ':auto' : '');
@@ -1213,8 +1315,25 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
     grab(body); grab(cabin);
     var parts = [], placed = {};   // placed[view]: decal pieces already emitted (stacking for maxTilt decals)
+    // onParts:true decals / text also land on the authored solid parts (boxes, prisms, cylinders, 3D polys: a
+    // spoiler, wing or bumper block), not just the body / cabin shells
+    var partTris = null;
+    function surfFor(p) {
+      if (!p.onParts) return all;
+      if (partTris) return partTris;
+      partTris = all.slice();
+      var Bp = { poly: function (m, pts, hint) { var a2 = new Acc(); emitPoly(a2, pts, [1, 1, 1], hint); for (var k = 0; k < a2.p.length; k += 9) partTris.push(triRec([a2.p[k], a2.p[k + 1], a2.p[k + 2]], [a2.p[k + 3], a2.p[k + 4], a2.p[k + 5]], [a2.p[k + 6], a2.p[k + 7], a2.p[k + 8]], m)); } };
+      var I3 = function (q) { return [+q[0], +q[1], +q[2]]; }, I1 = function (x) { return x; };
+      (def.parts || []).forEach(function (q) {
+        if (q && (q.t === 'box' || q.t === 'prism' || q.t === 'cyl' || (q.t === 'poly' && !q.view && q.pts && q.pts[0] && q.pts[0].length === 3))) {
+          try { emitPart(Bp, q, I3, 1, null, 0, 0, I1, null, null); } catch (e) { /* skip malformed part */ }
+        }
+      });
+      return partTris;
+    }
     (def.parts || []).forEach(function (p) {
       if (p.t === 'poly' && p.view) {
+        var all = surfFor(p);   // eslint-disable-line no-shadow
         var off = num(p.offset, 0.006);
         var outline = p.pts.map(function (q) { return [+q[0], +q[1]]; });
         var lists = [outline];
@@ -1231,7 +1350,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
           if (!pcs.length) pcs = projectOutline(all, view, ol, off, 0.03);
           var pl = placed[view] || (placed[view] = []);
           pcs.forEach(function (pc) {
-            parts.push({ t: 'poly3', mat: p.mat || 'black', pts: pc.pts, n: pc.n, kind: p.kind });
+            parts.push({ t: 'poly3', mat: p.mat || 'black', pts: pc.pts, n: pc.n, kind: p.kind, low: p.low });
             for (var k = 1; k < pc.pts.length - 1; k++) {   // stacking record (decal plane, facing the view)
               var tr = triRec(pc.pts[0], pc.pts[k], pc.pts[k + 1], p.mat);
               if (dot(tr.n, pc.n) < 0) tr = triRec(pc.pts[0], pc.pts[k + 1], pc.pts[k], p.mat);
@@ -1239,6 +1358,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
             }
           });
         });
+      } else if (p.t === 'text') {
+        textDecal(surfFor(p), p, placed).forEach(function (q) { parts.push(q); });
       } else parts.push(p);
     });
     var res = { id: id, def: def, body: body, cabin: cabin, parts: parts, tris: all, wheels: def.wheels || {}, auto: !!def.auto };
@@ -1370,6 +1491,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var colors = {
       resolve: function (mat) {
         if (mat === 'mirror') mat = mirrorM;
+        if (mat === 'badgeP') {   // lettering on the paint: chrome on dark paint, dark gloss on light paint
+          var lp = 0.2126 * paint[0] + 0.7152 * paint[1] + 0.0722 * paint[2];
+          return low ? { b: 'low', c: lp > 0.28 ? BADGE_DARK : PAL.chrome } : lp > 0.28 ? { b: 'gloss', c: BADGE_DARK } : { b: 'chrome', c: PAL.chrome };
+        }
         var b = BUCKET[mat];
         if (!b) return null;
         var c = mat === 'paint' ? paint : mat === 'paint2' ? roofC : mat === 'glass' ? glassC : mat === 'stripe' || mat === 'accent' ? stripeC
@@ -1452,8 +1577,19 @@ var CB = (globalThis.CB = globalThis.CB || {});
     // shell queries (the cast list holds the shell faces only; parts are not recorded) + mirror mounts
     var Sh = shellInfo(grid, B.cast, f, dx, arches);
     var MP = low ? null : planMirrors(C.parts, Sh, sz, dx, dy, mx);
+    // parts flagged low:true also draw at the low LOD (low:'only': the low LOD alone, e.g. a simplified light bar);
+    // a def with its own low-LOD lamps of a material skips the automatic one-quad-per-side lamp for it
+    var lowOwn = {};
+    C.parts.forEach(function (p) { if (p.low && (p.mat === 'light' || p.mat === 'tail')) lowOwn[p.mat] = true; });
     C.parts.forEach(function (p, pi) {
+      if (!low && p.low === 'only') return;
       if (low) {
+        if (p.low) {
+          if (p.t === 'poly3') { var fit = fitLowDecal(p.pts.map(P3), p.n ? [p.n[0], p.n[1], p.n[2] / (sz || 1)] : null, Sh); if (fit) { B.poly(p.mat || 'black', fit, p.n); return; } }
+          emitPart(B, p, P3, sz, f, dx, dy, mx, null, arches);
+          return;
+        }
+        if (lowOwn[p.mat]) return;
         if ((p.t === 'poly3' || p.t === 'poly') && (p.mat === 'light' || p.mat === 'tail')) {
           (p.t === 'poly' && p.mirror ? [1, -1] : [1]).forEach(function (sg) {
             var key = p.mat + (p.pts[0][2] * sg >= 0 ? 'R' : 'L'), L = lowLamps[key] || (lowLamps[key] = { mat: p.mat, pts: [] });
@@ -1591,6 +1727,34 @@ var CB = (globalThis.CB = globalThis.CB || {});
       anchors: anchors, lod: lod, model: { id: model.id, make: model.make, name: model.name, style: model.style },
       stats: { triangles: tris, parts: out.length }, auto: !authored, S: S, shell: Sh, mirrorPlan: MP
     };
+  }
+  /** low LOD: a rear / front facing decal authored on the full shell is fitted to the coarser low-LOD shell — corners
+      past the narrower low-LOD tail move inboard (|z| shrinks until the ray along x hits the low shell), the polygon
+      stays planar (x re-solved on its own plane) and the whole piece slides along x until it just clears the low
+      surface everywhere (no lamp floating behind a raked tail or sunk inside it). Other decals: null (emit as is). */
+  function fitLowDecal(pts, hint, Sh) {
+    var nn = polyNormal(pts);
+    if (!(Math.abs(nn[0]) > 0.5) || pts.length < 3) return null;
+    var rear = hint ? hint[0] < 0 : nn[0] < 0, hitX = rear ? Sh.rearX : Sh.frontX, D = dot(nn, pts[0]);
+    var out = pts.map(function (q) {
+      var y = q[1], z = q[2], sg = z < 0 ? -1 : 1;
+      if (hitX(y, z) === null && Math.abs(z) > 0.02) {
+        var a = 0, b = Math.abs(z);
+        for (var k = 0; k < 10; k++) { var m = (a + b) / 2; if (hitX(y, sg * m) !== null) a = m; else b = m; }
+        z = sg * a * 0.985;
+      }
+      return [(D - nn[1] * y - nn[2] * z) / nn[0], y, z];
+    });
+    var worst = null;
+    out.forEach(function (q) {
+      var sx = hitX(q[1], q[2]);
+      if (sx === null) return;
+      var g = rear ? q[0] - sx : sx - q[0];   // > 0: inside the low shell
+      if (worst === null || g > worst) worst = g;
+    });
+    if (worst === null) return out;
+    var d = (worst + 0.006) * (rear ? -1 : 1);
+    return out.map(function (q) { return [q[0] + d, q[1], q[2]]; });
   }
   /** keep n stations (ends + evenly spread interior) for the low LOD */
   function decimateStations(st, n) {
@@ -1951,6 +2115,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   /* ================================================================ API */
   LP.register = register;
   LP.has = function (id) { return !!defs[id]; };
+  LP.unregister = function (id) { var had = !!defs[id]; delete defs[id]; delete errorsById[id]; delete compiled[id]; return had; };   // fixtures / dev tools
   LP.get = function (id) { return defs[id] || null; };
   LP.list = function () { return Object.keys(defs); };
   LP.errors = function (id) { return errorsById[id] || []; };

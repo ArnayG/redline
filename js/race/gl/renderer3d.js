@@ -2289,6 +2289,65 @@ CB.race.renderer3d = (function () {
       M[0] *= sx; M[1] *= sx; M[2] *= sx; M[8] *= sz; M[9] *= sz; M[10] *= sz;
       return it;
     }
+    /* ---------------- brake-lamp glow (medium tier and up)
+       A soft additive halo just behind each brake lamp (model.anchors.brakeLights, car-local) while the car brakes,
+       plus a faint one for lit tail lamps at night: the lamps read as glowing from the chase cam even where the tier
+       has no bloom (medium) or the daylight bloom threshold is not reached. One small fan mesh per car model
+       (2 lamps x 24 tris), one tiny material per car; drawn only for the nearest BRAKE_GLOW_MAX cars facing the
+       camera within BRAKE_GLOW_FAR m (cost: <= BRAKE_GLOW_MAX extra draw calls; none on the low tier). */
+    var BRAKE_GLOW_MAX = 10, BRAKE_GLOW_FAR = 90;
+    function brakeGlowMesh(model) {
+      if (model._brakeGlow !== undefined) return model._brakeGlow;
+      model._brakeGlow = null;
+      var A = model.anchors && model.anchors.brakeLights, d = model.dims || {};
+      if (!A || !A.length || !isV3(A[0])) return null;
+      var lamps = A.filter(isV3);
+      if (lamps.length === 2 && Math.abs(lamps[0][2] - lamps[1][2]) < 0.3) lamps = [[(lamps[0][0] + lamps[1][0]) / 2, (lamps[0][1] + lamps[1][1]) / 2, 0]];
+      var f1 = !!d.f1, k = clamp(num(d.width, 1.9) / 1.9, 0.8, 1.15), rz = (f1 ? 0.22 : 0.36) * k, ry = (f1 ? 0.13 : 0.18) * k;
+      var P = [], N = [], C = [], I = [], SEG = 8;
+      lamps.forEach(function (L) {
+        var b = P.length / 3, x = L[0] - 0.06;
+        P.push(x, L[1], L[2]); N.push(-1, 0, 0); C.push(1, 0.16, 0.1, 1);
+        [0.38, 1].forEach(function (rr, ri) {
+          for (var q = 0; q < SEG; q++) {
+            var a = q / SEG * Math.PI * 2;
+            P.push(x - 0.002 * ri, L[1] + Math.sin(a) * ry * rr, L[2] + Math.cos(a) * rz * rr); N.push(-1, 0, 0);
+            if (ri === 0) C.push(0.5, 0.035, 0.022, 1); else C.push(0, 0, 0, 1);
+          }
+        });
+        for (var q2 = 0; q2 < SEG; q2++) {
+          var i0 = b + 1 + q2, i1 = b + 1 + (q2 + 1) % SEG, o0 = i0 + SEG, o1 = i1 + SEG;
+          I.push(b, i0, i1, i0, o0, o1, i0, o1, i1);
+        }
+      });
+      model._brakeGlow = safe('brakeGlow mesh', function () {
+        return mesh({ positions: new Float32Array(P), normals: new Float32Array(N), colors: new Float32Array(C), colorSize: 4, indices: new Uint16Array(I) });
+      }, null);
+      return model._brakeGlow;
+    }
+    function brakeGlowItem(e, c, model, lampItem, camPos) {
+      if (!lampItem || !lampItem.model || model._fallback || G.lite || !S.Q.post || opts.brakeGlow === false || e.dist > BRAKE_GLOW_FAR) return null;
+      var night = S.timeOfDay === 'night', brake = clamp01(num(e.view && e.view.brake, 0));
+      var k = brake > 0.03 ? (night ? 1.0 : S.timeOfDay === 'dusk' ? 0.85 : 0.75) * (0.6 + 0.4 * brake) : (S.lit && S.lit.headlights ? (night ? 0.24 : 0.12) : 0);
+      if (S.Q.bloom) k *= 0.75;   // the bloom pass already spreads the lit lamp
+      if (k < 0.02) return null;
+      // rear-facing only: fades out as the camera swings round to the side / front of the car
+      var fx = Math.cos(e.pose.heading), fz = -Math.sin(e.pose.heading), vx = e.pose.x - camPos[0], vz = -e.pose.y - camPos[2], vl = Math.hypot(vx, vz) || 1;
+      k *= smoothstep(0.05, 0.55, (vx * fx + vz * fz) / vl) * (1 - smoothstep(BRAKE_GLOW_FAR * 0.6, BRAKE_GLOW_FAR, e.dist));
+      if (k < 0.02) return null;
+      var gm = brakeGlowMesh(model);
+      if (!gm) return null;
+      var it = e.glowItem;
+      if (!it) {
+        var mt = material({ color: [1, 1, 1, 1], unlit: true });
+        mt.additive = true; mt.transparent = true; mt.depthWrite = false; mt.castShadow = false; mt.name = 'brake-glow';
+        it = e.glowItem = { mesh: gm, material: mt, model: m4.create(), kind: 'brake-glow', castShadow: false, receiveShadow: false, transparent: true };
+      }
+      it.mesh = gm;
+      var bc = it.material.baseColor; bc[0] = bc[1] = bc[2] = k;
+      m4.copy(it.model, lampItem.model);
+      return it;
+    }
     function roadElevation(c) {
       var f = S.world.roadY;
       if (typeof f !== 'function') return 0;
@@ -3256,7 +3315,7 @@ CB.race.renderer3d = (function () {
       var shadowCenter = shadowCenterTmp;
       if (playerPose) { shadowCenter[0] = playerPose.x + Math.cos(playerPose.heading) * 35; shadowCenter[1] = 0; shadowCenter[2] = -(playerPose.y + Math.sin(playerPose.heading) * 35); }
       else { shadowCenter[0] = camPos[0]; shadowCenter[1] = 0; shadowCenter[2] = camPos[2]; }
-      var drawnCars = 0;
+      var drawnCars = 0, glowN = 0;
       for (i = 0; i < order.length; i++) {
         var oc = order[i], oe = S.cars[oc.id];
         var wantHigh = oc === player || (oe.lodDist < S.Q.lodNear && highCount < S.Q.maxHigh);
@@ -3285,10 +3344,11 @@ CB.race.renderer3d = (function () {
         else items = poseItems(oe, model, carView(oe, oc, oe.pose), dt);
         oe.items = items;
         if (!items) continue;
-        var isP = oc === player;
+        var isP = oc === player, lampIt = null;
         for (var k = 0; k < items.length; k++) {
           var it = items[k];
           if (!it || !it.mesh) continue;
+          if (it.kind === 'light-brake' && !lampIt) lampIt = it;
           if (isP && it.kind === 'body' && it.material) bodyCullFor(it, S.mode);
           var castsHere = nearShadow && it.castShadow !== false && !(it.transparent || (it.material && it.material.transparent));
           // parts hidden from the player's own eye (bumper cam: whole car; cockpit: body shell/glass/driver) still
@@ -3303,10 +3363,13 @@ CB.race.renderer3d = (function () {
         }
         if (inView) {
           drawnCars++;
-          if (!(isP && (hidePlayerAll || S.mode === 'cockpit'))) { var csi = contactShadowItem(oe, oc, dims, isP); if (csi) main.push(csi); }
+          if (!(isP && (hidePlayerAll || S.mode === 'cockpit'))) {
+            var csi = contactShadowItem(oe, oc, dims, isP); if (csi) main.push(csi);
+            if (glowN < BRAKE_GLOW_MAX) { var gli = brakeGlowItem(oe, oc, model, lampIt, camPos); if (gli) { main.push(gli); glowN++; } }
+          }
         }
       }
-      S.stats.cars = drawnCars; S.stats.high = highCount;
+      S.stats.cars = drawnCars; S.stats.high = highCount; S.stats.brakeGlows = glowN;
 
       // ---- static world + scenery
       var W = S.world, culled = 0;

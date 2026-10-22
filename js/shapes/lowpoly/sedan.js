@@ -153,10 +153,9 @@
       capF: 'paint', capR: 'paint'
     },
     parts: [].concat(
-      // kidney pair: gloss surround, dark mesh, horizontal double slats; BMW roundel above
+      // kidney pair: gloss surround, dark mesh, horizontal double slats; no logo artwork
       polys([[[0.045, 0.36], [0.255, 0.36], [0.29, 0.40], [0.297, 0.735], [0.272, 0.787], [0.065, 0.795], [0.045, 0.76]]], 'front', 'grille', 0.007, true),
       polys([0, 1, 2].map(function (k) { var y = 0.60 + k * 0.06; return rect(0.05, y, 0.29, y + 0.008); }), 'front', 'gloss', 0.009, true),
-      polys([ell(0, 0.83, 0.022, 0.022, 8)], 'front', 'badge', 0.006, false),
       polys([rect(-0.26, 0.42, 0.26, 0.53)], 'front', 'plate', 0.011, false),
       // slim headlamps: dark lens, white L light guides
       polys([[[0.325, 0.74], [0.38, 0.705], [0.80, 0.722], [0.865, 0.765], [0.845, 0.797], [0.42, 0.795], [0.335, 0.778]]], 'front', 'gloss', 0.005, true),
@@ -173,28 +172,50 @@
       polys([[[0.98, 0.72], [1.03, 0.72], [1.06, 0.86], [1.015, 0.87]]], 'side', 'gloss', 0.005, true),
       polys([[[-0.25, 1.03], [-0.33, 1.03], [-0.355, 1.38], [-0.27, 1.38]]], 'side', 'gloss', 0.006, true),
       polys([rect(0.10, 0.905, 0.25, 0.93), rect(-0.78, 0.915, -0.63, 0.94)], 'side', 'gloss', 0.004, true),
-      // rear: dark L tail lamps wrapping onto the boot lid, M lip spoiler, plate, carbon diffuser
-      polys([[[0.38, 0.875], [0.71, 0.865], [0.73, 0.775], [0.785, 0.78], [0.83, 0.955], [0.80, 0.99], [0.38, 0.975]]], 'rear', 'tail', 0.006, true),
-      polys([[[0.40, 0.905], [0.75, 0.895], [0.765, 0.935], [0.40, 0.945]]], 'rear', 'gloss', 0.009, true),
-      polys([rect(-0.26, 0.83, 0.26, 0.945)], 'rear', 'plate', 0.006, false),
-      polys([rect(-2.47, -0.58, -2.36, 0.58)], 'top', 'carbon', 0.005, false),
-      polys([ell(0, 0.975, 0.03, 0.03, 10)], 'rear', 'badge', 0.006, false),
+      // rear (rear-detail pass, Commons "BMW M3 Competition M xDrive (G80) rear.jpg", "2021 BMW M3 Competition
+      // Automatic 3.0 Rear.jpg"): smoked L tail lamps wrapping onto the boot lid — a lit red L light guide (top bar
+      // turning down at the outer end) over a red lens strip, small reverse section inboard
+      polys([[[0.38, 0.875], [0.71, 0.865], [0.73, 0.775], [0.785, 0.78], [0.83, 0.955], [0.80, 0.99], [0.38, 0.975]]], 'rear', 'smoke', 0.006, true),
+      polys([[[0.415, 0.928], [0.742, 0.922], [0.748, 0.80], [0.778, 0.803], [0.808, 0.952], [0.415, 0.958]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.415, 0.893], [0.705, 0.886], [0.705, 0.91], [0.415, 0.915]]], 'rear', 'lens', 0.009, true),
+      polys([rect(0.425, 0.896, 0.52, 0.912)], 'rear', 'rev', 0.012, true),
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 40, pts: [[0.40, 0.925], [0.66, 0.92], [0.66, 0.82], [0.70, 0.82], [0.70, 0.958], [0.40, 0.96]] }],
+      // boot lid: shut lines round the plate panel, plate in a gloss recess with plate lamps, M3 text badge
+      polys([rect(0.355, 0.815, 0.367, 0.98)], 'rear', 'black', 0.007, true),
+      polys([rect(-0.367, 0.805, 0.367, 0.817)], 'rear', 'black', 0.007, false),
+      polys([rect(-0.285, 0.82, 0.285, 0.955)], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.26, 0.83, 0.26, 0.945)], 'rear', 'plate', 0.008, false),
+      polys([rect(-0.15, 0.947, -0.10, 0.953), rect(0.10, 0.947, 0.15, 0.953)], 'rear', 'light', 0.010, false),
+      [{ t: 'text', view: 'rear', str: 'M3', at: [0.30, 0.975], h: 0.028, mat: 'chrome', weight: 0.2, skew: 0.25 },
+        // third brake lamp at the top of the backlight
+        { t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.18, 1.36, 0.18, 1.375) }],
+      // bumper: carbon diffuser with strakes, slim vertical corner reflectors, parking-sensor dots
       polys([[[-0.80, 0.20], [0.80, 0.20], [0.82, 0.42], [-0.82, 0.42]]], 'rear', 'carbon', 0.005, false),
-            polys([rect(0.80, 0.46, 0.82, 0.58)], 'rear', 'tail', 0.007, true),
+      polys([rect(-0.30, 0.20, 0.30, 0.235)], 'rear', 'gloss', 0.008, false),
+      polys([rect(0.835, 0.40, 0.85, 0.58)], 'rear', 'lens', 0.007, true),
+      polys([ell(0.25, 0.56, 0.014, 0.012, 6), ell(0.55, 0.56, 0.014, 0.012, 6)], 'rear', 'black', 0.007, true),
       [
         // M mirrors (carbon caps on Competition): housing on a black foot
         { t: 'prism', mat: 'carbon', mirror: true, z0: 0.83, z1: 1.03, pts2d: [[0.60, 1.035], [0.43, 1.04], [0.415, 1.13], [0.545, 1.135]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.53, 1.045, 0.85], s: [0.10, 0.03, 0.05] },
         // carbon side skirt blade
-        { t: 'box', mat: 'carbon', mirror: true, c: [0.0, 0.20, 0.87], s: [2.05, 0.05, 0.06] }
+        { t: 'box', mat: 'carbon', mirror: true, c: [0.0, 0.20, 0.87], s: [2.05, 0.05, 0.06] },
+        // M lip spoiler on the boot lid edge (two spans following the deck crown), diffuser strakes
+        { t: 'prism', mat: 'carbon', mirror: true, z0: 0.0, z1: 0.36, pts2d: [[-2.37, 1.022], [-2.485, 1.028], [-2.495, 1.062], [-2.41, 1.042]] },
+        { t: 'prism', mat: 'carbon', mirror: true, z0: 0.36, z1: 0.62, pts2d: [[-2.37, 0.997], [-2.485, 1.004], [-2.495, 1.038], [-2.41, 1.017]] },
+        { t: 'box', mat: 'gloss', mirror: true, c: [-2.44, 0.315, 0.15], s: [0.10, 0.075, 0.018] },
+        { t: 'box', mat: 'gloss', mirror: true, c: [-2.44, 0.315, 0.68], s: [0.10, 0.075, 0.018] }
       ]
     ),
+    exhaust: [{ cx: 0.432, cy: 0.29, w: 0.1, shape: 'round', mirror: true }, { cx: 0.56, cy: 0.29, w: 0.1, shape: 'round', mirror: true }],   // quad, a pair each side
     wheels: { style: 'y', spokes: 5 },
     notes: 'BMW M3 Competition (G80) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:BMW_M3_Competition_(G80)_IMG_4041.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2021_BMW_M3_Competition_Automatic_3.0_Front.jpg (front 3/4 right), ' +
       'https://commons.wikimedia.org/wiki/File:BMW_M3_COMPETITION_(G80)_China.jpg (side / front 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:2023_BMW_M3_Competition_xDrive_Auto_1.jpg (rear 3/4).'
+      'https://commons.wikimedia.org/wiki/File:2023_BMW_M3_Competition_xDrive_Auto_1.jpg (rear 3/4); rear detail: ' +
+      'https://commons.wikimedia.org/wiki/File:BMW_M3_Competition_M_xDrive_(G80)_rear.jpg (rear), ' +
+      'https://commons.wikimedia.org/wiki/File:2021_BMW_M3_Competition_Automatic_3.0_Rear.jpg (rear 3/4).'
   };
   reg('bmw-m3-g80', M3);
 
@@ -243,11 +264,10 @@
     },
     parts: [].concat(
       // Panamericana grille: tall dark trapezoid from the bonnet edge down, 13 vertical chrome slats, chrome frame,
-      // plain chrome disc badge in the centre (text badges only, no logo artwork)
+      // no badge artwork (text badges only)
       polys([[[-0.355, 0.735], [0.355, 0.735], [0.39, 0.70], [0.425, 0.455], [0.40, 0.43], [-0.40, 0.43], [-0.425, 0.455], [-0.39, 0.70]]], 'front', 'chrome', 0.004, false),
       polys([[[-0.335, 0.718], [0.335, 0.718], [0.37, 0.69], [0.402, 0.46], [0.385, 0.447], [-0.385, 0.447], [-0.402, 0.46], [-0.37, 0.69]]], 'front', 'grille', 0.006, false),
       polys([-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6].map(function (k) { var z = k * 0.054, w = 0.0075; return [[z - w, 0.462], [z + w, 0.462], [z * 0.93 + w, 0.705], [z * 0.93 - w, 0.705]]; }), 'front', 'chrome', 0.009, false),
-      polys([ell(0, 0.585, 0.092, 0.092, 12)], 'front', 'chrome', 0.011, false),
       // slim angular headlamps with the eyebrow DRL hooking down at the inner end
       // (audit: maxTilt keeps the lamp decals on the upright nose face; the DRL hook used to smear up the bonnet as a white wedge)
       tilt(polys([[[0.405, 0.672], [0.47, 0.655], [0.80, 0.69], [0.875, 0.735], [0.86, 0.765], [0.48, 0.732]]], 'front', 'gloss', 0.005, true), 45),
@@ -263,22 +283,48 @@
       polys([[[0.98, 0.80], [1.12, 0.81], [1.12, 0.845], [0.99, 0.84]]], 'side', 'gloss', 0.005, true),
       polys([[[-0.355, 1.045], [-0.445, 1.045], [-0.485, 1.40], [-0.395, 1.40]]], 'side', 'gloss', 0.006, true),
       polys([rect(0.05, 0.925, 0.20, 0.95), rect(-0.85, 0.935, -0.70, 0.96)], 'side', 'chrome', 0.004, true),
-      // rear: two-piece wedge tail lamps (split at the boot shut line), star, plate, dark diffuser
-      polys([[[0.26, 0.86], [0.84, 0.82], [0.89, 0.88], [0.875, 0.995], [0.26, 0.955]]], 'rear', 'tail', 0.006, true),
-      polys([[[0.32, 0.912], [0.84, 0.905], [0.84, 0.917], [0.32, 0.922]]], 'rear', 'gloss', 0.009, true),
-      polys([ell(0, 0.965, 0.04, 0.04, 10)], 'rear', 'badge', 0.006, false),
-      polys([rect(-0.26, 0.72, 0.26, 0.83)], 'rear', 'plate', 0.006, false),
+      // rear (rear-detail pass, Commons "Mercedes-AMG C 63 S E PERFORMANCE (W206) rear.jpg", "Mercedes-AMG C 63 (W206)
+      // IMG 0310.jpg", "Mercedes-AMG C63 S E Performance (W206) rear.jpg"): two-piece wedge lamps (split at the boot
+      // shut line) — dark red lens with three stacked swept LED blades, a lit top contour, small reverse inboard
+      polys([[[0.26, 0.86], [0.84, 0.82], [0.89, 0.88], [0.875, 0.995], [0.26, 0.955]]], 'rear', 'lens', 0.006, true),
+      polys([[[0.27, 0.945], [0.87, 0.982], [0.873, 0.992], [0.27, 0.955]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.34, 0.918], [0.86, 0.945], [0.862, 0.96], [0.34, 0.93]], [[0.46, 0.893], [0.865, 0.91], [0.866, 0.925], [0.46, 0.905]],
+        [[0.58, 0.866], [0.87, 0.874], [0.871, 0.889], [0.58, 0.878]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.85, 0.845], [0.885, 0.885], [0.877, 0.975], [0.86, 0.975]]], 'rear', 'tail', 0.009, true),
+      polys([rect(0.30, 0.875, 0.42, 0.893)], 'rear', 'rev', 0.009, true),
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 40, pts: [[0.28, 0.875], [0.70, 0.842], [0.71, 0.98], [0.28, 0.955]] }],
+      // boot lid: shut lines, gloss lip on the deck edge, AMG / C 63 S lettering (text only), plate recess,
+      // third brake lamp at the top of the backlight
+      polys([rect(0.288, 0.70, 0.30, 0.95)], 'rear', 'black', 0.007, true),
+      polys([rect(-0.30, 0.69, 0.30, 0.702)], 'rear', 'black', 0.007, false),
+      polys([rect(-2.505, -0.56, -2.44, 0.56)], 'top', 'gloss', 0.004, false),
+      [{ t: 'text', view: 'rear', str: 'AMG', at: [-0.14, 0.89], h: 0.026, mat: 'chrome', weight: 0.18, skew: 0.2 },
+        { t: 'text', view: 'rear', str: 'C 63 S', at: [0.15, 0.89], h: 0.026, mat: 'chrome', weight: 0.16 },
+        { t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.18, 1.335, 0.18, 1.35) }],
+      polys([rect(-0.285, 0.705, 0.285, 0.845)], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.26, 0.72, 0.26, 0.83)], 'rear', 'plate', 0.008, false),
+      polys([rect(-0.15, 0.836, -0.10, 0.842), rect(0.10, 0.836, 0.15, 0.842)], 'rear', 'light', 0.010, false),
+      // bumper: dark diffuser (fins below), slim horizontal corner reflectors, parking-sensor dots
       polys([[[-0.80, 0.22], [0.80, 0.22], [0.82, 0.42], [-0.82, 0.42]]], 'rear', 'gloss', 0.005, false),
+      polys([rect(0.70, 0.49, 0.85, 0.505)], 'rear', 'lens', 0.007, true),
+      polys([ell(0.22, 0.56, 0.014, 0.012, 6), ell(0.50, 0.555, 0.014, 0.012, 6)], 'rear', 'black', 0.007, true),
       [
         // mirrors: body-colour housing on a black foot
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.83, z1: 1.04, pts2d: [[0.60, 1.05], [0.42, 1.055], [0.405, 1.145], [0.55, 1.15]] },
-        { t: 'box', mat: 'black', mirror: true, c: [0.53, 1.06, 0.85], s: [0.10, 0.03, 0.05] }
+        { t: 'box', mat: 'black', mirror: true, c: [0.53, 1.06, 0.85], s: [0.10, 0.03, 0.05] },
+        // diffuser fins between and inboard of the tip pairs
+        { t: 'box', mat: 'gloss', mirror: true, c: [-2.46, 0.32, 0.12], s: [0.10, 0.075, 0.018] },
+        { t: 'box', mat: 'gloss', mirror: true, c: [-2.46, 0.32, 0.30], s: [0.10, 0.075, 0.018] },
+        { t: 'box', mat: 'gloss', mirror: true, c: [-2.46, 0.32, 0.45], s: [0.10, 0.075, 0.018] }
       ]
     ),
+    exhaust: [{ cx: 0.57, cy: 0.292, w: 0.085, h: 0.06, shape: 'trapezoid', mirror: true }, { cx: 0.67, cy: 0.292, w: 0.085, h: 0.06, shape: 'trapezoid', mirror: true }],
     wheels: { style: 'split', spokes: 5 },
     notes: 'Mercedes-AMG C 63 S E PERFORMANCE (W206) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Mercedes-AMG_C_63_(W206)_IMG_0305.jpg (front 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:Mercedes-AMG_C_63_(W206)_IMG_0310.jpg (rear 3/4).'
+      'https://commons.wikimedia.org/wiki/File:Mercedes-AMG_C_63_(W206)_IMG_0310.jpg (rear 3/4); rear detail: ' +
+      'https://commons.wikimedia.org/wiki/File:Mercedes-AMG_C_63_S_E_PERFORMANCE_(W206)_rear.jpg (rear), ' +
+      'https://commons.wikimedia.org/wiki/File:Mercedes-AMG_C63_S_E_Performance_(W206)_rear.jpg (rear 3/4).'
   };
   reg('mercedes-amg-c63-w206', C63);
 
@@ -345,31 +391,46 @@
       tilt(polys([[[0.52, 0.660], [0.66, 0.632], [0.86, 0.640], [0.90, 0.665], [0.80, 0.675], [0.62, 0.668]]], 'front', 'light', 0.009, true), 40),
       tilt(polys([[[0.52, 0.676], [0.92, 0.696], [0.915, 0.708], [0.56, 0.692]]], 'front', 'drl', 0.011, true), 40),
       tilt(polys([ell(0.80, 0.652, 0.04, 0.02, 8)], 'front', 'chrome', 0.012, true), 40),
-      // small plain badge on the nose, plate, wide low intake, air-curtain slots
-      polys([rect(-0.04, 0.575, 0.04, 0.595)], 'front', 'badge', 0.008, false),
+      // plate, wide low intake, air-curtain slots
       polys([rect(-0.26, 0.38, 0.26, 0.49)], 'front', 'plate', 0.007, false),
       polys([[[-0.62, 0.20], [0.62, 0.20], [0.60, 0.32], [-0.60, 0.32]]], 'front', 'grille', 0.004, false),
       polys([[[0.70, 0.26], [0.74, 0.26], [0.76, 0.40], [0.72, 0.40]]], 'front', 'gloss', 0.005, true),
       // side: B-pillar, flush handles
       polys([[[-0.20, 1.03], [-0.29, 1.03], [-0.325, 1.39], [-0.235, 1.39]]], 'side', 'gloss', 0.006, true),
       polys([rect(0.05, 0.935, 0.19, 0.95), rect(-0.95, 0.94, -0.81, 0.955)], 'side', 'gloss', 0.004, true),
-      // rear: smoked wrap tail lamps with red inner blades, TESLA letters, plate, black diffuser, reflectors
-      polys([[[0.36, 0.89], [0.86, 0.86], [0.945, 0.90], [0.94, 0.995], [0.86, 1.015], [0.36, 0.975]]], 'rear', 'gloss', 0.005, true),
-      polys([[[0.38, 0.915], [0.86, 0.89], [0.93, 0.93], [0.86, 0.995], [0.38, 0.958]]], 'rear', 'tail', 0.009, true),
+      // rear (rear-detail pass, Commons "Tesla Model S Plaid Autofrühling Ulm IMG 9321.jpg", "(CHN-Hubei) Showcar Tesla
+      // Model S No-plate rear 2024-12-03.jpg"): smoked wrap tail lamps — a red LED light guide along the top edge
+      // turning down at the outer end, a lower inner blade, dark red lens between, small reverse section inboard
+      polys([[[0.36, 0.89], [0.86, 0.86], [0.945, 0.90], [0.94, 0.995], [0.86, 1.015], [0.36, 0.975]]], 'rear', 'smoke', 0.005, true),
+      polys([[[0.38, 0.958], [0.86, 0.985], [0.86, 1.0], [0.38, 0.972]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.86, 0.985], [0.905, 0.905], [0.932, 0.915], [0.928, 0.985], [0.86, 1.0]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.56, 0.905], [0.86, 0.885], [0.89, 0.898], [0.56, 0.918]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.40, 0.925], [0.84, 0.905], [0.88, 0.925], [0.85, 0.975], [0.40, 0.952]]], 'rear', 'lens', 0.008, true),
+      polys([rect(0.40, 0.903, 0.52, 0.917)], 'rear', 'rev', 0.009, true),
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 40, pts: [[0.38, 0.92], [0.80, 0.895], [0.82, 0.995], [0.38, 0.972]] }],
+      // liftback: shut lines, spaced TESLA letters, plate in a gloss recess with plate lamps
       polys(word('TESLA', 0, 0.94, 0.03, 1, 2.2), 'rear', 'badge', 0.007, false),
-      polys([rect(-0.26, 0.79, 0.26, 0.90)], 'rear', 'plate', 0.006, false),
+      polys([rect(0.352, 0.77, 0.364, 0.975)], 'rear', 'black', 0.007, true),
+      polys([rect(-0.364, 0.76, 0.364, 0.772)], 'rear', 'black', 0.007, false),
+      polys([rect(-0.285, 0.775, 0.285, 0.915)], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.26, 0.79, 0.26, 0.90)], 'rear', 'plate', 0.008, false),
+      polys([rect(-0.15, 0.905, -0.10, 0.911), rect(0.10, 0.905, 0.15, 0.911)], 'rear', 'light', 0.010, false),
+      // bumper: black diffuser valance, slim corner reflectors, parking-sensor dots
       polys([[[-0.72, 0.26], [0.72, 0.26], [0.74, 0.40], [-0.74, 0.40]]], 'rear', 'gloss', 0.005, false),
-      polys([rect(0.55, 0.47, 0.75, 0.49)], 'rear', 'tail', 0.007, true),
+      polys([rect(0.55, 0.47, 0.75, 0.49)], 'rear', 'lens', 0.007, true),
+      polys([ell(0.25, 0.56, 0.014, 0.012, 6), ell(0.55, 0.56, 0.014, 0.012, 6)], 'rear', 'black', 0.007, true),
       [
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.84, z1: 1.05, pts2d: [[0.70, 1.035], [0.52, 1.04], [0.505, 1.12], [0.65, 1.125]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.63, 1.045, 0.875], s: [0.09, 0.03, 0.05] }
       ]
     ),
+    exhaust: [],   // EV: no tips
     wheels: { style: 'turbine', spokes: 10 },
     notes: 'Tesla Model S (2021 refresh) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Tesla_Model_S_(2023)_Motorworld_Munich_1X7A0025.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Tesla_Model_S_Plaid_Autofr%C3%BChling_Ulm_IMG_9321.jpg (rear 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:2021_Tesla_Model_S_P2_Long_Range_front_right_view.jpg (front 3/4).'
+      'https://commons.wikimedia.org/wiki/File:2021_Tesla_Model_S_P2_Long_Range_front_right_view.jpg (front 3/4); rear detail: ' +
+      'https://commons.wikimedia.org/wiki/File:(CHN-Hubei)_Showcar_Tesla_Model_S_No-plate_rear_2024-12-03.jpg (rear 3/4).'
   };
   reg('tesla-model-s-2021', MS);
 
@@ -417,11 +478,9 @@
       capF: 'paint', capR: 'paint'
     },
     parts: [].concat(
-      // hexagonal grille with the wing bar and the Subaru oval
+      // hexagonal grille with the wing bar (no logo artwork)
       polys([[[-0.29, 0.475], [0.29, 0.475], [0.385, 0.54], [0.39, 0.63], [0.33, 0.695], [-0.33, 0.695], [-0.39, 0.63], [-0.385, 0.54]]], 'front', 'grille', 0.004, false),
       polys([[[-0.36, 0.545], [0.36, 0.545], [0.37, 0.565], [-0.37, 0.565]]], 'front', 'chrome', 0.007, false),
-      polys([ell(0, 0.625, 0.07, 0.04, 10)], 'front', 'chrome', 0.010, false),
-      polys([ell(0, 0.625, 0.05, 0.026, 8)], 'front', 'grille', 0.013, false),
       // hawk-eye headlamps: hooked inner end beside the grille, swept up and back into the wing
       tilt(polys([[[0.395, 0.60], [0.48, 0.575], [0.70, 0.615], [0.80, 0.67], [0.805, 0.735], [0.62, 0.725], [0.44, 0.70], [0.40, 0.66]]], 'front', 'gloss', 0.006, true), 40),
       tilt(polys([[[0.45, 0.62], [0.62, 0.635], [0.64, 0.705], [0.47, 0.69]]], 'front', 'light', 0.009, true), 40),
@@ -436,27 +495,50 @@
       polys([[[0.86, 0.60], [0.98, 0.60], [0.98, 0.75], [0.88, 0.75]]], 'side', 'gloss', 0.005, true),
       polys([[[-0.30, 1.04], [-0.38, 1.04], [-0.40, 1.43], [-0.32, 1.43]]], 'side', 'gloss', 0.006, true),
       polys([rect(0.02, 0.93, 0.16, 0.955), rect(-0.86, 0.95, -0.72, 0.975)], 'side', 'gloss', 0.004, true),
-      // rear: wrap tail lamps with a clear inner band, boot-lid plate, oval, dark diffuser, rear fog
-      polys([[[0.34, 0.95], [0.56, 0.90], [0.78, 0.85], [0.875, 0.87], [0.895, 0.985], [0.87, 1.05], [0.56, 1.055], [0.35, 1.02]]], 'rear', 'tail', 0.006, true),
-      polys([[[0.42, 0.975], [0.60, 0.945], [0.79, 0.905], [0.80, 0.93], [0.60, 0.97], [0.42, 0.995]]], 'rear', 'gloss', 0.009, true),
+      // rear (rear-detail pass, VA rear photos: Commons "Subaru WRX STI Type S (VAB) rear.JPG", "2015 Subaru WRX STi
+      // Type UK Symetrica 2.5 Rear.jpg", "Subaru WRX STI (VAB) rear.JPG"): big wrap tail lamps — dark red lens with a
+      // lit C ring round the outer two thirds and a clear reverse section in a chrome cup at the inner end
+      polys([[[0.355, 1.045], [0.37, 0.925], [0.60, 0.885], [0.80, 0.852], [0.888, 0.868], [0.902, 0.985], [0.878, 1.052], [0.56, 1.062]]], 'rear', 'lens', 0.006, true),
+      polys([[[0.475, 1.05], [0.475, 0.905], [0.80, 0.858], [0.884, 0.872], [0.897, 0.985], [0.874, 1.048]]], 'rear', 'tail', 0.009, true),
+      polys([[[0.56, 0.975], [0.84, 0.948], [0.846, 0.962], [0.56, 0.99]]], 'rear', 'lens', 0.012, true),
+      polys([[[0.385, 1.03], [0.392, 0.94], [0.462, 0.918], [0.462, 1.04]]], 'rear', 'chrome', 0.009, true),
+      polys([[[0.398, 1.018], [0.404, 0.952], [0.45, 0.936], [0.45, 1.026]]], 'rear', 'rev', 0.012, true),
       polys([[[-2.34, 0.87], [-2.22, 0.88], [-2.13, 0.97], [-2.15, 1.03], [-2.34, 1.03]]], 'side', 'tail', 0.006, true),
-      polys([rect(-0.26, 0.835, 0.26, 0.945)], 'rear', 'plate', 0.006, false),
-      polys([ell(0, 1.005, 0.06, 0.032, 10)], 'rear', 'chrome', 0.006, false),
+      // far / chase LOD: one lamp per side carries the wrap shape
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 40, pts: [[0.37, 1.04], [0.38, 0.925], [0.78, 0.862], [0.80, 1.045]] }],
+      // boot-lid shut lines (down the lamp inner ends, across under the plate recess) and on the deck
+      polys([rect(0.338, 0.80, 0.35, 1.045)], 'rear', 'black', 0.007, true),
+      polys([rect(-0.35, 0.795, 0.35, 0.807)], 'rear', 'black', 0.007, false),
+      polys([rect(-1.86, -0.6, -1.845, 0.6)], 'top', 'black', 0.004, false),
+      polys([rect(-2.2, 0.585, -1.86, 0.6)], 'top', 'black', 0.004, true),
+      // plate in a gloss recess with two plate lamps, WRX / STI and SUBARU lettering (text only)
+      polys([[[-0.29, 0.82], [0.29, 0.82], [0.30, 0.965], [-0.30, 0.965]]], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.26, 0.835, 0.26, 0.945)], 'rear', 'plate', 0.008, false),
+      polys([rect(-0.15, 0.952, -0.10, 0.96), rect(0.10, 0.952, 0.15, 0.96)], 'rear', 'light', 0.009, false),
+      [{ t: 'text', view: 'rear', str: 'WRX', at: [0.47, 0.885], h: 0.036, mat: 'chrome', weight: 0.17, skew: 0.15 },
+        { t: 'text', view: 'rear', str: 'STI', at: [0.47, 0.835], h: 0.03, mat: 'chrome', weight: 0.17, skew: 0.15 },
+        { t: 'text', view: 'rear', str: 'SUBARU', at: [-0.47, 0.875], h: 0.022, mat: 'chrome', weight: 0.14 }],
+      // third brake lamp at the top of the backlight
+      [{ t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.2, 1.385, 0.2, 1.402) }],
+      // bumper: black diffuser valance with fins, square centre rear fog, corner reflectors, tow-eye cover
       polys([[[-0.82, 0.22], [0.82, 0.22], [0.85, 0.36], [0.62, 0.42], [-0.62, 0.42], [-0.85, 0.36]]], 'rear', 'gloss', 0.005, false),
-      polys([rect(-0.045, 0.30, 0.045, 0.335)], 'rear', 'tail', 0.008, false),
+      polys([rect(-0.055, 0.29, 0.055, 0.345)], 'rear', 'tail', 0.008, false),
+      polys([rect(0.70, 0.445, 0.82, 0.468)], 'rear', 'lens', 0.007, true),
+      polys([ell(0.60, 0.50, 0.03, 0.02, 6)], 'rear', 'black', 0.006, false),
       [
         // bonnet scoop (top-mount intercooler) with its dark mouth
         { t: 'prism', mat: 'paint', mirror: true, z0: 0.0, z1: 0.31, pts2d: [[1.56, 0.868], [1.00, 0.918], [1.03, 0.958], [1.43, 0.985]] },
         { t: 'box', mat: 'grille', c: [1.445, 0.935, 0], s: [0.03, 0.075, 0.56] },
-        // tall wing on pylons, down-turned ends
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.0, z1: 0.76, pts2d: [[-2.08, 1.29], [-2.34, 1.295], [-2.36, 1.325], [-2.10, 1.318]] },
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.74, z1: 0.79, pts2d: [[-2.10, 1.20], [-2.33, 1.215], [-2.36, 1.325], [-2.10, 1.318]] },
-        { t: 'box', mat: 'paint', mirror: true, c: [-2.20, 1.18, 0.52], s: [0.13, 0.23, 0.03] },
+        // tall wing on swept pylons; the blade tips kick UP into endplates (rear photos), black gurney lip
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.0, z1: 0.70, pts2d: [[-2.08, 1.29], [-2.34, 1.295], [-2.36, 1.325], [-2.10, 1.318]] },
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.70, z1: 0.79, pts2d: [[-2.08, 1.29], [-2.34, 1.295], [-2.39, 1.395], [-2.22, 1.385]] },
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.50, z1: 0.54, pts2d: [[-2.08, 1.07], [-2.26, 1.065], [-2.30, 1.30], [-2.15, 1.30]] },
         // door-mounted mirrors
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.74, z1: 0.93, pts2d: [[0.66, 1.035], [0.50, 1.04], [0.49, 1.125], [0.62, 1.13]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.60, 1.04, 0.75], s: [0.10, 0.03, 0.05] }
       ]
     ),
+    exhaust: [{ cx: 0.53, cy: 0.27, w: 0.092, shape: 'round', mirror: true }, { cx: 0.645, cy: 0.27, w: 0.092, shape: 'round', mirror: true }],   // quad: a pair per corner
     wheels: { style: 'mesh', spokes: 10, stock: { rim: '#3d3f43', material: 'cast', caliper: '#c9a000' } },   // dark BBS-style, gold Brembo
     notes: 'Subaru WRX STI (VA) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_(VA)_IMG_4317.jpg (front 3/4), ' +
@@ -465,7 +547,9 @@
       'likeness round 2: https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI,_Geneva_2014.jpg (front), ' +
       'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_-_Blue_(cropped).jpg (side / front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_(VAB)_rear.JPG (rear 3/4), ' +
-      'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_-_5th_generation.jpg (rear).'
+      'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_-_5th_generation.jpg (rear); rear detail: ' +
+      'https://commons.wikimedia.org/wiki/File:Subaru_WRX_STI_Type_S_(VAB)_rear.JPG (rear 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:2015_Subaru_WRX_STi_Type_UK_Symetrica_2.5_Rear.jpg (rear 3/4).'
   };
   reg('subaru-wrx-sti-va', STI);
 
@@ -519,7 +603,6 @@
       polys([[[-0.625, 0.755], [0.625, 0.755], [0.505, 0.205], [-0.505, 0.205]]], 'front', 'gloss', 0.004, false),
       polys([[[-0.585, 0.735], [0.585, 0.735], [0.475, 0.23], [-0.475, 0.23]]], 'front', 'grille', 0.007, false),
       polys([[[-0.545, 0.56], [0.545, 0.56], [0.55, 0.58], [-0.55, 0.58]]], 'front', 'gloss', 0.010, false),
-      polys([rect(-0.05, 0.655, 0.05, 0.685)], 'front', 'chrome', 0.012, false),
       polys([rect(-0.26, 0.40, 0.26, 0.51)], 'front', 'plate', 0.012, false),
       // angular headlamps rising from the grille corners into the wings, dark brow, amber marker
       tilt(polys([[[0.625, 0.625], [0.70, 0.598], [0.835, 0.632], [0.87, 0.69], [0.85, 0.76], [0.64, 0.758]]], 'front', 'gloss', 0.006, true), 40),
@@ -537,25 +620,47 @@
       polys([[[0.86, 0.60], [0.93, 0.60], [1.00, 0.80], [0.94, 0.80]]], 'side', 'gloss', 0.005, true),
       polys([[[-0.29, 1.04], [-0.37, 1.04], [-0.39, 1.44], [-0.31, 1.44]]], 'side', 'gloss', 0.006, true),
       polys([rect(0.02, 0.93, 0.16, 0.955), rect(-0.86, 0.95, -0.72, 0.975)], 'side', 'gloss', 0.004, true),
-      // rear: wedge lamps with two round elements, amber outer, plate in the bumper, plain badge, dark lower bumper
-      polys([[[0.36, 0.855], [0.79, 0.835], [0.865, 0.89], [0.86, 1.025], [0.36, 1.015]]], 'rear', 'tail', 0.006, true),
+      // rear (rear-detail pass, Commons "Mitsubishi LANCER EVOLUTION X GSR (CZ4A) rear.JPG", "Mitsubishi Evo X rear
+      // DSC08497 (cropped).jpg", "2010 Mitsubishi Lancer Evolution GSR in Apex Silver Metallic, Rear Right"): wedge
+      // lamps (tall outboard, narrowing inboard) — amber outer block, a red round element and a clear (reverse) round
+      // element in chrome cups, red lens between them
+      polys([[[0.33, 1.015], [0.34, 0.952], [0.60, 0.885], [0.79, 0.835], [0.865, 0.89], [0.86, 1.025]]], 'rear', 'tail', 0.006, true),
       polys([[[-2.255, 0.86], [-2.16, 0.875], [-2.10, 0.95], [-2.13, 0.995], [-2.255, 0.995]]], 'side', 'tail', 0.006, true),
-      polys([ell(0.50, 0.925, 0.055, 0.05, 10), ell(0.67, 0.922, 0.055, 0.05, 10)], 'rear', 'rev', 0.009, true),
-      polys([ell(0.50, 0.925, 0.032, 0.029, 8), ell(0.67, 0.922, 0.032, 0.029, 8)], 'rear', 'tail', 0.012, true),
-      polys([[[0.745, 0.885], [0.785, 0.882], [0.80, 0.955], [0.76, 0.955]]], 'rear', 'indicator', 0.010, true),
-      polys([rect(-0.045, 0.945, 0.045, 0.975)], 'rear', 'chrome', 0.007, false),
-      polys([rect(-0.26, 0.47, 0.26, 0.58)], 'rear', 'plate', 0.008, false),
+      polys([[[0.705, 0.857], [0.79, 0.838], [0.86, 0.892], [0.855, 1.02], [0.705, 1.02]]], 'rear', 'indicator', 0.009, true),
+      polys([[[0.345, 1.01], [0.35, 0.958], [0.40, 0.944], [0.40, 1.012]]], 'rear', 'lens', 0.009, true),
+      polys([ell(0.475, 0.955, 0.056, 0.05, 10), ell(0.635, 0.94, 0.06, 0.058, 10)], 'rear', 'chrome', 0.009, true),
+      polys([ell(0.475, 0.955, 0.042, 0.037, 8)], 'rear', 'rev', 0.012, true),
+      polys([ell(0.635, 0.94, 0.045, 0.043, 8)], 'rear', 'tail', 0.012, true),
+      polys([ell(0.475, 0.955, 0.016, 0.014, 6)], 'rear', 'tail', 0.015, true),
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 40, pts: [[0.35, 1.012], [0.36, 0.95], [0.60, 0.885], [0.72, 0.855], [0.72, 1.018]] }],
+      // boot lid: shut lines down the lamp inner ends and across above the bumper, deck lines, high-mount stop
+      // lamp on the lid's rear edge, LANCER / EVOLUTION and MITSUBISHI lettering (text only)
+      polys([rect(0.318, 0.715, 0.33, 1.02)], 'rear', 'black', 0.007, true),
+      polys([rect(-0.33, 0.705, 0.33, 0.717)], 'rear', 'black', 0.007, false),
+      polys([rect(-1.72, -0.62, -1.705, 0.62)], 'top', 'black', 0.004, false),
+      polys([rect(-2.12, 0.605, -1.72, 0.62)], 'top', 'black', 0.004, true),
+      [{ t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.15, 1.048, 0.15, 1.06) }],
+      [{ t: 'text', view: 'rear', str: 'LANCER', at: [0.19, 0.79], h: 0.02, mat: 'chrome', weight: 0.14 },
+        { t: 'text', view: 'rear', str: 'EVOLUTION', at: [0.19, 0.755], h: 0.026, mat: 'chrome', weight: 0.15, skew: 0.25 },
+        { t: 'text', view: 'rear', str: 'MITSUBISHI', at: [-0.19, 0.77], h: 0.02, mat: 'chrome', weight: 0.14 }],
+      // bumper: plate in a black recess with plate lamps, corner reflectors, black diffuser valance with fins
+      polys([rect(-0.285, 0.455, 0.285, 0.595)], 'rear', 'black', 0.006, false),
+      polys([rect(-0.26, 0.47, 0.26, 0.58)], 'rear', 'plate', 0.009, false),
+      polys([rect(-0.14, 0.585, -0.09, 0.592), rect(0.09, 0.585, 0.14, 0.592)], 'rear', 'light', 0.010, false),
       polys([[[-0.82, 0.24], [0.82, 0.24], [0.84, 0.42], [-0.84, 0.42]]], 'rear', 'black', 0.005, false),
-      polys([rect(0.52, 0.50, 0.74, 0.52)], 'rear', 'tail', 0.007, true),
+      polys([rect(0.60, 0.50, 0.76, 0.525)], 'rear', 'lens', 0.007, true),
       [
-        // wing on pylons, down-turned ends
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.0, z1: 0.74, pts2d: [[-1.98, 1.205], [-2.21, 1.21], [-2.24, 1.24], [-2.00, 1.235]] },
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.72, z1: 0.77, pts2d: [[-2.00, 1.10], [-2.21, 1.10], [-2.24, 1.24], [-2.00, 1.235]] },
-        { t: 'box', mat: 'paint', mirror: true, c: [-2.10, 1.15, 0.50], s: [0.12, 0.13, 0.03] },
+        // wing on swept pylons, the blade tips kick up into endplates (rear photos); black fins in the diffuser
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.0, z1: 0.68, pts2d: [[-1.98, 1.205], [-2.21, 1.21], [-2.24, 1.24], [-2.00, 1.235]] },
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.68, z1: 0.77, pts2d: [[-1.98, 1.205], [-2.21, 1.21], [-2.27, 1.30], [-2.11, 1.295]] },
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.48, z1: 0.52, pts2d: [[-1.98, 1.11], [-2.13, 1.10], [-2.19, 1.215], [-2.04, 1.215]] },
+        { t: 'box', mat: 'black', mirror: true, c: [-2.20, 0.335, 0.16], s: [0.14, 0.08, 0.018] },
+        { t: 'box', mat: 'black', mirror: true, c: [-2.20, 0.335, 0.34], s: [0.14, 0.08, 0.018] },
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.75, z1: 0.93, pts2d: [[0.72, 1.045], [0.56, 1.05], [0.55, 1.125], [0.68, 1.13]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.66, 1.05, 0.76], s: [0.10, 0.03, 0.05] }
       ]
     ),
+    exhaust: [{ cx: 0.60, cy: 0.285, w: 0.12, shape: 'round', mirror: true }],   // one big tip at each rear corner
     wheels: { style: 'mesh', spokes: 10, stock: { rim: '#585b60', material: 'forged', caliper: '#b3121f' } },   // BBS forged, Brembo
     notes: 'Mitsubishi Lancer Evolution X — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2017-04-02_Mitsubishi_Lancer_Evolution_X_MR_SST_14_(2).jpg (front 3/4), ' +
@@ -564,7 +669,9 @@
       'likeness round 2: https://commons.wikimedia.org/wiki/File:Mitsubishi_Lancer_Evolution_X_(8159220027).jpg (front), ' +
       'https://commons.wikimedia.org/wiki/File:Mitsubishi_Lancer_Evolution_X_-_001.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Mitsubishi_Lancer_Evolution_X_(8159251566).jpg (side), ' +
-      'https://commons.wikimedia.org/wiki/File:Mitsubishi_Lancer_Evolution_X_(8159253784).jpg (rear).'
+      'https://commons.wikimedia.org/wiki/File:Mitsubishi_Lancer_Evolution_X_(8159253784).jpg (rear); rear detail: ' +
+      'https://commons.wikimedia.org/wiki/File:Mitsubishi_LANCER_EVOLUTION_X_GSR_(CZ4A)_rear.JPG (rear 3/4), ' +
+      'https://commons.wikimedia.org/wiki/File:Mitsubishi_Evo_X_rear_DSC08497_(cropped).jpg (rear 3/4).'
   };
   reg('mitsubishi-lancer-evo-x', EVO);
 

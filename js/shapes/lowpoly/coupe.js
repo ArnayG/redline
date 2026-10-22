@@ -132,6 +132,34 @@
     return out;
   }
 
+  /* ---------------------------------------------------------------- rear-detail helpers (chase-cam pass) */
+  /** thin band (LED light guide, shut line) along a polyline [[u, v], ...] in view coords, width w -> outline */
+  function strip(line, w) {
+    var L = [], R = [];
+    for (var i = 0; i < line.length; i++) {
+      var a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];
+      var dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l * w / 2, ny = dx / l * w / 2;
+      L.push([r3(line[i][0] + nx), r3(line[i][1] + ny)]); R.push([r3(line[i][0] - nx), r3(line[i][1] - ny)]);
+    }
+    return L.concat(R.reverse());
+  }
+  /** the low-LOD-only copy of a lamp part (far chase-cam cars keep the tail-light signature), set further proud
+      because the decimated low shell rounds the tail off */
+  function lowOnly(p, off) { var q = {}; for (var k in p) q[k] = p[k]; q.low = 'only'; q.maxTilt = 60; q.offset = off == null ? 0.008 : off; return q; }
+  /** flatten nested part lists (kits return arrays) */
+  function fl(a) { return a.reduce(function (o, x) { return o.concat(Array.isArray(x) ? fl(x) : [x]); }, []); }
+  /** badge TEXT on the rear (model / trim names only, no logo artwork) */
+  function TX(str, at, h, mat, o) { var p = { t: 'text', view: 'rear', str: str, at: at, h: h, mat: mat || 'chrome' }; for (var k in (o || {})) p[k] = o[k]; return p; }
+  /** number-plate recess (black), plate, and the two plate lamps in the recess top */
+  function plateKit(y0, y1, hw, off) {
+    off = off || 0.005;
+    return [P('rear', 'black', off, rect(-hw - 0.022, y0 - 0.014, hw + 0.022, y1 + 0.012), false),
+      P('rear', 'plate', off + 0.004, rect(-hw, y0, hw, y1), false),
+      P('rear', 'white', off + 0.007, rect(hw * 0.45, y1 + 0.002, hw * 0.65, y1 + 0.009))];
+  }
+  /** small round parking-sensor dots at z (mirrored), height y */
+  function sensors(zs, y, r) { return zs.map(function (z) { return P('rear', 'gloss', 0.006, ell(z, y, r || 0.012, r || 0.012, 6)); }); }
+
   /** rounded tail in plan: z scale falling off over the last `len` metres to the tail x */
   function rearTaper(xT, len, k) {
     k = k || 0.8;
@@ -187,17 +215,39 @@
       // (likeness pass 6: lamps taller / reaching further inboard on a smoked base, taller diffuser with fins,
       //  vertical red bumper reflectors, carbon boot-lip spoiler)
       [P('rear', 'gloss', 0.004, [[0.22, 0.875], [0.58, 0.855], [0.83, 0.885], [0.845, 1.01], [0.55, 1.02], [0.22, 0.97]]),
-       P('rear', 'tail', 0.007, [[0.24, 0.89], [0.58, 0.87], [0.82, 0.90], [0.83, 0.995], [0.55, 1.005], [0.24, 0.955]]),
-       P('rear', 'gloss', 0.010, [[0.36, 0.925], [0.76, 0.92], [0.76, 0.94], [0.36, 0.945]]),
+       // (rear-detail pass) unlit red lens, smoked inboard section with its thin bright bar, the lit L light
+       // guide (lower blade sweeping up into the outer end + upper blade), reverse lamp in the smoked section
+       P('rear', 'lens', 0.007, [[0.24, 0.89], [0.58, 0.87], [0.82, 0.90], [0.83, 0.995], [0.55, 1.005], [0.24, 0.955]]),
+       P('rear', 'smoke', 0.009, [[0.25, 0.895], [0.45, 0.882], [0.45, 0.982], [0.25, 0.952]]),
+       P('rear', 'tail', 0.012, strip([[0.43, 0.905], [0.58, 0.889], [0.73, 0.903], [0.795, 0.928], [0.808, 0.985]], 0.024)),
+       P('rear', 'tail', 0.012, strip([[0.47, 0.982], [0.62, 0.988], [0.78, 0.987]], 0.013)),
+       P('rear', 'chrome', 0.012, rect(0.27, 0.934, 0.44, 0.938)),
+       P('rear', 'rev', 0.012, rect(0.33, 0.908, 0.41, 0.918)),
+       lowOnly(P('rear', 'tail', 0, strip([[0.27, 0.92], [0.55, 0.895], [0.72, 0.92], [0.735, 0.985]], 0.05))),
        P('rear', 'carbon', 0.006, [[-0.62, 1.035], [0.62, 1.035], [0.68, 1.05], [-0.68, 1.05]], false),
+       // diffuser: black lower half with six fins, quad tips (def.exhaust)
        P('rear', 'black', 0.004, [[-0.82, 0.22], [0.82, 0.22], [0.82, 0.44], [0.62, 0.50], [-0.62, 0.50], [-0.82, 0.44]], false),
        P('rear', 'carbon', 0.008, rect(-0.18, 0.23, -0.16, 0.42), false), P('rear', 'carbon', 0.008, rect(0.16, 0.23, 0.18, 0.42), false),
-       P('rear', 'tail', 0.007, rect(0.79, 0.46, 0.82, 0.66)),
-       P('rear', 'plate', 0.008, rect(-0.26, 0.74, 0.26, 0.85), false)],
+       P('rear', 'carbon', 0.008, rect(-0.01, 0.23, 0.01, 0.44), false),
+       P('rear', 'carbon', 0.008, rect(0.31, 0.23, 0.33, 0.40)), P('rear', 'carbon', 0.008, rect(0.66, 0.23, 0.68, 0.40)),
+       // vertical red bumper reflectors in their black slots, parking sensors
+       P('rear', 'gloss', 0.005, rect(0.775, 0.45, 0.835, 0.67)),
+       P('rear', 'lens', 0.008, rect(0.79, 0.46, 0.82, 0.66)),
+       P('rear', 'tail', 0.010, rect(0.796, 0.53, 0.814, 0.60)),
+       sensors([0.24, 0.52], 0.615),
+       // boot lid shut line round the plate area, plate recess / lamps, M4 badge text
+       P('rear', 'black', 0.005, strip([[-0.235, 0.885], [-0.33, 0.705], [0.33, 0.705], [0.235, 0.885]], 0.007), false),
+       plateKit(0.74, 0.85, 0.26, 0.006),
+       TX('M4', [0.32, 1.006], 0.028, 'chrome', { skew: 0.25 }),
+       // third brake light at the top of the rear screen
+       P('rear', 'tail', 0.006, rect(-0.16, 1.285, 0.16, 1.298), false)],
+      // the lamps wrap into the rear wings
+      [P('side', 'lens', 0.006, [[-2.30, 0.935], [-2.47, 0.91], [-2.48, 1.0], [-2.33, 1.02]]),
+       P('side', 'tail', 0.009, strip([[-2.33, 0.95], [-2.47, 0.925]], 0.02))],
       mirrors(0.36, 0.60, 0.955, 1.075, 0.80, 0.985, 0.78)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 10 },
       // quad tips in two pairs set into the diffuser (likeness pass 6)
       exhaust: [{ cx: 0.44, cy: 0.31, w: 0.095, h: 0.095, mirror: true }, { cx: 0.555, cy: 0.31, w: 0.095, h: 0.095, mirror: true }],
@@ -234,8 +284,7 @@
     var parts = [].concat(
       // big central lower grille (trapezoid) with the nose badge above it, vertical outer intakes
       [P('front', 'grille', 0.005, [[0, 0.17], [0.40, 0.19], [0.47, 0.40], [0.30, 0.45], [0, 0.45]]),
-       P('front', 'gloss', 0.004, [[0.56, 0.20], [0.72, 0.25], [0.79, 0.52], [0.66, 0.50]]),
-       P('front', 'badge', 0.008, ell(0, 0.53, 0.04, 0.03, 6), false)],
+       P('front', 'gloss', 0.004, [[0.56, 0.20], [0.72, 0.25], [0.79, 0.52], [0.66, 0.50]])],
       // slim swept headlamps on the front corners (six-LED projectors + DRL strip)
       [P('front', 'gloss', 0.006, [[0.33, 0.56], [0.60, 0.58], [0.82, 0.655], [0.85, 0.765], [0.66, 0.745], [0.35, 0.625]]),
        // (likeness pass 6) dark housing with the row of three LED projectors instead of one white blob
@@ -248,18 +297,36 @@
        P('side', 'black', 0.004, [[0.72, 0.56], [0.76, 0.56], [0.86, 0.76], [0.82, 0.76]]),
        P('side', 'black', 0.004, rect(-0.40, 0.87, -0.26, 0.89))],
       // rear: slim tail lamps under the ducktail, black diffuser with the centre fog lamp, twin round tips
-      [P('rear', 'tail', 0.006, [[0.24, 0.905], [0.58, 0.88], [0.76, 0.895], [0.80, 0.975], [0.62, 0.97], [0.24, 0.955]]),
+      // (rear-detail pass) smoked slim lamps with the red light guide along the top edge hooking down at the
+      // outer end, a short lower blade, reverse lamp inboard; "SUPRA" / "GR" badge text, plate recess in the
+      // bumper, finned diffuser with the centre fog / reverse lamp, corner reflectors, third brake light
+      [P('rear', 'lens', 0.006, [[0.24, 0.905], [0.58, 0.88], [0.76, 0.895], [0.80, 0.975], [0.62, 0.97], [0.24, 0.955]]),
+       P('rear', 'smoke', 0.008, [[0.25, 0.912], [0.42, 0.90], [0.42, 0.94], [0.25, 0.948]]),
+       P('rear', 'tail', 0.010, strip([[0.26, 0.945], [0.60, 0.958], [0.765, 0.962], [0.785, 0.93], [0.755, 0.905]], 0.018)),
+       P('rear', 'tail', 0.010, strip([[0.42, 0.905], [0.62, 0.895]], 0.012)),
+       P('rear', 'tail', 0.010, strip([[0.62, 0.925], [0.73, 0.93]], 0.014)),
+       P('rear', 'rev', 0.010, rect(0.29, 0.915, 0.37, 0.93)),
+       lowOnly(P('rear', 'tail', 0, [[0.26, 0.91], [0.58, 0.886], [0.76, 0.90], [0.79, 0.97], [0.62, 0.965], [0.26, 0.95]])),
        P('rear', 'gloss', 0.004, [[-0.80, 0.20], [0.80, 0.20], [0.78, 0.43], [0.62, 0.45], [-0.62, 0.45], [-0.78, 0.43]], false),
-       P('rear', 'tail', 0.008, rect(-0.04, 0.30, 0.04, 0.38), false),
-       P('rear', 'plate', 0.008, rect(-0.26, 0.60, 0.26, 0.72), false),
-       P('rear', 'badge', 0.008, ell(0, 0.82, 0.035, 0.035, 6), false),
+       P('rear', 'black', 0.007, rect(0.16, 0.21, 0.18, 0.42)), P('rear', 'black', 0.007, rect(0.34, 0.21, 0.36, 0.43)),
+       P('rear', 'gloss', 0.008, [[-0.07, 0.27], [0.07, 0.27], [0.07, 0.40], [-0.07, 0.40]], false),
+       P('rear', 'tail', 0.011, rect(-0.055, 0.34, 0.055, 0.385), false),
+       P('rear', 'rev', 0.011, rect(-0.055, 0.285, 0.055, 0.325), false),
+       plateKit(0.60, 0.72, 0.26, 0.006),
+       TX('SUPRA', [-0.30, 0.775], 0.03, 'chrome', { skew: 0.2 }),
+       TX('GR', [0.40, 0.56], 0.032, 'chrome'),
        P('rear', 'gloss', 0.007, [[0.56, 0.30], [0.70, 0.32], [0.70, 0.56], [0.60, 0.52]]),
+       P('rear', 'lens', 0.009, rect(0.715, 0.40, 0.735, 0.58)),
+       sensors([0.20, 0.46], 0.50),
+       P('rear', 'tail', 0.006, rect(-0.12, 1.205, 0.12, 1.218), false),
        P('side', 'tail', 0.006, [[-1.80, 0.50], [-1.86, 0.50], [-1.90, 0.66], [-1.84, 0.66]])],
       mirrors(0.22, 0.44, 0.92, 1.03, 0.72, 0.90, 0.70)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 5 },
+      // twin big round tips at the outer ends of the diffuser
+      exhaust: [{ cx: 0.56, cy: 0.285, w: 0.115, h: 0.115, mirror: true }],
       notes: 'Toyota GR Supra (A90) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2020_Toyota_Supra_front_NYIAS_2019.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2020_Toyota_Supra_rear_NYIAS_2019.jpg (rear 3/4), ' +
@@ -301,8 +368,7 @@
       // (pass 4) dark-grey frames round the near-square kidneys, horizontal slats
       [P('front', 'black', 0.004, [[0.02, 0.50], [0.315, 0.50], [0.34, 0.525], [0.34, 0.745], [0.315, 0.772], [0.035, 0.772], [0.02, 0.755]]),
        P('front', 'grille', 0.008, [[0.042, 0.522], [0.30, 0.522], [0.318, 0.54], [0.318, 0.73], [0.30, 0.75], [0.05, 0.75], [0.042, 0.737]]),
-       P('front', 'gloss', 0.012, rect(0.045, 0.588, 0.315, 0.600)), P('front', 'gloss', 0.012, rect(0.045, 0.662, 0.315, 0.674)),
-       P('front', 'badge', 0.009, ell(0, 0.79, 0.03, 0.03, 8), false)],
+       P('front', 'gloss', 0.012, rect(0.045, 0.588, 0.315, 0.600)), P('front', 'gloss', 0.012, rect(0.045, 0.662, 0.315, 0.674))],
       [P('front', 'gloss', 0.006, [[0.38, 0.665], [0.62, 0.68], [0.80, 0.725], [0.815, 0.795], [0.60, 0.80], [0.385, 0.765]]),
        P('front', 'light', 0.009, [[0.41, 0.68], [0.60, 0.695], [0.775, 0.738], [0.785, 0.785], [0.60, 0.787], [0.415, 0.752]]),
        P('front', 'drl', 0.012, [[0.41, 0.76], [0.60, 0.778], [0.77, 0.782], [0.60, 0.787], [0.42, 0.767]])],
@@ -323,19 +389,34 @@
       flare(1.3735, 0.3376, 0.368, 0.46, 0.84, 0.95, 'paint', 3, -8, 188),
       flare(-1.3735, 0.3395, 0.37, 0.485, 0.84, 0.952, 'paint', 3, -8, 188),
       // rear: slanted L tail lamps, plate on the boot lid, black diffuser with 2+2 tips, corner reflectors
-      [P('rear', 'tail', 0.006, [[0.42, 0.905], [0.62, 0.885], [0.85, 0.91], [0.86, 1.005], [0.62, 1.012], [0.42, 0.965]]),
-       P('rear', 'gloss', 0.009, [[0.48, 0.93], [0.62, 0.918], [0.80, 0.935], [0.80, 0.95], [0.62, 0.935], [0.48, 0.946]]),
-       P('rear', 'badge', 0.008, ell(0, 1.0, 0.035, 0.035, 8), false),
-       P('rear', 'plate', 0.008, rect(-0.26, 0.76, 0.26, 0.87), false),
+      // (rear-detail pass) smoked L lamp body with the lit L guide (top blade + outer drop) round a red inner
+      // block, reverse strip; gloss boot-lip spoiler, "M2" text, plate recess, finned diffuser, black corner
+      // vents with the vertical reflectors, sensors, shut line, third brake light atop the rear screen
+      [P('rear', 'smoke', 0.006, [[0.42, 0.905], [0.62, 0.885], [0.85, 0.91], [0.86, 1.005], [0.62, 1.012], [0.42, 0.965]]),
+       P('rear', 'tail', 0.010, strip([[0.44, 0.985], [0.62, 0.995], [0.835, 0.99], [0.845, 0.93]], 0.02)),
+       P('rear', 'lens', 0.010, [[0.62, 0.92], [0.80, 0.93], [0.80, 0.965], [0.62, 0.965]]),
+       P('rear', 'tail', 0.013, [[0.72, 0.93], [0.80, 0.935], [0.80, 0.962], [0.72, 0.962]]),
+       P('rear', 'rev', 0.010, rect(0.47, 0.928, 0.53, 0.938)),
+       lowOnly(P('rear', 'tail', 0, strip([[0.44, 0.975], [0.62, 0.982], [0.74, 0.975], [0.75, 0.92]], 0.05))),
+       P('rear', 'gloss', 0.006, [[-0.70, 1.075], [0.70, 1.075], [0.76, 1.098], [-0.76, 1.098]], false),
+       TX('M2', [0.33, 1.035], 0.028, 'chrome', { skew: 0.25 }),
+       P('rear', 'black', 0.005, strip([[-0.40, 0.92], [-0.36, 0.73], [0.36, 0.73], [0.40, 0.92]], 0.007), false),
+       plateKit(0.76, 0.87, 0.26, 0.006),
        P('rear', 'black', 0.004, [[-0.84, 0.22], [0.84, 0.22], [0.84, 0.42], [0.66, 0.48], [-0.66, 0.48], [-0.84, 0.42]], false),
        P('rear', 'gloss', 0.007, [[-0.20, 0.23], [0.20, 0.23], [0.22, 0.42], [-0.22, 0.42]], false),
-       P('rear', 'tail', 0.007, rect(0.80, 0.42, 0.83, 0.64)),
+       P('rear', 'carbon', 0.010, rect(-0.01, 0.23, 0.01, 0.42), false), P('rear', 'carbon', 0.010, rect(0.10, 0.23, 0.12, 0.42)),
+       P('rear', 'carbon', 0.008, rect(0.25, 0.23, 0.27, 0.40)), P('rear', 'carbon', 0.008, rect(0.60, 0.23, 0.62, 0.40)),
+       P('rear', 'gloss', 0.005, [[0.76, 0.40], [0.86, 0.40], [0.86, 0.68], [0.78, 0.66]]),
+       P('rear', 'lens', 0.008, rect(0.80, 0.42, 0.83, 0.64)),
+       P('rear', 'tail', 0.010, rect(0.806, 0.50, 0.824, 0.58)),
+       sensors([0.22, 0.50], 0.62),
+       P('rear', 'tail', 0.006, rect(-0.15, 1.305, 0.15, 1.318), false),
        // the L lamps wrap round onto the haunch
        P('side', 'tail', 0.006, [[-2.17, 0.935], [-2.33, 0.915], [-2.34, 0.99], [-2.19, 1.012]])],
       mirrors(0.58, 0.82, 0.96, 1.08, 0.79, 0.98, 0.76)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 10, stock: { rim: '#2c2d30', material: 'forged', caliper: '#2f4f9e' } },   // dark M wheels, blue M brakes
       // quad tips: two pairs set wide in the diffuser
       exhaust: [{ cx: 0.36, cy: 0.315, w: 0.10, h: 0.10, mirror: true }, { cx: 0.475, cy: 0.315, w: 0.10, h: 0.10, mirror: true }],
@@ -404,17 +485,30 @@
        P('side', 'chrome', 0.009, [[0.98, 0.72], [1.14, 0.72], [1.14, 0.735], [0.98, 0.735]]),
        P('side', 'black', 0.004, rect(-0.36, 0.90, -0.22, 0.92))],
       // rear: two-piece L tail lamps, plate on the boot lid, quad tips in two pairs
-      [P('rear', 'tail', 0.006, [[0.25, 0.815], [0.48, 0.81], [0.50, 0.755], [0.80, 0.765], [0.81, 0.945], [0.25, 0.96]]),
-       P('rear', 'rev', 0.009, [[0.30, 0.878], [0.46, 0.874], [0.46, 0.895], [0.30, 0.90]]),
+      // (rear-detail pass) red lens L lamps split at the boot gap, two lit LED light bars in the outer part,
+      // lit inner block, clear indicator strip, reverse lamp on the lid; chrome lid handle bar, "M3" text,
+      // plate recess / lamps, lid shut line, bumper reflectors
+      [P('rear', 'lens', 0.006, [[0.25, 0.815], [0.48, 0.81], [0.50, 0.755], [0.80, 0.765], [0.81, 0.945], [0.25, 0.96]]),
+       P('rear', 'tail', 0.009, [[0.51, 0.77], [0.795, 0.778], [0.80, 0.885], [0.51, 0.89]]),
+       P('rear', 'tail', 0.009, [[0.27, 0.822], [0.47, 0.818], [0.47, 0.848], [0.27, 0.852]]),
+       P('rear', 'tail', 0.009, [[0.27, 0.905], [0.47, 0.902], [0.47, 0.945], [0.27, 0.948]]),
+       P('rear', 'white', 0.010, [[0.51, 0.895], [0.80, 0.892], [0.805, 0.935], [0.51, 0.945]]),
+       P('rear', 'rev', 0.009, [[0.30, 0.858], [0.46, 0.855], [0.46, 0.885], [0.30, 0.888]]),
+       P('rear', 'black', 0.009, rect(0.49, 0.80, 0.505, 0.95)),
        P('rear', 'gloss', 0.009, rect(0.25, 0.84, 0.80, 0.848)),
-       P('rear', 'plate', 0.008, rect(-0.25, 0.76, 0.25, 0.865), false),
+       lowOnly(P('rear', 'tail', 0, [[0.27, 0.82], [0.50, 0.77], [0.71, 0.775], [0.72, 0.93], [0.27, 0.945]])),
+       P('rear', 'chrome', 0.008, rect(-0.23, 0.872, 0.23, 0.884), false),
+       TX('M3', [0.19, 0.972], 0.022, 'chrome', { skew: 0.25 }),
+       P('rear', 'black', 0.005, strip([[-0.245, 0.815], [-0.27, 0.71], [0.27, 0.71], [0.245, 0.815]], 0.006), false),
+       plateKit(0.76, 0.865, 0.25, 0.005),
+       P('rear', 'lens', 0.007, rect(0.64, 0.50, 0.76, 0.525)),
        // (likeness pass 6) bumper rubbing strip + body-colour bumper over a full-width black lower valance
        P('rear', 'black', 0.005, rect(-0.80, 0.555, 0.80, 0.585), false),
        P('rear', 'black', 0.004, [[-0.74, 0.32], [0.74, 0.32], [0.78, 0.38], [0.62, 0.41], [-0.62, 0.41], [-0.78, 0.38]], false)],
       mirrors(0.38, 0.60, 0.92, 1.03, 0.78, 0.96, 0.76)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 10 },
       // quad tips: a pair under each outer end of the bumper (likeness pass 6)
       exhaust: [{ cx: 0.46, cy: 0.34, w: 0.08, h: 0.08, mirror: true }, { cx: 0.555, cy: 0.34, w: 0.08, h: 0.08, mirror: true }],
@@ -451,8 +545,7 @@
       // the gaping low grille: gloss frame, dark mesh, number plate on it
       [P('front', 'gloss', 0.004, [[0, 0.12], [0.60, 0.13], [0.70, 0.25], [0.60, 0.45], [0.36, 0.49], [0, 0.49]]),
        P('front', 'grille', 0.008, [[0, 0.15], [0.58, 0.16], [0.66, 0.255], [0.57, 0.425], [0.35, 0.46], [0, 0.46]]),
-       P('front', 'plate', 0.012, rect(-0.25, 0.26, 0.25, 0.37), false),
-       P('front', 'badge', 0.006, [[0, 0.585], [0.07, 0.60], [0.0, 0.61]])],
+       P('front', 'plate', 0.012, rect(-0.25, 0.26, 0.25, 0.37), false)],
       // slim swept headlamps on the wing tops
       [P('front', 'gloss', 0.006, [[0.42, 0.565], [0.62, 0.58], [0.86, 0.66], [0.87, 0.71], [0.66, 0.665], [0.44, 0.615]]),
        P('front', 'light', 0.009, [[0.46, 0.575], [0.62, 0.59], [0.83, 0.665], [0.84, 0.695], [0.65, 0.65], [0.47, 0.605]]),
@@ -464,20 +557,31 @@
       // rear: thin light bar under the ducktail, black diffuser with fins, plate
       // (likeness pass 6: the light bar is a smoked full-width band with a bright red blade, so it reads on any
       //  paint; the diffuser is the big black lower half with dark fins)
+      // (rear-detail pass) the bar is a dark-red lens with a lit LED line along its lower edge and brighter
+      // outer kick-ups; "ASTON MARTIN" text, plate recess, centre fog lamp, big finned diffuser (fins hang
+      // below the bumper as real blades), parking sensors
       [P('rear', 'gloss', 0.005, [[0.0, 0.85], [0.36, 0.845], [0.58, 0.865], [0.765, 0.915], [0.75, 0.975], [0.56, 0.935], [0.36, 0.92], [0.0, 0.92]]),
-       P('rear', 'tail', 0.009, [[0.0, 0.872], [0.36, 0.868], [0.58, 0.886], [0.74, 0.93], [0.735, 0.952], [0.56, 0.912], [0.36, 0.896], [0.0, 0.898]]),
+       P('rear', 'lens', 0.009, [[0.0, 0.866], [0.36, 0.862], [0.58, 0.881], [0.745, 0.926], [0.738, 0.958], [0.56, 0.917], [0.36, 0.902], [0.0, 0.905]]),
+       P('rear', 'tail', 0.013, strip([[0.0, 0.874], [0.36, 0.870], [0.58, 0.889], [0.735, 0.935]], 0.012)),
+       P('rear', 'tail', 0.013, [[0.62, 0.905], [0.74, 0.932], [0.735, 0.955], [0.62, 0.922]]),
+       lowOnly(P('rear', 'tail', 0, [[0.0, 0.862], [0.36, 0.858], [0.58, 0.878], [0.75, 0.925], [0.74, 0.96], [0.56, 0.92], [0.36, 0.905], [0.0, 0.908]])),
        P('rear', 'gloss', 0.004, [[-0.76, 0.14], [0.76, 0.14], [0.80, 0.40], [0.58, 0.48], [-0.58, 0.48], [-0.80, 0.40]], false),
        P('rear', 'carbon', 0.008, rect(0.14, 0.15, 0.16, 0.34)),
-       P('rear', 'carbon', 0.008, rect(0.30, 0.15, 0.32, 0.34)),
-       P('rear', 'plate', 0.008, rect(-0.26, 0.56, 0.26, 0.67), false),
-       P('rear', 'badge', 0.008, [[0, 0.795], [0.08, 0.81], [0, 0.82]])],
+       P('rear', 'carbon', 0.008, rect(0.47, 0.15, 0.49, 0.34)),
+       P('rear', 'tail', 0.008, rect(-0.035, 0.40, 0.035, 0.45), false),
+       plateKit(0.56, 0.67, 0.26, 0.006),
+       sensors([0.22, 0.50], 0.62),
+       TX('ASTON MARTIN', [-0.30, 0.80], 0.02, 'chrome', { spacing: 1.6 })],
+      // diffuser blades hanging below the bumper
+      [0.07, 0.22, 0.58].map(function (z) { return { t: 'box', mat: 'carbon', mirror: true, c: [-2.08, 0.16, z], s: [0.26, 0.15, 0.02] }; }),
       mirrors(0.18, 0.40, 0.87, 0.97, 0.76, 0.94, 0.74)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 10 },
       // quad tips: a close pair at each outer corner of the diffuser (generator exhaust override)
-      exhaust: [{ cx: 0.53, cy: 0.27, w: 0.095, h: 0.095, mirror: true }, { cx: 0.64, cy: 0.27, w: 0.095, h: 0.095, mirror: true }],
+      // (rear-detail pass, rear photos) quad tips in two pairs either side of the centre of the diffuser
+      exhaust: [{ cx: 0.27, cy: 0.26, w: 0.095, h: 0.095, mirror: true }, { cx: 0.38, cy: 0.26, w: 0.095, h: 0.095, mirror: true }],
       notes: 'Aston Martin Vantage (2018) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2019_Aston_Martin_Vantage_V8_Automatic_4.0_(1).jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2019_Aston_Martin_Vantage_V8_Automatic_4.0_Rear.jpg (rear 3/4).'
@@ -525,26 +629,36 @@
       // lower grille with the plate, small corner intakes, badge
       [P('front', 'grille', 0.005, [[0, 0.17], [0.52, 0.19], [0.58, 0.30], [0.46, 0.38], [0, 0.38]]),
        P('front', 'plate', 0.010, rect(-0.24, 0.23, 0.24, 0.33), false),
-       P('front', 'gloss', 0.006, [[0.62, 0.24], [0.74, 0.27], [0.76, 0.40], [0.66, 0.40]]),
-       P('front', 'badge', 0.008, [[0, 0.60], [0.035, 0.635], [0, 0.67], [-0.035, 0.635]], false)],
+       P('front', 'gloss', 0.006, [[0.62, 0.24], [0.74, 0.27], [0.76, 0.40], [0.66, 0.40]])],
       // side: door handle, small rear-quarter intake
       [P('side', 'black', 0.004, rect(-0.36, 0.86, -0.24, 0.88)),
        // C-pillar (likeness pass 6): leans rearward so the side window ends in the teardrop point at the belt
        P('side', 'paint', 0.010, [[-0.48, 1.228], [-0.68, 1.222], [-0.86, 1.10], [-1.10, 0.958], [-0.96, 0.948], [-0.78, 1.04]]),
        P('side', 'gloss', 0.004, [[-0.82, 0.62], [-0.90, 0.62], [-0.98, 0.76], [-0.90, 0.78]])],
       // rear: thin X-shaped tail lamps, plate, black diffuser
+      // (rear-detail pass) smoked lamps with the lit X signature between two thin lit bars, reverse inboard;
+      // spaced "ALPINE" / "A110" text, plate recess, third brake light at the top of the rear screen
       [P('rear', 'gloss', 0.005, [[0.24, 0.735], [0.62, 0.745], [0.76, 0.785], [0.70, 0.815], [0.24, 0.80]]),
-       P('rear', 'tail', 0.008, [[0.27, 0.745], [0.62, 0.755], [0.73, 0.787], [0.68, 0.805], [0.27, 0.79]]),
-       P('rear', 'gloss', 0.011, [[0.40, 0.745], [0.43, 0.745], [0.60, 0.805], [0.57, 0.805]]),
-       P('rear', 'gloss', 0.011, [[0.40, 0.805], [0.43, 0.805], [0.60, 0.745], [0.57, 0.745]]),
-       P('rear', 'plate', 0.008, rect(-0.25, 0.56, 0.25, 0.67), false),
+       P('rear', 'lens', 0.008, [[0.27, 0.745], [0.62, 0.755], [0.73, 0.787], [0.68, 0.805], [0.27, 0.79]]),
+       P('rear', 'smoke', 0.010, [[0.28, 0.752], [0.38, 0.754], [0.38, 0.792], [0.28, 0.788]]),
+       P('rear', 'tail', 0.011, strip([[0.40, 0.752], [0.60, 0.757], [0.715, 0.787]], 0.008)),
+       P('rear', 'tail', 0.011, strip([[0.40, 0.795], [0.60, 0.798], [0.68, 0.80]], 0.008)),
+       P('rear', 'tail', 0.013, strip([[0.42, 0.752], [0.58, 0.797]], 0.012)),
+       P('rear', 'tail', 0.013, strip([[0.42, 0.797], [0.58, 0.754]], 0.012)),
+       P('rear', 'rev', 0.013, rect(0.30, 0.764, 0.35, 0.774)),
+       P('rear', 'black', 0.007, rect(0.24, 0.15, 0.26, 0.33)), P('rear', 'black', 0.007, rect(0.42, 0.15, 0.44, 0.34)),
+       lowOnly(P('rear', 'tail', 0, [[0.38, 0.748], [0.62, 0.755], [0.72, 0.787], [0.68, 0.803], [0.38, 0.795]])),
+       plateKit(0.56, 0.665, 0.25, 0.006),
+       TX('ALPINE', [0, 0.715], 0.022, 'chrome', { spacing: 4, weight: 0.12 }),
+       TX('A110', [0, 0.688], 0.015, 'chrome', { weight: 0.13 }),
+       P('rear', 'tail', 0.006, rect(-0.10, 1.195, 0.10, 1.208), false),
        P('rear', 'gloss', 0.004, [[-0.72, 0.15], [0.72, 0.15], [0.78, 0.36], [0.50, 0.42], [-0.50, 0.42], [-0.78, 0.36]], false),
        P('rear', 'chrome', 0.008, [[-0.13, 0.22], [0.13, 0.22], [0.16, 0.27], [0.13, 0.31], [-0.13, 0.31], [-0.16, 0.27]], false),
        P('rear', 'tail', 0.008, rect(0.60, 0.36, 0.70, 0.385))],
       mirrors(0.22, 0.42, 0.84, 0.94, 0.72, 0.89, 0.70)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 5 },
       // one centre tip in the diffuser (generator exhaust override)
       exhaust: [{ cx: 0, cy: 0.255, w: 0.115, h: 0.105 }],
@@ -582,10 +696,9 @@
       mat: function (i, j, xm, m) { if (j >= 8 && xm < -0.85 && xm > -1.70) return 'black'; return null; }
     });
     var parts = [].concat(
-      // twin lower intakes either side of the body-colour centre, Lotus roundel
+      // twin lower intakes either side of the body-colour centre (no logo artwork)
       [P('front', 'grille', 0.005, [[0.10, 0.17], [0.58, 0.19], [0.66, 0.30], [0.60, 0.40], [0.14, 0.38]]),
-       P('front', 'gloss', 0.008, [[0.42, 0.21], [0.60, 0.22], [0.64, 0.30], [0.58, 0.37], [0.44, 0.36]]),
-       P('front', 'indicator', 0.008, ell(0, 0.47, 0.035, 0.03, 8), false)],
+       P('front', 'gloss', 0.008, [[0.42, 0.21], [0.60, 0.22], [0.64, 0.30], [0.58, 0.37], [0.44, 0.36]])],
       // blade headlamps on the wing fronts
       [P('front', 'gloss', 0.006, [[0.46, 0.52], [0.70, 0.56], [0.88, 0.645], [0.875, 0.715], [0.68, 0.65], [0.47, 0.585]]),
        P('front', 'light', 0.009, [[0.52, 0.54], [0.70, 0.575], [0.84, 0.655], [0.84, 0.68], [0.68, 0.62], [0.53, 0.565]]),
@@ -602,16 +715,28 @@
        P('side', 'grille', 0.009, [[-0.48, 0.70], [-0.56, 0.80], [-0.66, 0.84], [-0.77, 0.825], [-0.845, 0.76], [-0.86, 0.65], [-0.81, 0.565], [-0.70, 0.54], [-0.57, 0.59]]),
        P('side', 'black', 0.004, rect(-0.20, 0.86, -0.08, 0.88))],
       // rear: thin blade tail lamps, black corner vents, plate, diffuser
-      [P('rear', 'tail', 0.006, [[0.20, 0.845], [0.62, 0.85], [0.76, 0.89], [0.74, 0.915], [0.60, 0.875], [0.20, 0.87]]),
+      // (rear-detail pass, rear photos) a hair-thin full-width light bar along the ducktail edge ending in the
+      // C-shaped lamps at the corners (smoked body, lit C), spaced "LOTUS" text, the plate low in the big black
+      // diffuser between the twin tips, corner vents with their grille
+      [P('rear', 'gloss', 0.005, [[0.0, 0.852], [0.60, 0.857], [0.60, 0.874], [0.0, 0.870]]),
+       P('rear', 'tail', 0.009, strip([[0.0, 0.862], [0.62, 0.866]], 0.008)),
+       P('rear', 'smoke', 0.006, [[0.46, 0.835], [0.66, 0.843], [0.78, 0.878], [0.765, 0.915], [0.62, 0.89], [0.46, 0.862]]),
+       P('rear', 'tail', 0.010, strip([[0.48, 0.856], [0.62, 0.879], [0.752, 0.902], [0.765, 0.882], [0.68, 0.852], [0.50, 0.842]], 0.016)),
+       P('rear', 'rev', 0.010, rect(0.63, 0.864, 0.68, 0.874)),
+       lowOnly(P('rear', 'tail', 0, [[-0.5, 0.852], [0.5, 0.852], [0.62, 0.845], [0.72, 0.878], [0.71, 0.912], [0.6, 0.885], [-0.6, 0.885], [-0.71, 0.912], [-0.72, 0.878], [-0.62, 0.845]], false)),
        P('rear', 'gloss', 0.006, ell(0.62, 0.60, 0.075, 0.11, 8)),
-       P('rear', 'plate', 0.008, rect(-0.25, 0.43, 0.25, 0.54), false),
-       P('rear', 'gloss', 0.004, [[-0.72, 0.15], [0.72, 0.15], [0.76, 0.33], [0.52, 0.40], [-0.52, 0.40], [-0.76, 0.33]], false),
-       P('rear', 'badge', 0.008, rect(-0.16, 0.775, 0.16, 0.79), false)],
+       P('rear', 'grille', 0.009, ell(0.62, 0.60, 0.055, 0.088, 8)),
+       P('rear', 'gloss', 0.004, [[-0.72, 0.15], [0.72, 0.15], [0.76, 0.33], [0.62, 0.45], [-0.62, 0.45], [-0.76, 0.33]], false),
+       P('rear', 'black', 0.007, rect(0.30, 0.16, 0.32, 0.27)), P('rear', 'black', 0.007, rect(-0.01, 0.16, 0.01, 0.26), false),
+       plateKit(0.28, 0.39, 0.24, 0.007),
+       TX('LOTUS', [0, 0.80], 0.026, 'chrome', { spacing: 4.5, weight: 0.13 })],
       mirrors(0.50, 0.72, 0.89, 0.99, 0.78, 0.97, 0.76)
     );
     return {
-      body: body, parts: parts,
+      body: body, parts: fl(parts),
       wheels: { style: 'split', spokes: 5 },
+      // twin round tips flanking the plate in the diffuser
+      exhaust: [{ cx: 0.44, cy: 0.32, w: 0.10, h: 0.10, mirror: true }],
       notes: 'Lotus Emira — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2025_Lotus_Emira_V6_in_Vivid_Red,_front_right.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Lotus_Emira_IMG_8027.jpg (rear 3/4), ' +

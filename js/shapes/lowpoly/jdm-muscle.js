@@ -125,6 +125,56 @@
     ];
   }
 
+  /* ---------------------------------------------------------------- rear-end helpers (chase-cam detail) */
+  /** badge TEXT on the rear (model / trim names only, no logos): generator stroke font, flat facing the view */
+  function txt(str, z, y, h, o) {
+    var p = { t: 'text', view: 'rear', str: str, at: [z, y], h: h, mat: 'chrome' };
+    if (o) for (var k in o) p[k] = o[k];
+    return p;
+  }
+  /** number plate in a dark recess with two plate lamps over it (rear view [z, y]) */
+  function plateKit(y0, y1, hw, zc) {
+    var c = zc || 0;
+    return [
+      poly(rect(c - hw - 0.025, y0 - 0.02, c + hw + 0.025, y1 + 0.022), 'rear', 'black', 0.004, false),
+      poly(rect(c - hw, y0, c + hw, y1), 'rear', 'plate', 0.008, false),
+      poly(rect(c - hw * 0.62, y1 + 0.006, c - hw * 0.42, y1 + 0.016), 'rear', 'white', 0.009, false),
+      poly(rect(c + hw * 0.42, y1 + 0.006, c + hw * 0.62, y1 + 0.016), 'rear', 'white', 0.009, false)
+    ];
+  }
+  /** thin dark shut lines / seams on the rear face: segments [z0, y0, z1, y1] (mirrored when asked) */
+  function seams(list, mirror, w) {
+    var t = (w || 0.006) / 2;
+    return list.map(function (s) {
+      var dz = s[2] - s[0], dy = s[3] - s[1], l = Math.hypot(dz, dy) || 1, nz = -dy / l * t, ny = dz / l * t;
+      return poly([[s[0] + nz, s[1] + ny], [s[2] + nz, s[3] + ny], [s[2] - nz, s[3] - ny], [s[0] - nz, s[1] - ny]], 'rear', 'black', 0.005, mirror);
+    });
+  }
+  /** low-LOD-only tail signature: rear decals (rects [z0, y0, z1, y1], kept inboard of |z| 0.74) that the generator
+      fits onto the coarser low-LOD tail; the far car keeps its lamp graphic. (x: unused, kept for call-site context) */
+  function lowLamps(x, list, mat, mirror) {
+    void x;
+    return list.map(function (r) {
+      var c = function (z) { return Math.max(-0.74, Math.min(0.74, z)); };
+      return { t: 'poly', view: 'rear', mat: mat || 'tail', mirror: mirror !== false, low: 'only', maxTilt: 45, offset: 0.006,
+        pts: rect(c(r[0]), r[1], c(r[2]), r[3]) };
+    });
+  }
+  /** diffuser strakes drawn on the rear face (gloss vertical strips at z, y0..y1, mirrored) */
+  function strakes(zs, y0, y1, w) {
+    return polys(zs.map(function (z) { return rect(z - (w || 0.012) / 2, y0, z + (w || 0.012) / 2, y1); }), 'rear', 'gloss', 0.009, true);
+  }
+  /** rounded rectangle outline [z, y] (corner radius r, n segments a corner) */
+  function rrect(z0, y0, z1, y1, r, n) {
+    var out = [], m = n || 3, c = [[z1 - r, y0 + r, -90], [z1 - r, y1 - r, 0], [z0 + r, y1 - r, 90], [z0 + r, y0 + r, 180]];
+    c.forEach(function (q) { for (var k = 0; k <= m; k++) { var a = (q[2] + 90 * k / m) * Math.PI / 180; out.push([q[0] + Math.cos(a) * r, q[1] + Math.sin(a) * r]); } });
+    return out;
+  }
+  /** vertical diffuser fins under the rear bumper (boxes at z, from x0 back to x1) */
+  function fins(x0, x1, y0, y1, zs, mat) {
+    return zs.map(function (z) { return { t: 'box', mat: mat || 'black', mirror: true, c: [(x0 + x1) / 2, (y0 + y1) / 2, z], s: [Math.abs(x1 - x0), y1 - y0, 0.014] }; });
+  }
+
   /* ================================================================ Nissan Silvia Spec-R (S15) */
   // Reference photos (Wikimedia Commons, via en.wikipedia.org/wiki/Nissan_Silvia):
   //   front 3/4: https://commons.wikimedia.org/wiki/File:1999_Nissan_Silvia_S15_Spec_R.jpg
@@ -165,30 +215,47 @@
       polys([ell(0.47, 0.615, 0.045, 0.024, 10), ell(0.62, 0.618, 0.05, 0.026, 10)], 'front', 'chrome', 0.012, true),
       // nose: small slot under the badge, lower mouth with the plate, fog-lamp ducts
       polys([rect(-0.22, 0.505, 0.22, 0.53)], 'front', 'grille', 0.005, false),
-      polys([ell(0, 0.585, 0.03, 0.015, 6)], 'front', 'badge', 0.008, false),
       polys([[[-0.46, 0.24], [0.46, 0.24], [0.50, 0.44], [-0.50, 0.44]]], 'front', 'grille', 0.005, false),
       polys([rect(-0.2, 0.33, 0.2, 0.44)], 'front', 'plate', 0.009, false),
       tilt(polys([[[0.55, 0.23], [0.73, 0.25], [0.74, 0.37], [0.56, 0.37]]], 'front', 'grille', 0.005, true), 35),
       tilt(polys([ell(0.635, 0.305, 0.04, 0.035, 8)], 'front', 'light', 0.009, true), 35),
       polys([rect(-0.62, 0.19, 0.62, 0.215)], 'front', 'black', 0.004, false),
-      // rear: wedge lamps (amber top strip) tapering toward the plate recess, boot badge, bumper plate
-      tilt(polys([[[0.745, 0.865], [0.30, 0.872], [0.30, 0.79], [0.46, 0.76], [0.74, 0.735]]], 'rear', 'tail', 0.006, true), 45),
-      tilt(polys([[[0.742, 0.862], [0.40, 0.868], [0.40, 0.832], [0.745, 0.822]]], 'rear', 'indicator', 0.012, true), 45),
-      tilt(polys([[[0.46, 0.772], [0.36, 0.785], [0.36, 0.81], [0.46, 0.80]]], 'rear', 'rev', 0.009, true), 45),
+      // rear: wedge lamps tapering in toward the boot lid: gloss bezel, dark red lens housing, lit outer block, the
+      // inboard round lamp (red ring, clear reverse centre), amber indicator strip along the top
+      tilt(polys([[[0.752, 0.872], [0.29, 0.878], [0.29, 0.784], [0.46, 0.753], [0.748, 0.728]]], 'rear', 'gloss', 0.005, true), 45),
+      tilt(polys([[[0.745, 0.865], [0.30, 0.872], [0.30, 0.79], [0.46, 0.76], [0.74, 0.735]]], 'rear', 'lens', 0.007, true), 45),
+      tilt(polys([[[0.738, 0.826], [0.52, 0.829], [0.52, 0.768], [0.736, 0.742]]], 'rear', 'tail', 0.009, true), 45),
+      tilt(polys([ell(0.405, 0.810, 0.050, 0.034, 10)], 'rear', 'tail', 0.009, true), 45),
+      tilt(polys([ell(0.405, 0.810, 0.030, 0.020, 8)], 'rear', 'rev', 0.011, true), 45),
+      tilt(polys([[[0.742, 0.862], [0.34, 0.868], [0.34, 0.846], [0.745, 0.836]]], 'rear', 'indicator', 0.011, true), 45),
       polys([[[-2.00, 0.80], [-2.00, 0.89], [-2.20, 0.885], [-2.24, 0.77]]], 'side', 'tail', 0.006, true),
-      polys([rect(-0.17, 0.52, 0.17, 0.64)], 'rear', 'plate', 0.008, false),
+      // boot lid between the lamps (shut lines), SILVIA script + spec R, plate on the bumper in its recess
+      seams([[0.285, 0.715, 0.285, 0.875], [-0.285, 0.715, 0.285, 0.715]], false),
+      seams([[-0.285, 0.715, -0.285, 0.875]], false),
+      [txt('SILVIA', 0, 0.75, 0.032, { skew: 0.22, weight: 0.13 }), txt('SPEC R', 0.48, 0.665, 0.022, { skew: 0.2, weight: 0.14 })],
+      plateKit(0.52, 0.64, 0.17),
+      // bumper: corner reflectors, black lower valence, tow-hook cover
+      polys([rect(0.56, 0.40, 0.68, 0.425)], 'rear', 'lens', 0.006, true),
       polys([rect(-0.62, 0.20, 0.62, 0.30)], 'rear', 'black', 0.004, false),
+      polys([rect(0.30, 0.33, 0.36, 0.36)], 'rear', 'black', 0.006, false),
+      // far-car tail signature: wedge block + round inboard lamp
+      lowLamps(-2.284, [[0.50, 0.745, 0.70, 0.86], [0.31, 0.78, 0.46, 0.84]], 'tail'),
+      lowLamps(-2.284, [[-0.17, 0.52, 0.17, 0.64]], 'plate', false),
       // side: amber marker, door handle, fuel flap
       polys([rect(1.62, 0.58, 1.68, 0.60)], 'side', 'indicator', 0.004, true),
       polys([rect(-0.30, 0.85, -0.18, 0.87)], 'side', 'black', 0.004, true),
       mirrorParts(0.24, 0.40, 0.935, 1.025, 0.74, 0.90, [0.34, 0.935, 0.74], [0.07, 0.03, 0.06]),
       [
-        // Spec-R boot wing on two stalks
+        // Spec-R boot wing on two stalks, tips curling down, high-mount brake lamp in the trailing edge
         { t: 'prism', mat: 'paint', z0: -0.62, z1: 0.62, pts2d: [[-2.00, 1.005], [-2.20, 1.015], [-2.215, 1.035], [-2.03, 1.025]] },
-        { t: 'box', mat: 'paint', mirror: true, c: [-2.10, 0.97, 0.50], s: [0.10, 0.07, 0.03] }
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.60, z1: 0.66, pts2d: [[-2.02, 0.975], [-2.20, 0.985], [-2.215, 1.035], [-2.03, 1.025]] },
+        { t: 'box', mat: 'paint', mirror: true, c: [-2.10, 0.97, 0.50], s: [0.10, 0.07, 0.03] },
+        { t: 'box', mat: 'tail', c: [-2.212, 1.024, 0], s: [0.008, 0.014, 0.22] }
       ]
     ),
     wheels: { style: 'star', spokes: 5 },
+    // one exit on the left with twin round tips (rear photos)
+    exhaust: [{ cx: -0.50, cy: 0.25, w: 0.075, h: 0.075 }, { cx: -0.415, cy: 0.25, w: 0.075, h: 0.075 }],
     notes: 'Nissan Silvia Spec-R (S15) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:1999_Nissan_Silvia_S15_Spec_R.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Nissan_Silvia_S15_001.JPG (side), ' +
@@ -237,7 +304,7 @@
       polys([[[0.30, 0.625], [0.79, 0.633], [0.825, 0.66], [0.81, 0.695], [0.42, 0.69], [0.30, 0.658]]], 'front', 'light', 0.009, true),
       polys([ell(0.50, 0.66, 0.05, 0.028, 10), ell(0.68, 0.664, 0.055, 0.03, 10)], 'front', 'chrome', 0.012, true),
       polys([[[-0.26, 0.615], [0.26, 0.615], [0.26, 0.69], [-0.26, 0.69]]], 'front', 'grille', 0.006, false),
-      polys([rect(-0.045, 0.64, 0.045, 0.665)], 'front', 'badge', 0.01, false),
+      [{ t: 'text', view: 'front', str: 'GT-R', at: [0, 0.652], h: 0.022, mat: 'chrome', offset: 0.01 }],
       // big lower intercooler mouth with the plate, brake ducts, fog lamps, carbon chin
       polys([[[-0.62, 0.24], [0.62, 0.24], [0.66, 0.56], [-0.66, 0.56]]], 'front', 'grille', 0.005, false),
       polys([rect(-0.2, 0.38, 0.2, 0.50)], 'front', 'plate', 0.009, false),
@@ -247,23 +314,40 @@
       // bonnet NACA duct, fender vents behind the front wheels
       polys([[[1.25, -0.05], [1.25, 0.05], [1.05, 0.08], [1.05, -0.08]]], 'top', 'black', 0.004, false),
       polys([[[0.86, 0.50], [0.94, 0.50], [0.92, 0.70], [0.84, 0.70]]], 'side', 'gloss', 0.004, true),
-      // rear: quad round tail lamps (outer lens, dark ring, bright centre), boot panel, plate, carbon diffuser
-      roundLamp(-2.272, 0.885, 0.645, [[0.088, 'tail', 0.014], [0.05, 'gloss'], [0.03, 'tail']]),
-      roundLamp(-2.275, 0.885, 0.455, [[0.084, 'tail', 0.014], [0.048, 'gloss'], [0.028, 'tail']]),
-      polys([rect(-0.10, 0.955, 0.10, 0.968)], 'rear', 'tail', 0.006, false),
-      polys([rect(-0.18, 0.55, 0.18, 0.67)], 'rear', 'plate', 0.008, false),
-      polys([rect(0.30, 0.60, 0.44, 0.64)], 'rear', 'rev', 0.008, true),
+      // rear: quad round tail lamps — gloss bezel, lit red outer ring, smoked inner ring, dark red lens, bright centre
+      roundLamp(-2.272, 0.885, 0.645, [[0.092, 'gloss', 0.016], [0.084, 'tail'], [0.056, 'smoke'], [0.044, 'lens'], [0.026, 'tail']]),
+      // inboard pair: red ring round an amber indicator ring and the clear reverse centre
+      roundLamp(-2.275, 0.885, 0.455, [[0.088, 'gloss', 0.016], [0.080, 'tail'], [0.054, 'smoke'], [0.044, 'indicator'], [0.026, 'rev']]),
+      // high-mount stop lamp on the boot lid top, boot lid shut lines between the lamps, GT-R / V-spec badges
+      polys([rect(-0.085, 0.952, 0.085, 0.968)], 'rear', 'tail', 0.006, false),
+      seams([[0.335, 0.735, 0.335, 0.975], [-0.335, 0.735, 0.335, 0.735]], false),
+      seams([[-0.335, 0.735, -0.335, 0.975]], false),
+      [txt('GT-R', 0.20, 0.775, 0.036, { weight: 0.16 }), txt('V-SPEC', 0.56, 0.50, 0.022, { skew: 0.25, weight: 0.14 })],
+      // bumper: plate between the clear reverse lamp and the red fog lamp, side reflectors, tow hook
+      plateKit(0.53, 0.65, 0.18),
+      polys([rect(-0.40, 0.57, -0.26, 0.62)], 'rear', 'rev', 0.008, false),
+      polys([rect(0.26, 0.57, 0.40, 0.62)], 'rear', 'tail', 0.008, false),
+      polys([rect(0.66, 0.46, 0.76, 0.485)], 'rear', 'lens', 0.006, true),
+      polys([rect(0.30, 0.32, 0.37, 0.35)], 'rear', 'black', 0.007, false),
+      // V-spec carbon rear diffuser with vertical strakes
       polys([rect(-0.80, 0.20, 0.80, 0.36)], 'rear', 'carbon', 0.005, false),
+      strakes([0.16, 0.38, 0.60], 0.205, 0.345),
+      lowLamps(-2.281, [[0.56, 0.80, 0.73, 0.97], [0.37, 0.80, 0.54, 0.97]], 'tail'),
+      lowLamps(-2.281, [[-0.18, 0.53, 0.18, 0.65]], 'plate', false),
       polys([rect(-0.30, 0.86, -0.18, 0.88)], 'side', 'black', 0.004, true),
       mirrorParts(0.28, 0.46, 0.96, 1.07, 0.80, 0.98, [0.40, 0.965, 0.80], [0.08, 0.03, 0.06]),
       [
         // GT-R wing on tall stalks
         { t: 'prism', mat: 'paint', z0: -0.74, z1: 0.74, pts2d: [[-1.94, 1.18], [-2.22, 1.19], [-2.24, 1.215], [-1.98, 1.21]] },
         { t: 'prism', mat: 'paint', mirror: true, z0: 0.56, z1: 0.62, pts2d: [[-2.02, 1.03], [-2.20, 1.02], [-2.18, 1.19], [-2.05, 1.185]] },
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.735, z1: 0.75, pts2d: [[-1.95, 1.15], [-2.24, 1.15], [-2.25, 1.24], [-1.98, 1.235]] }
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.735, z1: 0.75, pts2d: [[-1.95, 1.15], [-2.24, 1.15], [-2.25, 1.24], [-1.98, 1.235]] },
+        // adjustable upper flap over the blade's trailing edge
+        { t: 'prism', mat: 'paint', z0: -0.66, z1: 0.66, pts2d: [[-2.16, 1.218], [-2.25, 1.222], [-2.255, 1.236], [-2.17, 1.232]] }
       ]
     ),
     wheels: { style: 'star', spokes: 6 },
+    // single exit on the left: one big round titanium tip
+    exhaust: [{ cx: -0.56, cy: 0.245, w: 0.11, h: 0.105 }],
     notes: 'Nissan Skyline GT-R V-Spec (R34) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:Nissan_Skyline_GT-R_R34_V_Spec_II.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Nissan_Skyline_R34_GT-R_N%C3%BCr_001.jpg (front 3/4), ' +
@@ -328,18 +412,25 @@
       tilt(polys([[[0.52, 0.215], [0.74, 0.225], [0.76, 0.305], [0.53, 0.30]]], 'front', 'grille', 0.006, true), 40),
       tilt(polys([ell(0.64, 0.262, 0.03, 0.026, 8)], 'front', 'light', 0.009, true), 40),
       tilt(polys([[[0.76, 0.30], [0.80, 0.305], [0.81, 0.34], [0.77, 0.335]]], 'front', 'indicator', 0.01, true), 45),
-      polys([rect(-0.03, 0.40, 0.03, 0.42)], 'front', 'badge', 0.008, false),
       polys([rect(-0.20, 0.135, 0.20, 0.15)], 'front', 'black', 0.004, false),
       // pop-up lamp lids: oval shut-line on each front corner of the bonnet
       polys(lidLine(1.87, 0.61, 0.15, 0.15, 0.007), 'top', 'black', 0.004, true),
-      // '99 tail: smoked full-width band with three round lamps a side (amber inboard), plate in the bumper
+      // '99 tail: smoked full-width band (gloss rim, smoked red lens) with three round lamps a side behind it: two
+      // red tail / brake rings outboard, the inboard one a clear reverse lamp in a red ring
       polys([[[-0.74, 0.69], [0.74, 0.69], [0.82, 0.715], [0.85, 0.76], [0.82, 0.805], [0.74, 0.83], [-0.74, 0.83], [-0.82, 0.805], [-0.85, 0.76], [-0.82, 0.715]]], 'rear', 'gloss', 0.006, false),
-      polys([ell(0.72, 0.76, 0.05, 0.045, 10), ell(0.59, 0.76, 0.05, 0.045, 10)], 'rear', 'tail', 0.009, true),
-      polys([ell(0.46, 0.76, 0.045, 0.04, 10)], 'rear', 'black', 0.009, true),
-      polys([rect(-0.17, 0.40, 0.17, 0.52)], 'rear', 'plate', 0.008, false),
-      polys([rect(0.40, 0.42, 0.56, 0.45)], 'rear', 'tail', 0.008, true),
+      polys([[[-0.73, 0.70], [0.73, 0.70], [0.80, 0.72], [0.83, 0.76], [0.80, 0.798], [0.73, 0.82], [-0.73, 0.82], [-0.80, 0.798], [-0.83, 0.76], [-0.80, 0.72]]], 'rear', 'smoke', 0.008, false),
+      polys([ell(0.72, 0.76, 0.05, 0.045, 10), ell(0.59, 0.76, 0.05, 0.045, 10)], 'rear', 'tail', 0.011, true),
+      polys([ell(0.72, 0.76, 0.026, 0.023, 8), ell(0.59, 0.76, 0.026, 0.023, 8)], 'rear', 'lens', 0.013, true),
+      polys([ell(0.46, 0.76, 0.045, 0.04, 10)], 'rear', 'lens', 0.011, true),
+      polys([ell(0.46, 0.76, 0.028, 0.025, 8)], 'rear', 'rev', 0.013, true),
+      [txt('RX-7', 0.0, 0.725, 0.026, { weight: 0.15 }), txt('TYPE R', 0.30, 0.855, 0.02, { skew: 0.2, weight: 0.14 })],
+      // bumper: plate recess, red reflectors low on the corners, rear fog / reflector strip, black lower valence
+      plateKit(0.40, 0.52, 0.17),
+      polys([rect(0.40, 0.42, 0.56, 0.45)], 'rear', 'lens', 0.008, true),
       polys([rect(-0.72, 0.22, 0.72, 0.30)], 'rear', 'black', 0.004, false),
-      polys([ell(0, 0.79, 0.025, 0.018, 6)], 'rear', 'badge', 0.011, false),
+      polys([rect(-0.40, 0.31, -0.33, 0.335)], 'rear', 'black', 0.007, false),
+      lowLamps(-2.125, [[0.40, 0.70, 0.78, 0.82]], 'tail'),
+      lowLamps(-2.125, [[-0.17, 0.40, 0.17, 0.52]], 'plate', false),
       // side: amber marker, the sculpted scoop recess at the front of the door
       polys([rect(1.52, 0.46, 1.58, 0.48)], 'side', 'indicator', 0.004, true),
       polys([[[0.93, 0.33], [0.97, 0.34], [0.985, 0.52], [0.955, 0.56], [0.935, 0.50]]], 'side', 'gloss', 0.005, true),
@@ -347,7 +438,9 @@
       [
         // Type R hoop wing: blade on two swept uprights
         { t: 'prism', mat: 'paint', z0: -0.72, z1: 0.72, pts2d: [[-1.82, 1.055], [-2.08, 1.06], [-2.10, 1.085], [-1.86, 1.08]] },
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.64, z1: 0.70, pts2d: [[-1.72, 0.96], [-1.88, 0.96], [-2.08, 1.065], [-1.86, 1.075]] }
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.64, z1: 0.70, pts2d: [[-1.72, 0.96], [-1.88, 0.96], [-2.08, 1.065], [-1.86, 1.075]] },
+        // high-mount stop lamp along the blade's trailing edge
+        { t: 'box', mat: 'tail', c: [-2.097, 1.072, 0], s: [0.008, 0.012, 0.30] }
       ]
     ),
     wheels: { style: 'star', spokes: 5, stock: { rim: '#c3c6ca', material: 'cast', caliper: '#2a2a2a' } },   // silver 5-spoke
@@ -407,7 +500,6 @@
       // the matte-chrome V-motion bar across the top of the opening (dark mesh above, badge on it)
       polys([[[-0.31, 0.615], [0.31, 0.615], [0.24, 0.515], [-0.24, 0.515]]], 'front', 'chrome', 0.008, false),
       polys([[[-0.27, 0.618], [0.27, 0.618], [0.215, 0.545], [-0.215, 0.545]]], 'front', 'grille', 0.010, false),
-      polys([rect(-0.04, 0.575, 0.04, 0.60)], 'front', 'badge', 0.013, false),
       // long swept headlamps with lightning-bolt DRL, deep corner intakes, carbon chin
       polys([[[0.32, 0.625], [0.62, 0.635], [0.84, 0.70], [0.90, 0.745], [0.82, 0.76], [0.56, 0.69], [0.33, 0.665]]], 'front', 'gloss', 0.006, true),
       polys([[[0.35, 0.633], [0.62, 0.643], [0.83, 0.705], [0.875, 0.74], [0.81, 0.75], [0.56, 0.682], [0.36, 0.66]]], 'front', 'light', 0.009, true),
@@ -417,21 +509,36 @@
       polys([[[1.35, 0.28], [1.60, 0.30], [1.60, 0.33], [1.35, 0.31]]], 'top', 'black', 0.004, true),
       // wing vent with blade behind the front wheel
       polys([[[0.80, 0.52], [0.86, 0.52], [0.98, 0.86], [0.92, 0.86]]], 'side', 'gloss', 0.004, true),
-      // rear: four round ring lamps (red ring, chrome ring, red centre), boot plate recess, black diffuser
-      roundLamp(-2.306, 0.945, 0.70, [[0.075, 'tail', 0.02], [0.05, 'chrome'], [0.038, 'tail']]),
-      roundLamp(-2.306, 0.945, 0.50, [[0.085, 'tail', 0.02], [0.057, 'chrome'], [0.043, 'tail']]),
-      polys([rect(-0.17, 0.58, 0.17, 0.69)], 'rear', 'plate', 0.008, false),
+      // rear: four round RING lamps — gloss bezel, lit red ring, chrome reflector bowl, red inner ring, chrome core
+      roundLamp(-2.306, 0.945, 0.70, [[0.080, 'gloss', 0.02], [0.074, 'tail'], [0.052, 'chrome'], [0.036, 'tail'], [0.022, 'smoke']]),
+      roundLamp(-2.306, 0.945, 0.50, [[0.090, 'gloss', 0.02], [0.084, 'tail'], [0.059, 'chrome'], [0.041, 'tail'], [0.025, 'smoke']]),
+      // boot lid shut lines between the lamps, plate recess on the lid, GT-R badge
+      seams([[0.395, 0.565, 0.395, 1.06], [-0.395, 0.565, 0.395, 0.565]], false),
+      seams([[-0.395, 0.565, -0.395, 1.06]], false),
+      [txt('GT-R', 0.30, 0.875, 0.038, { weight: 0.16 })],
+      plateKit(0.665, 0.79, 0.17),
+      // black diffuser: V-shaped top edge, strakes, red rear fog in the centre, slatted corner vents
       polys([[[-0.88, 0.18], [0.88, 0.18], [0.89, 0.46], [0.40, 0.48], [0.0, 0.40], [-0.40, 0.48], [-0.89, 0.46]]], 'rear', 'black', 0.005, false),
-      polys([rect(0.80, 0.50, 0.85, 0.53)], 'rear', 'tail', 0.006, true),
+      polys([rect(-0.07, 0.25, 0.07, 0.29)], 'rear', 'tail', 0.009, false),
+      polys([[[0.68, 0.24], [0.84, 0.24], [0.85, 0.42], [0.70, 0.43]]], 'rear', 'grille', 0.008, true),
+      polys([0, 1, 2].map(function (k) { var y = 0.28 + k * 0.05; return rect(0.70, y, 0.845, y + 0.012); }), 'rear', 'gloss', 0.011, true),
+      strakes([0.10, 0.22, 0.34], 0.19, 0.38),
+      polys([rect(0.80, 0.50, 0.85, 0.53)], 'rear', 'lens', 0.006, true),
+      polys([rect(-2.27, 0.50, -2.21, 0.70)], 'side', 'lens', 0.005, true),
+      lowLamps(-2.316, [[0.62, 0.87, 0.78, 1.02], [0.41, 0.86, 0.59, 1.03]], 'tail'),
+      lowLamps(-2.316, [[-0.17, 0.665, 0.17, 0.79]], 'plate', false),
       polys([rect(-0.25, 0.92, -0.13, 0.94)], 'side', 'black', 0.004, true),
       mirrorParts(0.33, 0.52, 1.02, 1.12, 0.84, 1.02, [0.46, 1.02, 0.84], [0.08, 0.03, 0.06]),
       [
         // low boot wing on end stalks
         { t: 'prism', mat: 'paint', z0: -0.74, z1: 0.74, pts2d: [[-1.98, 1.155], [-2.22, 1.165], [-2.24, 1.19], [-2.01, 1.18]] },
-        { t: 'prism', mat: 'paint', mirror: true, z0: 0.62, z1: 0.66, pts2d: [[-2.02, 1.07], [-2.20, 1.06], [-2.21, 1.17], [-2.03, 1.165]] }
+        { t: 'prism', mat: 'paint', mirror: true, z0: 0.62, z1: 0.66, pts2d: [[-2.02, 1.07], [-2.20, 1.06], [-2.21, 1.17], [-2.03, 1.165]] },
+        { t: 'box', mat: 'tail', c: [-2.238, 1.176, 0], s: [0.008, 0.012, 0.36] }
       ]
     ),
     wheels: { style: 'split', spokes: 6 },
+    // quad round titanium tips, a pair each side of the diffuser
+    exhaust: [{ cx: 0.44, cy: 0.235, w: 0.12, h: 0.115, mirror: true }, { cx: 0.575, cy: 0.235, w: 0.12, h: 0.115, mirror: true }],
     notes: 'Nissan GT-R (R35, MY2017+) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2018_Nissan_GT-R_Premium_in_Super_Silver,_Front_Right,_10-11-2022.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2018_Nissan_GT-R_Premium_in_Super_Silver,_Rear_Right,_10-11-2022.jpg (rear 3/4).'
@@ -442,7 +549,7 @@
   // Reference photos (Wikimedia Commons, via en.wikipedia.org/wiki/Ford_Mustang_(seventh_generation)):
   //   front 3/4: https://commons.wikimedia.org/wiki/File:2024_Ford_Mustang_2.3_EcoBoost_in_Race_Red,_front_left,_06-26-2024.jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2024_Ford_Mustang_2.3_EcoBoost_in_Race_Red,_rear_left,_06-26-2024.jpg
-  // Signature: forward-leaning shark nose with a big trapezoid mesh grille + pony, slim lamps with the three-bar
+  // Signature: forward-leaning shark nose with a big trapezoid mesh grille, slim lamps with the three-bar
   // DRL, long bonnet with GT heat extractors, fastback roof with tapering quarter glass, TRI-BAR tail lamps.
   var MUS = {
     body: {
@@ -473,9 +580,8 @@
       polys([[[0.55, 1.035], [-0.12, 1.30], [-0.55, 1.33], [-0.55, 1.045]]], 'side', 'glass', 0.006, true),
       polys([[[-0.60, 1.047], [-0.60, 1.33], [-0.78, 1.32], [-1.32, 1.085]]], 'side', 'glass', 0.006, true),
       polys([rect(-0.60, 1.04, -0.55, 1.33)], 'side', 'gloss', 0.007, true),
-      // shark-nose trapezoid mesh grille, pony badge, plate
+      // shark-nose trapezoid mesh grille, plate
       polys([[[-0.56, 0.69], [0.56, 0.69], [0.64, 0.56], [0.44, 0.36], [-0.44, 0.36], [-0.64, 0.56]]], 'front', 'grille', 0.005, false),
-      polys([[[-0.07, 0.585], [0.06, 0.60], [0.08, 0.57], [-0.02, 0.56]]], 'front', 'chrome', 0.009, false),
       polys([rect(-0.18, 0.40, 0.18, 0.50)], 'front', 'plate', 0.009, false),
       // tri-bar LED headlamps: tall dark housing rising outboard under the bonnet lip, slim projector lens along its
       // top edge and three bold raked vertical DRL bars (the S650's three-element signature)
@@ -490,12 +596,27 @@
       polys([rect(-0.86, 0.14, 0.86, 0.21)], 'front', 'black', 0.006, false),
       // GT bonnet heat extractors
       polys([[[1.20, 0.22], [1.52, 0.24], [1.52, 0.40], [1.20, 0.42]]], 'top', 'black', 0.004, true),
-      // rear: dark trapezoid housings each with three raked vertical bars, pony, plate, black diffuser
+      // rear: dark trapezoid housings (gloss rim, smoked lens) each with three raked vertical TRI-BARS and a red
+      // lens sill under them
       polys([[[0.36, 0.83], [0.82, 0.81], [0.86, 0.94], [0.40, 0.96]]], 'rear', 'gloss', 0.006, true),
-      polys([0, 1, 2].map(function (k) { var z = 0.46 + k * 0.125; return [[z, 0.835], [z + 0.045, 0.832], [z + 0.07, 0.945], [z + 0.025, 0.948]]; }), 'rear', 'tail', 0.01, true),
-      polys([[[-0.06, 0.88], [0.06, 0.895], [0.07, 0.87], [-0.03, 0.86]]], 'rear', 'chrome', 0.008, false),
-      polys([rect(-0.17, 0.58, 0.17, 0.69)], 'rear', 'plate', 0.008, false),
+      polys([[[0.375, 0.838], [0.815, 0.82], [0.848, 0.932], [0.41, 0.95]]], 'rear', 'smoke', 0.008, true),
+      polys([0, 1, 2].map(function (k) { var z = 0.46 + k * 0.125; return [[z, 0.835], [z + 0.045, 0.832], [z + 0.07, 0.945], [z + 0.025, 0.948]]; }), 'rear', 'tail', 0.011, true),
+      polys([[[0.37, 0.832], [0.82, 0.813], [0.823, 0.826], [0.372, 0.845]]], 'rear', 'lens', 0.012, true),
+      // decklid shut lines, GT badge, plate in the bumper, sensor dots
+      seams([[0.34, 0.785, 0.34, 0.985], [-0.34, 0.785, 0.34, 0.785]], false),
+      seams([[-0.34, 0.785, -0.34, 0.985]], false),
+      [txt('GT', 0, 0.875, 0.05, { weight: 0.17, spacing: 1.6 })],
+      plateKit(0.58, 0.69, 0.17),
+      polys([rect(0.26, 0.505, 0.275, 0.52), rect(0.55, 0.50, 0.565, 0.515)], 'rear', 'black', 0.007, true),
+      // black diffuser: red rear fog in the centre, strakes, red corner reflectors
       polys([rect(-0.86, 0.20, 0.86, 0.44)], 'rear', 'black', 0.005, false),
+      polys([rect(-0.06, 0.30, 0.06, 0.33)], 'rear', 'tail', 0.009, false),
+      strakes([0.14, 0.24], 0.21, 0.40),
+      polys([rect(0.76, 0.42, 0.86, 0.44)], 'rear', 'lens', 0.009, true),
+      // high-mount stop lamp at the top of the rear glass
+      polys([rect(-0.12, 1.315, 0.12, 1.332)], 'rear', 'tail', 0.006, false),
+      lowLamps(-2.533, [0, 1, 2].map(function (k) { var z = 0.46 + k * 0.125; return [z, 0.835, z + 0.06, 0.945]; }), 'tail'),
+      lowLamps(-2.533, [[-0.17, 0.58, 0.17, 0.69]], 'plate', false),
       polys([rect(-0.32, 0.95, -0.20, 0.97)], 'side', 'black', 0.004, true),
       mirrorParts(0.34, 0.54, 1.05, 1.15, 0.85, 1.04, [0.47, 1.05, 0.85], [0.08, 0.03, 0.06]),
       [
@@ -504,6 +625,8 @@
       ]
     ),
     wheels: { style: 'split', spokes: 5 },
+    // quad round tips in pairs either side of the centre fog lamp
+    exhaust: [{ cx: 0.37, cy: 0.255, w: 0.11, h: 0.11, mirror: true }, { cx: 0.485, cy: 0.255, w: 0.11, h: 0.11, mirror: true }],
     notes: 'Ford Mustang GT Fastback (S650) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2024_Ford_Mustang_2.3_EcoBoost_in_Race_Red,_front_left,_06-26-2024.jpg (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2024_Ford_Mustang_2.3_EcoBoost_in_Race_Red,_rear_left,_06-26-2024.jpg (rear 3/4), ' +
@@ -555,10 +678,9 @@
       polys([[[0.46, 0.99], [0.12, 1.17], [-0.12, 1.245], [-0.60, 1.28], [-0.60, 1.03]]], 'side', 'glass', 0.006, true),
       polys([[[-0.65, 1.035], [-0.65, 1.28], [-0.84, 1.245], [-0.98, 1.17], [-1.07, 1.075]]], 'side', 'glass', 0.006, true),
       polys([rect(-0.65, 1.025, -0.60, 1.282)], 'side', 'gloss', 0.007, true),
-      // face, top to bottom: thin black upper slot between the lamps (text badge position on it), body-colour bar,
+      // face, top to bottom: thin black upper slot between the lamps (text badge on it), body-colour bar,
       // then the huge honeycomb lower grille that fills the bumper, flanked by tall vertical air curtains
       tilt(polys([[[-0.44, 0.665], [0.44, 0.665], [0.47, 0.705], [0.47, 0.745], [-0.47, 0.745], [-0.47, 0.705]]], 'front', 'grille', 0.006, false), 45),
-      tilt(polys([rect(-0.065, 0.69, 0.065, 0.72)], 'front', 'badge', 0.006, false), 45),
       tilt(polys([[[-0.46, 0.20], [0.46, 0.20], [0.60, 0.33], [0.66, 0.48], [0.61, 0.60], [-0.61, 0.60], [-0.66, 0.48], [-0.60, 0.33]]], 'front', 'grille', 0.005, false), 40),
       // honeycomb: staggered gloss zig-zag bars across the mesh
       tilt(polys([0, 1, 2, 3].map(function (k) {
@@ -569,7 +691,7 @@
         }
         return top.concat(bot);
       }), 'front', 'gloss', 0.004, false), 40),
-      tilt(polys([rect(-0.54, 0.50, -0.40, 0.535)], 'front', 'badge', 0.004, false), 40),
+      [{ t: 'text', view: 'front', str: 'ZL1', at: [-0.47, 0.517], h: 0.03, mat: 'chrome', maxTilt: 40, weight: 0.17 }],
       // slim swept lamps: low pointed inner end, the outer end climbs and wraps onto the wing; LED light guide
       // along the lower edge hooking down at the outer end
       tilt(polys([[[0.47, 0.666], [0.66, 0.674], [0.76, 0.698], [0.815, 0.733], [0.825, 0.768], [0.70, 0.764], [0.47, 0.742]]], 'front', 'gloss', 0.006, true), 50),
@@ -584,13 +706,24 @@
       // big carbon bonnet extractor with louvres
       polys([[[1.22, -0.30], [1.86, -0.36], [1.86, 0.36], [1.22, 0.30]]], 'top', 'carbon', 0.004, false),
       polys([0, 1, 2, 3, 4].map(function (k) { var x = 1.30 + k * 0.11; return rect(x, -0.27, x + 0.05, 0.27); }), 'top', 'black', 0.007, false),
-      // rear: black housing with two rectangular lamps a side, badge, plate, black diffuser
+      // rear: gloss black housing with two rectangular elements a side, each a lit red light-guide frame round a
+      // smoked centre with a red LED bar through it
       polys([[[0.28, 0.885], [0.86, 0.875], [0.89, 0.985], [0.28, 0.995]]], 'rear', 'gloss', 0.006, true),
       polys([rect(0.33, 0.905, 0.55, 0.97), [[0.60, 0.903], [0.83, 0.898], [0.85, 0.965], [0.60, 0.97]]], 'rear', 'tail', 0.009, true),
-      polys([rect(0.36, 0.93, 0.52, 0.945), rect(0.63, 0.928, 0.80, 0.943)], 'rear', 'gloss', 0.012, true),
-      polys([[[-0.06, 0.91], [0.06, 0.91], [0.06, 0.94], [-0.06, 0.94]]], 'rear', 'badge', 0.008, false),
-      polys([rect(-0.17, 0.60, 0.17, 0.71)], 'rear', 'plate', 0.008, false),
+      polys([rect(0.345, 0.917, 0.535, 0.958), [[0.613, 0.915], [0.818, 0.911], [0.835, 0.953], [0.613, 0.958]]], 'rear', 'smoke', 0.011, true),
+      polys([rect(0.40, 0.933, 0.535, 0.942), rect(0.613, 0.931, 0.826, 0.94)], 'rear', 'tail', 0.013, true),
+      // high-mount stop lamp under the spoiler, decklid shut lines, ZL1 badge beside the plate
+      polys([rect(-0.11, 0.99, 0.11, 1.004)], 'rear', 'tail', 0.007, false),
+      seams([[0.265, 0.78, 0.265, 1.0], [-0.265, 0.78, 0.265, 0.78]], false),
+      seams([[-0.265, 0.78, -0.265, 1.0]], false),
+      [txt('ZL1', -0.32, 0.665, 0.04, { weight: 0.17, skew: 0.15 })],
+      plateKit(0.60, 0.71, 0.17),
+      // black diffuser with strakes, red reflectors on its top corners
       polys([rect(-0.86, 0.22, 0.86, 0.42)], 'rear', 'black', 0.005, false),
+      strakes([0.10, 0.22, 0.34], 0.23, 0.40),
+      polys([rect(0.58, 0.425, 0.76, 0.44)], 'rear', 'lens', 0.008, true),
+      lowLamps(-2.45, [[0.33, 0.905, 0.55, 0.97], [0.60, 0.90, 0.84, 0.968]], 'tail'),
+      lowLamps(-2.45, [[-0.17, 0.60, 0.17, 0.71]], 'plate', false),
       polys([rect(-0.40, 0.955, -0.28, 0.975)], 'side', 'black', 0.004, true),
       // side marker / gill under the front-wing crest
       polys([[[1.95, 0.60], [2.10, 0.62], [2.10, 0.64], [1.95, 0.625]]], 'side', 'indicator', 0.005, true),
@@ -659,7 +792,7 @@
       polys([ell(0.80, 0.668, 0.058, 0.058, 12), ell(0.625, 0.668, 0.058, 0.058, 12)], 'front', 'light', 0.011, true),
       polys([ell(0.80, 0.668, 0.028, 0.028, 8), ell(0.625, 0.668, 0.028, 0.028, 8)], 'front', 'chrome', 0.014, true),
       polys([ell(-0.625, 0.668, 0.05, 0.05, 10)], 'front', 'grille', 0.016, false),   // Air Catcher (inner left)
-      polys([rect(-0.12, 0.70, 0.0, 0.725)], 'front', 'badge', 0.009, false),
+      [{ t: 'text', view: 'front', str: 'SRT', at: [-0.06, 0.712], h: 0.022, mat: 'chrome', offset: 0.009, weight: 0.17 }],
       // lower grille split by the plate, corner brake ducts, black splitter
       polys([[[-0.64, 0.22], [0.64, 0.22], [0.66, 0.46], [-0.66, 0.46]]], 'front', 'grille', 0.005, false),
       polys([rect(-0.17, 0.35, 0.17, 0.47)], 'front', 'plate', 0.009, false),
@@ -668,12 +801,24 @@
       // Hellcat bonnet: centre scoop + twin heat extractors
       polys([[[1.45, -0.20], [1.75, -0.22], [1.75, 0.22], [1.45, 0.20]]], 'top', 'black', 0.004, false),
       polys([[[1.10, 0.42], [1.40, 0.44], [1.40, 0.62], [1.10, 0.60]]], 'top', 'black', 0.004, true),
-      // full-width racetrack tail lamp around the gloss-black centre panel, plate, valence
-      tilt(polys([[[-0.86, 0.87], [0.86, 0.87], [0.90, 0.90], [0.90, 1.00], [0.86, 1.03], [-0.86, 1.03], [-0.90, 1.00], [-0.90, 0.90]]], 'rear', 'tail', 0.006, false), 45),
-      tilt(polys([rect(-0.80, 0.915, 0.80, 0.985)], 'rear', 'gloss', 0.009, false), 45),
-      tilt(polys([rect(0.66, 0.93, 0.74, 0.97)], 'rear', 'rev', 0.012, true), 45),
-      polys([rect(-0.17, 0.58, 0.17, 0.70)], 'rear', 'plate', 0.008, false),
+      // full-width gloss-black tail panel carrying the two "racetrack" ring lamps (each a lit red rounded-rect ring,
+      // split in two, round a smoked centre with a thin lens line), DODGE lettering between them
+      tilt(polys([[[-0.86, 0.87], [0.86, 0.87], [0.90, 0.90], [0.90, 1.00], [0.86, 1.03], [-0.86, 1.03], [-0.90, 1.00], [-0.90, 0.90]]], 'rear', 'gloss', 0.006, false), 45),
+      tilt(polys([rrect(0.20, 0.893, 0.85, 1.007, 0.045, 2)], 'rear', 'tail', 0.009, true), 45),
+      tilt(polys([rrect(0.225, 0.913, 0.825, 0.987, 0.028, 2)], 'rear', 'smoke', 0.012, true), 45),
+      tilt(polys([rect(0.505, 0.89, 0.52, 1.01)], 'rear', 'gloss', 0.015, true), 45),
+      tilt(polys([rect(0.535, 0.947, 0.81, 0.953)], 'rear', 'lens', 0.015, true), 45),
+      tilt(polys([rect(0.245, 0.938, 0.495, 0.962)], 'rear', 'rev', 0.015, true), 45),   // clear reverse strip, inboard half
+      [txt('DODGE', 0, 0.95, 0.03, { weight: 0.12, spacing: 2.6 }), txt('SRT', 0.62, 1.05, 0.026, { weight: 0.16, skew: 0.3 })],
+      seams([[-0.84, 1.036, 0.84, 1.036]], false),
+      plateKit(0.58, 0.70, 0.17),
       polys([rect(-0.88, 0.20, 0.88, 0.40)], 'rear', 'black', 0.005, false),
+      polys([rect(0.42, 0.405, 0.66, 0.42)], 'rear', 'lens', 0.007, true),
+      // high-mount stop lamp at the top of the rear glass
+      polys([rect(-0.15, 1.375, 0.15, 1.39)], 'rear', 'tail', 0.006, false),
+      lowLamps(-2.556, [[-0.90, 0.87, 0.90, 1.03]], 'gloss', false),
+      lowLamps(-2.562, [[0.20, 0.893, 0.505, 1.007], [0.52, 0.893, 0.85, 1.007]], 'tail'),
+      lowLamps(-2.556, [[-0.17, 0.58, 0.17, 0.70]], 'plate', false),
       // side: round racing filler, amber / red markers, door handle
       polys([ell(-1.56, 0.89, 0.055, 0.055, 10)], 'side', 'gloss', 0.004, false),
       polys([rect(2.25, 0.44, 2.33, 0.46)], 'side', 'indicator', 0.004, true),
@@ -686,6 +831,8 @@
       ]
     ),
     wheels: { style: 'split', spokes: 5 },
+    // twin wide trapezoid tips at the outer ends of the valence
+    exhaust: [{ cx: 0.63, cy: 0.24, w: 0.22, h: 0.075, shape: 'trapezoid', mirror: true }],
     notes: 'Dodge Challenger SRT Hellcat — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2015_HellCat.JPG (front 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:2016_DodgeChallenger_(Texas_Dealer_special_edition)_Hellcat_side_01.jpg (side), ' +

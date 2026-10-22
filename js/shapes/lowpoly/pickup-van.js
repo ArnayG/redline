@@ -80,6 +80,15 @@
     return list.map(function (p) { return { t: 'poly', view: view, mat: mat, offset: off, mirror: !!mirror, pts: p }; });
   }
   function lerp(a, b, t) { return a + (b - a) * t; }
+  /** flat rear-facing polygon at x (on a box face behind the shell, where view decals cannot land): pts [[z, y]] */
+  function faceP(x, pts, mat, mirror, low) {
+    var o = { t: 'poly', mat: mat, mirror: !!mirror, normal: [-1, 0, 0], pts: pts.map(function (q) { return [x, q[1], q[0]]; }) };
+    if (low) o.low = low;
+    return o;
+  }
+  function face(x, z0, y0, z1, y1, mat, mirror, low) { return faceP(x, [[z0, y0], [z0, y1], [z1, y1], [z1, y0]], mat, mirror, low); }
+  /** rear-view decal list helper with the low flag (low-LOD tail signature) */
+  function lowPoly(pts, mat, off, mirror, low) { return { t: 'poly', view: 'rear', mat: mat, offset: off, mirror: !!mirror, pts: pts, low: low || true }; }
   /** piecewise-linear profile: knots [[x, v], ...] (any x order) -> v(x) */
   function pl(knots) {
     var K = knots.slice().sort(function (a, b) { return a[0] - b[0]; });
@@ -185,16 +194,34 @@
       polys([[[-0.54, 0.47], [0.54, 0.47], [0.64, 0.64], [-0.64, 0.64]]], 'front', 'chrome', 0.008, false),
       polys([[[-0.62, 0.615], [0.62, 0.615], [0.63, 0.63], [-0.63, 0.63]]], 'front', 'white', 0.011, false),
       polys([-0.40, -0.20, 0, 0.20, 0.40].map(function (z) { return rect(z - 0.07, 0.49, z + 0.07, 0.53); }), 'front', 'black', 0.011, false),
-      // cab rear window + 3rd brake light
+      // cab rear window (3-pane slider: two dark mullions) + 3rd brake light in a black housing over it
       polys([rect(-0.62, 1.56, 0.62, 1.84)], 'rear', 'glass', 0.005, false),
-      polys([rect(-0.14, 1.865, 0.14, 1.89)], 'rear', 'tail', 0.008, false),
-      // rear: tall tail lamps with dark spine, stamped TACOMA, handle, bumper step, plate
-      polys([[[0.79, 0.96], [0.94, 0.96], [0.94, 1.39], [0.84, 1.39]]], 'rear', 'tail', 0.006, true),
-      polys([rect(0.89, 1.04, 0.925, 1.30)], 'rear', 'gloss', 0.009, true),
-      polys([rect(-0.11, 1.28, 0.11, 1.32)], 'rear', 'black', 0.006, false),
+      polys([rect(-0.215, 1.565, -0.195, 1.835), rect(0.195, 1.565, 0.215, 1.835)], 'rear', 'gloss', 0.008, false),
+      polys([rect(-0.17, 1.855, 0.17, 1.90)], 'rear', 'gloss', 0.006, false),
+      polys([rect(-0.14, 1.866, 0.14, 1.888)], 'rear', 'tail', 0.009, false),
+      // rear (2024 photos): tall tail lamps — smoked housing, red upper block, red light line across the dark
+      // middle, clear reverse section, short red foot; black outboard spine
+      polys([[[0.785, 0.95], [0.945, 0.95], [0.945, 1.40], [0.835, 1.40]]], 'rear', 'smoke', 0.006, true),
+      polys([[[0.815, 1.23], [0.928, 1.23], [0.928, 1.383], [0.845, 1.383]]], 'rear', 'tail', 0.009, true),
+      polys([rect(0.808, 1.135, 0.928, 1.158)], 'rear', 'tail', 0.009, true),
+      polys([rect(0.835, 1.045, 0.915, 1.105)], 'rear', 'rev', 0.009, true),
+      polys([rect(0.808, 0.968, 0.928, 1.012)], 'rear', 'tail', 0.009, true),
+      polys([rect(0.93, 1.00, 0.943, 1.36)], 'rear', 'gloss', 0.010, true),
+      [lowPoly([[0.785, 0.95], [0.945, 0.95], [0.945, 1.40], [0.835, 1.40]], 'tail', 0.006, true, 'only')],
+      // tailgate: shut lines round it, black top cap, recessed handle with chrome pull, stamped TACOMA, plate box
+      // with plate lights, i-FORCE MAX badge lower right
+      polys([rect(0.768, 0.875, 0.778, 1.405), rect(-0.778, 0.875, -0.768, 1.405)], 'rear', 'gloss', 0.007, false),
+      polys([rect(-0.775, 0.872, 0.775, 0.882)], 'rear', 'gloss', 0.007, false),
+      polys([rect(-0.775, 1.385, 0.775, 1.408)], 'rear', 'black', 0.007, false),
+      polys([rect(-0.135, 1.262, 0.135, 1.338)], 'rear', 'black', 0.006, false),
+      polys([rect(-0.10, 1.278, 0.10, 1.296)], 'rear', 'gloss', 0.009, false),
       polys(word('TACOMA', 0, 1.105, 0.085, 1, 2.05), 'rear', 'gloss', 0.006, false),
+      [{ t: 'text', view: 'rear', str: 'I-FORCE MAX', at: [0.56, 0.93], h: 0.022, mat: 'chrome', weight: 0.16 },
+       { t: 'text', view: 'rear', str: 'TOYOTA', at: [0, 1.315], h: 0.014, mat: 'chrome', weight: 0.18 }],
       polys([rect(-0.62, 0.68, 0.62, 0.86)], 'rear', 'black', 0.005, false),
-      polys([rect(-0.16, 0.89, 0.16, 0.97)], 'rear', 'plate', 0.008, false),
+      polys([rect(-0.18, 0.88, 0.18, 0.985)], 'rear', 'gloss', 0.007, false),
+      polys([rect(-0.16, 0.89, 0.16, 0.97)], 'rear', 'plate', 0.009, false),
+      polys([rect(-0.12, 0.974, -0.07, 0.982), rect(0.07, 0.974, 0.12, 0.982)], 'rear', 'white', 0.010, false),
       // door handles, TACOMA door badge
       polys([rect(0.34, 1.29, 0.48, 1.32), rect(-0.56, 1.29, -0.42, 1.32)], 'side', 'black', 0.004, true),
       polys([[[0.99, 1.43], [0.80, 1.43], [0.80, 1.58]]], 'side', 'gloss', 0.006, true),
@@ -215,10 +242,23 @@
         { t: 'box', mat: 'black', mirror: true, c: [0.86, 1.455, 0.95], s: [0.13, 0.05, 0.09] },
         { t: 'box', mat: 'black', c: [-2.90, 0.70, 0], s: [0.10, 0.12, 1.24] },
         // rear bumper: black centre step, body-colour corner caps (photos)
-        { t: 'box', mat: 'paint', mirror: true, c: [-2.87, 0.73, 0.78], s: [0.14, 0.15, 0.30] }
+        { t: 'box', mat: 'paint', mirror: true, c: [-2.87, 0.73, 0.78], s: [0.14, 0.15, 0.30] },
+        // step pad (ribbed top face), lower valance with the square hitch receiver + trailer plug, red reflectors
+        // and parking-sensor dots on the bumper face, bed-rail end caps over the lamps
+        face(-2.953, -0.60, 0.728, 0.60, 0.752, 'gloss'),
+        face(-2.953, -0.60, 0.655, 0.60, 0.668, 'gloss'),
+        { t: 'box', mat: 'black', c: [-2.88, 0.585, 0], s: [0.10, 0.05, 1.10] },
+        { t: 'box', mat: 'black', c: [-2.92, 0.575, 0], s: [0.16, 0.075, 0.075] },
+        face(-3.002, -0.024, 0.552, 0.024, 0.598, 'grille'),
+        { t: 'box', mat: 'black', c: [-2.92, 0.58, -0.16], s: [0.05, 0.05, 0.06] },
+        face(-2.943, 0.86, 0.69, 0.925, 0.715, 'lens', true),
+        face(-2.953, 0.36, 0.708, 0.38, 0.722, 'gloss', true), face(-2.953, 0.12, 0.708, 0.14, 0.722, 'gloss', true),
+        { t: 'box', mat: 'black', mirror: true, c: [-2.86, 1.432, 0.94], s: [0.06, 0.035, 0.12] }
       ]
     ),
     // TRD Pro: matte black 18 in forged wheels, red TRD callipers (photos)
+    // driver-side tip, turned down under the rear bumper behind the left rear wheel (rear photos)
+    exhaust: [{ shape: 'round', cx: -0.62, cy: 0.45, w: 0.085, h: 0.085 }],
     wheels: { style: 'star', spokes: 6, tyre: 'at', stock: { rim: '#1c1d1f', material: 'forged', caliper: '#c01818' } },
     notes: 'Toyota Tacoma TRD Pro (N400, 2024) — hand-authored low-poly. Reference photos: ' +
       'https://commons.wikimedia.org/wiki/File:2024_Cleveland_Auto_Show_(53571764732).jpg (front, TRD Pro), ' +
@@ -228,7 +268,10 @@
       'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_TRD_Off_Road_(N400)_DSC_7353.jpg (rear 3/4), ' +
       'https://commons.wikimedia.org/wiki/File:Toyota_Tacoma_N400_Double_Cab.jpg (front). Final check 2026-10: deeper ' +
       'front fascia (bumper to ~0.47 m), big wedge corner headlamps with DRL bar, body-colour bumper bar over the black ' +
-      'lower intake + grey skid plate, body-colour rear bumper corners, factory TRD Pro wheel look (wheels.stock).'
+      'lower intake + grey skid plate, body-colour rear bumper corners, factory TRD Pro wheel look (wheels.stock). Rear detail ' +
+      '2026-10 (smoked multi-element lamps, shut lines, handle, plate lights, hitch, reflectors, left exhaust) from ' +
+      'https://commons.wikimedia.org/wiki/File:2024_Toyota_Tacoma_TRD_Off_Road_black_rear.jpg and ' +
+      'https://commons.wikimedia.org/wiki/File:2024_Toyota_Tacoma_TRD_Sport_rear_view.jpg.'
   };
   // shoulder crease: the flank leans out to a sharp horizontal crease a hand below the belt and tucks back in
   // above it (both trucks carry one along the doors and the bed), so the light splits the slab side in two
@@ -296,15 +339,22 @@
          { t: 'poly', mat: 'light', mirror: true, normal: [1, 0, 0], pts: [[2.818, 0.995, 0.78], [2.818, 0.995, 0.93], [2.818, 1.03, 0.93], [2.818, 1.03, 0.78]] }],
         polys([rect(-1.0, 0.50, 1.0, 0.70)], 'front', 'black', 0.005, false),
         polys([rect(-0.55, 0.56, 0.55, 0.66)], 'front', 'grille', 0.008, false),
-                // rear: full-width red bar on the tailgate top edge, dark bumper, plate, tailgate seam
-        polys([[[0.0, 1.10], [0.958, 1.10], [0.965, 1.19], [0.0, 1.19]]], 'rear', 'gloss', 0.005, true),
-        polys([[[0.0, 1.135], [0.95, 1.135], [0.955, 1.16], [0.0, 1.16]]], 'rear', 'tail', 0.008, true),
+        // rear (2024 photos): smoked full-width bar on the tailgate top edge with one thin red LED line across it,
+        // taller lit blocks at the corners (brake / turn) wrapping onto the flanks, tailgate shut lines, plain
+        // stainless tailgate (no badge on the real truck), dark bumper, plate
+        polys([[[0.0, 1.10], [0.958, 1.10], [0.965, 1.19], [0.0, 1.19]]], 'rear', 'smoke', 0.005, true),
+        polys([[[0.0, 1.139], [0.95, 1.139], [0.952, 1.153], [0.0, 1.153]]], 'rear', 'tail', 0.008, true),
+        polys([[[0.80, 1.112], [0.952, 1.112], [0.958, 1.178], [0.82, 1.178]]], 'rear', 'tail', 0.009, true),
+        polys([[[2.88 - 0.12, 1.112], [2.88 - 0.005, 1.112], [2.88 - 0.005, 1.178], [2.88 - 0.10, 1.175]].map(function (q) { return [-q[0], q[1]]; })], 'side', 'tail', 0.006, true),
+        [lowPoly([[-0.958, 1.115], [0.958, 1.115], [0.958, 1.175], [-0.958, 1.175]], 'tail', 0.01, false, 'only')],
+        polys([rect(-0.962, 0.775, 0.962, 0.786), rect(0.952, 0.78, 0.962, 1.10), rect(-0.962, 0.78, -0.952, 1.10)], 'rear', 'gloss', 0.007, false),
         polys([rect(-1.0, 0.52, 1.0, 0.76)], 'rear', 'black', 0.005, false),
-        polys([rect(0.70, 0.78, 0.84, 0.80)], 'rear', 'tail', 0.008, true),
         // door seams / handles-free flanks: the door cut lines
         polys([rect(1.0, 0.62, 1.012, 1.04), rect(-0.30, 0.62, -0.288, 1.07), rect(-1.25, 0.62, -1.238, 1.08)], 'side', 'black', 0.004, true),
         // angular trapezoid arch cladding (3-segment, thick as on the real truck) + dark rocker; the black
         // bumpers wrap round the corners into the arch cladding (cyb-b / cyb-a photos)
+        // powered vault tonneau: transverse slat lines across the bed cover (reads from the raised chase cam)
+        polys([-1.45, -1.68, -1.91, -2.14, -2.37, -2.60].map(function (x) { return rect(x - 0.008, -0.60, x + 0.008, 0.60); }), 'top', 'gloss', 0.006, false),
         flare(1.81737, 0.43925, 0.52, 0.665, 0.90, 1.025, 'black', 3, false),
         flare(-1.81737, 0.43925, 0.52, 0.665, 0.90, 1.025, 'black', 3, false),
         polys([[[2.46, 0.44], [2.82, 0.48], [2.82, 0.72], [2.42, 0.70]]], 'side', 'black', 0.004, true),
@@ -314,6 +364,16 @@
           { t: 'box', mat: 'black', c: [2.80, 0.58, 0], s: [0.08, 0.20, 1.98] },
           { t: 'box', mat: 'black', c: [-2.87, 0.63, 0], s: [0.10, 0.24, 1.98] },
           { t: 'box', mat: 'plate', c: [-2.922, 0.65, 0], s: [0.01, 0.11, 0.32] },
+          // bumper face: plate recess + lights, lower step lip, red corner reflectors, reverse lamps, sensor dots,
+          // centre hitch receiver below
+          face(-2.921, -0.19, 0.585, 0.19, 0.715, 'gloss'),
+          face(-2.928, -0.08, 0.708, 0.08, 0.714, 'white'),
+          face(-2.921, -0.97, 0.53, 0.97, 0.548, 'gloss'),
+          face(-2.921, 0.84, 0.70, 0.955, 0.725, 'lens', true),
+          face(-2.921, 0.66, 0.58, 0.74, 0.595, 'rev', true),
+          face(-2.921, 0.46, 0.695, 0.48, 0.71, 'gloss', true), face(-2.921, 0.28, 0.695, 0.30, 0.71, 'gloss', true),
+          { t: 'box', mat: 'black', c: [-2.88, 0.46, 0], s: [0.14, 0.07, 0.07] },
+          face(-2.951, -0.022, 0.44, 0.022, 0.48, 'grille'),
           // small black door mirrors at the front corner of the door glass, mirror glass facing back
           { t: 'prism', mat: 'gloss', mirror: true, z0: 0.90, z1: 1.09, pts2d: [[1.03, 1.20], [0.87, 1.21], [0.87, 1.33], [0.99, 1.33]] },
           { t: 'poly', mat: 'glass', mirror: true, normal: [-1, 0, 0], pts: [[0.865, 1.225, 0.93], [0.865, 1.225, 1.075], [0.865, 1.315, 1.075], [0.865, 1.315, 0.93]] }
@@ -323,7 +383,9 @@
       notes: 'Tesla Cybertruck (2024) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Cybertruck_supercharging_at_Bravoland.jpg (side 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:Tesla_Cybertruck_-_04.jpg (3/4).'
+        'https://commons.wikimedia.org/wiki/File:Tesla_Cybertruck_-_04.jpg (3/4). Rear detail 2026-10 from ' +
+        'https://commons.wikimedia.org/wiki/File:2024_Tesla_Cybertruck,_rear_9.7.24.jpg and ' +
+        'https://commons.wikimedia.org/wiki/File:Tesla_Cybertruck_Cyberbeast_Satin_Stealth_Black_-_rear.jpg (no tailgate badge on the real truck).'
     };
   })();
   reg('tesla-cybertruck', CYB);
@@ -341,8 +403,8 @@
   //   front 3/4: https://commons.wikimedia.org/wiki/File:2019_Mercedes-Benz_Sprinter_314_CDi_2.1.jpg
   //   front 3/4: https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Front.jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Rear.jpg
-  // Signature: short sloping bonnet with a protruding dark bumper, two-slat grille with the big three-pointed
-  // star, swept headlamps on the fender corners, steep windscreen under a smooth high-roof cap, tall flat
+  // Signature: short sloping bonnet with a protruding dark bumper, two-slat grille (badges as text only,
+  // no logo artwork), swept headlamps on the fender corners, steep windscreen under a smooth high-roof cap, tall flat
   // flanks with passenger windows and a dark rub strip, tall narrow tail lamps on the rear corners.
   var SPRINTER = (function () {
     var W = 1.0;
@@ -387,24 +449,12 @@
       [K, P, K, P, P, P, P, P, P, P],          // rear corner
       [K, K, K, P, P, P, P, P, P, P]           // rear corner
     ];
-    // three-pointed star in a ring (front view coordinates, centre (a, b), radius r)
-    function star(a, b, r, dir) {
-      var out = [];
-      for (var k = 0; k < 3; k++) {
-        var t = Math.PI / 2 + k * Math.PI * 2 / 3, t1 = t + Math.PI / 2, w = r * 0.13;
-        out.push([[a + Math.cos(t) * r * 0.92 * dir, b + Math.sin(t) * r * 0.92], [a + Math.cos(t1) * w * dir, b + Math.sin(t1) * w], [a - Math.cos(t1) * w * dir, b - Math.sin(t1) * w]]);
-      }
-      return out;
-    }
     return {
       body: { stations: st, mats: mats, capF: 'black', capR: 'paint' },
       parts: [].concat(
-        // grille: dark trapezoid, two slats, big star in a ring
+        // grille: dark trapezoid, two slats (no logo artwork)
         polys([[[-0.47, 0.775], [0.47, 0.775], [0.52, 1.015], [-0.52, 1.015]]], 'front', 'grille', 0.004, false),
         polys([rect(-0.49, 0.865, 0.49, 0.885), rect(-0.505, 0.94, 0.505, 0.96)], 'front', 'chrome', 0.007, false),
-        polys([ell(0, 0.905, 0.10, 0.10, 14)], 'front', 'chrome', 0.009, false),
-        polys([ell(0, 0.905, 0.085, 0.085, 14)], 'front', 'grille', 0.011, false),
-        polys(star(0, 0.905, 0.085, 1), 'front', 'chrome', 0.013, false),
         // headlamps swept round the fender corners (+ the side return)
         // (audit: the lamps read as small white slivers — the real units are big, run the full grille height and
         //  sweep a long way back up the fender towards the bonnet shut line)
@@ -424,16 +474,27 @@
         polys([rect(0.68, 0.56, 0.84, 0.64)], 'front', 'gloss', 0.007, true),
         // bonnet vents at the base of the windscreen
         polys([rect(1.66, 0.30, 1.78, 0.70)], 'top', 'black', 0.004, true),
-        // rear: tall corner lamps, split doors with windows, star, plate, 3rd brake light, bumper
-        polys([[[0.83, 0.80], [0.985, 0.80], [0.985, 1.36], [0.85, 1.36]]], 'rear', 'tail', 0.006, true),
-        polys([rect(0.94, 0.95, 0.975, 1.12)], 'rear', 'rev', 0.009, true),
-        polys([rect(0.07, 1.42, 0.80, 1.98)], 'rear', 'glass', 0.006, true),
+        // rear (VS30 photos): tall corner lamps — red lens housing, red tail block on top, clear reverse window,
+        // amber indicator, red foot; split doors with framed windows, hinges, SPRINTER / 317 CDI lettering,
+        // one handle on the right door, plate recess with lights, roof-top 3rd brake light pod, step bumper
+        polys([[[0.83, 0.80], [0.985, 0.80], [0.985, 1.36], [0.85, 1.36]]], 'rear', 'lens', 0.006, true),
+        polys([[[0.845, 1.12], [0.972, 1.12], [0.972, 1.345], [0.862, 1.345]]], 'rear', 'tail', 0.009, true),
+        polys([rect(0.85, 0.99, 0.972, 1.10)], 'rear', 'rev', 0.009, true),
+        polys([rect(0.85, 0.93, 0.972, 0.975)], 'rear', 'indicator', 0.009, true),
+        polys([rect(0.85, 0.815, 0.972, 0.915)], 'rear', 'tail', 0.009, true),
+        [lowPoly([[0.83, 0.80], [0.985, 0.80], [0.985, 1.36], [0.85, 1.36]], 'tail', 0.006, true, 'only'),
+         lowPoly(rect(-0.13, 2.55, 0.13, 2.60), 'tail', 0.01, false, 'only')],
+        polys([rect(0.05, 1.40, 0.82, 2.00)], 'rear', 'gloss', 0.005, true),
+        polys([rect(0.07, 1.42, 0.80, 1.98)], 'rear', 'glass', 0.007, true),
+        polys([rect(0.14, 1.75, 0.73, 1.756), rect(0.14, 1.60, 0.73, 1.606)], 'rear', 'gloss', 0.009, true),
         polys([rect(-0.006, 0.62, 0.006, 2.45)], 'rear', 'black', 0.008, false),
-        polys([ell(0, 1.22, 0.07, 0.07, 12)], 'rear', 'chrome', 0.008, false),
-        polys(star(0, 1.22, 0.058, -1), 'rear', 'gloss', 0.011, false),
-        polys([rect(0.12, 1.06, 0.24, 1.09)], 'rear', 'black', 0.009, true),
-        polys([rect(-0.26, 0.66, 0.26, 0.78)], 'rear', 'plate', 0.009, false),
-        polys([rect(-0.30, 2.56, 0.30, 2.585)], 'rear', 'tail', 0.008, false),
+        [{ t: 'text', view: 'rear', str: 'SPRINTER', at: [-0.42, 1.22], h: 0.03, mat: 'chrome', weight: 0.14, skew: 0.12 },
+         { t: 'text', view: 'rear', str: '317 CDI', at: [0.50, 1.22], h: 0.026, mat: 'chrome', weight: 0.14 }],
+        polys([rect(0.09, 1.105, 0.25, 1.15)], 'rear', 'black', 0.009, false),
+        polys([rect(0.11, 1.118, 0.23, 1.135)], 'rear', 'chrome', 0.011, false),
+        polys([rect(-0.29, 0.63, 0.29, 0.81)], 'rear', 'black', 0.007, false),
+        polys([rect(-0.26, 0.66, 0.26, 0.78)], 'rear', 'plate', 0.010, false),
+        polys([rect(-0.20, 0.79, -0.14, 0.80), rect(0.14, 0.79, 0.20, 0.80)], 'rear', 'white', 0.011, false),
         // side: amber markers on the rub strip, door handles, sliding-door rail
         polys([rect(0.18, 0.66, 0.24, 0.70), rect(-2.30, 0.66, -2.24, 0.70)], 'side', 'indicator', 0.008, true),
         polys([rect(0.80, 1.20, 0.92, 1.23), rect(0.10, 1.20, 0.22, 1.23)], 'side', 'black', 0.006, true),
@@ -441,6 +502,15 @@
         flare(-1.8325, 0.387, 0.445, 0.475, 0.97, 1.01, 'black', 5, false),
         [
           { t: 'box', mat: 'black', c: [-3.07, 0.52, 0], s: [0.16, 0.18, 2.0] },
+          // rear bumper: grey step face, red corner reflectors, sensor dots; door hinges on the outer edges;
+          // 3rd brake light pod on the roof edge
+          face(-3.153, -0.70, 0.57, 0.70, 0.60, 'gloss'),
+          face(-3.153, 0.80, 0.475, 0.95, 0.50, 'lens', true),
+          face(-3.153, 0.50, 0.555, 0.52, 0.57, 'white', true), face(-3.153, 0.22, 0.555, 0.24, 0.57, 'white', true),
+          { t: 'box', mat: 'black', mirror: true, c: [-3.10, 0.95, 0.965], s: [0.05, 0.10, 0.05] },
+          { t: 'box', mat: 'black', mirror: true, c: [-3.10, 2.15, 0.955], s: [0.05, 0.10, 0.05] },
+          { t: 'box', mat: 'gloss', c: [-3.06, 2.585, 0], s: [0.10, 0.075, 0.34] },
+          face(-3.112, -0.15, 2.558, 0.15, 2.61, 'tail'),
           // big door mirrors on arms
           { t: 'prism', mat: 'gloss', mirror: true, z0: 1.00, z1: 1.22, pts2d: [[1.20, 1.44], [1.08, 1.44], [1.07, 1.72], [1.17, 1.72]] },
           { t: 'box', mat: 'black', mirror: true, c: [1.19, 1.50, 1.02], s: [0.08, 0.05, 0.08] }
@@ -450,7 +520,8 @@
       notes: 'Mercedes-Benz Sprinter (VS30) 144" high roof — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2019_Mercedes-Benz_Sprinter_314_CDi_2.1.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Front.jpg (front 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Rear.jpg (rear 3/4).'
+        'https://commons.wikimedia.org/wiki/File:2018_Mercedes-Benz_Sprinter_314_CDi_2.1_Rear.jpg (rear 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:Mercedes-Benz_Sprinter_VS30_317_CDI_Black_-_rear.jpg (rear 3/4, rear detail 2026-10).'
     };
   })();
   reg('mercedes-sprinter-vs30', SPRINTER);
@@ -460,7 +531,7 @@
   //   front 3/4: https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Front.jpg
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Rear.jpg
   //   front 3/4: https://commons.wikimedia.org/wiki/File:2015_Ford_Transit_250_MR_148%22,_fR.jpg
-  // Signature: tall blunt nose with a big trapezoid grille (three horizontal bars + Ford oval), large swept
+  // Signature: tall blunt nose with a big trapezoid grille (three horizontal bars; badges are text only, no oval), large swept
   // headlamps reaching up the fender sides, long rising bonnet flowing into the windscreen, high-roof cap with
   // a peak over the windscreen, a deep black lower band along the whole van, tall corner tail lamps.
   var TRANSIT = (function () {
@@ -520,12 +591,10 @@
     return {
       body: { stations: st, mats: mats, capF: 'black', capR: 'paint' },
       parts: [].concat(
-        // big upright trapezoid grille with three bright bars + Ford oval
+        // big upright trapezoid grille with three bright bars (no logo artwork)
         polys([[[-0.45, 0.785], [0.45, 0.785], [0.535, 1.225], [-0.535, 1.225]]], 'front', 'chrome', 0.003, false),
         polys([[[-0.42, 0.81], [0.42, 0.81], [0.50, 1.20], [-0.50, 1.20]]], 'front', 'grille', 0.005, false),
         polys([0.87, 0.98, 1.09].map(function (y, i) { var w = 0.43 + i * 0.022; return rect(-w, y, w, y + 0.05); }), 'front', 'chrome', 0.008, false),
-        polys([ell(0, 1.02, 0.115, 0.052, 14)], 'front', 'chrome', 0.010, false),
-        polys([ell(0, 1.02, 0.098, 0.041, 14)], 'front', 'gloss', 0.012, false),
         // large swept headlamps (and their side return up the fender)
         polys([[[0.51, 1.02], [0.54, 1.235], [0.93, 1.20], [0.99, 1.12], [0.97, 1.03]]], 'front', 'gloss', 0.006, true),
         polys([[[0.54, 1.04], [0.565, 1.215], [0.91, 1.185], [0.96, 1.12], [0.94, 1.045]]], 'front', 'light', 0.009, true),
@@ -540,14 +609,25 @@
         polys([rect(-0.26, 0.63, 0.26, 0.75)], 'front', 'plate', 0.008, false),
         // bonnet vents
         polys([rect(1.95, 0.20, 2.05, 0.52)], 'top', 'black', 0.004, true),
-        // rear: tall corner lamps, split doors with windows, plate, 3rd brake light, bumper
-        polys([[[0.85, 0.82], [1.0, 0.82], [1.0, 1.47], [0.87, 1.47]]], 'rear', 'tail', 0.006, true),
-        polys([rect(0.89, 1.04, 0.97, 1.20)], 'rear', 'rev', 0.009, true),
-        polys([rect(0.07, 1.46, 0.84, 2.02)], 'rear', 'glass', 0.006, true),
+        // rear (2020 facelift photos): tall corner lamps — red lens housing, long red tail block, clear reverse
+        // window low down, red foot; framed split-door windows, hinges, TRANSIT script, one handle on the right
+        // door, black 3rd brake light pod with a red lens at the roof edge
+        polys([[[0.85, 0.82], [1.0, 0.82], [1.0, 1.47], [0.87, 1.47]]], 'rear', 'lens', 0.006, true),
+        polys([[[0.865, 1.15], [0.987, 1.15], [0.987, 1.455], [0.882, 1.455]]], 'rear', 'tail', 0.009, true),
+        polys([rect(0.87, 1.00, 0.987, 1.13)], 'rear', 'rev', 0.009, true),
+        polys([rect(0.87, 0.835, 0.987, 0.98)], 'rear', 'tail', 0.009, true),
+        polys([rect(0.987, 0.84, 0.998, 1.46)], 'rear', 'gloss', 0.010, true),
+        [lowPoly([[0.85, 0.82], [1.0, 0.82], [1.0, 1.47], [0.87, 1.47]], 'tail', 0.006, true, 'only'),
+         lowPoly(rect(-0.20, 2.61, 0.20, 2.645), 'tail', 0.01, false, 'only')],
+        polys([rect(0.05, 1.44, 0.86, 2.04)], 'rear', 'gloss', 0.005, true),
+        polys([rect(0.07, 1.46, 0.84, 2.02)], 'rear', 'glass', 0.007, true),
+        polys([rect(0.12, 1.80, 0.79, 1.806), rect(0.12, 1.65, 0.79, 1.656)], 'rear', 'gloss', 0.009, true),
         polys([rect(-0.006, 0.80, 0.006, 2.52)], 'rear', 'black', 0.008, false),
-        polys(word('TRANSIT', -0.35, 1.30, 0.05, 1, 1.3), 'rear', 'gloss', 0.008, false),
-        polys([rect(0.12, 1.18, 0.24, 1.21)], 'rear', 'black', 0.009, true),
-        polys([rect(-0.32, 2.61, 0.32, 2.64)], 'rear', 'tail', 0.008, false),
+        [{ t: 'text', view: 'rear', str: 'TRANSIT', at: [-0.40, 1.24], h: 0.034, mat: 'chrome', weight: 0.14, skew: 0.18 }],
+        polys([rect(0.10, 1.215, 0.26, 1.26)], 'rear', 'black', 0.009, false),
+        polys([rect(0.12, 1.228, 0.24, 1.245)], 'rear', 'chrome', 0.011, false),
+        polys([rect(-0.13, 2.595, 0.13, 2.655)], 'rear', 'gloss', 0.007, false),
+        polys([rect(-0.11, 2.605, 0.11, 2.645)], 'rear', 'tail', 0.010, false),
         // side: door handles, sliding-door rail
         polys([rect(0.95, 1.24, 1.07, 1.27), rect(0.12, 1.24, 0.24, 1.27)], 'side', 'black', 0.006, true),
         polys([rect(-2.95, 1.30, -0.80, 1.33)], 'side', 'gloss', 0.008, true),
@@ -557,6 +637,16 @@
         [
           { t: 'box', mat: 'black', c: [-3.04, 0.56, 0], s: [0.16, 0.26, 2.04] },
           { t: 'box', mat: 'plate', c: [-3.125, 0.62, 0], s: [0.01, 0.11, 0.50] },
+          // bumper: plate recess with lights, grey centre step, corner reflectors, sensor dots, tow bar; door hinges
+          face(-3.122, -0.28, 0.555, 0.28, 0.69, 'gloss'),
+          face(-3.132, -0.12, 0.681, 0.12, 0.687, 'white'),
+          face(-3.122, -0.62, 0.45, 0.62, 0.50, 'gloss'),
+          face(-3.122, 0.84, 0.47, 1.0, 0.495, 'lens', true),
+          face(-3.122, 0.52, 0.645, 0.54, 0.66, 'white', true), face(-3.122, 0.36, 0.645, 0.38, 0.66, 'white', true),
+          { t: 'box', mat: 'black', c: [-3.15, 0.40, 0], s: [0.10, 0.06, 0.08] },
+          { t: 'cyl', mat: 'chrome', c: [-3.21, 0.44, 0], r: 0.025, l: 0.05, axis: 'y', sides: 6 },
+          { t: 'box', mat: 'black', mirror: true, c: [-3.075, 1.00, 0.985], s: [0.05, 0.11, 0.05] },
+          { t: 'box', mat: 'black', mirror: true, c: [-3.075, 2.20, 0.975], s: [0.05, 0.11, 0.05] },
           // big door mirrors with indicator
           { t: 'prism', mat: 'gloss', mirror: true, z0: 1.02, z1: 1.24, pts2d: [[1.28, 1.48], [1.14, 1.48], [1.13, 1.78], [1.25, 1.78]] },
           { t: 'box', mat: 'black', mirror: true, c: [1.26, 1.55, 1.04], s: [0.08, 0.05, 0.08] }
@@ -566,7 +656,8 @@
       notes: 'Ford Transit (gen 4, 2020 facelift) 350 148" high roof — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Front.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2020_Ford_Transit_350_Leader_EcoBlue_2.0_facelift_Rear.jpg (rear 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:2015_Ford_Transit_250_MR_148%22,_fR.jpg (front 3/4, US).'
+        'https://commons.wikimedia.org/wiki/File:2015_Ford_Transit_250_MR_148%22,_fR.jpg (front 3/4, US), ' +
+        'https://commons.wikimedia.org/wiki/File:2023_Ford_Transit_T-350HD_XL_high_roof_extended_length_passenger_van,_rear_left,_09-28-2024.jpg (rear 3/4, rear detail 2026-10).'
     };
   })();
   reg('ford-transit-hr', TRANSIT);
@@ -577,7 +668,7 @@
   //   rear 3/4:  https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID._Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_rear_right,_2025-05-18.jpg
   //   front 3/4: https://commons.wikimedia.org/wiki/File:Volkswagen_ID._Buzz_1X7A6263.jpg
   // Signature: Bulli two-tone — white upper body, roof and a big white V on the nose over the coloured lower
-  // body; slim lamps joined by a light strip through the large VW roundel; short sloping nose, upright
+  // body; slim lamps joined by a light strip across the nose (no logo artwork); short sloping nose, upright
   // windscreen, very short overhangs, huge glasshouse with black pillars, honeycomb lower intake, full-width
   // rear light bar on the colour split, white D-pillars with three slots.
   var BUZZ = (function () {
@@ -619,24 +710,11 @@
       [K, K, P, P, Wt, Wt, Wt, Wt, Wt],      // white D-pillar
       [K, K, P, P, Wt, Wt, Wt, Wt, Wt]       // tail corner
     ];
-    // VW roundel (front / rear view), centre (a, b), radius r
-    function vw(a, b, r) {
-      var w = r * 0.13;
-      return {
-        ring: [ell(a, b, r, r, 16)], inner: [ell(a, b, r * 0.84, r * 0.84, 16)],
-        lines: [
-          seg([a - r * 0.52, b + r * 0.62], [a, b - r * 0.06], w), seg([a + r * 0.52, b + r * 0.62], [a, b - r * 0.06], w),
-          seg([a - r * 0.78, b + r * 0.12], [a - r * 0.40, b - r * 0.70], w), seg([a - r * 0.40, b - r * 0.70], [a, b - r * 0.12], w),
-          seg([a, b - r * 0.12], [a + r * 0.40, b - r * 0.70], w), seg([a + r * 0.40, b - r * 0.70], [a + r * 0.78, b + r * 0.12], w)
-        ]
-      };
-    }
     // extra block capitals for the rear "ID. BUZZ" badge (local additions; the shared set has no B / U / Z / '.')
     if (!GLYPH.B) GLYPH.B = [[0, 0, 1, 5], [1, 4, 2.4, 5], [1, 2, 2.4, 3], [1, 0, 2.4, 1], [2.2, 3, 3, 4.4], [2.2, 0.6, 3, 2]];
     if (!GLYPH.U) GLYPH.U = [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1]];
     if (!GLYPH.Z) GLYPH.Z = [[0, 4, 3, 5], [0, 0, 3, 1], [1.9, 3, 3, 4], [1, 2, 2, 3], [0, 1, 1.1, 2]];
     if (!GLYPH['.']) GLYPH['.'] = [[1, 0, 2, 1]];
-    var fl = vw(0, 1.01, 0.10), rl = vw(0, 1.02, 0.075);
     var holes = [];
     [0.515, 0.445, 0.375].forEach(function (y, r) {
       for (var k = -5; k <= 5; k++) {
@@ -650,33 +728,46 @@
       parts: [].concat(
         // the white V on the nose
         polys([[[-0.93, 1.0], [-0.74, 0.84], [-0.40, 0.68], [0, 0.625], [0.40, 0.68], [0.74, 0.84], [0.93, 1.0], [0.96, 1.12], [-0.96, 1.12]]], 'front', 'white', 0.004, false),
-        // slim lamps, the light strip through the roundel, amber tips
+        // slim lamps, the light strip between them, amber tips
         polys([[[0.13, 0.985], [0.78, 0.958], [0.925, 1.005], [0.905, 1.065], [0.15, 1.035]]], 'front', 'gloss', 0.007, true),
         polys([[[0.30, 1.012], [0.80, 1.022], [0.895, 1.035], [0.89, 1.052], [0.30, 1.028]]], 'front', 'light', 0.010, true),
         polys([[[0.45, 0.975], [0.78, 0.965], [0.86, 0.99], [0.78, 0.99], [0.45, 0.995]]], 'front', 'light', 0.010, true),
         polys([rect(0.10, 1.008, 0.30, 1.022)], 'front', 'drl', 0.010, true),
         polys([[[0.81, 1.03], [0.90, 1.022], [0.885, 1.05], [0.80, 1.048]]], 'front', 'indicator', 0.012, true),
-        polys(fl.ring, 'front', 'chrome', 0.012, false),
-        polys(fl.inner, 'front', 'gloss', 0.014, false),
-        polys(fl.lines, 'front', 'chrome', 0.016, false),
         // honeycomb lower intake (body-colour lattice, dark cells) + dark lower lip
         polys(holes, 'front', 'grille', 0.006, false),
         polys([rect(-0.12, 0.33, 0.12, 0.37)], 'front', 'grille', 0.006, false),
         // front plate on the bumper above the honeycomb (audit: missing; the real plate sits over the intake)
         polys([rect(-0.25, 0.455, 0.25, 0.555)], 'front', 'plate', 0.009, false),
-        // rear: white upper tailgate, big window, full-width light bar, roundel + ID. BUZZ, plate recess, bumper
+        // rear: white upper tailgate, big window, full-width light bar, ID. BUZZ text, plate recess, bumper
         polys([[[-0.96, 1.17], [0.96, 1.17], [0.90, 1.90], [-0.90, 1.90]]], 'rear', 'white', 0.004, false),
         polys([[[-0.76, 1.27], [0.76, 1.27], [0.64, 1.80], [-0.64, 1.80]]], 'rear', 'glass', 0.007, false),
-        polys([[[0, 1.115], [0.90, 1.115], [0.945, 1.18], [0, 1.18]]], 'rear', 'tail', 0.008, true),
-        polys([[[0.60, 1.10], [0.90, 1.10], [0.945, 1.19], [0.62, 1.19]]], 'rear', 'tail', 0.010, true),
-        polys(rl.ring, 'rear', 'chrome', 0.008, false),
-        polys(rl.inner, 'rear', 'gloss', 0.010, false),
-        polys(rl.lines, 'rear', 'chrome', 0.012, false),
-        polys(word('ID. BUZZ', 0, 0.90, 0.036, 1, 0.8), 'rear', 'badge', 0.009, false),
+        // light bar on the colour split (photos): one thin red line right across, smoked clusters at the ends
+        // tapering to a point inboard, two red LED lines + a vertical brake element at the outer edge, reverse
+        polys([[[0, 1.10], [0.92, 1.10], [0.95, 1.195], [0, 1.195]]], 'rear', 'gloss', 0.006, true),
+        polys([[[0, 1.142], [0.60, 1.142], [0.60, 1.154], [0, 1.154]]], 'rear', 'tail', 0.009, true),
+        polys([[[0.48, 1.148], [0.60, 1.104], [0.925, 1.104], [0.948, 1.19], [0.60, 1.19]]], 'rear', 'smoke', 0.009, true),
+        polys([[[0.56, 1.162], [0.93, 1.162], [0.935, 1.176], [0.575, 1.176]]], 'rear', 'tail', 0.012, true),
+        polys([[[0.60, 1.120], [0.92, 1.120], [0.922, 1.133], [0.615, 1.133]]], 'rear', 'tail', 0.012, true),
+        polys([[[0.885, 1.108], [0.925, 1.108], [0.945, 1.186], [0.895, 1.186]]], 'rear', 'tail', 0.013, true),
+        polys([rect(0.70, 1.138, 0.80, 1.154)], 'rear', 'rev', 0.012, true),
+        [lowPoly([[-0.945, 1.115], [0.945, 1.115], [0.945, 1.18], [-0.945, 1.18]], 'tail', 0.01, false, 'only')],
+        // rear wiper parked at the bottom of the window, 3rd brake light in the roof spoiler lip
+        [{ t: 'poly', view: 'rear', mat: 'gloss', offset: 0.011, pts: seg([0.06, 1.30], [-0.50, 1.36], 0.016) },
+         { t: 'poly', view: 'rear', mat: 'black', offset: 0.012, pts: rect(0.03, 1.285, 0.09, 1.315) }],
+        polys([rect(-0.22, 1.805, 0.22, 1.83)], 'rear', 'tail', 0.011, false),
+        [{ t: 'text', view: 'rear', str: 'ID. BUZZ', at: [0, 0.93], h: 0.042, mat: 'badge', weight: 0.14, spacing: 1.6 }],
         polys([rect(-0.17, 0.64, 0.17, 0.75)], 'rear', 'gloss', 0.006, false),
         polys([rect(-0.15, 0.65, 0.15, 0.74)], 'rear', 'plate', 0.009, false),
+        polys([rect(-0.10, 0.752, -0.05, 0.76), rect(0.05, 0.752, 0.10, 0.76)], 'rear', 'white', 0.009, false),
+        // tailgate shut line round the lower tailgate, bright strip over the bumper, black bumper with sensor dots
+        // and round red reflectors low on the corners
+        polys([rect(-0.80, 0.585, 0.80, 0.593), rect(0.795, 0.585, 0.803, 1.10), rect(-0.803, 0.585, -0.795, 1.10)], 'rear', 'gloss', 0.007, false),
+        polys([rect(-0.60, 0.50, 0.60, 0.515)], 'rear', 'chrome', 0.007, false),
         polys([rect(-0.95, 0.34, 0.95, 0.47)], 'rear', 'black', 0.006, false),
-        polys([rect(0.80, 0.42, 0.86, 0.50)], 'rear', 'tail', 0.009, true),
+        polys([rect(-0.95, 0.335, 0.95, 0.35)], 'rear', 'gloss', 0.008, false),
+        polys([[0.50, 0.44], [0.22, 0.44]].map(function (q) { return ell(q[0], q[1], 0.012, 0.012, 6); }), 'rear', 'gloss', 0.009, true),
+        polys([ell(0.84, 0.43, 0.042, 0.042, 8)], 'rear', 'lens', 0.009, true),
         // side: D-pillar slots, door handles, sliding-door handle
         polys([0, 1, 2].map(function (k) { var y = 1.55 + k * 0.10; return rect(-2.06, y, -1.93, y + 0.03); }), 'side', 'gloss', 0.006, true),
         polys([rect(0.78, 1.00, 0.90, 1.03), rect(0.05, 1.00, 0.17, 1.03)], 'side', 'black', 0.006, true),
@@ -690,7 +781,8 @@
       notes: 'Volkswagen ID. Buzz (2022) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID.Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_front_left,_2025-03-14.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2025_Volkswagen_ID._Buzz_1st_Edition_4MOTION_in_Candy_White_%26_Pomelo_Yellow_Metallic_two-tone,_rear_right,_2025-05-18.jpg (rear 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:Volkswagen_ID._Buzz_1X7A6263.jpg (front 3/4).'
+        'https://commons.wikimedia.org/wiki/File:Volkswagen_ID._Buzz_1X7A6263.jpg (front 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:2022_Volkswagen_ID._Buzz_rear_view.jpg (rear 3/4, rear detail 2026-10).'
     };
   })();
   reg('vw-id-buzz', BUZZ);

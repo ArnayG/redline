@@ -57,45 +57,38 @@
     }
     return parts;
   }
-  /** plain oval badge (text badges only, no logo artwork): chrome oval with a dark / paint inset, sized to the
-      width the old four-ring badge spanned (r: ring radius, gap: ring spacing; view coordinates) */
-  function rings(view, zc, yc, r, gap, off, back) {
-    var ra = gap * 1.5 + r, rb = r * 0.9;
-    return [{ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(zc, yc, ra, rb, 12) },
-      { t: 'poly', view: view, mat: back ? 'paint' : 'grille', offset: off + 0.002, pts: ell(zc, yc, ra - r * 0.25, rb - r * 0.25, 12) }];
+  /* ---------------------------------------------------------------- rear-end kit (rear-view decals [z, y]) */
+  /** small round dots (parking sensors, reflector studs): n-gon per [z, y] */
+  function dots(list, r, mat, off, mirror, n) {
+    return list.map(function (q) { return { t: 'poly', view: 'rear', mat: mat || 'black', offset: off || 0.007, mirror: !!mirror, pts: ell(q[0], q[1], r, r, n || 6) }; });
   }
-
-  // block capitals on a 3x5 grid: [col0, row0, col1, row1] (rows from the bottom)
-  var GLYPH = {
-    P: [[0, 0, 1, 5], [1, 4, 3, 5], [2, 2, 3, 4], [1, 2, 2, 3]],
-    O: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1], [1, 4, 2, 5]],
-    R: [[0, 0, 1, 5], [1, 4, 2.6, 5], [2, 2.6, 3, 4], [1, 2, 2.6, 3], [2, 0, 3, 2]],
-    S: [[0, 4, 3, 5], [0, 2.5, 1, 4], [0, 2, 3, 3], [2, 1, 3, 2], [0, 0, 3, 1]],
-    C: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 0, 3, 1]],
-    H: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 2, 2, 3]],
-    E: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 2, 2.4, 3], [1, 0, 3, 1]],
-    L: [[0, 0, 1, 5], [1, 0, 3, 1]],
-    V: [[0, 1.6, 1, 5], [2, 1.6, 3, 5], [0.8, 0, 2.2, 1.7]]
-  };
-  /** word centred at (ac, bc), letter height h, extra letter spacing k; dir = +1 when +a reads left -> right */
-  function word(txt, ac, bc, h, dir, k) {
-    var cell = h / 5, lw = 3 * cell, gap = cell * (k || 1.1), total = txt.length * lw + (txt.length - 1) * gap, out = [];
-    for (var i = 0; i < txt.length; i++) {
-      var g = GLYPH[txt[i]]; if (!g) continue;
-      var x0 = -total / 2 + i * (lw + gap);
-      g.forEach(function (c) {
-        var u0 = x0 + c[0] * cell, u1 = x0 + c[2] * cell;
-        out.push(rect(ac + dir * u0, bc - h / 2 + c[1] * cell, ac + dir * u1, bc - h / 2 + c[3] * cell));
-      });
+  /** number-plate recess (black, a little larger), plate, two plate lamps under the recess top edge */
+  function plateKit(zc, y0, y1, hw) {
+    var w = hw || 0.26;
+    return [{ t: 'poly', view: 'rear', mat: 'black', offset: 0.006, pts: rect(zc - w - 0.022, y0 - 0.018, zc + w + 0.022, y1 + 0.02) },
+      { t: 'poly', view: 'rear', mat: 'plate', offset: 0.009, pts: rect(zc - w, y0, zc + w, y1) },
+      { t: 'poly', view: 'rear', mat: 'white', offset: 0.009, pts: rect(zc - w * 0.62, y1 + 0.005, zc - w * 0.42, y1 + 0.014) },
+      { t: 'poly', view: 'rear', mat: 'white', offset: 0.009, pts: rect(zc + w * 0.42, y1 + 0.005, zc + w * 0.62, y1 + 0.014) }];
+  }
+  /** rear wiper parked on the glass: pivot [z, y], arm length, angle (deg, 0 = toward +z / the viewer's right) */
+  function wiper(pz, py, L, deg) {
+    var a = deg * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a), t = 0.009, ez = pz + c * L, ey = py + sn * L;
+    var bt = 0.006;
+    return [{ t: 'poly', view: 'rear', mat: 'gloss', offset: 0.012, pts: [[pz + sn * t, py - c * t], [ez + sn * bt, ey - c * bt], [ez - sn * bt, ey + c * bt], [pz - sn * t, py + c * t]] },
+      { t: 'poly', view: 'rear', mat: 'black', offset: 0.014, pts: ell(pz, py, 0.022, 0.022, 6) }];
+  }
+  /** n vertical bars (LED blades) spread across z0..z1 between y0(z) and y1(z) (linear in z), width frac of pitch */
+  function vbars(z0, z1, y0a, y0b, y1a, y1b, n, frac, mat, off, mirror) {
+    var out = [], pitch = (z1 - z0) / n;
+    for (var i = 0; i < n; i++) {
+      var za = z0 + pitch * (i + (1 - frac) / 2), zb = za + pitch * frac, ta = (za - z0) / (z1 - z0), tb = (zb - z0) / (z1 - z0);
+      out.push({ t: 'poly', view: 'rear', mat: mat, offset: off, mirror: mirror !== false, pts: [[za, y0a + (y0b - y0a) * ta], [zb, y0a + (y0b - y0a) * tb], [zb, y1a + (y1b - y1a) * tb], [za, y1a + (y1b - y1a) * ta]] });
     }
     return out;
   }
-  /** plain round badge (text badges only, no logo artwork): chrome ring, dark / paint field, small chrome centre disc */
-  function badge(view, zc, yc, r, off, field) {
-    return [{ t: 'poly', view: view, mat: 'chrome', offset: off, pts: ell(zc, yc, r, r, 12) },
-      { t: 'poly', view: view, mat: field || 'grille', offset: off + 0.002, pts: ell(zc, yc, r * 0.82, r * 0.82, 12) },
-      { t: 'poly', view: view, mat: 'chrome', offset: off + 0.004, pts: ell(zc, yc, r * 0.22, r * 0.22, 8) }];
-  }
+  /** low-LOD-only lamp (one flat polygon per side, mirrored unless mirror === false): the chase-cam signature */
+  function lowLamp(pts, mirror, mat) { return { t: 'poly', view: 'rear', mat: mat || 'tail', low: 'only', offset: 0.012, maxTilt: 60, mirror: mirror !== false, pts: pts }; }
+  function txt(str, z, y, h, mat, o) { return Object.assign({ t: 'text', view: 'rear', str: str, at: [z, y], h: h, mat: mat || 'chrome' }, o || {}); }
 
   /* ---------------------------------------------------------------- ring builder
      station spec: { x, k:'h'|'c'|'w', m:<row tag for the strip to the next station>,
@@ -225,10 +218,9 @@
     defs['audi-rs6-avant-c8'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // Singleframe: gloss frame-less honeycomb hexagon, slot under the bonnet edge, four rings, plate
+        // Singleframe: gloss frame-less honeycomb hexagon, slot under the bonnet edge, plate (no emblem)
         polys([[[-0.53, 0.75], [0.53, 0.75], [0.62, 0.60], [0.53, 0.26], [-0.53, 0.26], [-0.62, 0.60]]], 'front', 'grille', 0.006, false),
         polys([rect(-0.40, 0.765, 0.40, 0.79)], 'front', 'black', 0.006, false),
-        rings('front', 0, 0.66, 0.042, 0.062, 0.011),
         polys([rect(-0.26, 0.40, 0.26, 0.51)], 'front', 'plate', 0.012, false),
         // corner intakes (angular, honeycomb) with the vertical blade
         polys([[[0.62, 0.26], [0.92, 0.26], [0.95, 0.66], [0.88, 0.69], [0.66, 0.58]]], 'front', 'grille', 0.006, true),
@@ -239,16 +231,29 @@
         polys([[[0.64, 0.722], [0.74, 0.738], [0.88, 0.755], [0.885, 0.766], [0.73, 0.75], [0.64, 0.732]]], 'front', 'drl', 0.012, true),
         // lower lip / splitter blade
         polys([rect(-0.92, 0.16, 0.92, 0.215)], 'front', 'black', 0.007, false),
-        // rear: light band across the tailgate, lamps with arrow tips, rings, plate, black diffuser, oval tips
-        polys([rect(-0.52, 0.985, 0.52, 1.05)], 'rear', 'gloss', 0.006, false),
-        polys([rect(-0.52, 0.985, 0.52, 0.996)], 'rear', 'chrome', 0.009, false),
-        polys([[[0.48, 0.962], [0.80, 0.968], [0.86, 1.065], [0.48, 1.075]]], 'rear', 'tail', 0.008, true),
-        polys([[[0.54, 0.99], [0.76, 0.992], [0.79, 1.04], [0.54, 1.045]]], 'rear', 'gloss', 0.011, true),
-        rings('rear', 0, 1.15, 0.034, 0.05, 0.008, true),
-        polys([rect(-0.26, 0.82, 0.26, 0.93)], 'rear', 'plate', 0.007, false),
-        polys([[[-0.86, 0.24], [0.86, 0.24], [0.88, 0.47], [0.80, 0.47], [0.76, 0.30], [-0.76, 0.30], [-0.80, 0.47], [-0.88, 0.47]]], 'rear', 'chrome', 0.006, false),
-        polys([rect(-0.76, 0.24, 0.76, 0.30)], 'rear', 'grille', 0.008, false),
-        polys([rect(-0.44, 0.30, 0.44, 0.38)], 'rear', 'grille', 0.008, false),
+        // rear (C8 rear photos IAA 2019 / 2019 RS6 Rear End / 2023 Nardo Grey rear): smoked lamps with ten vertical
+        // LED blades and a lit top edge, split at the tailgate shut line, plate between the lamps, chrome strip,
+        // "RS 6" under the left lamp, silver U diffuser surround round a honeycomb diffuser, red
+        // corner lamps, sensor dots, roof spoiler with the 3rd brake light, rear wiper
+        polys([[[0.33, 0.968], [0.80, 0.962], [0.865, 1.065], [0.33, 1.08]]], 'rear', 'smoke', 0.007, true),
+        polys([[[0.34, 1.062], [0.84, 1.052], [0.856, 1.068], [0.34, 1.078]]], 'rear', 'tail', 0.010, true),
+        vbars(0.39, 0.81, 0.98, 0.976, 1.052, 1.05, 10, 0.42, 'tail', 0.010),
+        polys([rect(0.345, 0.985, 0.372, 1.04)], 'rear', 'rev', 0.010, true),
+        polys([[[0.40, 0.969], [0.79, 0.965], [0.80, 0.972], [0.40, 0.976]]], 'rear', 'indicator', 0.010, true),
+        polys([rect(0.598, 0.95, 0.606, 1.085)], 'rear', 'black', 0.013, true),     // tailgate shut line through the lamp
+        polys([rect(-0.606, 0.842, 0.606, 0.85), rect(0.598, 0.842, 0.606, 0.96)], 'rear', 'black', 0.007, true),
+        polys([rect(-0.33, 1.046, 0.33, 1.056)], 'rear', 'chrome', 0.009, false),
+        plateKit(0, 0.93, 1.03, 0.235),
+        [txt('RS 6', -0.47, 0.905, 0.034, 'chrome', { skew: 0.12 })],
+        polys([[[-0.78, 0.25], [0.78, 0.25], [0.80, 0.46], [0.75, 0.46], [0.71, 0.30], [-0.71, 0.30], [-0.75, 0.46], [-0.80, 0.46]]], 'rear', 'badge', 0.006, false).map(tilt(12)),
+        polys([[[-0.71, 0.30], [0.71, 0.30], [0.745, 0.44], [-0.745, 0.44]]], 'rear', 'grille', 0.004, false).map(tilt(12)),
+        polys([-3, -1, 1, 3].map(function (k) { var z = k * 0.1; return rect(z - 0.008, 0.305, z + 0.008, 0.43); }), 'rear', 'gloss', 0.004, false).map(tilt(12)),
+        polys([rect(0.79, 0.31, 0.806, 0.45)], 'rear', 'tail', 0.010, true),
+        dots([[0.22, 0.56], [0.52, 0.55]], 0.009, 'gloss', 0.007, true),
+        polys([rect(-0.24, 1.322, 0.24, 1.332)], 'rear', 'tail', 0.010, false),
+        wiper(0.0, 1.17, 0.40, 8),
+        [{ t: 'prism', mat: 'gloss', mirror: true, z0: 0, z1: 0.50, pts2d: [[-2.16, 1.36], [-2.33, 1.338], [-2.335, 1.322], [-2.20, 1.338]] }],
+        [lowLamp([[0.33, 0.965], [0.82, 0.962], [0.865, 1.065], [0.33, 1.08]]), lowLamp(rect(0.79, 0.31, 0.806, 0.45))],
         // flush black roof rails, door handles, mirrors, side blade
         [{ t: 'prism', mat: 'gloss', mirror: true, z0: 0.585, z1: 0.645, pts2d: [[0.05, 1.432], [-0.60, 1.458], [-1.40, 1.448], [-2.05, 1.38], [-2.05, 1.40], [-1.40, 1.468], [-0.60, 1.478], [0.05, 1.45]] }],
         polys([rect(0.42, 0.955, 0.56, 0.98), rect(-0.68, 0.98, -0.54, 1.005)], 'side', 'black', 0.004, true),
@@ -259,7 +264,9 @@
       notes: 'Audi RS 6 Avant (C8) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2021_Audi_RS6_Avant_in_Nardo_Gray,_front_right.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Audi_RS6_Avant_C8_IMG_0344.jpg (front 3/4), ' +
-        'https://commons.wikimedia.org/wiki/File:Audi_RS6_Avant_C8_at_IAA_2019_IMG_0304.jpg (rear 3/4).'
+        'https://commons.wikimedia.org/wiki/File:Audi_RS6_Avant_C8_at_IAA_2019_IMG_0304.jpg (rear 3/4), ' +
+        'rear-detail pass: https://commons.wikimedia.org/wiki/File:2019_Audi_RS6_Avant_4.0_Rear_End.jpg (rear), ' +
+        'https://commons.wikimedia.org/wiki/File:2023_Audi_RS6_Avant_in_Nardo_Grey_(Rear).jpg (rear 3/4).'
     };
   })();
 
@@ -299,8 +306,7 @@
         // Panamericana grille: chrome frame, dark field, vertical chrome slats, big round badge
         polys([[[-0.31, 0.70], [0.31, 0.70], [0.38, 0.385], [-0.38, 0.385]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.29, 0.685], [0.29, 0.685], [0.355, 0.40], [-0.355, 0.40]]], 'front', 'grille', 0.008, false),
-        polys([-4, -3, -2, 2, 3, 4].map(function (k) { var z = k * 0.07; return rect(z - 0.007, 0.41, z + 0.007, 0.675); }), 'front', 'chrome', 0.011, false),
-        badge('front', 0, 0.545, 0.095, 0.012),
+        polys([-4, -3, -2, -1, 0, 1, 2, 3, 4].map(function (k) { var z = k * 0.07; return rect(z - 0.007, 0.41, z + 0.007, 0.675); }), 'front', 'chrome', 0.011, false),   // no star: slats run across
         // flat angular LED lamps with the eyebrow DRL
         polys([[[0.40, 0.665], [0.47, 0.71], [0.82, 0.765], [0.885, 0.735], [0.82, 0.685], [0.55, 0.625]]], 'front', 'gloss', 0.006, true),
         polys([[[0.46, 0.66], [0.50, 0.69], [0.80, 0.735], [0.83, 0.715], [0.78, 0.69], [0.56, 0.645]]], 'front', 'light', 0.009, true),
@@ -310,16 +316,33 @@
         polys([[[0.52, 0.355], [0.86, 0.37], [0.865, 0.395], [0.53, 0.38]]], 'front', 'paint', 0.009, true),
         polys([rect(-0.44, 0.19, 0.44, 0.30)], 'front', 'grille', 0.006, false),
         polys([rect(-0.26, 0.29, 0.26, 0.385)], 'front', 'plate', 0.009, false),
-        // rear: wide two-piece lamps into the tailgate, chrome strip, round badge, plate, diffuser, quad tips
-        polys([[[0.47, 0.985], [0.84, 0.99], [0.89, 1.06], [0.84, 1.105], [0.47, 1.10]]], 'rear', 'tail', 0.008, true),
-        polys([[[0.30, 1.01], [0.47, 0.995], [0.47, 1.09], [0.30, 1.07]]], 'rear', 'tail', 0.008, true),
+        // rear (S213 facelift rear photos, Toronto E 63 S / E220d AMG Line): wide two-piece smoked lamps with
+        // three red LED light-lines (outer) / two (tailgate piece), reverse + indicator strips, chrome strip,
+        // round badge with "AMG" / "E 63 S" either side, plate recess, black diffuser with fins and a chrome
+        // blade, quad trapezoid tips, corner reflectors, sensor dots, roof spoiler + 3rd brake light, wiper
+        polys([[[0.47, 0.985], [0.84, 0.99], [0.89, 1.06], [0.84, 1.105], [0.47, 1.10]]], 'rear', 'smoke', 0.007, true),
+        polys([[[0.30, 1.01], [0.47, 0.995], [0.47, 1.09], [0.30, 1.07]]], 'rear', 'smoke', 0.007, true),
+        polys([0, 1, 2].map(function (k) { var y = 1.005 + k * 0.03; return [[0.47, y], [0.80 + k * 0.03, y + 0.004], [0.83 + k * 0.03, y + 0.014], [0.47, y + 0.011]]; }), 'rear', 'tail', 0.010, true),
+        polys([0, 1].map(function (k) { var y = 1.02 + k * 0.032; return [[0.31, y - 0.004], [0.468, y], [0.468, y + 0.011], [0.31, y + 0.007]]; }), 'rear', 'tail', 0.010, true),
+        polys([[[0.84, 1.098], [0.86, 1.07], [0.875, 1.072], [0.855, 1.10]]], 'rear', 'tail', 0.010, true),
+        polys([rect(0.36, 1.075, 0.44, 1.083)], 'rear', 'rev', 0.010, true),
+        polys([[[0.50, 0.992], [0.80, 0.995], [0.81, 1.0], [0.50, 0.998]]], 'rear', 'indicator', 0.010, true),
+        polys([rect(0.468, 0.99, 0.474, 1.10)], 'rear', 'black', 0.012, true),      // tailgate split between the lamp halves
         polys([[[-2.47, 0.995], [-2.48, 1.10], [-2.535, 1.09], [-2.575, 1.0], [-2.54, 0.985]]], 'side', 'tail', 0.006, true),
+        [txt('AMG', -0.20, 1.078, 0.026, 'chrome'), txt('E 63 S', 0.20, 1.078, 0.024, 'chrome')],
+        polys([rect(-0.472, 0.84, 0.472, 0.847), rect(0.466, 0.84, 0.473, 0.99)], 'rear', 'black', 0.007, true),
+        polys([rect(0.76, 0.47, 0.83, 0.49)], 'rear', 'lens', 0.008, true),
+        dots([[0.24, 0.56], [0.55, 0.55]], 0.009, 'gloss', 0.007, true),
+        polys([rect(-0.24, 1.34, 0.24, 1.35)], 'rear', 'tail', 0.010, false),
+        wiper(0.0, 1.16, 0.38, 10),
+        [{ t: 'prism', mat: 'paint', mirror: true, z0: 0, z1: 0.47, pts2d: [[-2.33, 1.372], [-2.45, 1.352], [-2.455, 1.338], [-2.36, 1.35]] }],
+        [lowLamp([[0.30, 1.0], [0.84, 0.99], [0.89, 1.06], [0.84, 1.105], [0.30, 1.08]])],
         // chrome DLO surround curling round the rounded rear end of the quarter glass onto the D-pillar
         polys([[[-2.215, 1.118], [-2.25, 1.125], [-2.275, 1.21], [-2.255, 1.305], [-2.225, 1.30], [-2.245, 1.21], [-2.228, 1.135]]], 'side', 'chrome', 0.006, true),
         polys([rect(-0.30, 1.03, 0.30, 1.045)], 'rear', 'chrome', 0.008, false),
-        badge('rear', 0, 1.075, 0.04, 0.008, 'paint'),
-        polys([rect(-0.26, 0.86, 0.26, 0.97)], 'rear', 'plate', 0.008, false),
+        plateKit(0, 0.875, 0.975, 0.24),
         polys([rect(-0.84, 0.22, 0.84, 0.42)], 'rear', 'grille', 0.006, false),
+        polys([-3, -1, 1, 3].map(function (k) { var z = k * 0.1; return rect(z - 0.008, 0.25, z + 0.008, 0.40); }), 'rear', 'gloss', 0.010, false),
         polys([rect(-0.84, 0.42, 0.84, 0.435)], 'rear', 'chrome', 0.008, false),
         // chrome roof rails, door handles, mirrors
         [{ t: 'prism', mat: 'chrome', mirror: true, z0: 0.55, z1: 0.60, pts2d: [[0.0, 1.425], [-0.70, 1.462], [-1.50, 1.445], [-2.20, 1.385], [-2.20, 1.405], [-1.50, 1.47], [-0.70, 1.487], [0.0, 1.445]] }],
@@ -367,17 +390,13 @@
     ];
     pillar(pillar(S, -0.36, -0.46), -1.42, -1.50);   // B-pillar, C-pillar ahead of the quarter glass
     var M = matTable({ trim: 'gloss', roof: 'paint2', sill: 'black' });
-    var diag = [[-0.37, 0.455], [-0.37, 0.48], [0.37, 0.685], [0.37, 0.66]];
     defs['volvo-v60-polestar-engineered'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // upright grille: chrome frame, dark field, vertical bars, plain round badge + diagonal bar
+        // upright grille: chrome frame, dark field, vertical bars, no emblem (text-only badges)
         polys([[[-0.36, 0.42], [0.36, 0.42], [0.40, 0.46], [0.40, 0.70], [0.36, 0.745], [-0.36, 0.745], [-0.40, 0.70], [-0.40, 0.46]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.34, 0.44], [0.34, 0.44], [0.375, 0.47], [0.375, 0.69], [0.34, 0.725], [-0.34, 0.725], [-0.375, 0.69], [-0.375, 0.47]]], 'front', 'grille', 0.008, false),
         polys([-4, -3, -2, -1, 1, 2, 3, 4].map(function (k) { var z = k * 0.075; return rect(z - 0.006, 0.45, z + 0.006, 0.715); }), 'front', 'gloss', 0.010, false),
-        polys([diag], 'front', 'chrome', 0.013, false),
-        polys([ell(0, 0.57, 0.062, 0.062, 12)], 'front', 'chrome', 0.014, false),
-        polys([ell(0, 0.57, 0.046, 0.046, 12)], 'front', 'grille', 0.016, false),
         // headlamps with Thor's-hammer DRL (horizontal bar + inboard head)
         polys([[[0.42, 0.685], [0.86, 0.715], [0.905, 0.81], [0.47, 0.805], [0.41, 0.75]]], 'front', 'gloss', 0.006, true),
         polys([[[0.68, 0.716], [0.84, 0.728], [0.872, 0.79], [0.68, 0.792]]], 'front', 'light', 0.009, true),
@@ -388,13 +407,28 @@
         polys([0, 1, 2].map(function (k) { var y = 0.33 + k * 0.06; return [[0.60 + k * 0.009, y], [0.83 + k * 0.009, y], [0.835 + k * 0.009, y + 0.012], [0.605 + k * 0.009, y + 0.012]]; }), 'front', 'chrome', 0.009, true),
         polys([rect(-0.55, 0.19, 0.55, 0.29)], 'front', 'grille', 0.006, false),
         polys([rect(-0.26, 0.30, 0.26, 0.40)], 'front', 'plate', 0.008, false),
-        // rear: L-shaped lamps up the D-pillars, VOLVO letters, plate, black diffuser with integrated tips
-        polys([[[0.60, 0.92], [0.80, 0.93], [0.80, 1.31], [0.72, 1.33], [0.70, 1.0], [0.60, 1.0]]], 'rear', 'tail', 0.008, true),
+        // rear (V60 rear photos, PE Washington DC / 2018 Momentum PRO): tall L lamps up the D-pillars, red lens with
+        // the lit L outline + inner blade, indicator / reverse in the inner column, VOLVO spaced letters under the
+        // glass, "V60" left, plate recess, tailgate shut line, black diffuser with chrome blade and integrated
+        // outlets, red reflector slits, sensor dots, roof spoiler + 3rd brake light, rear wiper
+        polys([[[0.60, 0.92], [0.80, 0.93], [0.80, 1.31], [0.72, 1.33], [0.70, 1.0], [0.60, 1.0]]], 'rear', 'lens', 0.008, true),
         polys([[[0.73, 1.03], [0.775, 1.03], [0.775, 1.26], [0.74, 1.27]]], 'rear', 'gloss', 0.011, true),
+        polys([[[0.778, 0.95], [0.797, 0.95], [0.797, 1.30], [0.778, 1.312]], [[0.61, 0.928], [0.79, 0.937], [0.79, 0.953], [0.61, 0.947]],
+          [[0.705, 0.975], [0.724, 0.975], [0.735, 1.31], [0.72, 1.318]]], 'rear', 'tail', 0.011, true),
+        polys([rect(0.737, 1.12, 0.772, 1.16)], 'rear', 'rev', 0.013, true),
+        polys([rect(0.737, 1.04, 0.772, 1.07)], 'rear', 'indicator', 0.013, true),
+        [txt('VOLVO', 0, 1.03, 0.036, 'chrome', { spacing: 4.2, weight: 0.13 }), txt('V60', -0.44, 0.885, 0.03, 'chrome', { weight: 0.13 })],
+        polys([rect(-0.60, 0.80, 0.60, 0.808), rect(0.593, 0.80, 0.60, 0.92)], 'rear', 'black', 0.007, true),
+        polys([rect(-0.50, 0.40, 0.50, 0.41)], 'rear', 'chrome', 0.008, false),
+        polys([rect(0.70, 0.455, 0.79, 0.472)], 'rear', 'lens', 0.008, true),
+        dots([[0.24, 0.56], [0.55, 0.55]], 0.009, 'gloss', 0.007, true),
+        polys([rect(-0.20, 1.352, 0.20, 1.362)], 'rear', 'tail', 0.010, false),
+        wiper(0.0, 1.13, 0.36, 10),
+        [{ t: 'prism', mat: 'paint', mirror: true, z0: 0, z1: 0.50, pts2d: [[-2.15, 1.402], [-2.30, 1.378], [-2.305, 1.362], [-2.19, 1.386]] }],
+        [lowLamp([[0.60, 0.92], [0.80, 0.93], [0.80, 1.31], [0.72, 1.33], [0.70, 1.0], [0.60, 1.0]])],
         // the lamps wrap round the tail corners and climb the D-pillars (seen from the side)
         polys([[[-2.38, 0.93], [-2.52, 0.93], [-2.46, 1.10], [-2.28, 1.28], [-2.20, 1.29], [-2.33, 1.05]]], 'side', 'tail', 0.006, true),
-        polys(word('VOLVO', 0, 1.09, 0.045, 1, 3.0), 'rear', 'chrome', 0.008, false),
-        polys([rect(-0.26, 0.86, 0.26, 0.97)], 'rear', 'plate', 0.008, false),
+        plateKit(0, 0.845, 0.945, 0.24),
         polys([rect(-0.82, 0.22, 0.82, 0.40)], 'rear', 'black', 0.006, false),
         polys([rect(0.50, 0.27, 0.70, 0.33)], 'rear', 'chrome', 0.009, true),
         polys([rect(0.515, 0.28, 0.685, 0.32)], 'rear', 'gloss', 0.012, true),
@@ -459,15 +493,29 @@
         polys([rect(0.17, 0.235, 0.21, 0.37)], 'front', 'paint', 0.009, true),
         polys([rect(-0.95, 0.15, 0.95, 0.235)], 'front', 'black', 0.006, false),
         polys([rect(-0.25, 0.39, 0.25, 0.49)], 'front', 'plate', 0.008, false),
-        polys([ell(2.36, 0, 0.022, 0.018, 8)], 'top', 'indicator', 0.006, false),
-        // rear: full-width light bar with PORSCHE lettering, outer lamps with 4-point brake lights
-        polys([rect(-0.62, 0.945, 0.62, 0.99)], 'rear', 'tail', 0.008, false),
-        polys(word('PORSCHE', 0, 0.967, 0.026, 1, 2.2), 'rear', 'gloss', 0.011, false),
-        polys([[[0.60, 0.905], [0.80, 0.915], [0.84, 0.99], [0.60, 0.995]]], 'rear', 'tail', 0.008, true),
-        polys([rect(0.66, 0.93, 0.69, 0.95), rect(0.72, 0.93, 0.75, 0.95), rect(0.66, 0.96, 0.69, 0.98), rect(0.72, 0.96, 0.75, 0.98)], 'rear', 'gloss', 0.011, true),
+        // rear (Cross Turismo rear photos 2024 IMG_9332 / Turbo S CT rear): smoked full-width glass bar with a thin
+        // lit red line and chrome PORSCHE lettering, outer smoked lamps with the 4-point brake lights and a lit
+        // outline, "TAYCAN" script left, plate low in the black off-road apron, red reflector strips, diffuser
+        // ribs, sensor dots, black roof spoiler with the 3rd brake light, rear wiper
+        polys([rect(-0.62, 0.94, 0.62, 0.995)], 'rear', 'smoke', 0.008, false),
+        polys([rect(-0.62, 0.983, 0.62, 0.99), rect(-0.62, 0.944, 0.62, 0.949)], 'rear', 'tail', 0.011, false),
+        [txt('PORSCHE', 0, 0.965, 0.024, 'chrome', { spacing: 2.4, weight: 0.13 })],
+        polys([[[0.60, 0.905], [0.80, 0.915], [0.84, 0.99], [0.60, 0.995]]], 'rear', 'smoke', 0.008, true).map(tilt(40)),
+        polys([[[0.62, 0.983], [0.83, 0.98], [0.835, 0.99], [0.62, 0.993]], [[0.795, 0.918], [0.805, 0.918], [0.835, 0.982], [0.825, 0.982]]], 'rear', 'tail', 0.004, true).map(tilt(40)),
+        polys([rect(0.66, 0.93, 0.69, 0.95), rect(0.72, 0.93, 0.75, 0.95), rect(0.66, 0.96, 0.69, 0.98), rect(0.72, 0.96, 0.75, 0.98)], 'rear', 'tail', 0.004, true).map(tilt(40)),
+        polys([rect(0.61, 0.912, 0.645, 0.93)], 'rear', 'rev', 0.004, true).map(tilt(40)),
+        [txt('TAYCAN', -0.40, 0.895, 0.022, 'chrome', { skew: 0.22, weight: 0.12 })],
         polys([rect(-0.95, 0.22, 0.95, 0.52)], 'rear', 'black', 0.006, false),
-        polys([rect(-0.26, 0.60, 0.26, 0.71)], 'rear', 'plate', 0.008, false),
-        polys([rect(-0.30, 0.24, -0.27, 0.40), rect(0.27, 0.24, 0.30, 0.40)], 'rear', 'grille', 0.009, false),
+        plateKit(0, 0.38, 0.48, 0.24),
+        polys([rect(-0.30, 0.24, -0.27, 0.36), rect(0.27, 0.24, 0.30, 0.36)], 'rear', 'grille', 0.009, false),
+        polys([-0.12, -0.48, -0.62, 0.12, 0.48, 0.62].map(function (z) { return rect(z - 0.008, 0.24, z + 0.008, 0.34); }), 'rear', 'gloss', 0.009, false),
+        polys([[[0.56, 0.495], [0.82, 0.49], [0.83, 0.505], [0.56, 0.51]]], 'rear', 'lens', 0.009, true),
+        polys([rect(-0.56, 0.80, 0.56, 0.807)], 'rear', 'black', 0.007, false),
+        dots([[0.30, 0.60], [0.60, 0.59]], 0.009, 'gloss', 0.007, true),
+        polys([rect(-0.24, 1.252, 0.24, 1.26)], 'rear', 'tail', 0.010, false),
+        wiper(0.0, 1.135, 0.32, 172),
+        [{ t: 'prism', mat: 'gloss', mirror: true, z0: 0, z1: 0.42, pts2d: [[-2.05, 1.312], [-2.20, 1.29], [-2.205, 1.274], [-2.09, 1.296]] }],
+        [lowLamp(rect(-0.84, 0.94, 0.84, 0.995), false)],
         // flyline blade, rocker cladding, charge flap, door handles
         polys([[[-2.06, 1.20], [-2.13, 1.25], [-2.43, 1.0], [-2.36, 0.985]]], 'side', 'gloss', 0.006, true),
         polys([rect(1.80, 0.74, 1.98, 0.80)], 'side', 'black', 0.006, true),
@@ -517,18 +565,20 @@
     pillar(S, -0.92, -0.97);   // slim divider between the long door glass and the rear quarter glass
     var M = matTable({ trim: 'chrome', roof: 'paint2', sill: 'black' });
     function rl(z, y) {
+      // round lamp: gloss bezel, lit outer ring, smoked centre with a small lit core
       return [{ t: 'poly', view: 'rear', mat: 'gloss', offset: 0.006, mirror: true, pts: ell(z, y, 0.072, 0.072, 12) },
         { t: 'poly', view: 'rear', mat: 'tail', offset: 0.009, mirror: true, pts: ell(z, y, 0.06, 0.06, 12) },
-        ];
+        { t: 'poly', view: 'rear', mat: 'smoke', offset: 0.012, mirror: true, pts: ell(z, y, 0.042, 0.042, 12) },
+        { t: 'poly', view: 'rear', mat: 'tail', offset: 0.015, mirror: true, pts: ell(z, y, 0.016, 0.016, 8) },
+        lowLamp(ell(z, y, 0.065, 0.065, 6))];
     }
     defs['ferrari-gtc4lusso'] = {
       body: shell(S, M, 'paint', 'paint'),
       parts: [].concat(
-        // wide low mesh mouth with horizontal bars, prancing-horse badge, plate
+        // wide low mesh mouth with horizontal bars, plate (no emblem)
         polys([[[-0.62, 0.20], [0.62, 0.20], [0.765, 0.28], [0.785, 0.43], [0.65, 0.495], [-0.65, 0.495], [-0.785, 0.43], [-0.765, 0.28]]], 'front', 'gloss', 0.004, false),
         polys([[[-0.60, 0.22], [0.60, 0.22], [0.74, 0.29], [0.76, 0.42], [0.64, 0.475], [-0.64, 0.475], [-0.76, 0.42], [-0.74, 0.29]]], 'front', 'grille', 0.007, false),
         polys([0, 1].map(function (k) { var y = 0.30 + k * 0.08; return rect(-0.70 + k * 0.01, y, 0.70 - k * 0.01, y + 0.012); }), 'front', 'badge', 0.010, false),
-        polys([rect(-0.025, 0.39, 0.025, 0.44)], 'front', 'chrome', 0.012, false),
         polys([rect(-0.26, 0.245, 0.26, 0.345)], 'front', 'plate', 0.012, false),
         polys([rect(-0.92, 0.15, 0.92, 0.205)], 'front', 'black', 0.007, false),
         // slim swept-back headlamps along the fender tips (seen from above / front), DRL strip
@@ -541,8 +591,18 @@
         polys([rect(1.15, 0.80, 1.20, 0.86)], 'side', 'indicator', 0.006, true),
         // rear: quad round lamps under the ducktail, plate, black diffuser, quad round tailpipes
         rl(0.58, 0.83), rl(0.75, 0.83),
-        polys([rect(-0.26, 0.58, 0.26, 0.69)], 'rear', 'plate', 0.008, false),
+        // (rear photos IMG_4354 / Lusso T Paris 2016): plate recess under the hatch shut line, black diffuser with
+        // vertical fins, centre fog lamp, sensor dots, 3rd brake light under the roof edge
+        plateKit(0, 0.585, 0.685, 0.24),
+        polys([rect(-0.50, 0.545, 0.50, 0.552), rect(0.493, 0.545, 0.50, 0.93)], 'rear', 'black', 0.007, true),
+        polys([[[-2.02, 0.31], [-2.24, 0.31], [-2.30, 0.52], [-2.08, 0.54]]], 'side', 'gloss', 0.006, true),   // bumper corner vent behind the rear wheel
+        polys([rect(-0.80, 0.23, 0.80, 0.44)], 'rear', 'black', 0.006, false),
         polys([rect(-0.60, 0.24, -0.57, 0.44), rect(0.57, 0.24, 0.60, 0.44), rect(-0.03, 0.24, 0.03, 0.44)], 'rear', 'grille', 0.009, false),
+        polys([-0.16, -0.30, -0.70, 0.16, 0.30, 0.70].map(function (z) { return rect(z - 0.009, 0.24, z + 0.009, 0.42); }), 'rear', 'gloss', 0.010, false),
+        polys([rect(-0.13, 0.452, 0.13, 0.47)], 'rear', 'tail', 0.010, false),
+        dots([[0.25, 0.51], [0.55, 0.50]], 0.009, 'gloss', 0.007, true),
+        polys([rect(-0.24, 1.296, 0.24, 1.305)], 'rear', 'tail', 0.010, false),
+        [lowLamp(rect(-0.13, 0.452, 0.13, 0.47), false)],
         // door handles, mirrors
         polys([rect(-0.30, 0.90, -0.17, 0.92)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.10, -0.06, 0.95, 1.04, 0.76, 0.95)
@@ -597,7 +657,6 @@
         polys([[[-0.38, 0.64], [0.38, 0.64], [0.42, 0.60], [0.40, 0.43], [0.36, 0.40], [-0.36, 0.40], [-0.40, 0.43], [-0.42, 0.60]]], 'front', 'chrome', 0.005, false),
         polys([[[-0.365, 0.625], [0.365, 0.625], [0.40, 0.592], [0.385, 0.44], [0.35, 0.415], [-0.35, 0.415], [-0.385, 0.44], [-0.40, 0.592]]], 'front', 'grille', 0.008, false),
         polys([rect(-0.39, 0.49, 0.39, 0.512), rect(-0.39, 0.545, 0.39, 0.567)], 'front', 'chrome', 0.011, false),
-        badge('front', 0, 0.528, 0.095, 0.013),
         // long swept lamps reaching back into the wings, three-stroke eyebrow DRL
         polys([[[0.42, 0.635], [0.48, 0.685], [0.86, 0.75], [0.91, 0.72], [0.80, 0.665], [0.56, 0.60]]], 'front', 'gloss', 0.006, true),
         polys([[[0.47, 0.635], [0.51, 0.67], [0.84, 0.725], [0.87, 0.71], [0.79, 0.675], [0.57, 0.62]]], 'front', 'light', 0.009, true),
@@ -611,14 +670,27 @@
         polys([rect(-0.84, 0.165, 0.84, 0.18)], 'front', 'chrome', 0.008, false),
         // rear: big wedge lamps wrapping deep into the flanks, chrome strip, round badge, plate, diffuser, 3rd brake light
         // (maxTilt: the lamps straddle the tailgate's shoulder, flat decals keep their full wedge from behind)
-        polys([[[0.31, 0.93], [0.52, 0.905], [0.69, 0.855], [0.755, 0.885], [0.715, 0.99], [0.31, 0.995]]], 'rear', 'tail', 0.008, true).map(tilt(40)),
-        polys([[[0.42, 0.948], [0.58, 0.932], [0.685, 0.895], [0.71, 0.91], [0.62, 0.958], [0.42, 0.968]]], 'rear', 'gloss', 0.011, true).map(tilt(40)),
+        // (rear photos CLS 550 rear / CLS 250 CDI rear): red lens wedge with a lit outline and three LED lines,
+        // smoked inner band with the amber indicator, reverse at the inner end, "CLS 500" / "4MATIC" above the lamps
+        polys([[[0.31, 0.93], [0.52, 0.905], [0.69, 0.855], [0.755, 0.885], [0.715, 0.99], [0.31, 0.995]]], 'rear', 'lens', 0.008, true).map(tilt(40)),
+        polys([[[0.42, 0.948], [0.58, 0.932], [0.685, 0.895], [0.71, 0.91], [0.62, 0.958], [0.42, 0.968]]], 'rear', 'smoke', 0.011, true).map(tilt(40)),
+        polys([[[0.32, 0.982], [0.71, 0.978], [0.715, 0.99], [0.32, 0.993]], [[0.70, 0.89], [0.75, 0.887], [0.715, 0.985], [0.705, 0.98]],
+          [[0.36, 0.935], [0.52, 0.913], [0.69, 0.864], [0.70, 0.874], [0.53, 0.922], [0.36, 0.944]]], 'rear', 'tail', 0.014, true).map(tilt(40)),
+        polys([[[0.46, 0.953], [0.58, 0.940], [0.63, 0.925], [0.62, 0.935], [0.58, 0.948], [0.46, 0.96]]], 'rear', 'indicator', 0.014, true).map(tilt(40)),
+        polys([rect(0.325, 0.945, 0.37, 0.97)], 'rear', 'rev', 0.014, true).map(tilt(40)),
+        [txt('CLS 500', -0.43, 1.02, 0.024, 'chrome', { skew: 0.15 }), txt('4MATIC', 0.43, 1.02, 0.024, 'chrome', { skew: 0.15 })],
         polys([[[-2.22, 0.995], [-2.32, 0.845], [-2.50, 0.83], [-2.53, 0.935], [-2.40, 1.0]]], 'side', 'tail', 0.006, true),
         polys([rect(-0.31, 0.935, 0.31, 0.95)], 'rear', 'chrome', 0.008, false),
-        badge('rear', 0, 0.99, 0.034, 0.008, 'paint'),
-        polys([rect(-0.26, 0.80, 0.26, 0.91)], 'rear', 'plate', 0.008, false),
+        plateKit(0, 0.80, 0.90, 0.24),
+        polys([rect(-0.45, 0.755, 0.45, 0.762), rect(0.305, 0.755, 0.312, 0.93)], 'rear', 'black', 0.007, true),
         polys([rect(-0.80, 0.23, 0.80, 0.37)], 'rear', 'grille', 0.006, false),
+        polys([rect(-0.80, 0.37, 0.80, 0.38)], 'rear', 'chrome', 0.008, false),
+        polys([rect(-0.30, 0.325, 0.30, 0.34)], 'rear', 'lens', 0.009, false),
+        polys([[[0.72, 0.42], [0.74, 0.42], [0.775, 0.56], [0.755, 0.56]]], 'rear', 'gloss', 0.008, true),
+        dots([[0.24, 0.57], [0.52, 0.56]], 0.009, 'gloss', 0.007, true),
         polys([rect(-0.30, 1.245, 0.30, 1.257)], 'rear', 'tail', 0.008, false),
+        wiper(0.0, 1.11, 0.30, 172),
+        [lowLamp([[0.31, 0.93], [0.69, 0.855], [0.755, 0.885], [0.715, 0.99], [0.31, 0.995]]), lowLamp(rect(-0.30, 1.245, 0.30, 1.257), false)],
         // chrome belt blade to the DLO point, door handles, mirrors
         polys([rect(0.30, 0.925, 0.44, 0.948), rect(-0.85, 0.95, -0.71, 0.972)], 'side', 'chrome', 0.004, true),
         mirrorPart(0.70, 0.54, 1.0, 1.09, 0.76, 0.94)

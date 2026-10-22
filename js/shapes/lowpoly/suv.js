@@ -28,40 +28,6 @@
     return out;
   }
   function rect(a0, b0, a1, b1) { return [[a0, b0], [a1, b0], [a1, b1], [a0, b1]]; }
-  // block capitals on a 3x5 grid: [col0, row0, col1, row1] (rows from the bottom)
-  var GLYPH = {
-    A: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 4, 2, 5], [1, 2, 2, 3]],
-    B: [[0, 0, 1, 5], [1, 4, 2.3, 5], [1, 2, 2.3, 3], [1, 0, 2.3, 1], [2.3, 0.7, 3, 2.3], [2.3, 2.7, 3, 4.3]],
-    C: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 0, 3, 1]],
-    D: [[0, 0, 1, 5], [1, 0, 2.2, 1], [1, 4, 2.2, 5], [2.2, 0.8, 3, 4.2]],
-    E: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 2, 2.4, 3], [1, 0, 3, 1]],
-    G: [[0, 0, 1, 5], [1, 4, 3, 5], [1, 0, 3, 1], [2, 1, 3, 2.5], [1.6, 2, 2, 2.5]],
-    H: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 2, 2, 3]],
-    I: [[1, 0, 2, 5]],
-    J: [[2, 1, 3, 5], [0, 0, 3, 1], [0, 1, 1, 2]],
-    L: [[0, 0, 1, 5], [1, 0, 3, 1]],
-    M: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 3, 2, 4.4]],
-    N: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 2.6, 1.5, 4.2], [1.5, 1.2, 2, 3]],
-    O: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1], [1, 4, 2, 5]],
-    P: [[0, 0, 1, 5], [1, 4, 3, 5], [2, 2, 3, 4], [1, 2, 2, 3]],
-    R: [[0, 0, 1, 5], [1, 4, 2.6, 5], [2, 2.6, 3, 4], [1, 2, 2.6, 3], [2, 0, 3, 2]],
-    S: [[0, 4, 3, 5], [0, 3, 1, 4], [0, 2, 3, 3], [2, 1, 3, 2], [0, 0, 3, 1]],
-    U: [[0, 0, 1, 5], [2, 0, 3, 5], [1, 0, 2, 1]],
-    V: [[0, 1.5, 1, 5], [2, 1.5, 3, 5], [0.8, 0, 2.2, 1.5]]
-  };
-  /** word centred at (ac, bc), letter height h; dir = +1 when +a reads left -> right for the viewer */
-  function word(txt, ac, bc, h, dir, sp) {
-    var cell = h / 5, lw = 3 * cell, gap = cell * (sp || 1.1), total = txt.length * lw + (txt.length - 1) * gap, out = [];
-    for (var i = 0; i < txt.length; i++) {
-      var g = GLYPH[txt[i]]; if (!g) continue;
-      var x0 = -total / 2 + i * (lw + gap);
-      g.forEach(function (c) {
-        var u0 = x0 + c[0] * cell, u1 = x0 + c[2] * cell;
-        out.push(rect(ac + dir * u0, bc - h / 2 + c[1] * cell, ac + dir * u1, bc - h / 2 + c[3] * cell));
-      });
-    }
-    return out;
-  }
   /** arch band (side profile ring segments) extruded across z */
   function flare(cx, cy, rIn, rOut, z0, z1, mat, segs, a0d, a1d) {
     var parts = [], n = segs || 6, A0 = (a0d == null ? 0 : a0d) * Math.PI / 180, A1 = (a1d == null ? 180 : a1d) * Math.PI / 180;
@@ -134,22 +100,39 @@
       polys([[[0.45, 0.872], [0.62, 0.846], [0.82, 0.85], [0.945, 0.885], [0.972, 0.95], [0.925, 0.995], [0.70, 0.992], [0.50, 0.95]]], 'front', 'gloss', 0.006, true),
       polys([[[0.49, 0.886], [0.63, 0.864], [0.81, 0.868], [0.925, 0.898], [0.948, 0.947], [0.91, 0.978], [0.70, 0.976], [0.53, 0.944]]], 'front', 'light', 0.009, true),
       polys([[0.60, 0.895], [0.71, 0.895], [0.60, 0.94], [0.71, 0.94]].map(function (c) { return rect(c[0], c[1], c[0] + 0.08, c[1] + 0.02); }), 'front', 'drl', 0.012, true),
-      // no upper grille: slim cooling slot, crest on the bonnet lip
+      // no upper grille: slim cooling slot
       polys([rect(-0.26, 0.705, 0.26, 0.722)], 'front', 'grille', 0.005, false),
-      polys([[[-0.028, 0.885], [0.028, 0.885], [0.03, 0.925], [0, 0.935], [-0.03, 0.925]]], 'front', 'badge', 0.008, false),
       // wide trapezoid lower intake, slatted corner intakes with a silver blade, plate
       polys([[[-0.58, 0.31], [0.58, 0.31], [0.61, 0.66], [-0.61, 0.66]]], 'front', 'grille', 0.004, false),
       polys([0.405, 0.475, 0.545, 0.615].map(function (y) { return rect(-0.57, y, 0.57, y + 0.012); }), 'front', 'gloss', 0.007, false),
       polys([[[0.64, 0.36], [0.93, 0.33], [0.945, 0.73], [0.66, 0.75]]], 'front', 'grille', 0.004, true),
       polys([rect(0.65, 0.585, 0.935, 0.607)], 'front', 'chrome', 0.007, true),
       polys([rect(-0.26, 0.335, 0.26, 0.445)], 'front', 'plate', 0.009, false),
-      // rear: full-width light strip with PORSCHE lettering, 3D lamp ends, plate, reflector strip, diffuser
-      polys([rect(-0.70, 1.095, 0.70, 1.148)], 'rear', 'tail', 0.006, false),
-      polys(word('PORSCHE', 0, 1.121, 0.032, 1, 1.4), 'rear', 'gloss', 0.009, false),
-      polys([[[0.66, 1.085], [0.88, 1.09], [0.89, 1.155], [0.66, 1.15]]], 'rear', 'tail', 0.008, true),
-      polys([rect(-0.26, 0.56, 0.26, 0.67)], 'rear', 'plate', 0.006, false),
-      polys([rect(0.40, 0.49, 0.78, 0.505)], 'rear', 'tail', 0.006, true),
+      // rear (E3 facelift): smoked full-width light bar, a thin lit line along its lower edge, PORSCHE lettering in
+      // the bar, 3D lamp ends (red lens with three lit slats, reverse + indicator segments inboard), Cayenne script
+      [{ t: 'poly', view: 'rear', mat: 'smoke', offset: 0.005, pts: [[-0.84, 1.088], [0.84, 1.088], [0.85, 1.158], [-0.85, 1.158]] }],
+      [{ t: 'poly', view: 'rear', mat: 'tail', offset: 0.008, pts: [[-0.60, 1.093], [0.60, 1.093], [0.60, 1.106], [-0.60, 1.106]] }],
+      [{ t: 'text', view: 'rear', str: 'PORSCHE', at: [0, 1.128], h: 0.03, mat: 'badge', weight: 0.13, spacing: 3.2, maxTilt: 35 }],
+      [{ t: 'poly', view: 'rear', mat: 'lens', mirror: true, offset: 0.009, pts: [[0.60, 1.09], [0.84, 1.092], [0.85, 1.157], [0.60, 1.156]] }],
+      [1.100, 1.120, 1.140].map(function (y) { return { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.013, pts: [[0.66, y], [0.845, y + 0.002], [0.847, y + 0.010], [0.66, y + 0.008]] }; }),
+      [{ t: 'poly', view: 'rear', mat: 'rev', mirror: true, offset: 0.013, pts: [[0.615, 1.112], [0.645, 1.112], [0.645, 1.138], [0.615, 1.138]] }],
+      [{ t: 'poly', view: 'rear', mat: 'indicator', mirror: true, offset: 0.013, pts: [[0.66, 1.147], [0.84, 1.148], [0.84, 1.154], [0.66, 1.153]] }],
+      [{ t: 'text', view: 'rear', str: 'Cayenne', at: [0.42, 1.055], h: 0.024, mat: 'badge', weight: 0.12, skew: 0.25 }],
+      // low LOD: the light bar alone (one quad) instead of a per-side block spanning bar + bumper reflectors
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', offset: 0.006, maxTilt: 35, pts: [[-0.76, 1.09], [0.76, 1.09], [0.76, 1.155], [-0.76, 1.155]] }],
+      // tailgate shut lines (the lid wraps round the lamp ends and drops to the bumper line), wiper on the screen
+      polys([rect(0.605, 0.72, 0.615, 1.085), rect(-0.615, 0.72, 0.615, 0.728)], 'rear', 'gloss', 0.004, true),
+      polys([[[0.04, 1.33], [0.44, 1.385], [0.44, 1.398], [0.04, 1.345]]], 'rear', 'black', 0.004, false),
+      polys([ell(0.04, 1.337, 0.018, 0.018, 6)], 'rear', 'black', 0.005, false),
+      // plate recess + plate + plate lights, parking-sensor dots, bumper reflectors, diffuser with silver trim + fins
+      polys([rect(-0.29, 0.545, 0.29, 0.69)], 'rear', 'gloss', 0.004, false),
+      polys([rect(-0.26, 0.56, 0.26, 0.67)], 'rear', 'plate', 0.007, false),
+      polys([rect(-0.20, 0.676, -0.14, 0.684), rect(0.14, 0.676, 0.20, 0.684)], 'rear', 'white', 0.008, false),
+      polys([ell(0.38, 0.50, 0.014, 0.014, 6), ell(0.66, 0.49, 0.014, 0.014, 6)], 'rear', 'paint', 0.006, true),
+      polys([[[0.74, 0.47], [0.90, 0.48], [0.90, 0.505], [0.74, 0.495]]], 'rear', 'lens', 0.006, true),
       polys([[[-0.80, 0.27], [0.80, 0.27], [0.84, 0.43], [-0.84, 0.43]]], 'rear', 'black', 0.004, false),
+      polys([rect(-0.82, 0.415, 0.82, 0.428)], 'rear', 'chrome', 0.006, false),
+      polys([-0.32, -0.16, 0, 0.16, 0.32].map(function (z) { return rect(z - 0.012, 0.275, z + 0.012, 0.39); }), 'rear', 'gloss', 0.006, false),
       // tail lamps wrapping round the rear corners (seen from the side)
       polys([[[-2.30, 1.15], [-2.47, 1.14], [-2.48, 1.095], [-2.33, 1.115]]], 'side', 'tail', 0.006, true),
       // door handles
@@ -163,6 +146,9 @@
       [
         // roof spoiler over the tailgate glass, roof rails
         { t: 'prism', mat: 'paint', z0: -0.47, z1: 0.47, pts2d: [[-1.93, 1.53], [-2.16, 1.468], [-2.18, 1.443], [-2.03, 1.478]] },
+        // third brake light under the spoiler's trailing edge, spoiler side fins
+        { t: 'box', mat: 'tail', c: [-2.165, 1.452, 0], s: [0.012, 0.012, 0.36] },
+        { t: 'prism', mat: 'gloss', mirror: true, z0: 0.47, z1: 0.49, pts2d: [[-1.95, 1.525], [-2.17, 1.463], [-2.17, 1.445], [-2.03, 1.47]] },
         { t: 'prism', mat: 'black', mirror: true, z0: 0.49, z1: 0.53, pts2d: [[-0.10, 1.65], [-0.60, 1.69], [-1.50, 1.632], [-1.90, 1.556], [-1.90, 1.536], [-1.50, 1.612], [-0.60, 1.67], [-0.10, 1.63]] },
         // door mirrors: body-colour housing on a black foot
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.82, z1: 1.06, pts2d: [[0.86, 1.175], [0.68, 1.175], [0.67, 1.285], [0.83, 1.295]] },
@@ -239,27 +225,47 @@
       polys([[[0.48, 0.885], [0.97, 0.885], [0.975, 0.935], [0.49, 0.94]]], 'front', 'light', 0.007, true),
       polys([rect(0.49, 0.943, 0.975, 0.955)], 'front', 'drl', 0.010, true),
       polys([rect(-0.44, 0.86, 0.44, 0.955)], 'front', 'grille', 0.004, false),
-      polys([rect(-0.06, 0.895, 0.06, 0.925)], 'front', 'badge', 0.008, false),
-      polys(word('RANGEROVER', 0, 1.0115, 0.017, -1, 1.8), 'front', 'badge', 0.006, false),
+      [{ t: 'text', view: 'front', str: 'RANGE ROVER', at: [0, 1.0115], h: 0.017, mat: 'badge', weight: 0.14, spacing: 3, maxTilt: 40 }],
       // lower bumper: wide dark intake with a body-colour bar, corner blades, plate, dark lip
       polys([[[-0.86, 0.44], [0.86, 0.44], [0.90, 0.77], [-0.90, 0.77]]], 'front', 'grille', 0.004, false),
       polys([rect(0.66, 0.53, 0.86, 0.545)], 'front', 'chrome', 0.007, true),
       polys([rect(-0.26, 0.57, 0.26, 0.69)], 'front', 'plate', 0.008, false),
       polys([rect(-0.82, 0.36, 0.82, 0.45)], 'front', 'black', 0.004, false),
       // rear: slim tail lamps joined by a gloss band with RANGE ROVER lettering, plate, lower bumper
-      polys([[[0.56, 1.10], [0.90, 1.11], [0.905, 1.16], [0.56, 1.165]]], 'rear', 'tail', 0.007, true),
+      // lamps: red lens housing, lit upper bar (two segments split by a dark gap), smoked lower strip, reverse inboard
+      polys([[[0.56, 1.10], [0.90, 1.11], [0.905, 1.16], [0.56, 1.165]]], 'rear', 'lens', 0.007, true),
+      polys([[[0.585, 1.124], [0.735, 1.127], [0.735, 1.158], [0.585, 1.158]], [[0.75, 1.127], [0.895, 1.131], [0.897, 1.157], [0.75, 1.158]]], 'rear', 'tail', 0.011, true),
+      polys([[[0.585, 1.106], [0.895, 1.114], [0.897, 1.122], [0.585, 1.118]]], 'rear', 'smoke', 0.011, true),
+      polys([rect(0.60, 1.107, 0.64, 1.118)], 'rear', 'rev', 0.014, true),
       polys([rect(-0.56, 1.10, 0.56, 1.165)], 'rear', 'gloss', 0.005, false),
-      polys(word('RANGEROVER', 0, 1.1325, 0.032, 1, 1.9), 'rear', 'badge', 0.008, false),
-      polys([rect(-0.26, 0.74, 0.26, 0.85)], 'rear', 'plate', 0.006, false),
-      polys([rect(-0.86, 0.36, 0.86, 0.54)], 'rear', 'gloss', 0.004, false),
-      polys([rect(0.36, 0.42, 0.58, 0.48)], 'rear', 'chrome', 0.007, true),
-      polys([rect(0.70, 0.60, 0.88, 0.62)], 'rear', 'tail', 0.006, true),
+      [{ t: 'text', view: 'rear', str: 'RANGE ROVER', at: [0, 1.1325], h: 0.028, mat: 'badge', weight: 0.12, spacing: 3.4, maxTilt: 40 }],
+      [{ t: 'text', view: 'rear', str: 'SPORT', at: [-0.70, 1.065], h: 0.017, mat: 'gloss', weight: 0.16, spacing: 1.8 }],
+      // low LOD: lamps + band as three flat quads
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 30, pts: [[0.56, 1.105], [0.83, 1.11], [0.83, 1.16], [0.56, 1.16]] }],
+      [{ t: 'poly', view: 'rear', mat: 'gloss', low: 'only', offset: 0.006, maxTilt: 30, pts: [[-0.56, 1.10], [0.56, 1.10], [0.56, 1.165], [-0.56, 1.165]] }],
+      // tailgate shut lines: round under the lamp band, down the sides, across above the bumper plate recess
+      polys([rect(0.60, 0.885, 0.61, 1.098)], 'rear', 'gloss', 0.004, true),
+      polys([rect(-0.61, 0.878, 0.61, 0.886)], 'rear', 'gloss', 0.004, false),
+      // plate in a shallow trapezoid recess in the bumper, plate lights, sensor dots, reflectors
+      polys([[[-0.34, 0.72], [0.34, 0.72], [0.30, 0.865], [-0.30, 0.865]]], 'rear', 'gloss', 0.004, false),
+      polys([rect(-0.26, 0.74, 0.26, 0.85)], 'rear', 'plate', 0.007, false),
+      polys([rect(-0.18, 0.853, -0.12, 0.86), rect(0.12, 0.853, 0.18, 0.86)], 'rear', 'white', 0.008, false),
+      polys([ell(0.26, 0.58, 0.013, 0.013, 6), ell(0.56, 0.585, 0.013, 0.013, 6)], 'rear', 'gloss', 0.006, true),
+      polys([rect(0.70, 0.60, 0.88, 0.616)], 'rear', 'lens', 0.006, true),
+      // black diffuser with a recessed centre panel and silver trim, rectangular tips with chrome surrounds
+      polys([rect(-0.86, 0.34, 0.86, 0.52)], 'rear', 'gloss', 0.004, false),
+      polys([rect(-0.86, 0.515, 0.86, 0.527)], 'rear', 'chrome', 0.006, false),
+      polys([[[-0.30, 0.35], [0.30, 0.35], [0.33, 0.47], [-0.33, 0.47]]], 'rear', 'black', 0.007, false),
+      polys([rect(0.42, 0.40, 0.66, 0.47)], 'rear', 'chrome', 0.007, true),
+      polys([rect(0.432, 0.41, 0.648, 0.46)], 'rear', 'grille', 0.010, true),
       // flush door handles, side gill on the front door
       polys([rect(0.05, 1.10, 0.22, 1.115), rect(-0.95, 1.12, -0.78, 1.135)], 'side', 'gloss', 0.004, true),
       polys([[[0.95, 0.80], [0.60, 0.80], [0.60, 0.82], [0.95, 0.835]]], 'side', 'gloss', 0.004, true),
       [
         // roof spoiler, door mirrors
         { t: 'prism', mat: 'gloss', z0: -0.58, z1: 0.58, pts2d: [[-1.98, 1.712], [-2.20, 1.672], [-2.22, 1.652], [-2.00, 1.688]] },
+        // wide slim third brake light along the spoiler's trailing edge
+        { t: 'box', mat: 'tail', c: [-2.214, 1.665, 0], s: [0.012, 0.012, 0.42] },
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.85, z1: 1.09, pts2d: [[0.86, 1.19], [0.66, 1.19], [0.65, 1.31], [0.82, 1.31]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.80, 1.19, 0.90], s: [0.12, 0.04, 0.08] }
       ]
@@ -327,8 +333,6 @@
       polys([[[0.40, 0.705], [0.62, 0.70], [0.88, 0.715], [0.97, 0.745], [0.975, 0.785], [0.90, 0.80], [0.62, 0.79], [0.44, 0.745]]], 'front', 'gloss', 0.006, true),
       polys([[[0.44, 0.712], [0.62, 0.708], [0.86, 0.722], [0.95, 0.748], [0.955, 0.777], [0.88, 0.788], [0.62, 0.78], [0.47, 0.742]]], 'front', 'light', 0.009, true),
       polys([[[0.50, 0.772], [0.90, 0.778], [0.90, 0.79], [0.50, 0.784]], [[0.70, 0.776], [0.72, 0.776], [0.66, 0.715], [0.64, 0.715]]], 'front', 'drl', 0.012, true),
-      // nose: bull badge, slim slot
-      polys([[[-0.035, 0.62], [0.035, 0.62], [0.045, 0.66], [0, 0.685], [-0.045, 0.66]]], 'front', 'badge', 0.008, false),
       // huge hex lower intakes split by body-colour Y bars
       polys([[[-0.50, 0.30], [0.50, 0.30], [0.56, 0.52], [0.40, 0.60], [-0.40, 0.60], [-0.56, 0.52]]], 'front', 'grille', 0.004, false),
       polys([[[0.56, 0.30], [0.97, 0.32], [0.97, 0.66], [0.62, 0.66], [0.52, 0.56]]], 'front', 'grille', 0.004, true),
@@ -336,15 +340,33 @@
       polys([[[0.46, 0.62], [0.52, 0.62], [0.60, 0.33], [0.55, 0.32]]], 'front', 'paint', 0.007, true),
       polys([rect(-0.20, 0.43, 0.20, 0.54)], 'front', 'plate', 0.008, false),
       // rear: Y tail lamps, gloss band with LAMBORGHINI lettering, black diffuser with quad pipes, plate
-      polys([[[0.56, 1.115], [0.93, 1.10], [0.95, 1.17], [0.58, 1.175]]], 'rear', 'gloss', 0.005, true),
-      polys([[[0.58, 1.135], [0.92, 1.122], [0.935, 1.16], [0.59, 1.165]], [[0.80, 1.13], [0.87, 1.128], [0.80, 1.035], [0.745, 1.035]], [[0.86, 1.13], [0.92, 1.128], [0.94, 1.06], [0.90, 1.055]]], 'rear', 'tail', 0.008, true),
+      // arrow-shaped smoked lamps pointing outboard; lit blades along top and bottom converge on the tip (the Y),
+      // a short centre stem from the tip, reverse segment inboard
+      polys([[[0.56, 1.112], [0.86, 1.104], [0.95, 1.14], [0.87, 1.176], [0.58, 1.178]]], 'rear', 'smoke', 0.005, true),
+      polys([[[0.59, 1.160], [0.865, 1.158], [0.862, 1.168], [0.59, 1.170]], [[0.865, 1.158], [0.935, 1.137], [0.945, 1.142], [0.862, 1.168]],
+        [[0.64, 1.114], [0.858, 1.110], [0.862, 1.120], [0.64, 1.124]], [[0.858, 1.110], [0.945, 1.138], [0.935, 1.143], [0.862, 1.120]],
+        [[0.80, 1.137], [0.92, 1.138], [0.92, 1.143], [0.80, 1.142]]], 'rear', 'tail', 0.009, true),
+      polys([rect(0.59, 1.133, 0.615, 1.146)], 'rear', 'rev', 0.009, true),
       polys([[[-2.40, 1.165], [-2.53, 1.15], [-2.54, 1.10], [-2.44, 1.12]]], 'side', 'tail', 0.006, true),
       polys([rect(-0.58, 1.13, 0.58, 1.165)], 'rear', 'gloss', 0.005, false),
-      polys(word('LAMBORGHINI', 0, 1.1475, 0.022, 1, 1.5), 'rear', 'badge', 0.008, false),
-      polys([rect(-0.26, 0.78, 0.26, 0.89)], 'rear', 'plate', 0.006, false),
-      polys([[[-0.86, 0.24], [0.86, 0.24], [0.90, 0.52], [-0.90, 0.52]]], 'rear', 'black', 0.004, false),
-      polys([rect(-0.62, 0.30, 0.62, 0.34)], 'rear', 'chrome', 0.007, false),
-      polys([rect(0.64, 0.58, 0.88, 0.60)], 'rear', 'tail', 0.006, true),
+      [{ t: 'text', view: 'rear', str: 'Lamborghini', at: [0, 1.1475], h: 0.022, mat: 'badge', weight: 0.13, skew: 0.18, spacing: 1.6, maxTilt: 40 }],
+      // low LOD: arrow lamps + band
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 30, pts: [[0.56, 1.11], [0.80, 1.106], [0.85, 1.14], [0.80, 1.174], [0.58, 1.176]] }],
+      [{ t: 'poly', view: 'rear', mat: 'gloss', low: 'only', offset: 0.006, maxTilt: 30, pts: [[-0.56, 1.128], [0.56, 1.128], [0.56, 1.166], [-0.56, 1.166]] }],
+      // tailgate: shut lines, plate high on the lid with plate lights; black corner slashes either side
+      polys([rect(0.595, 0.80, 0.605, 1.10)], 'rear', 'gloss', 0.004, true),
+      polys([rect(-0.605, 0.795, 0.605, 0.803)], 'rear', 'gloss', 0.004, false),
+      polys([rect(-0.25, 0.865, 0.25, 0.985)], 'rear', 'gloss', 0.004, false),
+      polys([rect(-0.23, 0.875, 0.23, 0.975)], 'rear', 'plate', 0.007, false),
+      polys([rect(-0.16, 0.987, -0.10, 0.994), rect(0.10, 0.987, 0.16, 0.994)], 'rear', 'white', 0.008, false),
+      polys([[[0.80, 0.64], [0.87, 0.64], [0.97, 0.96], [0.93, 0.98]]], 'rear', 'black', 0.006, true),
+      // black lower bumper, grey diffuser surround with fins, reflectors, sensor dots
+      polys([[[-0.86, 0.24], [0.86, 0.24], [0.92, 0.62], [0.80, 0.64], [-0.80, 0.64], [-0.92, 0.62]]], 'rear', 'black', 0.004, false),
+      polys([rect(-0.56, 0.50, 0.56, 0.52), rect(-0.56, 0.26, -0.54, 0.50), rect(0.54, 0.26, 0.56, 0.50)], 'rear', 'rim', 0.007, false),
+      polys([-0.36, -0.18, 0, 0.18, 0.36].map(function (z) { return rect(z - 0.011, 0.27, z + 0.011, 0.49); }), 'rear', 'gloss', 0.007, false),
+      polys([rect(-0.12, 0.44, 0.12, 0.47)], 'rear', 'lens', 0.009, false),
+      polys([rect(0.66, 0.58, 0.88, 0.60)], 'rear', 'lens', 0.007, true),
+      polys([ell(0.30, 0.70, 0.012, 0.012, 6), ell(0.58, 0.70, 0.012, 0.012, 6)], 'rear', 'gloss', 0.006, true),
       // dark lower door cladding between the arches
       polys([[[0.98, 0.31], [0.98, 0.47], [-1.0, 0.50], [-1.0, 0.31]]], 'side', 'black', 0.004, true),
       // front-fender vent, door handles
@@ -356,6 +378,8 @@
       [
         // tailgate lip spoiler, door mirrors
         { t: 'prism', mat: 'paint', z0: -0.70, z1: 0.70, pts2d: [[-2.38, 1.33], [-2.50, 1.325], [-2.51, 1.30], [-2.42, 1.305]] },
+        // third brake light: slim strip along the top of the rear screen
+        { t: 'box', mat: 'tail', c: [-1.99, 1.486, 0], s: [0.04, 0.014, 0.5] },
         { t: 'prism', mat: 'mirror', mirror: true, z0: 0.82, z1: 1.07, pts2d: [[0.62, 1.09], [0.42, 1.09], [0.40, 1.20], [0.58, 1.21]] },
         { t: 'box', mat: 'black', mirror: true, c: [0.56, 1.08, 0.87], s: [0.12, 0.04, 0.08] }
       ]
@@ -457,25 +481,41 @@
       polys([ell(0.43, 0.985, 0.104, 0.104, 10)], 'front', 'gloss', 0.011, true),
       polys([ell(0.43, 0.985, 0.05, 0.05, 8)], 'front', 'light', 0.014, true),
       polys([[[0.90, 1.02], [0.94, 1.00], [0.94, 0.96], [0.90, 0.98]]], 'front', 'indicator', 0.006, true),
-      polys([rect(-0.11, 1.17, 0.11, 1.215)], 'front', 'badge', 0.006, false),
-      polys(word('JEEP', 0, 1.1925, 0.032, -1), 'front', 'gloss', 0.009, false),
+      [{ t: 'text', view: 'front', str: 'JEEP', at: [0, 1.1925], h: 0.032, mat: 'black', weight: 0.17 }],
       // RUBICON decal on the bonnet side wall (reads correctly on both sides), hood vents
-      polys(word('RUBICON', 1.62, 1.225, 0.032, 1, 1.2), 'side', 'black', 0.004, false),
-      polys(word('RUBICON', 1.62, 1.225, 0.032, -1, 1.2), 'left', 'black', 0.004, false),
+      [{ t: 'text', view: 'side', str: 'RUBICON', at: [1.62, 1.225], h: 0.032, mat: 'black', weight: 0.17 }],
+      [{ t: 'text', view: 'left', str: 'RUBICON', at: [1.62, 1.225], h: 0.032, mat: 'black', weight: 0.17 }],
       // windscreen wipers, rear window on the hardtop back, CHMSL
       polys([rect(0.66, -0.70, 0.70, -0.05), rect(0.66, 0.05, 0.70, 0.70)], 'top', 'black', 0.006, false),
       polys([rect(-0.62, 1.43, 0.62, 1.77)], 'rear', 'glass', 0.005, false),
-      // vertical tail lamps, plate, tailgate handle
-      polys([rect(0.75, 1.01, 0.855, 1.165), rect(0.75, 0.775, 0.855, 0.88)], 'rear', 'tail', 0.008, true),
-      polys([rect(0.75, 0.895, 0.855, 0.995)], 'rear', 'rev', 0.008, true),
-      polys([rect(0.42, 0.635, 0.72, 0.78)], 'rear', 'plate', 0.006, false),
+      // vertical tail lamps (JL LED): red lens, lit rounded-ring outline round the upper lamp, reverse lens in the
+      // lower lamp, black bezel down the outboard edge (wraps the tub corner)
+      polys([rect(0.735, 0.77, 0.865, 1.17)], 'rear', 'lens', 0.006, true),
+      polys([rect(0.75, 1.145, 0.85, 1.16), rect(0.75, 0.93, 0.85, 0.945), rect(0.75, 0.945, 0.765, 1.145), rect(0.835, 0.945, 0.85, 1.145),
+        rect(0.78, 1.00, 0.82, 1.09)], 'rear', 'tail', 0.010, true),
+      polys([rect(0.75, 0.83, 0.85, 0.915)], 'rear', 'rev', 0.010, true),
+      polys([rect(0.75, 0.782, 0.85, 0.818)], 'rear', 'tail', 0.010, true),
+      polys([rect(0.865, 0.77, 0.89, 1.17)], 'rear', 'gloss', 0.006, true),
+      // low LOD: one lamp quad per side
+      [{ t: 'poly', view: 'rear', mat: 'tail', low: 'only', mirror: true, offset: 0.008, maxTilt: 20, pts: [[0.74, 0.78], [0.86, 0.78], [0.86, 1.165], [0.74, 1.165]] }],
+      // tailgate: shut lines (hinge side right, latch side left), handle on the latch side, JEEP badge lower left
+      polys([rect(-0.715, 0.64, -0.705, 1.33), rect(0.705, 0.64, 0.715, 1.33), rect(-0.715, 0.632, 0.715, 0.64)], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.67, 1.235, -0.57, 1.268)], 'rear', 'black', 0.008, false),
+      [{ t: 'text', view: 'rear', str: 'JEEP', at: [-0.56, 0.69], h: 0.04, mat: 'black', weight: 0.17 }],
+      // plate with its light bar, red bumper-end reflectors
+      polys([rect(0.40, 0.625, 0.74, 0.79)], 'rear', 'black', 0.006, false),
+      polys([rect(0.42, 0.635, 0.72, 0.78)], 'rear', 'plate', 0.009, false),
+      polys([rect(0.53, 0.783, 0.61, 0.79)], 'rear', 'white', 0.011, false),
       // spare wheel face on the tyre's rear cap: dark rim with five slots, hub
       polys([ell(0, 1.0, 0.25, 0.25, 10)], 'rear', 'rim', 0.006, false),
       polys([0, 1, 2, 3, 4].map(function (k) { var a = Math.PI / 2 + k * Math.PI * 2 / 5, c = Math.cos(a), sn = Math.sin(a); return [[c * 0.10, 1.0 + sn * 0.10], [Math.cos(a + 0.42) * 0.21, 1.0 + Math.sin(a + 0.42) * 0.21], [Math.cos(a + 0.82) * 0.21, 1.0 + Math.sin(a + 0.82) * 0.21], [Math.cos(a + 1.0) * 0.10, 1.0 + Math.sin(a + 1.0) * 0.10]]; }), 'rear', 'black', 0.009, false),
       polys([ell(0, 1.0, 0.065, 0.065, 8)], 'rear', 'black', 0.011, false),
+      polys([ell(0, 1.0, 0.035, 0.035, 6)], 'rear', 'badge', 0.013, false),
+      polys([0, 1, 2, 3, 4].map(function (k) { var a = Math.PI / 2 + k * Math.PI * 2 / 5 + 0.63; return ell(Math.cos(a) * 0.085, 1.0 + Math.sin(a) * 0.085, 0.011, 0.011, 5); }), 'rear', 'chrome', 0.013, false),
       // fog lamps in the steel bumper
       polys([ell(0.64, 0.545, 0.048, 0.048, 8)], 'front', 'light', 0.006, true),
-      polys([rect(0.56, 1.24, 0.66, 1.27)], 'rear', 'black', 0.008, false),
+      // hardtop liftglass: wiper parked across the lower glass
+      polys([[[-0.02, 1.455], [-0.50, 1.50], [-0.50, 1.513], [-0.02, 1.468]]], 'rear', 'black', 0.009, false),
       // door handles, exposed door hinges, cowl vent
       polys([rect(-0.42, 1.25, -0.26, 1.282), rect(-1.28, 1.25, -1.12, 1.282)], 'side', 'black', 0.004, true),
       polys([[[1.30, 1.20], [1.00, 1.205], [1.00, 1.235], [1.30, 1.23]]], 'side', 'grille', 0.004, true),
@@ -492,12 +532,23 @@
         // red tow hooks, rock rails
         { t: 'box', mat: 'tail', mirror: true, c: [2.25, 0.505, 0.40], s: [0.04, 0.06, 0.07] },
         { t: 'box', mat: 'black', mirror: true, c: [0.0, 0.40, 0.855], s: [2.0, 0.085, 0.09] },
+        // low LOD only: the 6-station decimation keeps x 0.70 then the bumper ring at -2.21, so the tub top
+        // collapses into one long sky-lit ramp down to the bumper (read pink from the chase cam) and the tailgate
+        // face disappears; two body-colour boxes restore the box tub above the arches and the upright tailgate
+        { t: 'box', mat: 'paint', low: 'only', c: [-0.75, 1.13, 0], s: [2.90, 0.42, 1.74] },
+        { t: 'box', mat: 'paint', low: 'only', c: [-2.075, 0.98, 0], s: [0.25, 0.72, 1.74] },
         // hidden body-colour fillers inside the steel bumper and the spare tyre: the painted shell must span the
         // full length (bumper face to spare) so the body part is centred like the real car's bounding box
         { t: 'box', mat: 'paint', c: [2.20, 0.55, 0], s: [0.08, 0.06, 0.06] },
         { t: 'box', mat: 'paint', c: [-2.47, 1.0, 0], s: [0.12, 0.06, 0.06] },
         // CHMSL on the spare carrier
         { t: 'box', mat: 'tail', c: [-2.23, 1.45, 0], s: [0.03, 0.03, 0.20] },
+        // hitch receiver under the bumper (square tube, dark mouth), red tow hook on the latch side, red
+        // reflectors on the bumper ends
+        { t: 'box', mat: 'black', c: [-2.27, 0.40, 0], s: [0.10, 0.075, 0.075] },
+        { t: 'box', mat: 'grille', c: [-2.322, 0.40, 0], s: [0.004, 0.05, 0.05] },
+        { t: 'box', mat: 'tail', c: [-2.25, 0.395, -0.55], s: [0.05, 0.05, 0.035] },
+        { t: 'box', mat: 'lens', mirror: true, c: [-2.287, 0.525, 0.80], s: [0.004, 0.03, 0.09] },
         // black door mirrors on stalks, antenna
         { t: 'box', mat: 'black', mirror: true, c: [0.53, 1.49, 1.0], s: [0.17, 0.18, 0.04] },
         { t: 'box', mat: 'black', mirror: true, c: [0.56, 1.42, 0.92], s: [0.06, 0.04, 0.10] }

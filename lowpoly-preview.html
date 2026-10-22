@@ -134,7 +134,7 @@
     r.parts.forEach(function (p) {
       var mesh = G.createMesh(ctx, { positions: p.positions, normals: p.normals, colors: p.colors, colorSize: 4, uvs: p.uvs, indices: p.indices });
       var mat = p.material, local = M4.create();
-      if (/^light-/.test(p.kind)) { var mm = {}; for (var k in mat) mm[k] = mat[k]; var e = p.kind === 'light-brake' ? [0.6, 0.01, 0.01] : p.lightKey === 'light-drl' ? [2.2, 2.3, 2.4] : [0.35, 0.35, 0.33]; mm.emissive = mm.uEmissive = e; mat = mm; }
+      if (/^light-/.test(p.kind)) { var mm = {}; for (var k in mat) mm[k] = mat[k]; var e = p.kind === 'light-brake' ? (Q.brake === '1' ? [3.4, 0.06, 0.04] : [0.6, 0.01, 0.01]) : p.kind === 'light-rev' && Q.rev === '1' ? [2.2, 2.2, 2.2] : p.lightKey === 'light-drl' ? [2.2, 2.3, 2.4] : [0.35, 0.35, 0.33]; mm.emissive = mm.uEmissive = e; mat = mm; }
       if (p.attach === 'wheel' || p.attach === 'caliper') {
         var W = p.wheel; M4.identity(local); local[12] = W.x; local[13] = W.y; local[14] = W.z - W.side * (W.inset || 0);
       }

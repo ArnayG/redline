@@ -92,7 +92,10 @@ test('lowpoly: every registered model builds (auto or authored) at both LODs, fi
         assert.ok(wt <= (m.style === 'pickup' ? 1500 : 900), m.id + ' wheels ' + wt + ' tris');
       }
       if (lod === 'low') assert.ok(t >= 120 && t <= 500, m.id + ' low LOD ' + t + ' tris');
-      else assert.ok(t >= 600 && t <= 3600, m.id + ' high LOD ' + t + ' tris');
+      // high LOD: 3600 + 600 for the detailed rear (racing is seen from behind: multi-element tail lamps, light bars,
+      // diffuser fins, plate recess, badge text, wing endplates); pickups +700 (tailgate, bed rails, tow hitch on
+      // top of their larger all-terrain tyre allowance)
+      else assert.ok(t >= 600 && t <= (m.style === 'pickup' ? 4300 : 4200), m.id + ' high LOD ' + t + ' tris');
       ['cockpitEye', 'hoodCam', 'bumperCam'].forEach(function (k) { assert.ok(r[k].length === 3 && r[k].every(isFinite), m.id + ' ' + k); });
     });
   });
@@ -402,3 +405,47 @@ test('lowpoly: Garage stock spec (CB.stock) uses a def\'s wheels.stock when the 
 });
 
 if (standalone && require.main === module) console.log(process.exitCode ? 'FAILED' : 'all lowpoly tests passed');
+
+test('lowpoly: text badges (stroke font) sit flat on the rear, low:true parts draw at the low LOD, lens / smoke mats', function () {
+  var src = LP.get('porsche-911-992');
+  var d = JSON.parse(JSON.stringify(src));
+  d.parts = d.parts.filter(function (p) { return !p.low && p.mat !== 'chrome'; });   // fixture lamps / strokes only
+  d.parts.push({ t: 'text', view: 'rear', str: 'GT3 RS', at: [0, 0.85], h: 0.05, mat: 'chrome' });
+  d.parts.push({ t: 'poly', view: 'rear', mat: 'tail', low: true, maxTilt: 40, pts: [[-0.7, 0.9], [0.7, 0.9], [0.7, 0.93], [-0.7, 0.93]] });
+  d.parts.push({ t: 'poly', view: 'rear', mat: 'lens', mirror: true, pts: [[0.3, 0.7], [0.5, 0.7], [0.5, 0.75], [0.3, 0.75]] });
+  d.parts.push({ t: 'poly', view: 'rear', mat: 'smoke', mirror: true, pts: [[0.3, 0.6], [0.5, 0.6], [0.5, 0.65], [0.3, 0.65]] });
+  assert.ok(LP.validate(d).ok, JSON.stringify(LP.validate(d).errors));
+  assert.ok(!LP.validate({ body: d.body, parts: [{ t: 'text', view: 'rear', str: '', at: [0, 1], h: 0.05 }] }).ok, 'empty text rejected');
+  var C = LP._.compile('lp-text-fixture', d);
+  var strokes = C.parts.filter(function (p) { return p.t === 'poly3' && p.mat === 'badgeP'; });   // chrome text on the paint: contrast badge
+  assert.ok(strokes.length >= 15 && strokes.length <= 40, 'GT3 RS strokes ' + strokes.length);
+  var xs = strokes.map(function (p) { return p.pts.map(function (q) { return q[0]; }); }).reduce(function (a, b) { return a.concat(b); }, []);
+  assert.ok(Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.05, 'one flat plane facing the rear');
+  var zs = strokes[0].pts.map(function (q) { return q[2]; });
+  assert.ok(Math.max.apply(null, zs) < 0, 'text reads left to right from behind (G on the viewer\'s left = -z)');
+  assert.ok(C.parts.some(function (p) { return p.t === 'poly3' && p.mat === 'tail' && p.low; }), 'low flag kept on projected decals');
+  LP.register('lp-text-fixture', d);
+  var m = Object.assign({}, SH.models['porsche-911-992'], { id: 'lp-text-fixture' }), b = refBuild(SH.models['porsche-911-992']);
+  b.body.model = m.id;
+  SH.models[m.id] = m;   // fixture only (not in SH.list()); removed again below
+  var lo, hi;
+  try { lo = LP.build(b, { lod: 'low' }); hi = LP.build(b, { lod: 'high' }); } finally { delete SH.models[m.id]; LP.unregister(m.id); }
+  assert.ok(lo && hi && lo.model.id === m.id && hi.model.id === m.id, 'fixture built');
+  var tail = lo.parts.filter(function (p) { return p.kind === 'light-brake'; })[0];
+  assert.ok(tail && tail.triangles === 2, 'low LOD: the authored light bar replaces the per-side lamp quads (' + (tail && tail.triangles) + ')');
+  // contrast badge: dark lettering on white paint, chrome on dark paint
+  var white = refBuild(SH.models['porsche-911-992']); white.body.model = m.id; white.exterior = Object.assign({}, white.exterior, { paint: '#f4f4f2' });
+  var black = refBuild(SH.models['porsche-911-992']); black.body.model = m.id; black.exterior = Object.assign({}, black.exterior, { paint: '#101012' });
+  SH.models[m.id] = m; LP.register(m.id, d);
+  var hw, hb;
+  try { hw = LP.build(white, { lod: 'high' }); hb = LP.build(black, { lod: 'high' }); } finally { delete SH.models[m.id]; LP.unregister(m.id); }
+  var gw = hw.parts.filter(function (p) { return p.mat === 'gloss'; })[0], cb = hb.parts.filter(function (p) { return p.mat === 'chrome'; })[0];
+  assert.ok(hb.parts.filter(function (p) { return p.mat === 'chrome'; })[0].triangles > hw.parts.filter(function (p) { return p.mat === 'chrome'; }).reduce(function (a, p) { return a + p.triangles; }, 0), 'lettering is chrome on dark paint only');
+  assert.ok(gw && cb, 'gloss / chrome parts');
+  // low-LOD decal fit: authored low lamps stay inside the low shell's rear silhouette
+  var lt = lo.parts.filter(function (p) { return p.kind === 'light-brake'; })[0], zmax = 0;
+  for (var k = 2; k < lt.positions.length; k += 3) zmax = Math.max(zmax, Math.abs(lt.positions[k]));
+  assert.ok(zmax < 0.7 * lo.dims.width / 2 + 0.2 && zmax <= lo.shell.hw, 'low lamp inboard of the low shell (' + zmax + ')');
+  var base = lp('porsche-911-992', 'high');
+  assert.ok(hi.stats.triangles > base.stats.triangles + 30, 'text + lens adds geometry at high LOD');
+});

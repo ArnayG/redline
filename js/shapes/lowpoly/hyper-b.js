@@ -113,7 +113,6 @@
         { t: 'poly', view: 'front', mat: 'paint', mirror: true, offset: 0.008, pts: [[0.64, 0.27], [0.83, 0.25], [0.84, 0.28], [0.65, 0.30]] },
         polys([[[-0.46, 0.13], [0.46, 0.13], [0.52, 0.21], [0.42, 0.36], [0.12, 0.33], [0, 0.31], [-0.12, 0.33], [-0.42, 0.36], [-0.52, 0.21]]], 'front', 'grille', 0.005, false),
         polys([rect(-0.92, 0.12, 0.92, 0.155)], 'front', 'black', 0.006, false),
-        polys([[[-0.035, 0.44], [0.035, 0.44], [0.03, 0.49], [0, 0.505], [-0.03, 0.49]]], 'front', 'badge', 0.008, false),
         // ---- side: intake ahead of the rear wheel, black sill blade, door shut, mirrors
         polys([[[-0.50, 0.37], [-0.88, 0.58], [-0.90, 0.38], [-0.82, 0.32]]], 'side', 'grille', 0.005, true),
         polys([[[0.93, 0.15], [-0.93, 0.15], [-0.93, 0.25], [-0.50, 0.30], [0.93, 0.26]]], 'side', 'black', 0.004, true),
@@ -121,20 +120,40 @@
           { t: 'prism', mat: 'mirror', mirror: true, z0: 0.85, z1: 0.985, pts2d: [[0.36, 0.875], [0.20, 0.88], [0.19, 0.94], [0.34, 0.945]] },
           { t: 'box', mat: 'black', mirror: true, c: [0.30, 0.87, 0.83], s: [0.06, 0.025, 0.08] }
         ],
-        // ---- rear: body-colour top, full-width black mesh, slim Y tail lamps, plate, diffuser
-        polys([rect(-0.86, 0.43, 0.86, 0.80)], 'rear', 'grille', 0.005, false),
-        polys([[[0.30, 0.86], [0.66, 0.875], [0.86, 0.82], [0.86, 0.79], [0.66, 0.84], [0.30, 0.835]]], 'rear', 'tail', 0.009, true),
-        polys([strip([0.66, 0.857], [0.80, 0.905], 0.018), strip([0.66, 0.857], [0.84, 0.86], 0.016)], 'rear', 'tail', 0.010, true),
-        polys([rect(-0.30, 0.83, 0.30, 0.855)], 'rear', 'black', 0.008, false),
-        polys([rect(-0.25, 0.445, 0.25, 0.545)], 'rear', 'plate', 0.009, false),
-        polys([rect(-0.82, 0.37, 0.82, 0.43)], 'rear', 'paint', 0.007, false),
-        polys([[[-0.80, 0.37], [0.80, 0.37], [0.74, 0.20], [-0.74, 0.20]]], 'rear', 'black', 0.007, false),
+        // ---- rear (EVO): slim slanted Y tail lamps in smoked housings under the ducktail lip, honeycomb band between
+        // them with the script badge, body-colour bumper whose creases run down-inward to a black recess holding the
+        // plate and the two big round tips, tall black diffuser with vertical fins
+        polys([[[0.28, 0.835], [0.66, 0.85], [0.88, 0.80], [0.90, 0.835], [0.68, 0.895], [0.28, 0.875]]], 'rear', 'smoke', 0.007, true),
+        polys([strip([0.31, 0.862], [0.67, 0.874], 0.016), strip([0.67, 0.874], [0.87, 0.825], 0.016)], 'rear', 'tail', 0.010, true),
+        polys([strip([0.67, 0.874], [0.86, 0.862], 0.012), strip([0.55, 0.866], [0.62, 0.846], 0.010)], 'rear', 'tail', 0.010, true),
+        polys([rect(0.32, 0.843, 0.44, 0.852)], 'rear', 'rev', 0.010, true),
+        polys([[[0.70, 0.848], [0.84, 0.814], [0.85, 0.826], [0.71, 0.858]]], 'rear', 'lens', 0.009, true),
+        // simplified lamp for the low LOD (one slanted bar per side)
+        { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.010, low: 'only', maxTilt: 40, pts: [[0.30, 0.84], [0.60, 0.855], [0.74, 0.82], [0.74, 0.86], [0.60, 0.895], [0.30, 0.88]] },
+        { t: 'poly', view: 'rear', mat: 'gloss', offset: 0.008, low: 'only', maxTilt: 30, pts: [[-0.62, 0.42], [0.62, 0.42], [0.78, 0.79], [-0.78, 0.79]] },
+        polys([rect(-0.28, 0.835, 0.28, 0.86)], 'rear', 'black', 0.008, false),
+        // honeycomb band between / under the lamps (+ slats), script badge text
+        polys([[[-0.72, 0.70], [0.72, 0.70], [0.80, 0.79], [0.66, 0.815], [-0.66, 0.815], [-0.80, 0.79]]], 'rear', 'grille', 0.006, false),
+        polys([rect(-0.70, 0.735, 0.70, 0.742), rect(-0.74, 0.770, 0.74, 0.777)], 'rear', 'gloss', 0.008, false),
+        { t: 'text', view: 'rear', str: 'LAMBORGHINI', at: [0, 0.756], h: 0.024, mat: 'chrome', weight: 0.16 },
+        // black recess with the plate (+ plate lights) and the exhaust pockets; body-colour creases either side
+        polys([[[-0.60, 0.42], [0.60, 0.42], [0.66, 0.50], [0.56, 0.68], [-0.56, 0.68], [-0.66, 0.50]]], 'rear', 'gloss', 0.006, false),
+        polys([rect(-0.25, 0.455, 0.25, 0.565)], 'rear', 'plate', 0.009, false),
+        polys([rect(-0.12, 0.570, -0.07, 0.578), rect(0.07, 0.570, 0.12, 0.578)], 'rear', 'white', 0.009, false),
+        polys([ell(0.42, 0.50, 0.095, 0.085, 10)], 'rear', 'black', 0.008, true),
+        polys([strip([0.66, 0.50], [0.80, 0.62], 0.012)], 'rear', 'black', 0.007, true),
+        polys([rect(0.68, 0.385, 0.78, 0.405)], 'rear', 'lens', 0.009, true),
+        polys([rect(-0.82, 0.37, 0.82, 0.42)], 'rear', 'paint', 0.007, false),
+        polys([[[-0.84, 0.37], [0.84, 0.37], [0.76, 0.20], [-0.76, 0.20]]], 'rear', 'black', 0.007, false),
+        // diffuser fins (gloss blades under the tail) and a ducktail lip on the deck edge
+        [0.12, 0.32, 0.52].map(function (z) { return { t: 'prism', mat: 'gloss', mirror: true, z0: z - 0.009, z1: z + 0.009, pts2d: [[-1.62, 0.16], [-1.95, 0.215], [-2.16, 0.365], [-2.17, 0.25], [-1.95, 0.15]] }; }),
+        { t: 'prism', mat: 'paint', mirror: false, z0: -0.56, z1: 0.56, pts2d: [[-2.06, 0.978], [-2.18, 0.978], [-2.195, 0.996], [-2.08, 0.992]] },
         // engine cover louvres (hexagonal glass -> dark slats across the cover)
         polys([0, 1, 2, 3].map(function (k) { var x = -1.20 - k * 0.15; return rect(x - 0.03, -0.30, x + 0.03, 0.30); }), 'top', 'black', 0.007, false)
       ),
       wheels: { style: 'split', spokes: 5 },
       // EVO: two big round tips flanking the plate, high in the black rear mesh
-      exhaust: [{ cx: 0.36, cy: 0.50, w: 0.12, h: 0.12, mirror: true }],
+      exhaust: [{ cx: 0.42, cy: 0.50, w: 0.14, h: 0.13, mirror: true }],
       notes: 'Lamborghini Huracán EVO — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2022_Lamborghini_Huracan_EVO_Orange.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2020_Lamborghini_Huracan_EVO_RWD.jpg (front 3/4), ' +
@@ -195,30 +214,43 @@
         polys([[[0.45, 0.566], [0.64, 0.578], [0.84, 0.610], [0.88, 0.648], [0.64, 0.624], [0.46, 0.606]]], 'front', 'light', 0.009, true),
         polys([strip([0.43, 0.607], [0.64, 0.636], 0.012), strip([0.64, 0.636], [0.88, 0.668], 0.011)], 'front', 'drl', 0.012, true),
         polys([[[0.40, 0.556], [0.49, 0.562], [0.51, 0.51], [0.48, 0.455], [0.43, 0.45], [0.395, 0.49]]], 'front', 'gloss', 0.007, true),
-        // full-width low mesh grille (the "hammerhead" mouth) with plate, outer corner ducts, splitter, yellow shield
+        // full-width low mesh grille (the "hammerhead" mouth) with plate, outer corner ducts, splitter
         polys([[[-0.66, 0.17], [0.66, 0.17], [0.74, 0.25], [0.70, 0.37], [0.52, 0.40], [-0.52, 0.40], [-0.70, 0.37], [-0.74, 0.25]]], 'front', 'grille', 0.005, false),
         polys([rect(-0.24, 0.24, 0.24, 0.33)], 'front', 'plate', 0.009, false),
         polys([[[0.78, 0.16], [0.95, 0.17], [0.97, 0.30], [0.82, 0.32]]], 'front', 'grille', 0.005, true),
         polys([rect(-0.88, 0.12, 0.88, 0.16)], 'front', 'black', 0.006, false),
-        polys([rect(-0.025, 0.46, 0.025, 0.52)], 'front', 'indicator', 0.008, false),
         // side: dark sill blade
         polys([[[0.90, 0.13], [-0.90, 0.13], [-0.90, 0.22], [-0.40, 0.26], [0.90, 0.21]]], 'side', 'black', 0.004, true),
         [
           { t: 'prism', mat: 'mirror', mirror: true, z0: 0.86, z1: 1.0, pts2d: [[0.34, 0.89], [0.18, 0.895], [0.17, 0.955], [0.32, 0.96]] },
           { t: 'box', mat: 'black', mirror: true, c: [0.28, 0.88, 0.84], s: [0.06, 0.025, 0.08] }
         ],
-        // rear: full-width black spoiler band, slim tail lamps at its ends (+ the short second bar), mesh panels
-        // either side of the central exhaust, plate, black diffuser
+        // rear: full-width black active-spoiler band with the twin-bar lamps at its ends (long upper bar, short lower
+        // bar, smoked housings), perforated panels either side of the oval exhaust mouth with the single wide centre
+        // tip, black diffuser with the plate, low red reflector strips and big fins, high-mounted stop lamp
         polys([[[-0.92, 0.84], [0.92, 0.84], [0.95, 0.92], [-0.95, 0.92]]], 'rear', 'gloss', 0.007, false),
-        polys([[[0.50, 0.865], [0.90, 0.87], [0.93, 0.905], [0.52, 0.898]]], 'rear', 'tail', 0.010, true),
-        polys([rect(0.66, 0.80, 0.88, 0.823)], 'rear', 'tail', 0.009, true),
-        polys([[[0.22, 0.56], [0.76, 0.56], [0.84, 0.62], [0.80, 0.69], [0.24, 0.69]]], 'rear', 'grille', 0.006, true),
-        polys([rect(-0.25, 0.42, 0.25, 0.51)], 'rear', 'plate', 0.009, false),
-        polys([[[-0.84, 0.41], [-0.30, 0.41], [-0.26, 0.53], [0.26, 0.53], [0.30, 0.41], [0.84, 0.41], [0.78, 0.22], [-0.78, 0.22]]], 'rear', 'black', 0.007, false),
-        polys([rect(-0.025, 0.75, 0.025, 0.80)], 'rear', 'indicator', 0.008, false)
+        { t: 'prism', mat: 'carbon', mirror: false, z0: -0.48, z1: 0.48, pts2d: [[-2.19, 0.905], [-2.27, 0.895], [-2.275, 0.92], [-2.20, 0.93]] },
+        polys([[[0.48, 0.79], [0.88, 0.795], [0.945, 0.83], [0.94, 0.915], [0.50, 0.912]]], 'rear', 'smoke', 0.009, true),
+        polys([[[0.52, 0.868], [0.89, 0.872], [0.925, 0.89], [0.92, 0.904], [0.54, 0.900]]], 'rear', 'tail', 0.011, true),
+        polys([[[0.68, 0.810], [0.88, 0.812], [0.915, 0.826], [0.91, 0.840], [0.69, 0.836]]], 'rear', 'tail', 0.011, true),
+        polys([rect(0.55, 0.848, 0.70, 0.858)], 'rear', 'rev', 0.011, true),
+        { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.011, low: 'only', maxTilt: 40, pts: [[0.46, 0.81], [0.74, 0.815], [0.74, 0.905], [0.46, 0.90]] },
+        { t: 'poly', view: 'rear', mat: 'gloss', offset: 0.008, low: 'only', maxTilt: 30, pts: [[-0.80, 0.43], [0.80, 0.43], [0.86, 0.70], [-0.86, 0.70]] },
+        { t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.22, 1.128, 0.22, 1.142) },
+        // perforated panels (tapered, outer end high) and the oval exhaust mouth
+        polys([[[0.33, 0.57], [0.62, 0.575], [0.82, 0.63], [0.86, 0.70], [0.78, 0.735], [0.50, 0.71], [0.33, 0.69]]], 'rear', 'grille', 0.006, true),
+        polys([rect(0.38, 0.676, 0.80, 0.684), rect(0.37, 0.648, 0.80, 0.656), rect(0.36, 0.620, 0.74, 0.628), rect(0.35, 0.594, 0.64, 0.602)], 'rear', 'paint', 0.008, true),
+        polys([[[-0.30, 0.55], [0.30, 0.55], [0.34, 0.60], [0.31, 0.69], [-0.31, 0.69], [-0.34, 0.60]]], 'rear', 'gloss', 0.007, false),
+        // diffuser: black, plate (+ lights), reflector strips, fins
+        polys([[[-0.84, 0.41], [-0.30, 0.41], [-0.26, 0.535], [0.26, 0.535], [0.30, 0.41], [0.84, 0.41], [0.78, 0.22], [-0.78, 0.22]]], 'rear', 'black', 0.007, false),
+        polys([[[-0.46, 0.40], [0.46, 0.40], [0.40, 0.545], [-0.40, 0.545]]], 'rear', 'gloss', 0.008, false),
+        polys([rect(-0.25, 0.42, 0.25, 0.51)], 'rear', 'plate', 0.010, false),
+        polys([rect(-0.10, 0.514, -0.06, 0.522), rect(0.06, 0.514, 0.10, 0.522)], 'rear', 'white', 0.009, false),
+        polys([[[0.50, 0.37], [0.78, 0.375], [0.80, 0.39], [0.52, 0.388]]], 'rear', 'lens', 0.009, true),
+        [0.16, 0.36, 0.56].map(function (z) { return { t: 'prism', mat: 'gloss', mirror: true, z0: z - 0.009, z1: z + 0.009, pts2d: [[-1.70, 0.15], [-1.95, 0.20], [-2.26, 0.42], [-2.27, 0.32], [-1.95, 0.16]] }; })
       ),
       // the single central exhaust, high between the mesh panels
-      exhaust: [{ cx: 0, cy: 0.615, w: 0.26, h: 0.10, shape: 'trapezoid' }],
+      exhaust: [{ cx: 0, cy: 0.62, w: 0.36, h: 0.10, shape: 'trapezoid' }],
       wheels: { style: 'split', spokes: 5 },
       notes: 'Ferrari 296 GTB — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Ferrari_296_GTB_DSC_7011.jpg (front 3/4, near side), ' +
@@ -268,10 +300,9 @@
     DEFS['audi-r8-v10-gen2'] = {
       body: { stations: S, mats: M, capF: 'black', capR: 'paint' },
       parts: [].concat(
-        // wide flat hexagonal Singleframe, slot above it, four rings
+        // wide flat hexagonal Singleframe, slot above it (no emblem artwork)
         polys([[[-0.50, 0.17], [0.50, 0.17], [0.57, 0.30], [0.52, 0.50], [-0.52, 0.50], [-0.57, 0.30]]], 'front', 'grille', 0.005, false),
         polys([rect(-0.36, 0.515, 0.36, 0.535)], 'front', 'black', 0.006, false),
-        polys([-0.105, -0.035, 0.035, 0.105].reduce(function (a, z) { return a.concat(ring(z, 0.58, 0.026, 0.035, 8)); }, []), 'front', 'chrome', 0.009, false),
         polys([rect(-0.25, 0.22, 0.25, 0.33)], 'front', 'plate', 0.009, false),
         // angular headlamps (dark unit, lamp, DRL hook) and honeycomb corner intakes with a vertical blade
         polys([[[0.52, 0.53], [0.90, 0.58], [0.92, 0.635], [0.86, 0.645], [0.56, 0.60]]], 'front', 'gloss', 0.006, true),
@@ -287,15 +318,31 @@
           { t: 'prism', mat: 'mirror', mirror: true, z0: 0.86, z1: 1.0, pts2d: [[0.40, 0.90], [0.22, 0.905], [0.21, 0.97], [0.38, 0.975]] },
           { t: 'box', mat: 'black', mirror: true, c: [0.34, 0.89, 0.84], s: [0.06, 0.025, 0.08] }
         ],
-        // rear: slim tail lamps, full-width honeycomb, four rings, plate, diffuser band
-        polys([[[0.42, 0.815], [0.96, 0.80], [0.985, 0.875], [0.42, 0.90]]], 'rear', 'tail', 0.009, true),
-        polys([strip([0.46, 0.866], [0.95, 0.85], 0.010)], 'rear', 'drl', 0.012, true),
+        // rear (facelift): smoked wedge tail lamps with stacked LED bars, amber sequential indicator bar and inner
+        // reverse lamp; full-width black honeycomb under them with the plate, R8 badge text, body-colour bumper strip
+        // with parking-sensor dots, black diffuser with fins and the two big oval tips at its outer ends
+        polys([[[0.40, 0.795], [0.94, 0.78], [0.99, 0.82], [0.985, 0.905], [0.42, 0.925]]], 'rear', 'smoke', 0.008, true),
+        polys([[[0.44, 0.81], [0.93, 0.795], [0.975, 0.825], [0.97, 0.893], [0.45, 0.91]]], 'rear', 'lens', 0.009, true),
+        polys([strip([0.46, 0.893], [0.96, 0.878], 0.014), strip([0.48, 0.866], [0.97, 0.852], 0.013), strip([0.52, 0.840], [0.97, 0.826], 0.013)], 'rear', 'tail', 0.011, true),
+        polys([strip([0.94, 0.89], [0.96, 0.818], 0.014)], 'rear', 'tail', 0.011, true),
+        polys([strip([0.62, 0.807], [0.95, 0.798], 0.008)], 'rear', 'indicator', 0.011, true),
+        polys([rect(0.43, 0.818, 0.50, 0.842)], 'rear', 'rev', 0.011, true),
+        { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.011, low: 'only', maxTilt: 40, pts: [[0.40, 0.81], [0.74, 0.80], [0.74, 0.885], [0.40, 0.90]] },
+        { t: 'poly', view: 'rear', mat: 'gloss', offset: 0.008, low: 'only', maxTilt: 30, pts: [[-0.86, 0.50], [0.86, 0.50], [0.86, 0.79], [-0.86, 0.79]] },
         polys([[[-0.90, 0.57], [0.90, 0.57], [0.92, 0.80], [-0.92, 0.80]]], 'rear', 'grille', 0.006, false),
-        polys([-0.105, -0.035, 0.035, 0.105].reduce(function (a, z) { return a.concat(ring(z, 0.93, 0.03, 0.04, 8)); }, []), 'rear', 'chrome', 0.009, false),
+        polys([rect(-0.90, 0.63, 0.90, 0.636), rect(-0.91, 0.70, 0.91, 0.706), rect(-0.91, 0.765, 0.91, 0.771)], 'rear', 'gloss', 0.008, false),
+        { t: 'text', view: 'rear', str: 'R8', at: [-0.30, 0.935], h: 0.04, mat: 'chrome', weight: 0.17 },
         polys([rect(-0.26, 0.60, 0.26, 0.71)], 'rear', 'plate', 0.010, false),
-        polys([[[-0.92, 0.46], [0.92, 0.46], [0.84, 0.25], [-0.84, 0.25]]], 'rear', 'black', 0.007, false)
+        polys([rect(-0.10, 0.714, -0.06, 0.722), rect(0.06, 0.714, 0.10, 0.722)], 'rear', 'white', 0.010, false),
+        polys([0.22, 0.48].map(function (z) { return ell(z, 0.515, 0.014, 0.014, 6); }), 'rear', 'gloss', 0.008, true),
+        polys([[[-0.92, 0.46], [0.92, 0.46], [0.84, 0.25], [-0.84, 0.25]]], 'rear', 'black', 0.007, false),
+        [0.14, 0.32, 0.50].map(function (z) { return { t: 'prism', mat: 'gloss', mirror: true, z0: z - 0.009, z1: z + 0.009, pts2d: [[-1.55, 0.15], [-1.85, 0.21], [-2.11, 0.42], [-2.12, 0.30], [-1.85, 0.16]] }; }),
+        // high-mounted stop lamp at the top of the rear screen
+        { t: 'poly', view: 'rear', mat: 'tail', offset: 0.006, pts: rect(-0.24, 1.205, 0.24, 1.218) }
       ),
       wheels: { style: 'split', spokes: 5 },
+      // two big oval tips at the diffuser's outer ends
+      exhaust: [{ cx: 0.74, cy: 0.33, w: 0.21, h: 0.12, shape: 'oval', mirror: true }],
       notes: 'Audi R8 V10 (Type 4S facelift) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:2020_Audi_R8_V10_5.2_Front.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2020_Audi_R8_V10_5.2_Rear.jpg (rear 3/4), ' +
@@ -348,11 +395,10 @@
         polys([[[0.34, 0.47], [0.62, 0.50], [0.86, 0.57], [0.93, 0.63], [0.90, 0.665], [0.66, 0.61], [0.38, 0.545]]], 'front', 'gloss', 0.006, true),
         polys([[[0.50, 0.505], [0.70, 0.535], [0.86, 0.595], [0.85, 0.625], [0.66, 0.578], [0.50, 0.535]]], 'front', 'light', 0.009, true),
         polys([strip([0.39, 0.535], [0.66, 0.600], 0.013), strip([0.66, 0.600], [0.90, 0.656], 0.011)], 'front', 'drl', 0.012, true),
-        // black lower: centre intake, big outer intakes, splitter; crossed-flags badge on the nose
+        // black lower: centre intake, big outer intakes, splitter; (no emblem artwork)
         polys([[[-0.46, 0.13], [0.46, 0.13], [0.50, 0.24], [0.40, 0.36], [-0.40, 0.36], [-0.50, 0.24]]], 'front', 'grille', 0.005, false),
         polys([[[0.54, 0.13], [0.94, 0.14], [0.95, 0.34], [0.86, 0.44], [0.60, 0.38]]], 'front', 'grille', 0.005, true),
         polys([rect(-0.90, 0.11, 0.90, 0.145)], 'front', 'black', 0.006, false),
-        polys([[[-0.06, 0.42], [0, 0.40], [0.06, 0.42], [0.05, 0.445], [0, 0.43], [-0.05, 0.445]]], 'front', 'badge', 0.008, false),
         // side: the big door scoop (dark opening + body-colour lip), black sill
         polys([[[-0.15, 0.84], [-0.62, 0.87], [-0.78, 0.70], [-0.76, 0.48], [-0.58, 0.38], [-0.40, 0.50]]], 'side', 'grille', 0.005, true),
         polys([rect(-0.95, 0.12, 0.95, 0.21)], 'side', 'black', 0.004, true),
@@ -360,19 +406,43 @@
           { t: 'prism', mat: 'mirror', mirror: true, z0: 0.86, z1: 1.0, pts2d: [[0.40, 0.88], [0.22, 0.885], [0.21, 0.945], [0.38, 0.95]] },
           { t: 'box', mat: 'black', mirror: true, c: [0.34, 0.87, 0.84], s: [0.06, 0.025, 0.08] }
         ],
-        // rear: black fascia, stacked angular tail lamps, corner vents, plate, diffuser
-        polys([[[0.36, 0.80], [0.80, 0.82], [0.94, 0.90], [0.92, 0.94], [0.76, 0.87], [0.36, 0.845]]], 'rear', 'tail', 0.009, true),
-        polys([[[0.42, 0.73], [0.82, 0.75], [0.92, 0.82], [0.90, 0.85], [0.78, 0.79], [0.42, 0.765]]], 'rear', 'tail', 0.009, true),
-        polys([[[0.52, 0.32], [0.95, 0.33], [0.97, 0.66], [0.84, 0.70], [0.58, 0.50]]], 'rear', 'grille', 0.008, true),
-        polys([rect(-0.26, 0.48, 0.26, 0.60)], 'rear', 'plate', 0.009, false),
-        polys([[[-0.94, 0.32], [0.94, 0.32], [0.90, 0.17], [-0.90, 0.17]]], 'rear', 'black', 0.007, false)
+        // rear: wide angular split tail lamps (two cells each: stacked LED blades joined at their outer ends, smoked
+        // housing, red lens), recessed plate between them under the spaced CORVETTE lettering, deck spoiler with
+        // kicked-up ends, black mesh corner vents under the lamps, black lower fascia / diffuser, quad tips 2 + 2
+        polys([[[0.27, 0.875], [0.60, 0.865], [0.93, 0.89], [0.95, 0.975], [0.62, 1.0], [0.30, 0.975]]], 'rear', 'smoke', 0.008, true),
+        polys([[[0.33, 0.888], [0.58, 0.880], [0.58, 0.975], [0.34, 0.962]], [[0.63, 0.882], [0.91, 0.902], [0.93, 0.965], [0.63, 0.984]]], 'rear', 'lens', 0.009, true),
+        polys([strip([0.34, 0.952], [0.57, 0.962], 0.013), strip([0.36, 0.905], [0.57, 0.898], 0.013), strip([0.565, 0.898], [0.565, 0.962], 0.012),
+          strip([0.64, 0.970], [0.92, 0.955], 0.013), strip([0.64, 0.905], [0.90, 0.915], 0.013), strip([0.90, 0.915], [0.92, 0.955], 0.012)], 'rear', 'tail', 0.011, true),
+        polys([rect(0.40, 0.922, 0.52, 0.935)], 'rear', 'rev', 0.011, true),
+        { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.011, low: 'only', maxTilt: 40, pts: [[0.30, 0.885], [0.74, 0.89], [0.74, 0.975], [0.30, 0.97]] },
+        { t: 'poly', view: 'rear', mat: 'gloss', offset: 0.008, low: 'only', maxTilt: 30, pts: [[-0.80, 0.32], [0.80, 0.32], [0.82, 0.55], [-0.82, 0.55]] },
+        // plate recess (+ lights) and the lettering on the deck face above it
+        polys([[[-0.24, 0.79], [0.24, 0.79], [0.25, 0.96], [-0.25, 0.96]]], 'rear', 'gloss', 0.007, false),
+        polys([rect(-0.16, 0.81, 0.16, 0.94)], 'rear', 'plate', 0.009, false),
+        polys([rect(-0.09, 0.944, -0.05, 0.952), rect(0.05, 0.944, 0.09, 0.952)], 'rear', 'white', 0.009, false),
+        { t: 'text', view: 'rear', str: 'CORVETTE', at: [0, 1.03], h: 0.026, mat: 'black', weight: 0.15, spacing: 3.2 },
+        // deck spoiler (Z51 style): blade across the tail with kicked-up outer ends
+        { t: 'prism', mat: 'gloss', mirror: false, z0: -0.54, z1: 0.54, pts2d: [[-2.00, 1.10], [-2.24, 1.112], [-2.255, 1.136], [-2.03, 1.118]] },
+        { t: 'prism', mat: 'gloss', mirror: true, z0: 0.54, z1: 0.64, pts2d: [[-2.00, 1.095], [-2.24, 1.105], [-2.265, 1.17], [-2.06, 1.14]] },
+        // corner vents (black mesh with slats) under the lamps
+        polys([[[0.58, 0.58], [0.84, 0.585], [0.88, 0.66], [0.86, 0.76], [0.62, 0.755]]], 'rear', 'grille', 0.008, true),
+        polys([strip([0.60, 0.635], [0.87, 0.64], 0.010), strip([0.61, 0.70], [0.87, 0.705], 0.010)], 'rear', 'gloss', 0.010, true),
+        // black lower fascia / diffuser band with reflectors and centre strakes
+        polys([[[-0.94, 0.30], [0.94, 0.30], [0.96, 0.52], [0.50, 0.55], [-0.50, 0.55], [-0.96, 0.52]]], 'rear', 'black', 0.007, false),
+        polys([[[-0.92, 0.32], [0.92, 0.32], [0.90, 0.17], [-0.90, 0.17]]], 'rear', 'black', 0.007, false),
+        polys([rect(0.84, 0.47, 0.93, 0.49)], 'rear', 'lens', 0.009, true),
+        [0.12, 0.30].map(function (z) { return { t: 'prism', mat: 'gloss', mirror: true, z0: z - 0.009, z1: z + 0.009, pts2d: [[-1.60, 0.15], [-1.85, 0.18], [-2.21, 0.31], [-2.22, 0.20], [-1.85, 0.14]] }; })
       ),
       wheels: { style: 'split', spokes: 5 },
+      // quad rectangular tips in two pairs at the outer ends of the black lower fascia
+      exhaust: [{ cx: 0.56, cy: 0.40, w: 0.12, h: 0.075, shape: 'trapezoid', mirror: true }, { cx: 0.70, cy: 0.40, w: 0.12, h: 0.075, shape: 'trapezoid', mirror: true }],
       notes: 'Chevrolet Corvette Stingray (C8) — hand-authored low-poly. Reference photos: ' +
         'https://commons.wikimedia.org/wiki/File:Chevrolet_Corvette_C8_IAA_2021_1X7A0156.jpg (front 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:2021_Chevrolet_Corvette_C8_rear.jpg (rear 3/4), ' +
         'https://commons.wikimedia.org/wiki/File:Chevrolet_Corvette_C8_State_Street_Bridge_downtown_Montpelier_VT_May_2022_side.jpg (side), ' +
-        'https://commons.wikimedia.org/wiki/File:Gray_Corvette_C8_(side)_(1).jpg (rear 3/4).'
+        'https://commons.wikimedia.org/wiki/File:Gray_Corvette_C8_(side)_(1).jpg (rear 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:2023_Chevrolet_Corvette_Stingray,_rear_left,_05-26-2024.jpg (rear 3/4), ' +
+        'https://commons.wikimedia.org/wiki/File:2021_Chevrolet_Corvette_Stingray,_rear_right,_08-30-2026.jpg (rear 3/4).'
     };
   })();
 
@@ -455,11 +525,10 @@
         polys([[[0.48, 0.35], [0.66, 0.32], [0.84, 0.35], [0.925, 0.44], [0.91, 0.54], [0.80, 0.575], [0.62, 0.545], [0.50, 0.46]]], 'front', 'gloss', 0.006, true),
         polys([strip([0.54, 0.345], [0.83, 0.362], 0.013), strip([0.83, 0.362], [0.90, 0.445], 0.013), strip([0.90, 0.445], [0.89, 0.535], 0.013), strip([0.89, 0.535], [0.64, 0.53], 0.012)], 'front', 'drl', 0.010, true),
         polys([rect(0.64, 0.47, 0.84, 0.50), rect(0.66, 0.405, 0.83, 0.435)], 'front', 'light', 0.009, true),
-        // wide black hexagonal mouth with the angular dark corner ducts, splitter, oval badge
+        // wide black hexagonal mouth with the angular dark corner ducts, splitter
         polys([[[-0.62, 0.13], [0.62, 0.13], [0.74, 0.22], [0.64, 0.31], [-0.64, 0.31], [-0.74, 0.22]]], 'front', 'grille', 0.005, false),
         polys([[[0.72, 0.13], [0.94, 0.15], [0.95, 0.30], [0.80, 0.33], [0.76, 0.22]]], 'front', 'black', 0.005, true),
         polys([rect(-0.96, 0.11, 0.96, 0.15)], 'front', 'black', 0.006, false),
-        polys([ell(0, 0.325, 0.05, 0.022, 8)], 'front', 'badge', 0.008, false),
         // bonnet heat-extractor vents either side of the centre keel
         polys([[[2.12, 0.14], [2.10, 0.42], [1.98, 0.45], [2.0, 0.15]]], 'top', 'grille', 0.005, true),
         // side: pinched door with the big scoop into the rear pod, sill, mirrors
@@ -469,13 +538,25 @@
           { t: 'prism', mat: 'mirror', mirror: true, z0: 0.70, z1: 0.85, pts2d: [[0.46, 0.865], [0.31, 0.87], [0.30, 0.915], [0.44, 0.92]] },
           { t: 'box', mat: 'black', mirror: true, c: [0.40, 0.84, 0.66], s: [0.04, 0.02, 0.10] }
         ],
-        // rear: hollow ring tail lamps at the channel exits, dark rear panel, exhaust surround, diffuser, plate
-        // (big "afterburner" rings at the outer ends, the dark open structure between them under the deck lip)
-        polys(ring(0.71, 0.71, 0.085, 0.16, 12), 'rear', 'tail', 0.009, true),
-        polys([ell(0.71, 0.71, 0.085, 0.085, 10)], 'rear', 'gloss', 0.008, true),
-        polys([[[-0.54, 0.52], [0.54, 0.52], [0.58, 0.82], [-0.58, 0.82]]], 'rear', 'gloss', 0.006, false),
+        // rear: hollow "afterburner" LED ring lamps at the channel exits (smoked bezel, lit ring, dark open centre),
+        // body-colour centre panel with the two big dark exhaust pockets and the GT badge text, active wing blade
+        // across the tail, black honeycomb lower band with the red light strips, plate, deep diffuser fins
+        polys(ring(0.71, 0.71, 0.16, 0.178, 12), 'rear', 'smoke', 0.008, true),
+        polys(ring(0.71, 0.71, 0.095, 0.16, 12), 'rear', 'tail', 0.009, true),
+        polys(ring(0.71, 0.71, 0.072, 0.095, 10), 'rear', 'lens', 0.009, true),
+        polys([ell(0.71, 0.71, 0.072, 0.072, 10)], 'rear', 'gloss', 0.008, true),
+        { t: 'poly', view: 'rear', mat: 'tail', mirror: true, offset: 0.009, low: 'only', maxTilt: 30, pts: ell(0.62, 0.71, 0.12, 0.14, 8) },
+        polys([ell(0.11, 0.70, 0.115, 0.115, 12)], 'rear', 'gloss', 0.007, true),
+        { t: 'text', view: 'rear', str: 'GT', at: [0, 0.855], h: 0.045, mat: 'chrome', weight: 0.17, skew: 0.25 },
+        { t: 'prism', mat: 'carbon', mirror: false, z0: -0.60, z1: 0.60, pts2d: [[-2.22, 0.95], [-2.45, 0.935], [-2.47, 0.958], [-2.24, 0.972]] },
         polys([[[-0.92, 0.42], [0.92, 0.42], [0.86, 0.18], [-0.86, 0.18]]], 'rear', 'grille', 0.007, false),
-        polys([rect(-0.24, 0.24, 0.24, 0.36)], 'rear', 'plate', 0.010, false)
+        polys([rect(-0.90, 0.415, 0.90, 0.44)], 'rear', 'black', 0.007, false),
+        polys([rect(0.30, 0.38, 0.72, 0.392)], 'rear', 'tail', 0.009, true),
+        polys([rect(0.76, 0.30, 0.84, 0.33)], 'rear', 'rev', 0.009, true),
+        polys([rect(-0.27, 0.415, 0.27, 0.545)], 'rear', 'gloss', 0.008, false),
+        polys([rect(-0.24, 0.425, 0.24, 0.53)], 'rear', 'plate', 0.010, false),
+        polys([rect(-0.10, 0.534, -0.06, 0.541), rect(0.06, 0.534, 0.10, 0.541)], 'rear', 'white', 0.010, false),
+        [0.10, 0.26, 0.42, 0.58].map(function (z) { return { t: 'prism', mat: 'carbon', mirror: true, z0: z - 0.009, z1: z + 0.009, pts2d: [[-1.70, 0.16], [-2.05, 0.17], [-2.42, 0.43], [-2.44, 0.28], [-2.05, 0.15]] }; })
       ),
       wheels: { style: 'split', spokes: 5 },
       // twin big centre tips sit high, at the ring tail lamps' height (generator exhaust override; base model cy 0.54)

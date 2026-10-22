@@ -334,6 +334,19 @@ var CB = (globalThis.CB = globalThis.CB || {});
     // diffuser: ramp from the floor to the crash structure + side fences
     prismZ(low ? dark : carbon, [[-1.55, 0.03], [-2.55, 0.33], [-2.55, 0.37], [-1.55, 0.06]], -0.52, 0.52, CARBON, 31);
     if (!low) [1, -1].forEach(function (sd) { prismZ(carbon, [[-1.55, 0.03], [-2.55, 0.3], [-2.55, 0.42], [-1.5, 0.08]], sd * 0.52, sd * 0.545, CARBON2, 33); });
+    if (!low) {
+      // diffuser strakes in the tunnels (hanging from the ramp roof) + the arched exit edge: the outer tunnels rise
+      // higher than the centre, dark tunnel roof behind the carbon lip
+      [0.16, 0.34].forEach(function (zz) { [1, -1].forEach(function (sd) { prismZ(carbon, [[-1.85, 0.11], [-2.53, 0.32], [-2.53, 0.19], [-2.15, 0.12]], sd * zz - 0.006, sd * zz + 0.006, CARBON2, 35); }); });
+      var lip = [[0, 0.365], [0.12, 0.38], [0.26, 0.43], [0.4, 0.45], [0.52, 0.42]];
+      [1, -1].forEach(function (sd) {
+        for (var li = 0; li < lip.length - 1; li++) {
+          var a0 = lip[li], a1 = lip[li + 1];
+          beam(carbon, [-2.565, a0[1], sd * a0[0]], [-2.565, a1[1], sd * a1[0]], 0.035, 0.018, CARBON2, [0, 1, 0]);
+          if (a0[1] > 0.37 || a1[1] > 0.37) carbon.quad([-2.548, 0.365, sd * a0[0]], [-2.548, 0.365, sd * a1[0]], [-2.548, a1[1], sd * a1[0]], [-2.548, a0[1], sd * a0[0]], BLACK, [-1, 0, 0]);
+        }
+      });
+    }
 
     /* ---- front wing: 3 elements (inner low, outer swept up), endplates, nose pillars */
     function fwElement(x0, x1, y0, t, zIn, zOut, zMid, rise, col, seed) {
@@ -368,20 +381,68 @@ var CB = (globalThis.CB = globalThis.CB || {});
       else prismZ(tgt, [[2.84, 0.04], [2.2, 0.04], [2.14, 0.3], [2.3, 0.34], [2.6, 0.2], [2.84, 0.14]], sd * 0.955, sd * 0.975, key(P.fwEnd), 91);
     });
 
-    /* ---- rear wing: mainplane, DRS flap (own part), endplates, beam wing, swan-neck pylon */
-    var rwZ = 0.5;
-    prismZ(low ? body : wing, low ? [[-2.44, 0.79], [-2.79, 0.78], [-2.79, 0.82], [-2.48, 0.83]] : [[-2.44, 0.79], [-2.78, 0.78], [-2.79, 0.81], [-2.66, 0.835], [-2.48, 0.83]], -rwZ, rwZ, key(P.rw), 101);
-    var flapProf = [[-2.5, 0.865], [-2.8, 0.87], [-2.81, 0.9], [-2.7, 0.955], [-2.55, 0.94]];
-    prismZ(low ? body : drs, low ? [[-2.5, 0.865], [-2.81, 0.87], [-2.81, 0.9], [-2.6, 0.95]] : flapProf, -rwZ + 0.005, rwZ - 0.005, key(P.rw), 111);
+    /* ---- rear wing (2022+ rules): mainplane + DRS flap whose tips curl down into the endplates (one shared
+       centre, so the slot gap runs round the curl), endplates with the FIA LED rain-light strips on their trailing
+       edges, DRS actuator pod, two-element beam wing, single central pylon, crash structure with the centre rain
+       light and the single exhaust tailpipe above it. Reference: RB19 rear / side photos (Austria 2023). */
+    var rwZ = 0.5, curlC = 0.245, curlY = 0.7;
+    function curl(acc, prof, yB, r, sd, segs, col, seed) {
+      // sweep the side profile round a quarter circle in the y-z plane (centre y = yB - r, z = curlC):
+      // theta 0 = the straight span's end, 90 deg = pointing down into the endplate
+      var rings = [];
+      for (var k = 0; k <= segs; k++) {
+        var th = k / segs * PI / 2, c = Math.cos(th), sn = Math.sin(th);
+        rings.push(prof.map(function (q) { var rr = r + (q[1] - yB); return [q[0], yB - r + rr * c, sd * (curlC + rr * sn)]; }));
+      }
+      for (var k2 = 0; k2 < segs; k2++) {
+        var A = rings[k2], B = rings[k2 + 1], n = A.length, cen = [0, 0, 0];
+        for (var m = 0; m < n; m++) cen = add(cen, scl(add(A[m], B[m]), 0.5 / n));
+        for (var i = 0; i < n; i++) {
+          var j = (i + 1) % n, mid = scl(add(add(A[i], A[j]), add(B[i], B[j])), 0.25);
+          acc.quad(A[i], A[j], B[j], B[i], jit(col, (seed || 0) + i + k2 * 7), sub(mid, cen));
+        }
+      }
+      acc.poly(rings[segs], col, [0, -1, 0]);
+    }
+    var mainProf = low ? [[-2.44, 0.79], [-2.79, 0.78], [-2.79, 0.82], [-2.48, 0.83]] : [[-2.44, 0.79], [-2.78, 0.78], [-2.79, 0.81], [-2.66, 0.835], [-2.48, 0.83]];
+    var flapProf = low ? [[-2.5, 0.865], [-2.81, 0.87], [-2.81, 0.9], [-2.6, 0.95]] : [[-2.5, 0.865], [-2.8, 0.87], [-2.81, 0.9], [-2.7, 0.955], [-2.55, 0.94]];
+    var wingAcc = low ? body : wing, flapAcc = low ? body : drs;
+    if (low) {
+      prismZ(body, mainProf, -rwZ, rwZ, key(P.rw), 101);
+      prismZ(body, flapProf, -rwZ + 0.005, rwZ - 0.005, key(P.rw), 111);
+    } else {
+      prismZ(wingAcc, mainProf, -curlC, curlC, key(P.rw), 101);
+      prismZ(flapAcc, flapProf, -curlC, curlC, key(P.rw), 111);
+      [1, -1].forEach(function (sd) {
+        curl(wingAcc, mainProf, 0.78, 0.08, sd, 3, key(P.rw), 103);
+        curl(flapAcc, flapProf, 0.865, 0.165, sd, 4, key(P.rw), 113);
+      });
+    }
     [1, -1].forEach(function (sd) {
-      prismZ(low ? body : wing, low ? [[-2.4, 0.6], [-2.84, 0.58], [-2.86, 0.98], [-2.42, 0.94]] : [[-2.42, 0.62], [-2.62, 0.56], [-2.84, 0.58], [-2.86, 0.97], [-2.62, 1.0], [-2.43, 0.93]], sd * rwZ, sd * (rwZ + 0.02), key(P.rwEnd), 121);
+      // endplate: from under the curled tips down past the beam wing, leading edge swept forward at the foot
+      prismZ(wingAcc, low ? [[-2.44, 0.71], [-2.62, 0.42], [-2.87, 0.44], [-2.87, 0.71]] : [[-2.45, 0.71], [-2.5, 0.52], [-2.62, 0.42], [-2.86, 0.44], [-2.87, 0.71], [-2.66, 0.73]], sd * rwZ, sd * (rwZ + 0.02), key(P.rwEnd), 121);
+      if (!low) prismY(wing, [[-2.46, sd * (curlC + 0.075)], [-2.86, sd * (curlC + 0.075)], [-2.86, sd * (rwZ + 0.02)], [-2.46, sd * (rwZ + 0.02)]], 0.695, 0.712, key(P.rwEnd), 125);   // tip foot under the curls
+      // FIA LED rain lights on the endplate trailing edges (part of the rain-light part: glows, brightens braking)
+      if (low) rain.quad([-2.875, 0.47, sd * 0.5], [-2.875, 0.47, sd * 0.52], [-2.875, 0.67, sd * 0.52], [-2.875, 0.67, sd * 0.5], [0.42, 0.012, 0.014], [-1, 0, 0]);
+      else box(rain, [-2.868, 0.57, sd * (rwZ + 0.01)], [0.012, 0.2, 0.024], [0.42, 0.012, 0.014]);
     });
     if (!low) {
-      prismZ(wing, [[-2.5, 0.43], [-2.72, 0.425], [-2.73, 0.46], [-2.55, 0.475]], -0.42, 0.42, CARBON, 131);   // beam wing
-      prismZ(wing, [[-2.3, 0.38], [-2.62, 0.4], [-2.6, 0.79], [-2.45, 0.8]], -0.018, 0.018, CARBON, 141);       // pylon
+      box(wing, [-2.66, 0.85, 0], [0.12, 0.034, 0.036], CARBON2);                                                      // DRS actuator pod
+      prismZ(wing, [[-2.5, 0.43], [-2.72, 0.425], [-2.73, 0.46], [-2.55, 0.475]], -0.42, 0.42, CARBON, 131);          // beam wing (lower)
+      prismZ(wing, [[-2.44, 0.5], [-2.62, 0.505], [-2.63, 0.53], [-2.5, 0.545]], -0.4, 0.4, CARBON2, 133);            // beam wing (upper)
+      [1, -1].forEach(function (sd) { prismZ(wing, [[-2.42, 0.4], [-2.74, 0.41], [-2.74, 0.56], [-2.46, 0.56]], sd * 0.42, sd * 0.435, CARBON, 135); });   // beam-wing end fences
+      prismZ(wing, [[-2.3, 0.38], [-2.62, 0.4], [-2.6, 0.79], [-2.45, 0.8]], -0.018, 0.018, CARBON, 141);       // central pylon
       prismZ(wing, [[-2.42, 0.36], [-2.56, 0.36], [-2.6, 0.5], [-2.46, 0.5]], -0.04, 0.04, CARBON2, 145);         // crash structure tip
+      box(carbon, [-2.585, 0.38, 0], [0.03, 0.09, 0.18], BLACK);                                                   // rain-light housing
+      // single exhaust tailpipe above the crash structure (8-sided tube + dark bore)
+      (function exhaust() {
+        var x0 = -2.47, x1 = -2.66, yc = 0.6, r = 0.052, n = 8, A = [], B = [], bore = [];
+        for (var k = 0; k < n; k++) { var a = (k + 0.5) / n * TAU; A.push([x0, yc + Math.sin(a) * r, Math.cos(a) * r]); B.push([x1, yc + Math.sin(a) * r, Math.cos(a) * r]); bore.push([x1 - 0.001, yc + Math.sin(a) * r * 0.72, Math.cos(a) * r * 0.72]); }
+        for (var k2 = 0; k2 < n; k2++) { var j = (k2 + 1) % n, o = [0, (A[k2][1] + A[j][1]) / 2 - yc, (A[k2][2] + A[j][2]) / 2]; carbon.quad(A[k2], A[j], B[j], B[k2], jit([0.16, 0.15, 0.14], k2), o); }
+        carbon.poly(bore, [0.004, 0.004, 0.005], [-1, 0, 0]);
+      })();
     }
-    // rain light (centre, under the beam wing)
+    // centre rain light (crash structure, under the beam wing)
     box(rain, [-2.6, 0.38, 0], low ? [0.03, 0.05, 0.12] : [0.03, 0.06, 0.14], [0.42, 0.012, 0.014]);
 
     /* ---- shark fin + airbox lip */
@@ -435,6 +496,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
         // brake ducts / uprights (small dark blocks inside the wheels)
         box(carbon, [xFA, 0.36, sd * 0.585], [0.24, 0.26, 0.05], CARBON2);
         box(carbon, [xRA, 0.36, sd * 0.51], [0.26, 0.28, 0.06], CARBON2);
+        box(carbon, [xRA - 0.06, 0.62, sd * 0.53], [0.24, 0.012, 0.09], CARBON);   // rear brake-duct winglets
+        box(carbon, [xRA - 0.1, 0.57, sd * 0.53], [0.2, 0.012, 0.08], CARBON);
       });
     }
 
@@ -471,7 +534,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         var uvS = sd > 0 ? [[1, 1], [0, 1], [0, 0], [1, 0]] : [[0, 1], [1, 1], [1, 0], [0, 0]];
         badge.quad([xa, ya, z * (0.775 / 0.792)], [xb, ya, z * (0.745 / 0.792)], [xb, yb, z * (0.74 / 0.792)], [xa, yb, z * (0.79 / 0.792)], [1, 1, 1], [0, 0, sd], uvS);
         var ze = sd * (rwZ + 0.023);
-        badge.quad([-2.42, 0.62, ze], [-2.8, 0.62, ze], [-2.8, 0.72, ze], [-2.42, 0.72, ze], [1, 1, 1], [0, 0, sd], uvS);
+        badge.quad([-2.52, 0.57, ze], [-2.84, 0.57, ze], [-2.84, 0.67, ze], [-2.52, 0.67, ze], [1, 1, 1], [0, 0, sd], uvS);
       });
     }
 

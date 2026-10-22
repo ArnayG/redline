@@ -178,9 +178,13 @@
       // headlamps: silver ring, clear lens, dark projector bowl, four-point DRL around it
       // (audit: the lens reads silver with a dark projector bowl — a full white lens rendered as a blank disc)
       [{ t: 'poly', mat: 'gloss', mirror: true, normal: HN, pts: hlAt(0, 0, 0.13, 0.18, 14, 0.016) },
-       { t: 'poly', mat: 'chrome', mirror: true, normal: HN, pts: hlAt(0, 0, 0.115, 0.162, 14, 0.020) },
-       { t: 'poly', mat: 'gloss', mirror: true, normal: HN, pts: hlAt(0, 0, 0.066, 0.092, 10, 0.023) },
-       { t: 'poly', mat: 'light', mirror: true, normal: HN, pts: hlAt(0, 0, 0.024, 0.032, 8, 0.026) }],
+       { t: 'poly', mat: 'chrome', mirror: true, normal: HN, pts: hlAt(0, 0, 0.115, 0.162, 14, 0.019) },
+       // thin silver ring only: a dark smoked lens fills it (a large chrome lens caught the Garage studio softboxes
+       // and read as a blank white disc; matte, so the up-tilted lens does not mirror the overhead softbox either),
+       // black projector bowl, small lit projector
+       { t: 'poly', mat: 'grille', mirror: true, normal: HN, pts: hlAt(0, 0, 0.103, 0.147, 14, 0.021) },
+       { t: 'poly', mat: 'black', mirror: true, normal: HN, pts: hlAt(0, 0, 0.05, 0.07, 10, 0.023) },
+       { t: 'poly', mat: 'light', mirror: true, normal: HN, pts: hlAt(0, 0, 0.022, 0.03, 8, 0.026) }],
       [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(function (q) {
         return { t: 'poly', mat: 'drl', mirror: true, normal: HN, pts: hlAt(q[0] * 0.06, q[1] * 0.085, 0.019, 0.025, 6, 0.027) };
       }),
@@ -190,24 +194,37 @@
       polys([rect(0.45, 0.30, 0.775, 0.32)], 'front', 'black', 0.007, true),
       polys([[[0.46, 0.415], [0.78, 0.415], [0.775, 0.432], [0.46, 0.432]]], 'front', 'drl', 0.007, true),
       polys([rect(-0.25, 0.345, 0.25, 0.455)], 'front', 'plate', 0.006, false),
-      // rear: full-width light bar, smoked lamp ends (wrapping round the corner), PORSCHE lettering
-      polys([[[0.50, 0.788], [0.79, 0.80], [0.80, 0.845], [0.50, 0.842]]], 'rear', 'gloss', 0.005, true),
-      polys([rect(-0.79, 0.818, 0.79, 0.834)], 'rear', 'tail', 0.008, false),
-      polys([[[0.52, 0.798], [0.78, 0.806], [0.78, 0.816], [0.52, 0.812]]], 'rear', 'tail', 0.009, true),
-      polys(spaced('PORSCHE', 0, 0.778, 0.03, 0.082, 1), 'rear', 'badge', 0.007, false),
-      polys([[[-2.31, 0.79], [-2.06, 0.80], [-1.86, 0.835], [-2.06, 0.842], [-2.31, 0.842]]], 'side', 'gloss', 0.005, true),
-      polys([[[-2.31, 0.818], [-2.06, 0.822], [-1.90, 0.834], [-2.06, 0.834], [-2.31, 0.834]]], 'side', 'tail', 0.008, true),
-      // rear bumper: black diffuser band, reflectors, plate
+      // rear (Commons rear + rear 3/4 photos): gloss-black full-width band under the deck lip carrying the thin
+      // red light line along its top edge, smoked wedge lamp ends wrapping round the corners with a second LED
+      // line + reverse segment, chrome PORSCHE lettering spaced across the band, "911" under it on the lid
+      polys([[[-0.50, 0.772], [0.50, 0.772], [0.50, 0.842], [-0.50, 0.842]]], 'rear', 'gloss', 0.004, false),
+      polys([[[0.48, 0.772], [0.62, 0.764], [0.80, 0.740], [0.815, 0.795], [0.80, 0.845], [0.48, 0.842]]], 'rear', 'smoke', 0.005, true),
+      polys([rect(-0.795, 0.82, 0.795, 0.838)], 'rear', 'tail', 0.008, false),
+      polys([[[0.56, 0.784], [0.79, 0.772], [0.80, 0.786], [0.56, 0.796]]], 'rear', 'tail', 0.008, true),
+      polys([rect(0.60, 0.803, 0.70, 0.813)], 'rear', 'rev', 0.008, true),
+      polys([rect(0.72, 0.801, 0.785, 0.811)], 'rear', 'lens', 0.008, true),
+      polys([[[-2.31, 0.77], [-2.06, 0.79], [-1.86, 0.835], [-2.06, 0.842], [-2.31, 0.842]]], 'side', 'smoke', 0.005, true),
+      polys([[[-2.31, 0.824], [-2.06, 0.826], [-1.90, 0.836], [-2.06, 0.836], [-2.31, 0.836]]], 'side', 'tail', 0.008, true),
+      [{ t: 'text', view: 'rear', str: 'PORSCHE', at: [0, 0.795], h: 0.03, mat: 'badge', spacing: 14, weight: 0.17, offset: 0.004 },
+       { t: 'text', view: 'rear', str: '911', at: [0, 0.725], h: 0.032, mat: 'badge', spacing: 1.2, weight: 0.17, skew: 0.15, offset: 0.006 }],
+      // low LOD (seen from far behind): band + light line as two flat quads on the tail face
+      [{ t: 'poly', mat: 'gloss', low: 'only', normal: [-1, 0, 0], pts: [[-2.333, 0.665, -0.72], [-2.333, 0.665, 0.72], [-2.333, 0.76, 0.72], [-2.333, 0.76, -0.72]] },
+       { t: 'poly', mat: 'tail', low: 'only', normal: [-1, 0, 0], pts: [[-2.338, 0.705, -0.74], [-2.338, 0.705, 0.74], [-2.338, 0.752, 0.74], [-2.338, 0.752, -0.74]] },
+       { t: 'poly', mat: 'black', low: 'only', normal: [-1, 0, 0], pts: [[-2.333, 0.2, -0.72], [-2.333, 0.2, 0.72], [-2.333, 0.34, 0.72], [-2.333, 0.34, -0.72]] }],
+      // rear bumper: black diffuser band with vertical fins, gloss tip surrounds, red reflectors (unlit lens),
+      // park-sensor dots, plate in a dark recess with two plate lamps
       polys([[[-0.74, 0.19], [0.74, 0.19], [0.80, 0.33], [0.62, 0.37], [-0.62, 0.37], [-0.80, 0.33]]], 'rear', 'black', 0.004, false),
-      polys([rect(0.46, 0.335, 0.68, 0.355)], 'rear', 'tail', 0.006, true),
-      polys([rect(-0.25, 0.39, 0.25, 0.50)], 'rear', 'plate', 0.006, false),
-      // "911" script under the lettering (text badge)
-      polys([[0, 4, 3, 5], [0, 2.5, 1, 4], [2, 0, 3, 5], [1, 2, 2, 3]].map(function (c) { return rect(-0.07 + c[0] * 0.007, 0.70 + c[1] * 0.007, -0.07 + c[2] * 0.007, 0.70 + c[3] * 0.007); })
-        .concat([0.012, 0.052].map(function (z) { return rect(z, 0.70, z + 0.009, 0.735); })), 'rear', 'badge', 0.007, false),
-      // louvred engine lid with the vertical third brake light
-      polys([rect(-1.98, -0.42, -1.66, 0.42)], 'top', 'gloss', 0.004, false),
-      polys([-0.36, -0.28, -0.2, -0.12, 0.12, 0.2, 0.28, 0.36].map(function (z) { return rect(-1.97, z - 0.016, -1.67, z + 0.016); }), 'top', 'black', 0.007, false),
-      polys([rect(-1.97, -0.04, -1.67, 0.04)], 'top', 'tail', 0.008, false),
+      polys([0.08, 0.20, 0.32].map(function (z) { return rect(z, 0.195, z + 0.018, 0.31); }), 'rear', 'gloss', 0.007, true),
+      polys([ell(0.55, 0.27, 0.115, 0.055, 10)], 'rear', 'gloss', 0.006, true),
+      polys([rect(0.40, 0.345, 0.70, 0.365)], 'rear', 'lens', 0.006, true),
+      polys([0.30, 0.66].map(function (z) { return ell(z, 0.43, 0.012, 0.012, 6); }), 'rear', 'gloss', 0.006, true),
+      polys([rect(-0.27, 0.375, 0.27, 0.515)], 'rear', 'gloss', 0.005, false),
+      polys([rect(-0.25, 0.39, 0.25, 0.50)], 'rear', 'plate', 0.007, false),
+      polys([rect(-0.16, 0.503, -0.12, 0.511), rect(0.12, 0.503, 0.16, 0.511)], 'rear', 'white', 0.008, false),
+      // louvred engine lid: ten slats a side round the split vertical third brake light
+      polys([rect(-1.98, -0.42, -1.66, 0.42)], 'top', 'grille', 0.004, false),
+      polys([0.075, 0.115, 0.155, 0.195, 0.235, 0.275, 0.315, 0.355, 0.395].reduce(function (a, z) { return a.concat([rect(-1.97, z - 0.011, -1.67, z + 0.011), rect(-1.97, -z - 0.011, -1.67, -z + 0.011)]); }, []), 'top', 'black', 0.007, false),
+      polys([rect(-1.97, -0.04, -1.67, -0.006), rect(-1.97, 0.006, -1.67, 0.04)], 'top', 'tail', 0.008, false),
       // side windows: black surround, door glass, quarter glass (gap = the slim pillar)
       polys([DLO], 'side', 'gloss', 0.004, true),
       polys([[[0.665, 0.962], [0.30, 0.968], [-0.20, 0.976], [-0.60, 0.985], [-0.57, 1.192], [-0.42, 1.198], [-0.10, 1.207], [0.04, 1.196]]], 'side', 'glass', 0.008, true),
@@ -320,19 +337,46 @@
       polys([[[-0.66, 0.555], [0.66, 0.555], [0.62, 0.67], [-0.62, 0.67]]], 'front', 'chrome', 0.009, false),
       // hood heat extractors on the leading corners
       polys([rect(2.28, 0.50, 2.56, 0.555), rect(2.28, 0.595, 2.56, 0.65)], 'top', 'black', 0.004, true),
-      // cab: rear window, third brake light, roof clearance lamps
+      // cab (Commons rear / rear 3/4 photos): rear window with the sliding centre pane's frame, chrome third
+      // brake light housing with the red LED strip and two white cargo lamps
       polys([rect(-0.64, 1.50, 0.64, 1.86)], 'rear', 'glass', 0.005, false),
-      polys([rect(-0.14, 1.89, 0.14, 1.925)], 'rear', 'tail', 0.008, false),
-      // rear: tall tail lamps from the bed rail down (white reverse block in the middle), dark full-width tailgate
-      // band with extended FORD letters, handle, dark bumper + step pads, plate
-      polys([rect(0.80, 0.93, 0.985, 1.475)], 'rear', 'tail', 0.006, true),
-      polys([rect(0.835, 1.10, 0.95, 1.235)], 'rear', 'rev', 0.009, true),
+      polys([rect(0.285, 1.52, 0.305, 1.84)], 'rear', 'gloss', 0.008, true),
+      polys([rect(-0.285, 1.52, 0.285, 1.535)], 'rear', 'gloss', 0.008, false),
+      polys([rect(-0.20, 1.875, 0.20, 1.945)], 'rear', 'chrome', 0.007, false),
+      polys([rect(-0.13, 1.895, 0.13, 1.925)], 'rear', 'tail', 0.010, false),
+      polys([rect(0.145, 1.895, 0.185, 1.925)], 'rear', 'light', 0.010, true),
+      // tail lamps: bright bezel round an unlit red lens, upper + lower red LED blocks, white reverse section with
+      // its red inner block; tailgate: shut lines, handle + camera, dark full-width band with extended FORD letters,
+      // F-150 / RAPTOR badge text at its lower corners
+      polys([rect(0.795, 0.925, 0.99, 1.48)], 'rear', 'chrome', 0.005, true),
+      polys([rect(0.805, 0.935, 0.98, 1.47)], 'rear', 'lens', 0.007, true),
+      polys([rect(0.815, 1.265, 0.97, 1.455)], 'rear', 'tail', 0.009, true),
+      polys([rect(0.815, 0.95, 0.97, 1.08)], 'rear', 'tail', 0.009, true),
+      polys([rect(0.815, 1.095, 0.97, 1.25)], 'rear', 'rev', 0.009, true),
+      polys([rect(0.845, 1.125, 0.94, 1.22)], 'rear', 'tail', 0.011, true),
+      polys([rect(0.775, 0.925, 0.785, 1.48)], 'rear', 'black', 0.006, true),
+      polys([rect(-0.775, 0.92, 0.775, 0.93)], 'rear', 'black', 0.006, false),
       polys([rect(-0.79, 1.00, 0.79, 1.235)], 'rear', 'gloss', 0.005, false),
       polys(word('FORD', 0, 1.118, 0.11, 1, 2.3), 'rear', 'badge', 0.009, false),
-      polys([rect(-0.11, 1.33, 0.11, 1.375)], 'rear', 'black', 0.008, false),
-      polys([rect(-1.03, 0.60, 1.03, 0.88)], 'rear', 'black', 0.005, false),
-      polys([rect(0.66, 0.845, 0.98, 0.875)], 'rear', 'gloss', 0.008, true),
+      [{ t: 'text', view: 'rear', str: 'F-150', at: [-0.64, 1.03], h: 0.022, mat: 'badge', weight: 0.16, offset: 0.004 },
+       { t: 'text', view: 'rear', str: 'RAPTOR', at: [0.62, 1.03], h: 0.022, mat: 'badge', weight: 0.16, skew: 0.2, offset: 0.004 }],
+      polys([rect(-0.15, 1.32, 0.15, 1.39)], 'rear', 'gloss', 0.006, false),
+      polys([rect(-0.11, 1.335, 0.11, 1.37)], 'rear', 'black', 0.008, false),
+      polys([ell(0, 1.38, 0.008, 0.008, 6)], 'rear', 'glass', 0.009, false),
+      // rear bumper: dark upper face with corner step pads, black lower valance, plate recess + plate lamps,
+      // park-sensor dots, hitch receiver opening
+      polys([rect(-1.03, 0.72, 1.03, 0.88)], 'rear', 'black', 0.005, false),
+      polys([rect(-0.96, 0.60, 0.96, 0.72)], 'rear', 'grille', 0.006, false),
+      polys([rect(0.66, 0.845, 0.98, 0.875), rect(0.20, 0.845, 0.40, 0.875)], 'rear', 'gloss', 0.008, true),
+      polys([0.66, 0.70, 0.74, 0.78, 0.82, 0.86, 0.90, 0.94].map(function (z) { return rect(z, 0.849, z + 0.014, 0.871); }), 'rear', 'rubber', 0.010, true),
+      polys([rect(-0.175, 0.645, 0.175, 0.835)], 'rear', 'gloss', 0.007, false),
       polys([rect(-0.155, 0.665, 0.155, 0.815)], 'rear', 'plate', 0.009, false),
+      polys([rect(-0.10, 0.821, -0.06, 0.829), rect(0.06, 0.821, 0.10, 0.829)], 'rear', 'white', 0.010, false),
+      polys([0.36, 0.62].map(function (z) { return ell(z, 0.78, 0.014, 0.014, 6); }), 'rear', 'gloss', 0.007, true),
+      // low LOD (far chase view): tall tail lamps, tailgate band, third brake light as flat quads
+      [{ t: 'poly', mat: 'tail', low: 'only', mirror: true, normal: [-1, 0, 0], pts: [[-3.118, 0.94, 0.58], [-3.118, 0.94, 0.74], [-3.118, 1.46, 0.74], [-3.118, 1.46, 0.58]] },
+       { t: 'poly', mat: 'gloss', low: 'only', normal: [-1, 0, 0], pts: [[-3.115, 1.0, -0.57], [-3.115, 1.0, 0.57], [-3.115, 1.235, 0.57], [-3.115, 1.235, -0.57]] },
+       { t: 'poly', mat: 'tail', low: 'only', normal: [-1, 0, 0], pts: [[-1.16, 1.893, -0.14], [-1.16, 1.893, 0.14], [-1.16, 1.925, 0.14], [-1.16, 1.925, -0.14]] }],
       // door handles, RAPTOR lettering on the bed sides (each flank reads front -> rear... i.e. left to right)
       polys([rect(0.02, 1.245, 0.16, 1.28), rect(-0.98, 1.245, -0.84, 1.28)], 'side', 'black', 0.004, true),
       polys(word('RAPTOR', -1.72, 1.375, 0.075, 1, 1.3), 'side', 'gloss', 0.005, false),
@@ -355,8 +399,8 @@
         { t: 'box', mat: 'black', c: [-3.15, 0.55, 0], s: [0.14, 0.075, 0.075] }
       ]
     ),
-    // twin tips under the rear bumper ends (rap-r34 photo)
-    exhaust: [{ cx: 0.52, cy: 0.6, w: 0.11, shape: 'round', mirror: true }],
+    // twin tips just under the rear bumper ends, pointing back (Commons rear + rear 3/4 photos)
+    exhaust: [{ cx: 0.80, cy: 0.56, w: 0.10, shape: 'round', mirror: true }],
     // factory look (Commons: 2021 Ford F-150 Raptor front / rear): matte black-grey 17" wheels, black callipers
     wheels: { style: 'star', spokes: 6, tyre: 'at', stock: { rim: '#26282b', material: 'cast', caliper: '#1c1c1e' } },
     notes: 'Ford F-150 Raptor (gen 3) — hand-authored low-poly. Reference photos: ' +
