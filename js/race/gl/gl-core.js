@@ -1469,6 +1469,9 @@ CB.gl = CB.gl || {};
     'uniform float uFlake; uniform float uHueShift; uniform float uAlphaTest; uniform float uEnvIntensity; uniform float uReceiveShadow;',
     'uniform float uAnisotropy; uniform vec4 uAnisoAxis; uniform float uMaterialType;',
     'uniform vec3 uEmissive;',
+    // crash damage (derby): x = wear layer on (vertex alpha = 1 - wear), y = glass crack 0..1 (> 0.75 shatters),
+    // z = soot, w = char (burnt shell); uDamage2 = dirt amount + dirt rgb
+    'uniform vec4 uDamage; uniform vec4 uDamage2;',
     'uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uAmbientSky; uniform vec3 uAmbientGround;',
     'uniform vec3 uFogColor; uniform float uFogDensity; uniform vec3 uCamPos;',
     'uniform float uWetness; uniform float uExposure; uniform float uLinearOut; uniform float uTime; uniform float uBlendMode; uniform float uFogEnabled;',
@@ -1485,9 +1488,26 @@ CB.gl = CB.gl || {};
     '#endif',
     'void main() {',
     '  vec4 base = uBaseColor * vColor;',
+    '  bool isGlass = uMaterialType > 0.5 && uMaterialType < 1.5;',
+    '  float dmgWear = 0.0;',
+    '  if (uDamage.x > 0.5 && !isGlass) { dmgWear = saturate(1.0 - vColor.a); base.a = uBaseColor.a; }',
     '  if (uUseMap > 0.5) { vec4 t = texture2D(uMap, vUv); base *= vec4(srgbToLinear(t.rgb), t.a); }',
     '  if (base.a < uAlphaTest) discard;',
-    '  bool isGlass = uMaterialType > 0.5 && uMaterialType < 1.5;',
+    // crazed safety glass: Voronoi cells (object space), crack lines spread with uDamage.y, cells fall out above 0.75
+    '  if (isGlass && uDamage.y > 0.001) {',
+    '    vec2 gp = vec2(vLocal.x + vLocal.z * 0.6, vLocal.y * 1.4 - vLocal.z * 0.35) * 4.2;',
+    '    vec2 gi = floor(gp); vec2 gf = fract(gp); float d1 = 8.0; float d2 = 8.0; float cid = 0.0;',
+    '    for (int gy = -1; gy <= 1; gy++) for (int gx = -1; gx <= 1; gx++) {',
+    '      vec2 go = vec2(float(gx), float(gy)); vec2 gr = go + vec2(hash12(gi + go), hash12(gi + go + 7.7)) - gf; float gd = dot(gr, gr);',
+    '      if (gd < d1) { d2 = d1; d1 = gd; cid = hash12(gi + go + 3.3); } else if (gd < d2) d2 = gd;',
+    '    }',
+    '    float gEdge = 1.0 - smoothstep(0.0, 0.035 + 0.05 * uDamage.y, sqrt(d2) - sqrt(d1));',
+    '    float gRad = smoothstep(0.55, 0.95, vnoise(vec2(atan(gf.y - 0.5, gf.x - 0.5) * 2.5, cid * 9.0)));',
+    '    float gOn = step(cid, uDamage.y * 1.25);',
+    '    if (uDamage.y > 0.75 && cid < (uDamage.y - 0.75) * 2.6) discard;',
+    '    float gc = saturate(gEdge * gOn + gRad * gOn * 0.35 * uDamage.y);',
+    '    base.rgb = mix(base.rgb, vec3(0.72, 0.75, 0.76), gc); base.a = max(base.a, gc * 0.9);',
+    '  }',
     '  bool isRubber = uMaterialType > 1.5;',
     '  vec3 V = normalize(uCamPos - vWorld);',
     '  vec3 Ng = normalize(vNormal);',
@@ -1506,9 +1526,43 @@ CB.gl = CB.gl || {};
     '  if (uUseRoughnessMap > 0.5) { vec4 rm = texture2D(uRoughnessMap, vUv); rough = clamp(rough * rm.g, 0.03, 1.0); metallic *= rm.b; }',
     '  if (uUseAoMap > 0.5) ao = mix(1.0, texture2D(uAoMap, vUv).r, uAoStrength);',
     '  vec3 albedo = base.rgb;',
+    '  float dmgCoat = 0.0;',
+    '  if (uDamage.x > 0.5 && !isGlass) {',
+    // scraped / chipped paint: primer ring, then bare steel, fine scratch streaks along the slide (horizontal on the
+    // flanks, along the car on the bonnet / roof); soot blotches; burnt shell (char + rust + blistering); mud
+    '    vec3 lp = vLocal; float upF = smoothstep(0.55, 0.85, abs(Ng.y));',
+    '    float acrossC = mix(lp.y, lp.z, upF); float alongC = mix(lp.x + lp.z * 0.35, lp.x, upF);',
+    '    float chipN = vnoise(vec2(lp.x + lp.z * 0.5, lp.y + lp.z) * 13.0) * 0.55 + vnoise(vec2(lp.z - lp.x, lp.y) * 37.0) * 0.45;',
+    '    float primer = smoothstep(0.3, 0.42, dmgWear + (chipN - 0.5) * 0.5);',
+    '    float bare = smoothstep(0.56, 0.66, dmgWear + (chipN - 0.5) * 0.55);',
+    '    float scr = smoothstep(0.6, 0.86, vnoise(vec2(alongC * 1.4, acrossC * 64.0))) * smoothstep(0.06, 0.3, dmgWear);',
+    '    float dm = max(bare, scr * 0.85);',
+    '    albedo = mix(albedo, vec3(0.2, 0.2, 0.205), primer * (1.0 - dm));',
+    '    albedo = mix(albedo, vec3(0.36, 0.36, 0.37), dm);',
+    '    metallic = mix(metallic, 0.7, dm); rough = mix(rough, 0.5, dm); rough = mix(rough, 0.72, primer * (1.0 - dm));',
+    '    dmgCoat = max(primer, dm);',
+    '    if (uDamage.z > 0.001) {',
+    '      float sootN = vnoise(lp.xz * 2.7 + lp.y * 1.9) * 0.7 + vnoise(lp.xy * 8.0) * 0.3;',
+    '      float so = saturate(uDamage.z * (0.55 + 0.9 * sootN));',
+    '      albedo *= 1.0 - 0.88 * so; rough = mix(rough, 0.9, so); dmgCoat = max(dmgCoat, so * 0.8);',
+    '    }',
+    '    if (uDamage.w > 0.001) {',
+    '      float ch = saturate(uDamage.w); float rustN = vnoise(lp.xy * 3.6 + lp.z * 1.7) * 0.65 + vnoise(lp.zy * 11.0) * 0.35;',
+    '      vec3 charC = mix(vec3(0.03, 0.028, 0.026), vec3(0.2, 0.085, 0.035), smoothstep(0.5, 0.78, rustN) * 0.9);',
+    '      albedo = mix(albedo, charC, ch); metallic = mix(metallic, 0.12, ch); rough = mix(rough, 0.93, ch); dmgCoat = max(dmgCoat, ch);',
+    '      float blN = vnoise(lp.xz * 24.0 + lp.y * 7.0); float blM = vnoise(lp.zx * 24.0 + 5.1 + lp.y * 7.0);',
+    '      N = normalize(N + (vec3(blN, 0.5, blM) - 0.5) * 0.45 * ch);',
+    '    }',
+    '    if (uDamage2.x > 0.001) {',
+    '      float dn = vnoise(vec2(lp.x * 2.6 + lp.z, lp.y * 7.0 + lp.z * 2.0)) * 0.7 + vnoise(lp.xz * 13.0 + lp.y * 5.0) * 0.3;',
+    '      float mud = smoothstep(0.2, 0.62, saturate((0.82 - lp.y) * 1.6 + (dn - 0.5) * 1.1) * uDamage2.x);',
+    '      albedo = mix(albedo, uDamage2.yzw * (0.75 + 0.5 * dn), mud * 0.92); rough = mix(rough, 0.95, mud); metallic *= 1.0 - mud; dmgCoat = max(dmgCoat, mud);',
+    '    }',
+    '  }',
     '  if (uMottle.y > 0.0) { vec4 mo = texture2D(uMottleMap, vWorld.xz * uMottle.x + uMottle.zw); albedo *= mix(1.0 - 0.16 * uMottle.y, 1.0 + 0.16 * uMottle.y, mo.r) * (1.0 - 0.12 * uMottle.y * mo.b); rough = clamp(rough + ((mo.g - 0.5) * 0.12 - 0.05 * mo.b) * uMottle.y, 0.03, 1.0); }',
     '  float cc = saturate(uClearcoat); float flakeIn = uFlake; float envScale = 1.0; float sheen = 0.0;',
     '  if (isGlass) { metallic = 0.0; cc = 0.0; flakeIn = 0.0; }',
+    '  cc *= 1.0 - dmgCoat; flakeIn *= 1.0 - dmgCoat;',
     '  if (isRubber) {',
     '    // vulcanised rubber: dielectric, broad dull lobe; moulded sidewall lettering (lighter rubber texels) is smoother',
     '    float letter = uUseMap > 0.5 ? smoothstep(0.012, 0.026, luma(albedo)) : 0.0;',
@@ -2869,6 +2923,9 @@ CB.gl = CB.gl || {};
     if (ax && ax.length >= 3) { out.ax0 = num(ax[0], 0); out.ax1 = num(ax[1], 0); out.ax2 = num(ax[2], 1); out.ax3 = ax.length > 3 ? num(ax[3], 1) : 1; }
     else { out.ax0 = 0; out.ax1 = 0; out.ax2 = 1; out.ax3 = 0; }
     out.materialType = materialTypeOf(mt);
+    var dmg = mt.damage, dmg2 = mt.damage2;
+    out.dm0 = dmg ? num(dmg[0], 0) : 0; out.dm1 = dmg ? num(dmg[1], 0) : 0; out.dm2 = dmg ? num(dmg[2], 0) : 0; out.dm3 = dmg ? num(dmg[3], 0) : 0;
+    out.dn0 = dmg2 ? num(dmg2[0], 0) : 0; out.dn1 = dmg2 ? num(dmg2[1], 0) : 0; out.dn2 = dmg2 ? num(dmg2[2], 0) : 0; out.dn3 = dmg2 ? num(dmg2[3], 0) : 0;
     out.metallic = clamp(num(mget(mt, 'uMetallic', 'metallic', 'metalness'), 0), 0, 1);
     out.roughness = clamp(num(mget(mt, 'uRoughness', 'roughness'), 0.7), 0.02, 1);
     out.clearcoat = clamp(num(mget(mt, 'uClearcoat', 'clearcoat'), 0), 0, 1);
@@ -3158,6 +3215,8 @@ CB.gl = CB.gl || {};
     if (u.uAnisotropy) gl.uniform1f(u.uAnisotropy, M.anisotropy);
     if (u.uAnisoAxis) gl.uniform4f(u.uAnisoAxis, M.ax0, M.ax1, M.ax2, M.ax3);
     if (u.uMaterialType) gl.uniform1f(u.uMaterialType, M.materialType);
+    if (u.uDamage) gl.uniform4f(u.uDamage, M.dm0, M.dm1, M.dm2, M.dm3);
+    if (u.uDamage2) gl.uniform4f(u.uDamage2, M.dn0, M.dn1, M.dn2, M.dn3);
   }
 
   /**

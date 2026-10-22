@@ -229,6 +229,97 @@ test('deformCar on a real car model: finite, bounded, every preset', function ()
   });
 });
 
+/* ---- realistic crash damage (2026-10): energy falloff, soft cap, asymmetry, subdivision, detached panels ---- */
+function realBody(pid, N) {
+  var bg = CB.gl.car.buildGeometry(CB.data.presetBuild(pid || 'muscle'), { lod: 'high' }), D = U.damageDims(bg.dims);
+  var g = bg.parts.filter(function (pp) { return pp.kind === 'body'; })[0].geo.finish();
+  return { D: D, g: N > 1 ? U.subdivideGeo(g, N) : g };
+}
+function maxDisp(b, o) { var m = 0; for (var i = 0; i < b.length; i += 3) m = Math.max(m, Math.hypot(o[i] - b[i], o[i + 1] - b[i + 1], o[i + 2] - b[i + 2])); return m; }
+
+test('applyDents: impact energy scales the falloff radius (a deeper dent spreads wider)', function () {
+  var b = carCloud(), o = new Float32Array(b.length);
+  function moved(depth) { U.applyDents(b, o, [{ x: 0, y: 0.95, z: 0.8, nx: 0, ny: -1, depth: depth, r: 0.6 }]); var c = 0; for (var i = 0; i < b.length; i += 3) if (Math.hypot(o[i] - b[i], o[i + 1] - b[i + 1], o[i + 2] - b[i + 2]) > 1e-4) c++; return c; }
+  var soft = moved(0.04), hard = moved(0.34);
+  assert.ok(hard > soft * 1.3, 'hard ' + hard + ' vs soft ' + soft);
+});
+
+test('applyDents: accumulated hits converge under the soft cap (no vertex explosion), no NaNs', function () {
+  var b = carCloud(), o = new Float32Array(b.length), d24 = [], d48 = [];
+  for (var k = 0; k < 48; k++) { var dd = { x: 0.2, y: 0.95, z: 0.7, nx: 0, ny: -1, depth: 0.42, r: 1.2 }; if (k < 24) d24.push(dd); d48.push(dd); }
+  U.applyDents(b, o, d24, { maxDisp: 0.36 }); var m24 = maxDisp(b, o);
+  U.applyDents(b, o, d48, { maxDisp: 0.36 }); var m48 = maxDisp(b, o);
+  assert.ok(finite(o));
+  assert.ok(m48 <= 0.36 + 1e-6 && m24 <= 0.36 + 1e-6, 'bounded ' + m48);
+  assert.ok(m48 - m24 < 0.02, 'converges: ' + m24.toFixed(3) + ' -> ' + m48.toFixed(3));
+});
+
+test('deformCar: asymmetric crumple follows the hits (mirror symmetry not forced)', function () {
+  var b = carBody(), o = new Float32Array(b.length), D = U.damageDims(DIMS);
+  // hits on the front-LEFT corner (sim +y = left = GL -Z)
+  U.deformCar(b, o, { dims: D, zones: { front: 0.8 }, dents: [{ x: 2.2, y: 0.7, z: 0.6, nx: -1, ny: 0, depth: 0.3, r: 0.8 }, { x: 2.1, y: 0.8, z: 0.5, nx: -0.8, ny: -0.6, depth: 0.25, r: 0.7 }] });
+  var L = 0, Rr = 0;
+  for (var i = 0; i < b.length; i += 3) if (b[i] > 2.25 && Math.abs(b[i + 1] - 0.6) < 0.15) { if (b[i + 2] < -0.6) L = Math.max(L, b[i] - o[i]); if (b[i + 2] > 0.6) Rr = Math.max(Rr, b[i] - o[i]); }
+  assert.ok(L > Rr * 1.2 && Rr > 0.05, 'left nose pushed in further: L ' + L.toFixed(2) + ' R ' + Rr.toFixed(2));
+});
+
+test('deformCar: cabin / roof stiffer than the crumple zones for the same dent', function () {
+  var b = carBody(), o = new Float32Array(b.length), D = U.damageDims(DIMS);
+  function push(x, y, z) { U.deformCar(b, o, { dims: D, dents: [{ x: x, y: 0.92, z: z, nx: 0, ny: -1, depth: 0.25, r: 0.5 }] }); var m = 0; for (var i = 0; i < b.length; i += 3) if (b[i + 2] < -0.9) m = Math.max(m, o[i + 2] - b[i + 2]); return m; }
+  var nose = push(1.95, 0, 0.7), cabinHigh = push(0, 0, 0.98);
+  assert.ok(nose > cabinHigh, 'front wing ' + nose.toFixed(3) + ' > door top ' + cabinHigh.toFixed(3));
+});
+
+test('deformCar on a subdivided real body: 120 random hits + all zones stay finite, bounded, seams closed', function () {
+  var rb = realBody('hot-hatch', 2), b = new Float32Array(rb.g.positions), o = new Float32Array(b.length), dents = [], R = 12345;
+  function rnd() { R = (R * 1103515245 + 12345) & 0x7fffffff; return R / 0x7fffffff; }
+  for (var k = 0; k < 120; k++) { var a = rnd() * 6.283; dents.push({ x: Math.cos(a) * 2, y: Math.sin(a) * 0.9, z: 0.2 + rnd(), nx: -Math.cos(a), ny: -Math.sin(a), depth: rnd() * 0.42, r: 0.3 + rnd() }); }
+  U.deformCar(b, o, { dims: rb.D, zones: { front: 1, rear: 1, left: 1, right: 1 }, roof: 1, dents: dents });
+  assert.ok(finite(o));
+  assert.ok(maxDisp(b, o) < 1.6, 'bounded ' + maxDisp(b, o).toFixed(2));
+  // coincident undamaged vertices (seams between facets) stay coincident
+  var map = {}, bad = 0;
+  for (var i = 0; i < b.length; i += 3) {
+    var key = Math.round(b[i] * 1e4) + ',' + Math.round(b[i + 1] * 1e4) + ',' + Math.round(b[i + 2] * 1e4);
+    if (map[key] == null) map[key] = i; else { var j = map[key]; if (Math.hypot(o[i] - o[j], o[i + 1] - o[j + 1], o[i + 2] - o[j + 2]) > 2e-3) bad++; }
+  }
+  assert.strictEqual(bad, 0, 'no cracks at seams');
+});
+
+test('subdivideGeo: N² coplanar triangles, colours carried, smoothing groups; smoothNormals unit length', function () {
+  var g = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1]), colors: new Float32Array(24).fill(0.5), colorSize: 4 };
+  var s3 = U.subdivideGeo(g, 3);
+  assert.strictEqual(s3.positions.length / 9, 2 * 9);
+  for (var i = 1; i < s3.positions.length; i += 3) assert.strictEqual(s3.positions[i], 0, 'stays on the plane');
+  assert.ok(Array.from(s3.colors).every(function (v) { return Math.abs(v - 0.5) < 1e-6; }));
+  // the shared edge (1,0,0)-(0,0,1) is split at the same points from both triangles
+  var pts = {};
+  for (var k = 0; k < s3.positions.length; k += 3) { var x = s3.positions[k], z = s3.positions[k + 2]; if (Math.abs(x + z - 1) < 1e-6) { var key = x.toFixed(5); pts[key] = (pts[key] || 0) + 1; } }
+  assert.strictEqual(Object.keys(pts).length, 4, 'edge split into 3 segments');
+  var n = U.computeNormals(s3.positions, null); U.smoothNormals(n, s3.groups, s3.groupCount, 0.7, {});
+  for (var q = 0; q < n.length; q += 3) assert.ok(Math.abs(Math.hypot(n[q], n[q + 1], n[q + 2]) - 1) < 1e-5);
+  assert.strictEqual(U.subdivideGeo(g, 1).positions.length, 18);
+});
+
+test('detached part pieces: extractTris keeps only that panel, centred with half extents; wear goes into vertex alpha', function () {
+  var rb = realBody('muscle', 1), D = rb.D, b = new Float32Array(rb.g.positions), o = new Float32Array(b.length), idx = rb.g.indices && rb.g.indices.length ? rb.g.indices : null;
+  U.deformCar(b, o, { dims: D, zones: { left: 0.9 }, dents: [{ x: 0.3, y: 0.92, z: 0.6, nx: 0, ny: -1, depth: 0.3, r: 0.8 }] });
+  var bb = b, oo = o;
+  var ex = U.extractTris(bb, oo, rb.g.colors, 4, idx, function (x, y, z) { return U.inPart('doorL', x, y, z, D); });
+  assert.ok(ex && ex.tris > 0 && finite(ex.positions), 'door triangles found');
+  var mean = [0, 0, 0]; for (var i = 0; i < ex.positions.length; i += 3) { mean[0] += ex.positions[i]; mean[2] += ex.positions[i + 2]; }
+  assert.ok(Math.abs(mean[0] / (ex.positions.length / 3)) < 0.6 && ex.centre[2] < 0, 'left door piece, centred');
+  assert.ok(ex.half[0] > 0.2 && ex.half[1] > 0.1);
+  assert.strictEqual(U.extractTris(bb, oo, null, 0, idx, function () { return false; }), null);
+  var cb = new Float32Array([0.7, 0.05, 0.03, 1, 0.7, 0.05, 0.03, 1]), co = new Float32Array(8);
+  U.paintDamage(cb, co, 4, new Float32Array([0, 0.9]), new Uint8Array(2), { kind: 'body', wearAlpha: true }, new Float32Array(6));
+  assert.strictEqual(co[3], 1); assert.ok(co[7] < 0.9 && co[7] >= 0, 'worn vertex alpha ' + co[7]); assert.ok(co[4] > 0.5, 'paint kept in RGB (the shader chips it)');
+});
+
+test('vnoise3: continuous and in 0..1', function () {
+  for (var i = 0; i < 200; i++) { var x = i * 0.137, v = U.vnoise3(x, x * 0.7, -x); assert.ok(v >= 0 && v <= 1); assert.ok(Math.abs(U.vnoise3(x + 1e-4, x * 0.7, -x) - v) < 0.01); }
+});
+
 test('arena outlines: closed, CCW, open edges only on the rooftop', function () {
   AR.list().forEach(function (def) {
     var o = DA.outline(def, 2);

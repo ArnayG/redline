@@ -282,6 +282,27 @@ worldToScreen(x, y, z), is3D: true }`. Cars use `CB.gl.car.build` models with pe
 smoke (white → black), fire, sparks, flame cones, hammer arm swing, wrecking-ball chain, magnet beam, shield bubble,
 nitro flames. `createPreview(canvas, { build, color, accessories }) → { update(opts), destroy() }` for the setup garage.
 
+**Crash damage look (2026-10, renderer-only, the sim is untouched):**
+* *Geometry*: deformable car meshes are uniformly subdivided at build (N² coplanar triangles per facet, so the undamaged
+  car looks the same; tier-gated: high 2 / ultra 3 for the followed car, AI 2 on high, 1 on medium / low). Dents push
+  along their impact direction with a falloff radius scaled by depth (energy), creased by smooth position-keyed noise
+  (seams never crack), scaled by panel stiffness (crumple zones soft, cabin / roof rail stiff), and the summed push is
+  soft-capped (`tanh`) so stacked hits converge. Zone crumple: nose / tail accordion toward the cabin, biased toward the
+  side the dents are on; bonnet buckles into a ridge, wings bulge, arches fold onto the tyres; side intrusion centred
+  on the side hits; rollover roof crush. Normals: flat per face blended with per-facet group averages (bent sheet).
+  Re-deforms are time-sliced (`QUALITY.deformMs` per frame, the followed car always).
+* *Materials*: `CB.gl` standard shader damage layer (`material.damage = [wearOn, glassCrack, soot, char]`,
+  `damage2 = [mud, r, g, b]`): vertex alpha carries the per-vertex wear (scrapes / dent rings) and the fragment shader
+  draws primer, chipped bare steel, scratch streaks, soot blotches, the charred + rusty blistered burnt shell and mud on
+  the lower body (arena surface colour). Glass: Voronoi crack web spreading with damage, cells fall out above 0.75.
+* *Parts*: detached bumpers / bonnets / boot lids / doors, smashed lamps and (visual-only) door mirrors fly off as the
+  car's own crumpled painted triangles with bbox ground contact, tumble, settle and persist; over the debris cap the
+  oldest sinks away. Bent wheels (≥ 0.45) camber and toe out.
+* *FX*: coolant steam from a holed radiator, oil / coolant drip trails and puddles + explosion scorch marks (one batched
+  decal mesh, `QUALITY.decals`), tyre smoke / dust / snow on slides, dust plumes on dirt, scrap bits + impact flash on
+  big hits, glass crumbs that settle and glitter. Low tier: dents + crumple + smoke/fire only (no subdivision, decals,
+  steam or tyre smoke).
+
 ## 10. UI (`CB.derby.ui`), controls
 
 Setup: car (preset gallery + My Cars), arena cards, opponents 3–11, difficulty, rules (time limit, lives), loadout

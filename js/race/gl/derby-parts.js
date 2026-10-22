@@ -344,9 +344,10 @@ CB.gl = CB.gl || {};
         prev = cur; prevL = curL;
       }
     } else {
-      var R = rng(7);
-      g.sphere([0, 0, 0], 0.18, 5, 3, [1, 1, 1, 1], 0.6, 11);
-      void R;
+      // a torn, bent scrap of sheet metal / plastic (two plates at an angle, ~30 cm) instead of a rock
+      g.box([-0.07, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.08, 0.012, 0.11, [1, 1, 1, 1]);
+      var ca = Math.cos(0.5), sa = Math.sin(0.5);
+      g.box([0.06, 0.03, 0.01], [ca, sa, 0], [-sa, ca, 0], [0, 0, 1], 0.07, 0.012, 0.09, [0.85, 0.85, 0.86, 1]);
     }
     return g.out();
   }
