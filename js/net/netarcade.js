@@ -436,6 +436,7 @@ CB.net = CB.net || {};
         var tick = tickOf(car), ph = car.ctx && car.ctx.phase;
         if (car.isPlayer) curTick = tick;
         if (goTick === null && ph === 'racing') goTick = tick;
+        if (isHost && kind === 'stunt') hostPreGameplay(tick);
         if (!isHost && car.isPlayer) return clientRecord(car, inp, tick, ph);
         if (isHost && !car.isPlayer && isRemoteHuman(car.id)) return hostReplay(car, inp, tick, ph);
         return inp;
@@ -455,7 +456,7 @@ CB.net = CB.net || {};
       if (car.finished) return inp;                 // over the line: the AI brings it home
       var buf = inbufs[netIdOf(car.id)];
       if (!buf) return inp;
-      if (car.isPlayer === false && car.ctx && car === carsByLocal[car.id]) buf.adapt(tick);
+      if (kind !== 'stunt' && car.isPlayer === false && car.ctx && car === carsByLocal[car.id]) buf.adapt(tick);   // (stunt: hostPreGameplay)
       // stunt hazards (stunt-features.js) run on the car's own race clock: this copy drives the player's input of tick
       // n − D, so it meets every pendulum / piston phase exactly as the player's own prediction did at tick n − D
       var m;
@@ -469,7 +470,11 @@ CB.net = CB.net || {};
         var e0 = buf.E !== null ? buf.E : buf.D;
         car.clockOffset = e0 * STEP;
         if (ph === 'grid' || ph === 'countdown' || goTick === null) return inp;
-        if (buf.E === null) { if (tick - buf.D < goTick) return holdInput(car); buf.E = buf.D; buf.lastAdj = tick; }
+        // until the player's GO input is due (GO + D) the copy stays parked where the grid put it (car.netHold: the
+        // session holds it like on the grid). Rolling on a sloped grid for D ticks with the hold input started the
+        // replay a few cm / 0.1 m/s off the player's own prediction, an error every later step inherited.
+        car.netHold = false;
+        if (buf.E === null) { if (tick - buf.D < goTick) { car.netHold = true; return holdInput(car); } buf.E = buf.D; buf.lastAdj = tick; }
         m = tick - buf.E;
         car.clockOffset = buf.E * STEP;
         if (car.netRep !== 1 && tick - buf.lastAdj >= 3) {
@@ -477,10 +482,10 @@ CB.net = CB.net || {};
           var step1 = car.mode === 'ground' ? [num(car.v, 0) * Math.cos(num(car.psi, 0)) * STEP, 0] : null;
           var step1w = car.mode === 'air' ? [num(car.vx, 0) * STEP, num(car.vy, 0) * STEP, num(car.vz, 0) * STEP] : null;
           if (buf.D > buf.E) {                                                                // next tick: hold
-            car.netSteps = 0; buf.E++; buf.lastAdj = tick;
+            car.netSteps = 0; buf.E++; buf.lastAdj = tick; buf.reTick = tick + 1; buf.reSteps = 0;
             visQueue.push({ tick: tick + 1, w: step1w, t: step1, id: car.id });
           } else if (buf.D < buf.E - 1 && tick - buf.lastAdj >= 60) {                         // next tick: catch up
-            car.netSteps = 2; buf.lastAdj = tick;
+            car.netSteps = 2; buf.lastAdj = tick; buf.reTick = tick + 1; buf.reSteps = 2;
             visQueue.push({ tick: tick + 1, w: step1w && [-step1w[0], -step1w[1], -step1w[2]], t: step1 && [-step1[0], 0], id: car.id });
           }
         }
@@ -492,14 +497,41 @@ CB.net = CB.net || {};
       }
       var rec = buf.at(m);
       if (!rec) return holdInput(car);
-      if (gp) {
-        gp.setInput(car.id, { nitro: !!(rec[4] & FB.nitro), aimBack: !!(rec[4] & FB.aimBack), itemSeq: rec[5] | 0 });
-        var K = gp.kart(car.id);
-        if (K && K.launchPending) { var g = buf.gradeUpTo(m); if (g) gp.launchKart(car.id, g); else if (m - goTick > 240) gp.launchKart(car.id, 'none'); }
-      }
+      if (gp && kind !== 'stunt') feedGameplay(car, buf, m, rec);   // stunt: fed before the layer steps (hostPreGameplay)
+      else if (gp && car.netRep === 1 && typeof gp.netExtraStep === 'function') { feedGameplay(car, buf, m, rec); gp.netExtraStep(car); }   // 2nd step of a doubled tick
       var o = inputOf([rec[1], rec[2], rec[3], rec[4]]);
       if (kind !== 'stunt') { o.shiftUp = false; o.shiftDown = false; o.reverse = false; o.requestReset = false; o.pit = false; }
       return o;
+    }
+
+    function feedGameplay(car, buf, m, rec) {
+      gp.setInput(car.id, { nitro: !!(rec[4] & FB.nitro), aimBack: !!(rec[4] & FB.aimBack), itemSeq: rec[5] | 0 });
+      var K = gp.kart(car.id);
+      // the player's session launches its kart in the layer step AFTER recording that tick's input, so the grade first
+      // rides on the record of the tick after the launch: look one record ahead (else the start boost / bog came a step late)
+      if (K && K.launchPending) { var g = buf.gradeUpTo(m + 1); if (g) gp.launchKart(car.id, g); else if (m - goTick > 240) gp.launchKart(car.id, 'none'); }
+    }
+    /** stunt host, first car hook of a tick (the gameplay layer steps lazily in the FIRST car's preStep, i.e. before the
+        remote copies' own preStep): each remote player's copy gets the nitro / item buttons and rocket-start grade of the
+        input index it replays this tick. Fed from its own preStep they only took effect a tick late (nitro burns, start
+        boosts, bogs one physics step off the player's own prediction: a few cm / tenths of m/s, corrected forever after) */
+    var fedTick = null;
+    function hostPreGameplay(tick) {
+      if (tick === fedTick) return;
+      fedTick = tick;
+      Object.keys(carsByLocal).forEach(function (id) {
+        var car = carsByLocal[id];
+        if (!car || car.isPlayer || car.finished || !isRemoteHuman(id)) return;
+        var buf = inbufs[netIdOf(id)];
+        if (!buf) return;
+        buf.adapt(tick);   // D moves once per tick HERE, so the layer below and the copy's own step agree on it
+        if (!gp || goTick === null) return;
+        var m = buf.E !== null ? tick - buf.E : tick - buf.D >= goTick ? tick - buf.D : null;   // (E is set to D on the first replayed tick)
+        var rec = m !== null ? buf.at(m) : null;
+        if (rec) feedGameplay(car, buf, m, rec);
+        var K = gp.kart(id);
+        if (K) K.netSteps = buf.reTick === tick && buf.reSteps === 0 ? 0 : 1;   // a held physics step: the layer holds the kart too
+      });
     }
 
     /* ---------------- client: record + predict own input ---------------- */

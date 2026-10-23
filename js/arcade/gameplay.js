@@ -432,24 +432,27 @@ CB.arcade = CB.arcade || {};
         var id = String(v.id), K = W.karts[id];
         if (!K) { K = W.karts[id] = newKart(v); W.list.push(K); }
         seen[id] = 1;
-        K.isPlayer = !!v.isPlayer;
-        K.human = !K.isPlayer && !!NET.humans[id];
-        K.s = num(v.s, K.s); K.lap = num(v.lap, K.lap); K.dist = num(v.dist, K.s); K.lat = num(v.lat, 0);
-        K.speed = Math.abs(num(v.speed, 0)); K.lastPos = K.pos; K.pos = num(v.position, K.pos);
-        if (isNum(v.vTop) && v.vTop > 5) K.vTop = v.vTop;
-        if (isNum(v.halfW)) K.halfW = v.halfW;
-        K.wasAir = K.airborne; K.airborne = !!v.airborne;
-        K.finished = !!v.finished; K.throttle = num(v.throttle, 0); K.steer = num(v.steer, 0);
-        K.onTrack = v.onTrack !== false;
-        K.nativeSlide = v.powerslide !== undefined && v.powerslide !== null;
-        K.slideOn = !!v.powerslide; K.slideDir = num(v.slideDir, 0);
-        K.nativeSpin = !!v.nativeSpin;
-        if (K.isPlayer) W.player = K;
+        syncKart(K, v);
       }
       if (W.list.length !== Object.keys(seen).length) {
         W.list = W.list.filter(function (k) { return seen[k.id]; });
         Object.keys(W.karts).forEach(function (id) { if (!seen[id]) delete W.karts[id]; });
       }
+    }
+    function syncKart(K, v) {
+      K.isPlayer = !!v.isPlayer;
+      K.human = !K.isPlayer && !!NET.humans[K.id];
+      K.s = num(v.s, K.s); K.lap = num(v.lap, K.lap); K.dist = num(v.dist, K.s); K.lat = num(v.lat, 0);
+      K.speed = Math.abs(num(v.speed, 0)); K.lastPos = K.pos; K.pos = num(v.position, K.pos);
+      if (isNum(v.vTop) && v.vTop > 5) K.vTop = v.vTop;
+      if (isNum(v.halfW)) K.halfW = v.halfW;
+      K.wasAir = K.airborne; K.airborne = !!v.airborne;
+      K.finished = !!v.finished; K.throttle = num(v.throttle, 0); K.steer = num(v.steer, 0);
+      K.onTrack = v.onTrack !== false;
+      K.nativeSlide = v.powerslide !== undefined && v.powerslide !== null;
+      K.slideOn = !!v.powerslide; K.slideDir = num(v.slideDir, 0);
+      K.nativeSpin = !!v.nativeSpin;
+      if (K.isPlayer) W.player = K;
     }
 
     function preStart(K, dt) {
@@ -584,6 +587,50 @@ CB.arcade = CB.arcade || {};
       return Math.abs(ds) < rS && Math.abs(e.lat - K.lat) < rL;
     }
 
+    /** a kart over a static pickup (box / pad / ring / coin / can) */
+    function pickup(K, e) {
+      if (e.type === 'box') {
+        if (overlaps(K, e, BOX_R + 0.6, BOX_R + K.halfW)) {
+          e.respawn = BOX_RESPAWN; K.st.boxes++;
+          evt('itemBox', K.id, { entity: e.id });
+          if (!K.item && !K.roulette && O.items) startRoulette(K);
+        }
+      } else if (e.type === 'pad') {
+        if (K.padCool <= 0 && overlaps(K, e, num(e.len, PAD.len) / 2 + 1, num(e.w, PAD.w) / 2 + K.halfW * 0.5)) {
+          K.padCool = 0.6; boost(K, 'pad', PAD.boost_s, PAD.top, PAD.accel);
+        }
+      } else if (e.type === 'ring') {
+        if (K.padCool <= 0 && overlaps(K, e, 1.5, num(e.r, RING.r))) {
+          K.padCool = 0.6; boost(K, 'ring', RING.boost_s, RING.top, RING.accel);
+          if (O.nitro) N.gain(K.nitro, 'ring');
+        }
+      } else if (e.type === 'coin') {
+        if (overlaps(K, e, COIN_R + 0.5, COIN_R + K.halfW)) {
+          e.respawn = COIN_RESPAWN;
+          if (K.coins < COIN_CAP) { K.coins++; K.st.coins++; }
+          evt('coin', K.id, { entity: e.id, coins: K.coins });
+        }
+      } else if (e.type === 'can') {
+        if (overlaps(K, e, CAN_R + 0.6, CAN_R + K.halfW)) {
+          e.respawn = CAN_RESPAWN;
+          N.gain(K.nitro, 'canister');
+          evt('canister', K.id, { entity: e.id });
+        }
+      }
+    }
+    /** netarcade host, the 2nd physics step of a remote player's copy in one tick (input-delay catch-up): the layer
+        steps that kart once more, from where its first step left it — timers, nitro, pickups, effects — exactly what the
+        player's own session did before its own step of that input */
+    function netExtraStep(car) {
+      var K = car && kart(car.id);
+      if (!K || !W.started || W.phase === 'grid' || W.phase === 'countdown' || follower()) return false;
+      syncKart(K, engineView(car));
+      kartStep(K, 1 / 120);
+      if (!K.finished) for (var i = 0; i < W.ents.length; i++) { var e = W.ents[i]; if (!(e.respawn > 0)) pickup(K, e); }
+      computeFx(K);
+      return true;
+    }
+
     function entityStep(dt) {
       var L = trackLen(), list = W.list, i, j, e, K;
       for (i = W.ents.length - 1; i >= 0; i--) {
@@ -605,39 +652,9 @@ CB.arcade = CB.arcade || {};
         for (j = 0; j < list.length; j++) {
           K = list[j];
           if (K.finished && e.type !== 'box') continue;
+          if (K.netHeld) continue;   // a remote copy holding its physics step this tick (netarcade): it did not move
           switch (e.type) {
-            case 'box':
-              if (overlaps(K, e, BOX_R + 0.6, BOX_R + K.halfW)) {
-                e.respawn = BOX_RESPAWN; K.st.boxes++;
-                evt('itemBox', K.id, { entity: e.id });
-                if (!K.item && !K.roulette && O.items) startRoulette(K);
-              }
-              break;
-            case 'pad':
-              if (K.padCool <= 0 && overlaps(K, e, num(e.len, PAD.len) / 2 + 1, num(e.w, PAD.w) / 2 + K.halfW * 0.5)) {
-                K.padCool = 0.6; boost(K, 'pad', PAD.boost_s, PAD.top, PAD.accel);
-              }
-              break;
-            case 'ring':
-              if (K.padCool <= 0 && overlaps(K, e, 1.5, num(e.r, RING.r))) {
-                K.padCool = 0.6; boost(K, 'ring', RING.boost_s, RING.top, RING.accel);
-                if (O.nitro) N.gain(K.nitro, 'ring');
-              }
-              break;
-            case 'coin':
-              if (overlaps(K, e, COIN_R + 0.5, COIN_R + K.halfW)) {
-                e.respawn = COIN_RESPAWN;
-                if (K.coins < COIN_CAP) { K.coins++; K.st.coins++; }
-                evt('coin', K.id, { entity: e.id, coins: K.coins });
-              }
-              break;
-            case 'can':
-              if (overlaps(K, e, CAN_R + 0.6, CAN_R + K.halfW)) {
-                e.respawn = CAN_RESPAWN;
-                N.gain(K.nitro, 'canister');
-                evt('canister', K.id, { entity: e.id });
-              }
-              break;
+            case 'box': case 'pad': case 'ring': case 'coin': case 'can': pickup(K, e); break;
             case 'oil':
               if (K.ghostT <= 0 && (e.owner !== K.id || e.age > 1.2) && overlaps(K, e, 1.9 + 1.2, 1.9 + K.halfW * 0.6)) {
                 hit(K, 'oil', e.owner);   // a shield / hit cool-down still soaks the slick up
@@ -851,6 +868,20 @@ CB.arcade = CB.arcade || {};
       });
     }
 
+    function kartStep(K, dt) {
+      timers(K, dt);
+      if (K.finished) { K.nitro.burning = false; K.drift.on = false; return; }
+      if (!human(K) && O.nitro) N.gain(K.nitro, 'passive', DIFF.passive * dt);
+      var held = human(K) ? !!K.input.nitro : aiNitro(K);
+      var was = K.nitro.burning;
+      N.burn(K.nitro, dt, held && O.nitro && K.spinT <= 0 && K.slowT <= 0);
+      if (K.nitro.burning) K.st.nitroUsed_s += dt;
+      if (K.nitro.burning && !was) evt('nitroStart', K.id, {});
+      else if (!K.nitro.burning && was) evt('nitroEnd', K.id, {});
+      if (human(K)) driftStep(K, dt);
+      slipAndPasses(K, dt);
+      airStep(K, dt);
+    }
     function step(dt, ctx) {
       if (!(dt > 0) || !ctx) return;
       if (isNum(ctx.trackLength) && ctx.trackLength > 0 && !(W.L > 0)) { W.L = ctx.trackLength; buildLayout(); }
@@ -871,18 +902,12 @@ CB.arcade = CB.arcade || {};
       if (follower()) { followerStep(dt); return; }
       for (i = 0; i < list.length; i++) {
         K = list[i];
-        timers(K, dt);
-        if (K.finished) { K.nitro.burning = false; K.drift.on = false; continue; }
-        if (!human(K) && O.nitro) N.gain(K.nitro, 'passive', DIFF.passive * dt);
-        var held = human(K) ? !!K.input.nitro : aiNitro(K);
-        var was = K.nitro.burning;
-        N.burn(K.nitro, dt, held && O.nitro && K.spinT <= 0 && K.slowT <= 0);
-        if (K.nitro.burning) K.st.nitroUsed_s += dt;
-        if (K.nitro.burning && !was) evt('nitroStart', K.id, {});
-        else if (!K.nitro.burning && was) evt('nitroEnd', K.id, {});
-        if (human(K)) driftStep(K, dt);
-        slipAndPasses(K, dt);
-        airStep(K, dt);
+        // netarcade host: a remote player's copy that holds its physics step this tick (input-delay re-timing) holds its
+        // timers / nitro / pickups too (else boosts and bogs ended a tick off its player's own prediction); a doubled
+        // step gets its second layer step from netExtraStep
+        K.netHeld = K.netSteps === 0;
+        K.netSteps = 1;
+        if (!K.netHeld) kartStep(K, dt);
       }
       entityStep(dt);
       for (i = 0; i < list.length; i++) {
@@ -1166,6 +1191,7 @@ CB.arcade = CB.arcade || {};
         return { role: NET.role, humans: Object.keys(NET.humans), externalLaunch: NET.extLaunch };
       },
       /** host: a remote player's own start grade ('perfect'|'good'|'none'|'over'), applied once */
+      netExtraStep: netExtraStep,
       launchKart: function (id, grade) { var K = kart(id); if (!K || !K.launchPending || !W.started) return false; launch(K, String(grade || 'none')); return true; },
       applyHit: function (id, kind) { applyHit(kart(id), kind || 'oil'); },
       netPack: netPack, netApply: netApply, pushEvents: pushEvents,

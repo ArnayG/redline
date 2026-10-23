@@ -133,6 +133,10 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       c.build = en.build || null;
       c.bodyStyle = en.bodyStyle || (c.build && c.build.body && c.build.body.style) || null;
       c.drive = driveModel.create(c.build, { seed: cfg.seed + k });
+      // engine-hook contract params from the start: the gameplay layer reads (and caches) a car's top speed the first time
+      // it sees it — before a car's first step that fell back to a generic 220 km/h for every car but the first one
+      // (a netarcade host's copy of a guest then boosted towards another target than the guest's own prediction)
+      c.params = { handling: 'arcade', arcade: {}, capabilities: { topSpeed_mps: num(c.drive && c.drive.vmax, 55) } };
       c.ai = isP ? null : AI.createDriver({ skill: num(en.skill, 0.75), laneBias: side * 1.2 * ((k % 3) / 2), seed: cfg.seed + k * 977 });
       c.lastCp = { s: 0, dist: Math.min(0, s0), lat: 0 };
       c.finished = false; c.finishT = null; c.finishPos = null; c.lapStartT = null; c.lapTimes = []; c.bestLap = null; c.lastLap = null;
@@ -360,7 +364,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
         if (hooks.length) c.input = inp;
         c.inputState = inp;
         c.throttle = num(inp.throttle, 0); c.brake = num(inp.brake, 0); c.steer = num(inp.steer, 0);
-        if (!racing) {   // grid / countdown: hold position (gameplay rocket-start gauge reads the throttle)
+        if (!racing || c.netHold) {   // grid / countdown / a netarcade host copy awaiting its player's GO input: hold position (rocket-start gauge reads the throttle)
           c.v = 0; c.rpm = 1000 + 5500 * c.throttle;
           return;
         }
