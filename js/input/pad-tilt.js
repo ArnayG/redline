@@ -362,7 +362,7 @@ CB.input = CB.input || {};
     if (!s.fresh) return { cls: 'bad', text: s.name + ' · no motion data (sleeping?)' };
     return { cls: 'ok', text: s.name + (s.transport ? ' (' + s.transport + ')' : '') + ' · ' + (s.angle >= 0 ? '+' : '') + Math.round(s.angle) + '° · ' + s.rate + ' Hz' + (s.avgMs != null ? ' · ' + s.avgMs.toFixed(1) + ' ms to the car' : '') };
   }
-  var CHIP_CSS = '.pt-chip{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147482000;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border-radius:999px;background:rgba(8,9,11,.82);border:1px solid var(--line-2,#3a3b44);color:var(--text,#ecebe6);font:600 11.5px var(--font,system-ui,sans-serif);font-variant-numeric:tabular-nums;cursor:pointer}' +
+  var CHIP_CSS = '.pt-chip{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:2147482000;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;border-radius:var(--pill);background:var(--glass-strong);border:1px solid var(--line-2,#3a3b44);color:var(--text,#ecebe6);box-shadow:var(--elev-2);font:600 var(--fs-xs) var(--font,system-ui,sans-serif);font-variant-numeric:tabular-nums;cursor:pointer}' +
     '.pt-chip.up{bottom:56px} .pt-chip .ss-dot{width:8px;height:8px;border-radius:50%;background:var(--warn,#e3a33a)} .pt-chip .ss-dot.ok{background:var(--good,#3fbf7f)} .pt-chip .ss-dot.bad{background:var(--bad,#e5484d)}';
   function updateChip() {
     if (!hasDOM || !document.body) return;

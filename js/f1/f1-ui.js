@@ -60,110 +60,91 @@ CB.f1 = CB.f1 || {};
   }
 
   /* ---------------------------------------------------------------- styles */
-  /* Design system (css/styles.css § 01): every colour is a token (light + dark themes), spacing on --sp-*, controls on
-     --control-h-*. The F1 identity colour (--mode-f1) only marks identity: eyebrows, step numbers, selected cards. The
-     primary CTA is the shared gold .cb-btn.primary; segmented controls are .cb-tab-list / .cb-tab. */
+  /* Design system (css/styles.css § 01 tokens, § 18 screen family): the root is `.mx[data-mode="f1"]`, so the header
+     (.mx-head / .mx-kicker / .mx-title / .mx-sub / .cb-back), section cards (.mx-sec + .mx-sec-title + .mx-step),
+     selection cards (.mx-card.is-on), the sticky footer (.mx-foot / .mx-foot-sum / .mx-cta) and the gold CTA are the
+     same as Race / Drift / Arcade / Derby / Drag. The F1 identity colour (--mode-f1 via --mx) only marks identity.
+     Rules below only add the F1-specific layout (livery strips, circuit thumbnails, weekend sessions, timing tables). */
   var CSS = [
     '#screen-f1{background:var(--bg);color:var(--text)}',
-    '.f1-root{min-height:100%;display:flex;flex-direction:column;font-family:var(--font,system-ui,sans-serif);box-sizing:border-box;color:var(--text)}',
+    '.f1-root{min-height:100%;display:flex;flex-direction:column;font-family:var(--font);box-sizing:border-box;color:var(--text);background:radial-gradient(1100px 520px at 18% -12%,var(--mode-f1-soft),transparent 62%),var(--bg)}',
     '.f1-root *{box-sizing:border-box}',
-    /* header: kicker + serif title, ghost "Main menu" on the right (the race setup pattern) */
-    '.f1-top{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4) clamp(14px,3vw,28px);border-bottom:1px solid var(--line);background:var(--glass,var(--panel));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);flex-wrap:nowrap}',
-    '.f1-mark{flex:none;display:block;width:30px;height:18px;background:linear-gradient(115deg,var(--mode-f1) 0 58%,transparent 58% 66%,var(--mode-f1) 66% 100%);transform:skewX(-12deg);border-radius:2px}',
-    '.f1-titles{flex:1 1 auto;display:flex;flex-direction:column;gap:3px;min-width:0}',
-    '.f1-kicker{font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;font-weight:650;color:var(--accent)}',
-    '.f1-title{margin:0;font-family:var(--serif);font-weight:500;font-size:var(--fs-2xl);line-height:1.1;color:var(--text-strong);letter-spacing:-.01em}',
-    '@media (min-width:980px){.f1-title{font-size:var(--fs-3xl)}}',
-    '.f1-sub{color:var(--text-dim);font-size:var(--fs-sm)}',
+    /* header: the shared .mx-head, in the page flow (like the derby / drag setups) */
+    '.f1-top{width:100%;max-width:1500px;margin:0 auto;padding:var(--sp-5) max(var(--sp-4),env(safe-area-inset-right)) 0 max(var(--sp-4),env(safe-area-inset-left))}',
+    '.f1-top .mx-headbar{margin-left:auto}',
+    '@media (max-width:560px){.f1-teams{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}.f1-livery{height:44px}.f1-back .lbl{display:none}.f1-back{min-width:var(--touch-min);padding:0 var(--sp-2)}}',
     '.f1-spacer{flex:1}',
-    '.f1-top-actions{flex:none;display:flex;align-items:center;gap:var(--sp-2);margin-left:auto}',
-    '.f1-back svg{width:18px;height:18px}',
-    '@media (max-width:560px){.f1-back span{display:none}.f1-back{width:var(--control-h-md);padding:0}.f1-title{font-size:var(--fs-xl)}.f1-top{gap:var(--sp-3)}.f1-mark{width:22px;height:14px}.f1-sub{font-size:var(--fs-xs)}}',
-    '.f1-main{flex:1;width:100%;max-width:1500px;margin:0 auto;padding:var(--sp-5) clamp(14px,3vw,28px) var(--sp-8)}',
+    '.f1-main{flex:1;width:100%;max-width:1500px;margin:0 auto;padding:var(--sp-4) max(var(--sp-4),env(safe-area-inset-right)) var(--sp-6) max(var(--sp-4),env(safe-area-inset-left))}',
     '.f1-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--sp-5);align-items:start}',
     '@media (max-width:980px){.f1-grid{grid-template-columns:1fr}}',
-    '.f1-sec{margin-bottom:var(--sp-6)}',
-    /* section eyebrow with the step number in the mode colour */
-    '.f1-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--sp-2);margin:0 0 var(--sp-3);font-size:var(--fs-xs);font-weight:650;letter-spacing:.18em;text-transform:uppercase;color:var(--text-strong)}',
-    '.f1-h b{color:var(--mode-f1);font-variant-numeric:tabular-nums;letter-spacing:.08em}',
-    '.f1-h span{font-size:var(--fs-sm);font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-dim)}',
-    '.f1-h.big{font-family:var(--serif);font-size:var(--fs-xl);font-weight:500;letter-spacing:0;text-transform:none}',
-    /* team / circuit cards */
+    /* team / circuit cards: .mx-card selection look; the team card keeps its livery strip edge to edge */
     '.f1-teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:var(--sp-3)}',
-    '.f1-team,.f1-circ{position:relative;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:var(--radius,12px);overflow:hidden;cursor:pointer;color:inherit;padding:0;font:inherit;transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}',
-    '.f1-team:hover,.f1-circ:hover{border-color:color-mix(in srgb,var(--mode-f1) 45%,var(--line))}',
-    '.f1-team.is-on,.f1-circ.is-on{border-color:var(--mode-f1);box-shadow:0 0 0 1px var(--mode-f1) inset;background:linear-gradient(var(--mode-f1-soft),var(--mode-f1-soft)),var(--panel)}',
-    '.f1-team:focus-visible,.f1-circ:focus-visible{outline:none;box-shadow:var(--focus)}',
+    '.f1-team.mx-card{padding:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}',
     '.f1-livery{height:54px;position:relative}',
-    '.f1-livery .num{position:absolute;right:8px;bottom:4px;font:800 26px/1 "Barlow Condensed","Arial Narrow",sans-serif;opacity:.95}',
+    '.f1-livery .num{position:absolute;right:var(--sp-2);bottom:var(--sp-1);font:800 var(--fs-2xl)/1 var(--hud-font);opacity:.95}',
     '.f1-team .meta{padding:var(--sp-2) var(--sp-3) var(--sp-3)}',
-    '.f1-badge{display:inline-block;font:800 13px/1 "Barlow Condensed","Arial Narrow",sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:4px;color:#fff}',
+    '.f1-badge{display:inline-block;font:800 var(--fs-sm)/1 var(--hud-font);letter-spacing:.08em;text-transform:uppercase;padding:var(--sp-1) 7px;border-radius:var(--radius-xs);color:var(--mode-ink)}',
     '.f1-team .drv{font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;line-height:1.45}',
     '.f1-team .drv b{color:var(--text-strong);font-weight:600}',
     '.f1-seat{margin-top:var(--sp-2)}',
     '.f1-circuits{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--sp-3)}',
-    '.f1-circ{padding:var(--sp-3);display:flex;gap:var(--sp-3);align-items:center}',
+    '.f1-circ.mx-card{padding:var(--sp-3);display:flex;gap:var(--sp-3);align-items:center;justify-content:flex-start}',
     '.f1-circ canvas{flex:0 0 auto;width:84px;height:64px}',
     '.f1-circ .nm{font-weight:650;font-size:var(--fs-md);line-height:1.2;color:var(--text-strong)}',
     '.f1-circ .ct{font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}',
-    '.f1-circ .st{font:600 11px/1.3 var(--mono,ui-monospace,Menlo,monospace);color:var(--text);margin-top:5px}',
-    '.f1-circ .rnd{position:absolute;top:6px;right:8px;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.12em;color:var(--mode-f1)}',
-    '.f1-night{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.1em;padding:2px 5px;border-radius:3px;background:var(--panel-3);color:var(--text-dim);border:1px solid var(--line);margin-left:6px;vertical-align:middle}',
-    /* settings panel */
-    '.f1-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg,14px);padding:var(--sp-4);position:sticky;top:var(--sp-4);box-shadow:var(--elev-1,none)}',
+    '.f1-circ .st{font:600 var(--fs-xs)/1.3 var(--mono);color:var(--text);margin-top:5px}',
+    '.f1-circ .rnd{position:absolute;top:6px;right:var(--sp-2);font-size:var(--fs-2xs);font-weight:700;letter-spacing:.12em;color:var(--mx)}',
+    '.f1-night{display:inline-block;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.1em;padding:2px 5px;border-radius:var(--radius-xs);background:var(--panel-3);color:var(--text-dim);border:1px solid var(--line);margin-left:6px;vertical-align:middle}',
+    /* session sidebar: an .mx-sec card, sticky */
+    '.f1-panel.mx-sec{position:sticky;top:var(--sp-4);margin-bottom:0}',
     '.f1-field{margin-bottom:var(--sp-4)}',
-    '.f1-field>label{display:block;font-size:var(--fs-2xs);font-weight:650;letter-spacing:.18em;text-transform:uppercase;color:var(--text-dim);margin-bottom:var(--sp-2)}',
-    /* segmented controls: the shared tab list; the active tab is accent-soft with a light ring and the gold underline */
+    '.f1-field>label{display:block;font-size:var(--fs-2xs);font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-dim);margin-bottom:var(--sp-2)}',
+    /* segmented controls: the shared tab list */
     '.f1-root .cb-tab-list.f1-seg{flex-wrap:wrap;overflow:visible}',
     '.f1-root .f1-seg .cb-tab{flex:1 1 auto;min-height:var(--control-h-sm);cursor:pointer}',
-    '.f1-root .f1-seg .cb-tab.is-active,[data-theme="light"] .f1-root .f1-seg .cb-tab.is-active{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 34%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 18%,transparent);color:var(--text-strong)}',
     '.f1-row{display:flex;align-items:center;gap:var(--sp-2)}',
     '.f1-step{display:flex;align-items:center;gap:var(--sp-2)}',
-    '.f1-step output{min-width:64px;text-align:center;font:700 15px/1 var(--mono,ui-monospace,Menlo,monospace);color:var(--text-strong)}',
+    '.f1-step output{min-width:64px;text-align:center;font:700 var(--fs-lg)/1 var(--mono);color:var(--text-strong)}',
     '.f1-step .cb-btn{width:var(--control-h-md);min-height:var(--control-h-md);padding:0;font-size:var(--fs-lg)}',
     '.f1-toggle{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:var(--control-h-sm);font-size:var(--fs-sm);cursor:pointer;color:var(--text)}',
     '.f1-toggle input{width:18px;height:18px;accent-color:var(--accent)}',
     '.f1-hint{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.45}',
     '.f1-hint b{color:var(--text)}',
-    '.f1-continue{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-radius:var(--radius,12px);background:linear-gradient(90deg,var(--mode-f1-soft),transparent 75%),var(--panel);border:1px solid color-mix(in srgb,var(--mode-f1) 40%,var(--line));margin-bottom:var(--sp-5);flex-wrap:wrap}',
+    '.f1-continue{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-radius:var(--radius-lg);background:linear-gradient(90deg,var(--mx-soft),transparent 75%),var(--panel);border:1px solid color-mix(in srgb,var(--mx) 40%,var(--line));margin-bottom:var(--sp-4);flex-wrap:wrap}',
     '.f1-continue b{color:var(--text-strong)}',
-    /* weekend hub */
-    '.f1-sessions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--sp-3);margin-bottom:var(--sp-5)}',
-    '.f1-sess{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius,12px);padding:var(--sp-3) var(--sp-4)}',
-    '.f1-sess.is-cur{border-color:var(--mode-f1);background:linear-gradient(var(--mode-f1-soft),var(--mode-f1-soft)),var(--panel)}',
+    /* weekend hub: session cards share the .mx-card look (current = selected) */
+    '.f1-sessions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--sp-3);margin-bottom:var(--sp-4)}',
+    '.f1-sess.mx-card{padding:var(--sp-3) var(--sp-4);cursor:default}',
     '.f1-sess.is-done{opacity:.78}',
-    '.f1-sess .k{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--mode-f1)}',
-    '.f1-sess .n{font-family:var(--serif);font-size:var(--fs-xl);font-weight:500;color:var(--text-strong);margin:var(--sp-1) 0}',
+    '.f1-sess .k{font-size:var(--fs-2xs);font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--mx)}',
+    '.f1-sess .n{font-family:var(--serif);font-size:var(--fs-xl);font-weight:var(--fw-title);color:var(--text-strong);margin:var(--sp-1) 0}',
     '.f1-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);color:var(--text)}',
-    '.f1-table th{text-align:left;font-size:var(--fs-2xs);font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);padding:var(--sp-2);border-bottom:1px solid var(--line)}',
-    '.f1-table td{padding:6px var(--sp-2);border-bottom:1px solid var(--line-soft,var(--line));white-space:nowrap}',
-    '.f1-table tr.me td{background:var(--accent-soft);color:var(--text-strong);font-weight:650}',
+    '.f1-table th{text-align:left;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);padding:var(--sp-2);border-bottom:1px solid var(--line)}',
+    '.f1-table td{padding:6px var(--sp-2);border-bottom:1px solid var(--line-soft);white-space:nowrap}',
+    '.f1-table tr.me td{background:var(--mx-soft);color:var(--text-strong);font-weight:650}',
     '.f1-table .bar{display:inline-block;width:4px;height:14px;vertical-align:middle;margin-right:6px;border-radius:1px}',
-    '.f1-table .mono{font-family:var(--mono,ui-monospace,Menlo,monospace)}',
+    '.f1-table .mono{font-family:var(--mono)}',
     '.f1-table .pts{font-weight:750;text-align:right;color:var(--text-strong)}',
-    '.f1-tyre{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:2px solid;font:800 9px/1 sans-serif;margin-right:2px;background:var(--panel-3)}',
+    '.f1-tyre{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:2px solid;font:800 var(--fs-2xs)/1 var(--hud-font);margin-right:2px;background:var(--panel-3)}',
+    /* F1 timing purple: fastest lap (the sport's own colour, used identically by the F1 HUD) */
     '.f1-fl{color:#b64dff;font-weight:800}',
     '.f1-tabs{margin-bottom:var(--sp-3)}',
     '.f1-scroll{overflow:auto;max-width:100%}',
     '.f1-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:var(--sp-2);margin-top:var(--sp-3)}',
-    '.f1-stat{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm,8px);padding:var(--sp-2)}',
+    '.f1-stat{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:var(--sp-2)}',
     '.f1-stat b{display:block;font-size:var(--fs-xl);font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums}',
     '.f1-stat span{font-size:var(--fs-2xs);letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim)}',
-    '.f1-res{display:flex;flex-direction:column;gap:6px;padding:var(--sp-3) var(--sp-4);border-radius:var(--radius,12px);background:linear-gradient(var(--mode-f1-soft),var(--mode-f1-soft)),var(--panel);border:1px solid color-mix(in srgb,var(--mode-f1) 40%,var(--line));margin-bottom:var(--sp-3);color:var(--text)}',
-    '.f1-res b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:500;color:var(--text-strong)}',
+    /* result banner (weekend hub + the race results panel): accent-tinted card with a serif verdict */
+    '.f1-res{display:flex;flex-direction:column;gap:6px;padding:var(--sp-3) var(--sp-4);border-radius:var(--radius-lg);background:linear-gradient(90deg,var(--mx-soft,var(--mode-f1-soft)),transparent 80%),var(--panel);border:1px solid color-mix(in srgb,var(--mx,var(--mode-f1)) 40%,var(--line));margin-bottom:var(--sp-3);color:var(--text)}',
+    '.f1-res b{font-family:var(--serif);font-size:var(--fs-xl);font-weight:var(--fw-title);letter-spacing:var(--tracking-title);color:var(--text-strong)}',
     '.f1-foot{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;margin-top:var(--sp-3)}',
-    /* sticky footer: session summary + the primary CTA (like the race setup .rx-footer) */
-    '.f1-footer{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) clamp(14px,3vw,28px) max(var(--sp-3),env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--glass-strong,var(--panel));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
-    '.f1-summary{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-4);font-size:var(--fs-sm);color:var(--text-dim)}',
-    '.f1-summary b{color:var(--text-strong);font-weight:650}',
-    '.f1-summary .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}',
-    '.f1-cta{min-width:220px}',
-    '.f1-root .cb-btn.large{min-height:var(--control-h-lg)}',
-    '@media (max-width:560px){.f1-footer{flex-wrap:wrap;gap:var(--sp-2)}.f1-footer .f1-cta{width:100%;min-width:0}.f1-summary{flex-wrap:nowrap;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);font-size:var(--fs-xs)}}',
+    /* sticky footer: the shared .mx-foot; the team swatch leads the summary line */
+    '.f1-footer .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:0;margin-right:var(--sp-2)}',
+    '.f1-cta svg{width:16px;height:16px}',
     /* short landscape phones: a slim header (no subtitle) and footer so the cards keep the screen */
-    '@media (max-height:500px){.f1-top{padding-top:var(--sp-2);padding-bottom:var(--sp-2)}.f1-sub{display:none}.f1-title{font-size:var(--fs-xl)}.f1-kicker{font-size:9.5px}.f1-main{padding-top:var(--sp-3)}.f1-footer{padding-top:var(--sp-2);padding-bottom:max(var(--sp-2),env(safe-area-inset-bottom))}.f1-footer .f1-cta{min-height:var(--control-h-md)}.f1-summary{flex-wrap:nowrap;overflow:hidden;white-space:nowrap}.f1-panel{position:static}}',
-    /* touch: 40–44 px controls */
-    '@media (pointer:coarse){.f1-root .cb-btn{min-height:var(--touch-min,44px)}.f1-root .f1-seg .cb-tab{min-height:40px}.f1-toggle{min-height:40px}.f1-toggle input{width:22px;height:22px}.f1-step .cb-btn{width:44px;min-height:44px}.f1-back{min-width:44px}}'
+    '@media (max-height:500px){.f1-top{padding-top:var(--sp-3)}.f1-top .mx-sub{display:none}.f1-top .mx-title{font-size:var(--fs-xl)}.f1-top .mx-kicker{margin-bottom:var(--sp-1)}.f1-main{padding-top:var(--sp-3)}.f1-footer.mx-foot{padding-top:var(--sp-2);padding-bottom:max(var(--sp-2),env(safe-area-inset-bottom))}.f1-footer .f1-cta{min-height:var(--control-h-md)}.f1-panel.mx-sec{position:static}}',
+    /* touch: >= 44 px controls */
+    '@media (pointer:coarse){.f1-root .cb-btn{min-height:var(--touch-min)}.f1-root .f1-seg .cb-tab{min-height:var(--touch-min)}.f1-toggle{min-height:var(--touch-min)}.f1-toggle input{width:22px;height:22px}.f1-step .cb-btn{width:var(--touch-min);min-height:var(--touch-min)}}'
   ].join('\n');
   function injectStyles() {
     if (!hasDOM || document.getElementById('f1-ui-styles')) return;
@@ -281,31 +262,55 @@ CB.f1 = CB.f1 || {};
     var el = U.el;
     while (el.firstChild) el.removeChild(el.firstChild);
     if (!mode() || !teams() || !wk()) { el.appendChild(h('div', { class: 'f1-root' }, h('p', { text: 'Formula 1 modules did not load (js/f1/*).' }))); return; }
-    var root = h('div', { class: 'f1-root' });
+    var root = h('div', { class: 'f1-root mx', 'data-mode': 'f1' });
     el.appendChild(root);
     if (U.screen === 'hub' && U.run) renderHub(root); else renderSetup(root);
     try { el.scrollTop = U.scroll || 0; } catch (e) { /* ignore */ }
   }
   var BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
-  /** Header (race setup pattern): F1 mark, small uppercase kicker + serif title, ghost "Main menu" on the right. */
+  var FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></svg>';
+  function sharedIcon(name, fb) { var I = CB.ui && CB.ui.icons; return (I && I[name]) || fb; }
+  /** Header (§ 18 screen family): accent kicker + serif title + sub; ghost actions and "Main menu" (Esc) on the right. */
   function header(kicker, title, sub, extra) {
-    return h('header', { class: 'f1-top' },
-      h('span', { class: 'f1-mark', 'aria-hidden': 'true' }),
+    return h('header', { class: 'f1-top mx-head' },
       h('div', { class: 'f1-titles' },
-        h('div', { class: 'f1-kicker', text: kicker }),
-        h('h1', { class: 'f1-title', text: title }),
-        sub ? h('div', { class: 'f1-sub', text: sub }) : null),
-      h('div', { class: 'f1-top-actions' },
+        h('div', { class: 'mx-kicker', text: kicker }),
+        h('h1', { class: 'mx-title', text: title }),
+        sub ? h('p', { class: 'mx-sub', text: sub }) : null),
+      h('div', { class: 'mx-headbar' },
         extra || null,
-        h('button', { class: 'cb-btn ghost f1-back', type: 'button', title: 'Main menu', 'aria-label': 'Main menu', html: BACK_SVG + '<span>Main menu</span>',
-          onclick: function () { if (CB.router && CB.router.go) CB.router.go('menu'); } })));
+        h('button', { class: 'cb-btn ghost cb-back f1-back', type: 'button', title: 'Main menu (Esc)', 'aria-label': 'Main menu',
+          html: sharedIcon('back', BACK_SVG) + '<span class="lbl">Main menu</span><kbd>Esc</kbd>',
+          onclick: function () { goMenu(); } })));
   }
-  /** Sticky footer: session summary + the primary CTA (shared gold .cb-btn.primary). */
-  function footer(summary, cta) {
-    return h('footer', { class: 'f1-footer' }, h('div', { class: 'f1-summary' }, summary), cta || null);
+  function goMenu() { if (CB.router && CB.router.go) CB.router.go('menu'); }
+  /** Esc on the setup / weekend screens goes back to the main menu (like the race setup); never while racing or typing. */
+  function onKey(e) {
+    if (e.key !== 'Escape' || !U || U.racing || !U.el || !U.el.isConnected || e.defaultPrevented) return;
+    var r = CB.router && CB.router.current ? CB.router.current() : null;
+    if (r && r.route && r.route !== 'f1') return;
+    var scr = U.el.closest ? U.el.closest('.cb-screen') : null;
+    if (scr && scr.hidden) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (document.querySelector('.cb-modal:not([hidden]), #modal-root .cb-modal')) return;
+    e.preventDefault(); goMenu();
   }
-  function sumItem(label, value, swatch) {
-    return h('span', null, swatch ? h('i', { class: 'sw', style: { background: swatch } }) : null, label ? label + ' ' : '', h('b', { text: value }));
+  /** Sticky footer (.mx-foot): summary line + meta line on the left, the gold CTA on the right. */
+  function footer(title, meta, cta, swatch) {
+    return h('footer', { class: 'f1-footer mx-foot' },
+      h('div', { class: 'mx-foot-sum' },
+        h('b', null, swatch ? h('i', { class: 'sw', style: { background: swatch } }) : null, title),
+        meta ? h('span', { text: meta }) : null),
+      cta ? h('div', { class: 'mx-cta' }, cta) : null);
+  }
+  function cta(label, attrs, onclick) {
+    return h('button', Object.assign({ class: 'cb-btn primary large f1-cta', type: 'button', onclick: onclick, html: sharedIcon('play', FLAG_SVG) + '<span>' + esc(label) + '</span>' }, attrs || {}));
+  }
+  function secTitle(n, label, hint) {
+    return h('h3', { class: 'mx-sec-title f1-h' },
+      h('span', { class: 't' }, n ? h('i', { class: 'mx-step', text: String(n) }) : null, label),
+      hint ? h('span', { class: 'mx-hint', text: hint }) : null);
   }
 
   /* ---------------------------------------------------------------- setup */
@@ -334,7 +339,7 @@ CB.f1 = CB.f1 || {};
     var tGrid = h('div', { class: 'f1-teams' });
     T.list.forEach(function (t) {
       var on = S.team === t.id;
-      var card = h('button', { class: 'f1-team' + (on ? ' is-on' : ''), type: 'button', 'data-team': t.id, 'aria-pressed': on ? 'true' : 'false',
+      var card = h('button', { class: 'f1-team mx-card' + (on ? ' is-on' : ''), type: 'button', 'data-team': t.id, 'aria-pressed': on ? 'true' : 'false',
         onclick: function (e) { if (e.target && e.target.closest && e.target.closest('.f1-seat')) return; S.team = t.id; persist(); render(); } },
         h('div', { class: 'f1-livery', style: { background: liveryCss(t) } }, h('span', { class: 'num', style: { color: t.livery.number }, text: t.drivers[on ? 1 - S.seat : 0].number })),
         h('div', { class: 'meta' },
@@ -349,7 +354,7 @@ CB.f1 = CB.f1 || {};
           })) : null));
       tGrid.appendChild(card);
     });
-    left.appendChild(h('div', { class: 'f1-sec' }, h('div', { class: 'f1-h', html: '<b>01</b> Pick your team <span>every car is the same spec — the liveries are the teams\' real colours</span>' }), tGrid));
+    left.appendChild(h('section', { class: 'f1-sec mx-sec' }, secTitle(1, 'Pick your team', 'Every car is the same spec — the liveries are the teams\' real colours'), tGrid));
 
     // circuits
     var list = M.circuits(), season = S.format === 'season';
@@ -359,7 +364,7 @@ CB.f1 = CB.f1 || {};
       var inf = M.info(d), on = season ? chosen.indexOf(d.id) >= 0 : S.circuitId === d.id;
       var cv = h('canvas', { 'aria-hidden': 'true' });
       var rnd = season && on ? calendar(list, chosen).indexOf(d.id) + 1 : 0;
-      var card = h('button', { class: 'f1-circ' + (on ? ' is-on' : ''), type: 'button', 'data-circuit': d.id, 'aria-pressed': on ? 'true' : 'false',
+      var card = h('button', { class: 'f1-circ mx-card' + (on ? ' is-on' : ''), type: 'button', 'data-circuit': d.id, 'aria-pressed': on ? 'true' : 'false',
         onclick: function () {
           if (season) {
             var c = chosen.slice(), i = c.indexOf(d.id);
@@ -377,11 +382,11 @@ CB.f1 = CB.f1 || {};
       cGrid.appendChild(card);
       setTimeout(function () { drawPreview(cv, d); }, 0);
     });
-    left.appendChild(h('div', { class: 'f1-sec' }, h('div', { class: 'f1-h', html: '<b>02</b> ' + (season ? 'Championship calendar <span>tap circuits to add or remove rounds (' + chosen.length + ' rounds)</span>' : 'Pick the circuit <span>faithful recreations of the real layouts</span>') }), cGrid));
+    left.appendChild(h('section', { class: 'f1-sec mx-sec' }, season ? secTitle(2, 'Championship calendar', 'Tap circuits to add or remove rounds (' + chosen.length + ' rounds)') : secTitle(2, 'Pick the circuit', 'Faithful recreations of the real layouts'), cGrid));
 
     // settings panel
-    var P = h('div', { class: 'f1-panel' });
-    P.appendChild(h('div', { class: 'f1-h', html: '<b>03</b> Session' }));
+    var P = h('div', { class: 'f1-panel mx-sec' });
+    P.appendChild(secTitle(3, 'Session'));
     P.appendChild(field('Format', seg(M.FORMATS, S.format, function (v) { S.format = v; persist(); render(); }),
       (M.FORMATS.filter(function (f) { return f.id === S.format; })[0] || {}).desc));
     if (season) P.appendChild(field('Each round', seg([{ id: 'quick', name: 'Race only' }, { id: 'weekend', name: 'Full weekend' }], S.seasonWeekend ? 'weekend' : 'quick', function (v) { S.seasonWeekend = v === 'weekend'; persist(); render(); })));
@@ -407,21 +412,16 @@ CB.f1 = CB.f1 || {};
       toggle('Automatic DRS', A.autoDrs, function (v) { A.autoDrs = v; persist(); }, 'Opens the flap for you whenever DRS is available'),
       h('div', { style: { 'margin-top': '6px' } }, seg([{ id: 'off', name: 'Steer off' }, { id: 'light', name: 'Light' }, { id: 'medium', name: 'Medium' }], A.steering, function (v) { A.steering = v; persist(); render(); })))));
     if (S.format !== 'quick') P.appendChild(toggle('Fastest-lap point (top 10)', S.fastestLapPoint, function (v) { S.fastestLapPoint = v; persist(); }));
-    var start = h('button', { class: 'cb-btn primary large rx-btn big f1-cta', type: 'button', 'data-act': 'start', onclick: beginRun },
-      S.format === 'quick' ? 'Start race' : S.format === 'weekend' ? 'Start weekend' : 'Start championship');
+    var start = cta(S.format === 'quick' ? 'Start race' : S.format === 'weekend' ? 'Start weekend' : 'Start championship', { 'data-act': 'start' }, beginRun);
     P.appendChild(h('div', { class: 'f1-hint', style: { 'margin-top': 'var(--sp-2)' }, html: 'Keys: <b>F</b> DRS · <b>N</b> ERS boost (hold) · <b>V</b> ERS mode · <b>I</b> box this lap · <b>O</b> pit tyre. Pad: RB DRS, LB boost, Back box.' }));
     var st = store() ? store().stats() : null;
     if (st && st.races) P.appendChild(h('div', { class: 'f1-stats' },
       [['Races', st.races], ['Wins', st.wins], ['Podiums', st.podiums], ['Poles', st.poles], ['Points', st.points], ['Titles', st.titles]].map(function (x) { return h('div', { class: 'f1-stat' }, h('b', { text: String(x[1]) }), h('span', { text: x[0] })); })));
     right.appendChild(P);
     var tm = T.get(S.team) || T.list[0], defS = M.circuit(S.circuitId), fmt = (M.FORMATS.filter(function (f) { return f.id === S.format; })[0] || {}).name || S.format;
-    rootAll.appendChild(footer([
-      sumItem('', tm.name, tm.livery.primary),
-      sumItem('', season ? (chosen.length + ' rounds') : (defS ? M.info(defS).name : '')),
-      sumItem('', fmt),
-      season ? null : sumItem('', lapsLabel(S, defS)),
-      sumItem('AI', (M.DIFFICULTIES.filter(function (d) { return d.id === S.difficulty; })[0] || {}).name || S.difficulty)
-    ], start));
+    rootAll.appendChild(footer(tm.name + ' · ' + (season ? chosen.length + ' rounds' : (defS ? M.info(defS).name : '')),
+      [fmt, season ? null : lapsLabel(S, defS), 'AI ' + ((M.DIFFICULTIES.filter(function (d) { return d.id === S.difficulty; })[0] || {}).name || S.difficulty)].filter(Boolean).join(' · '),
+      start, tm.livery.primary));
   }
 
   function beginRun() {
@@ -445,7 +445,7 @@ CB.f1 = CB.f1 || {};
     var team = T.get(S.team);
     var title = run.kind === 'season' ? 'Championship · ' + (W.isSeasonOver(run) ? 'final standings' : 'round ' + (run.round + 1) + ' of ' + run.rounds.length) : 'Race weekend';
     root.appendChild(header('Formula 1 · ' + title, inf ? inf.name : title, inf ? [def.city, inf.country].filter(Boolean).join(' · ') + ' · ' + km(inf.realLength_m) + ' · ' + lapsLabel(S, def) : null,
-      h('button', { class: 'cb-btn ghost', type: 'button', onclick: function () { U.screen = 'setup'; render(); } }, 'Setup')));
+      h('button', { class: 'cb-btn ghost', type: 'button', html: sharedIcon('settings', '') + '<span>Setup</span>', onclick: function () { U.screen = 'setup'; render(); } })));
     var rootAll = root, hubCta = null;
     root = h('div', { class: 'f1-main' });
     rootAll.appendChild(root);
@@ -459,37 +459,34 @@ CB.f1 = CB.f1 || {};
         var meta = M.SESSIONS.filter(function (x) { return x.id === s.id; })[0] || { name: s.id };
         var isCur = cur && cur === s;
         var status = s.done ? (s.skipped ? 'Skipped' : sessionSummary(s)) : isCur ? meta.desc : 'Later';
-        sRow.appendChild(h('div', { class: 'f1-sess' + (isCur ? ' is-cur' : '') + (s.done ? ' is-done' : '') },
-          h('div', { class: 'k', text: 'SESSION ' + (i + 1) }), h('div', { class: 'n', text: meta.name }), h('div', { class: 'f1-hint', text: status }),
+        sRow.appendChild(h('div', { class: 'f1-sess mx-card' + (isCur ? ' is-cur is-on' : '') + (s.done ? ' is-done' : '') },
+          h('div', { class: 'k', text: 'Session ' + (i + 1) }), h('div', { class: 'n', text: meta.name }), h('div', { class: 'f1-hint', text: status }),
           isCur && s.id !== 'race' ? h('div', { class: 'f1-foot' },
             h('button', { class: 'cb-btn ghost', type: 'button', onclick: function () { skip(); } }, s.id === 'qualifying' ? 'Skip (simulate)' : 'Skip')) : null));
-        if (isCur) hubCta = h('button', { class: 'cb-btn primary large rx-btn big f1-cta', type: 'button', 'data-act': 'session', onclick: function () { startSession(s.id); } }, 'Start ' + meta.name);
+        if (isCur) hubCta = cta('Start ' + String(meta.name).toLowerCase(), { 'data-act': 'session' }, function () { startSession(s.id); });
       });
       left.appendChild(sRow);
       var last = null;
       w.sessions.forEach(function (s) { if (s.done && s.results) last = s; });
-      if (last) left.appendChild(h('div', { class: 'f1-sec' }, h('div', { class: 'f1-h', html: (M.SESSIONS.filter(function (x) { return x.id === last.id; })[0] || {}).name + ' <span>classification</span>' }), resultsTable(last)));
+      if (last) left.appendChild(h('section', { class: 'f1-sec mx-sec' }, secTitle(0, (M.SESSIONS.filter(function (x) { return x.id === last.id; })[0] || {}).name || last.id, 'Classification'), resultsTable(last)));
       if (cur && cur.id === 'race' && w.grid) left.appendChild(h('div', { class: 'f1-hint', text: 'Grid set by qualifying: you start P' + (w.grid.indexOf('player') + 1) + '.' }));
     } else if (W.isSeasonOver(run)) {
       left.appendChild(h('div', { class: 'f1-res' }, h('b', { text: 'Season complete' }), h('div', { text: championLine(run) }),
         null));
-      hubCta = h('button', { class: 'cb-btn primary large rx-btn big f1-cta', type: 'button', onclick: function () { U.run = null; saveRun(); U.screen = 'setup'; U.lastPanel = null; render(); } }, 'New season');
+      hubCta = cta('New season', null, function () { U.run = null; saveRun(); U.screen = 'setup'; U.lastPanel = null; render(); });
     }
     if (run.kind === 'season') right.appendChild(standingsPanel(run));
     else if (w && W.isComplete(w)) {
-      right.appendChild(h('div', { class: 'f1-panel' }, h('div', { class: 'f1-h', text: 'Weekend complete' }), h('div', { class: 'f1-hint', text: 'Every session of this weekend has run.' })));
-      hubCta = h('button', { class: 'cb-btn primary large rx-btn big f1-cta', type: 'button', onclick: function () { U.run = null; saveRun(); U.screen = 'setup'; U.lastPanel = null; render(); } }, 'Back to setup');
+      right.appendChild(h('div', { class: 'f1-panel mx-sec' }, secTitle(0, 'Weekend complete'), h('div', { class: 'f1-hint', text: 'Every session of this weekend has run.' })));
+      hubCta = cta('Back to setup', null, function () { U.run = null; saveRun(); U.screen = 'setup'; U.lastPanel = null; render(); });
     }
-    else right.appendChild(h('div', { class: 'f1-panel' }, h('div', { class: 'f1-h', text: 'Your car' }),
-      h('div', { class: 'f1-livery', style: { background: liveryCss(team), height: '70px', 'border-radius': '8px' } }),
+    else right.appendChild(h('div', { class: 'f1-panel mx-sec' }, secTitle(0, 'Your car'),
+      h('div', { class: 'f1-livery', style: { background: liveryCss(team), height: '70px', 'border-radius': 'var(--radius-sm)' } }),
       h('div', { class: 'f1-hint', style: { 'margin-top': 'var(--sp-2)' }, text: team.full + ' · ' + team.power + ' power unit · teammate ' + team.drivers[1 - S.seat].name })));
     var curS = w ? W.currentSession(w) : null, curMeta = curS ? (M.SESSIONS.filter(function (x) { return x.id === curS.id; })[0] || { name: curS.id }) : null;
-    rootAll.appendChild(footer([
-      team ? sumItem('', team.name, team.livery.primary) : null,
-      inf ? sumItem('', inf.name) : null,
-      run.kind === 'season' ? sumItem('Round', (Math.min(run.round + 1, run.rounds.length)) + '/' + run.rounds.length) : null,
-      curMeta ? sumItem('Next', curMeta.name) : sumItem('', 'Complete')
-    ], hubCta));
+    rootAll.appendChild(footer([team ? team.name : null, inf ? inf.name : null].filter(Boolean).join(' · '),
+      [run.kind === 'season' ? 'Round ' + Math.min(run.round + 1, run.rounds.length) + ' of ' + run.rounds.length : 'Race weekend', curMeta ? 'Next: ' + curMeta.name : 'Complete'].join(' · '),
+      hubCta, team ? team.livery.primary : null));
   }
   function sessionSummary(s) {
     var me = (s.results || []).filter(function (r) { return r.isPlayer; })[0];
@@ -520,7 +517,7 @@ CB.f1 = CB.f1 || {};
     return h('div', { class: 'f1-scroll' }, h('table', { class: 'f1-table' }, h('thead', { html: head }), tb));
   }
   function standingsPanel(run) {
-    var st = wk().standings(run), P = h('div', { class: 'f1-panel' });
+    var st = wk().standings(run), P = h('div', { class: 'f1-panel mx-sec' });
     var tab = U.standTab || 'drivers';
     P.appendChild(h('div', { class: 'f1-tabs' }, seg([{ id: 'drivers', name: 'Drivers' }, { id: 'constructors', name: 'Constructors' }, { id: 'calendar', name: 'Calendar' }], tab,
       function (v) { U.standTab = v; render(); })));
@@ -741,6 +738,7 @@ CB.f1 = CB.f1 || {};
   }
   if (hasDOM) {
     register();
+    document.addEventListener('keydown', onKey);
     document.addEventListener('DOMContentLoaded', register);
     document.addEventListener('cb:router-ready', register);
     window.f1 = {

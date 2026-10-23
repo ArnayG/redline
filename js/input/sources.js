@@ -135,24 +135,28 @@ CB.input = CB.input || {};
   var CSS = [
     '.ss-box{display:flex;flex-direction:column;gap:10px}',
     '.ss-seg{display:flex;flex-wrap:wrap;gap:6px}',
-    '.ss-seg button{appearance:none;border:1px solid var(--line,#2b2c33);background:var(--panel-2,#1b1c21);color:var(--text,#ecebe6);border-radius:10px;padding:8px 12px;font:600 12.5px var(--font,system-ui,sans-serif);cursor:pointer;min-height:38px}',
-    '.ss-seg button.is-on{border-color:var(--accent,#c9a56b);background:rgba(201,165,107,.16);color:var(--text-strong,#fff)}',
+    /* source buttons = the shared selection card (.mx-card): accent border + inset ring + soft tint when picked */
+    '.ss-seg button{appearance:none;border:1px solid var(--line,#2b2c33);background:var(--panel-2,#1b1c21);color:var(--text,#ecebe6);border-radius:var(--radius-sm);transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease);padding:8px 12px;font:600 var(--fs-sm) var(--font,system-ui,sans-serif);cursor:pointer;min-height:38px}',
+    '.ss-seg button:hover:not(.is-on):not([disabled]){border-color:var(--line-2)}',
+    '.ss-seg button.is-on{border-color:var(--accent,#c9a56b);background:linear-gradient(160deg,var(--accent-soft),transparent 70%),var(--panel-2);box-shadow:inset 0 0 0 1px var(--accent);color:var(--text-strong,#fff)}',
+    '.ss-seg button:focus-visible,.ss-chipseg button:focus-visible{outline:none;box-shadow:var(--focus)}',
     '.ss-seg button[disabled]{opacity:.45;cursor:not-allowed}',
-    '.ss-hint{color:var(--text-dim,#9b9890);font-size:12px;line-height:1.45}',
-    '.ss-detail{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#2b2c33);background:rgba(255,255,255,.02)}',
+    '.ss-hint{color:var(--text-dim,#9b9890);font-size:var(--fs-xs);line-height:1.45}',
+    '.ss-detail{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line,#2b2c33);background:var(--bg-2)}',
     '.ss-detail:empty{display:none}',
-    '.ss-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px}',
+    '.ss-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:var(--fs-sm)}',
     '.ss-row>span:first-child{min-width:130px;color:var(--text-dim,#9b9890)}',
     '.ss-row input[type=range]{flex:1;min-width:120px}',
     '.ss-row b{font-variant-numeric:tabular-nums;min-width:52px}',
     '.ss-row small{color:var(--text-dim,#9b9890)}',
-    '.ss-chipseg{display:inline-flex;border:1px solid var(--line,#2b2c33);border-radius:9px;overflow:hidden}',
-    '.ss-chipseg button{appearance:none;border:0;background:transparent;color:var(--text-dim,#9b9890);padding:6px 10px;font:600 12px var(--font,system-ui);cursor:pointer}',
-    '.ss-chipseg button.is-on{background:rgba(201,165,107,.18);color:var(--text-strong,#fff)}',
-    '.ss-status{display:flex;align-items:center;gap:8px;font-size:12.5px;font-variant-numeric:tabular-nums}',
+    /* segmented = the shared .cb-tab-list look */
+    '.ss-chipseg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line,#2b2c33);border-radius:12px;background:var(--bg-2)}',
+    '.ss-chipseg button{appearance:none;border:1px solid transparent;border-radius:9px;min-height:28px;background:transparent;color:var(--text-dim,#9b9890);padding:0 10px;font:600 var(--fs-xs) var(--font,system-ui);cursor:pointer}',
+    '.ss-chipseg button.is-on{background:linear-gradient(180deg,var(--panel-3),var(--panel-2));border-color:var(--line);box-shadow:var(--elev-1);color:var(--text-strong,#fff)}[data-theme="light"] .ss-chipseg button.is-on{background:var(--panel)}',
+    '.ss-status{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);font-variant-numeric:tabular-nums}',
     '.ss-dot{width:9px;height:9px;border-radius:50%;background:var(--warn,#e3a33a);flex:none}',
     '.ss-dot.ok{background:var(--good,#3fbf7f)} .ss-dot.bad{background:var(--bad,#e5484d)}',
-    '@media (pointer:coarse){.ss-seg button{min-height:44px}}'
+    '@media (pointer:coarse){.ss-seg button{min-height:44px}.ss-chipseg button{min-height:40px}}'
   ].join('\n');
   function ensureCss() {
     if (!hasDOM || document.getElementById('ss-css')) return;
@@ -220,13 +224,13 @@ CB.input = CB.input || {};
      S.hud(id) -> { show(steer [-1, 1] (+1 = right), label, hint?), hide() }   one shared element in #race-root, the
      newest caller owns it (only one opt-in source steers at a time). */
   var hudEl = null, hudOwner = null, hudHintT = 0;
-  var HUD_CSS = '#race-root .ss-hud{position:absolute;left:50%;bottom:max(64px,calc(env(safe-area-inset-bottom) + 56px));transform:translateX(-50%);z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px;font:700 11px var(--font,system-ui,sans-serif);color:rgba(255,255,255,.85);text-shadow:0 1px 2px rgba(0,0,0,.6)}' +
-    '#race-root .ss-hud .ss-bar{position:relative;width:200px;height:8px;border-radius:4px;background:rgba(0,0,0,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}' +
+  var HUD_CSS = '#race-root .ss-hud{position:absolute;left:50%;bottom:max(64px,calc(env(safe-area-inset-bottom) + 56px));transform:translateX(-50%);z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px;font:700 var(--fs-xs) var(--hud-font);color:var(--hud-ink);text-shadow:0 1px 2px rgba(0,0,0,.6)}' +
+    '#race-root .ss-hud .ss-bar{position:relative;width:200px;height:8px;border-radius:4px;background:var(--hud-panel-soft);box-shadow:inset 0 0 0 1px var(--hud-line)}' +
     '#race-root .ss-hud .ss-bar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:rgba(255,255,255,.4)}' +
     '#race-root .ss-hud .ss-fill{position:absolute;top:1px;bottom:1px;left:50%;width:0;border-radius:3px;background:var(--accent,#c9a56b)}' +
-    '#race-root .ss-hud .ss-knob{position:absolute;top:-4px;width:6px;height:16px;margin-left:-3px;border-radius:3px;background:#fff;left:50%}' +
-    '#race-root .ss-hud .ss-lab{letter-spacing:.12em;text-transform:uppercase;font-size:10px;opacity:.8}' +
-    '#race-root .ss-hud .ss-tip{padding:7px 12px;border-radius:999px;background:rgba(8,9,11,.8);border:1px solid rgba(255,255,255,.2);letter-spacing:.02em;font-size:12px;text-transform:none}' +
+    '#race-root .ss-hud .ss-knob{position:absolute;top:-4px;width:6px;height:16px;margin-left:-3px;border-radius:3px;background:var(--hud-ink);left:50%}' +
+    '#race-root .ss-hud .ss-lab{letter-spacing:.12em;text-transform:uppercase;font-size:var(--fs-2xs);opacity:.8}' +
+    '#race-root .ss-hud .ss-tip{padding:7px 12px;border-radius:var(--pill);background:var(--hud-panel);border:1px solid var(--hud-line);letter-spacing:.02em;font-size:var(--fs-xs);text-transform:none}' +
     '#race-root .ss-hud .ss-tip:empty{display:none}';
   S.hud = function (id) {
     return {

@@ -218,7 +218,7 @@ test('integration: route, nav, menu tile, index.html, CSS tokens, achievements c
   assert.ok(idx[idx.length - 1] < html.indexOf('src="js/race/race-ui.js"'), 'before race-ui');
   var css = src('css/styles.css'), light = css.slice(css.indexOf('[data-theme="light"] {'));
   assert.ok(css.indexOf('--mode-drag:') >= 0 && light.slice(0, 4000).indexOf('--mode-drag:') >= 0, '--mode-drag both themes');
-  assert.ok(/#screen-drag\.cb-screen/.test(css), 'scroll rule'); assert.ok(/\.dg-foot \{[^}]*position: sticky/.test(css), 'sticky footer');
+  assert.ok(/#screen-drag\.cb-screen/.test(css), 'scroll rule'); assert.ok(/\.mx-foot \{[^}]*position: sticky/.test(css) && /class: 'mx-foot dg-foot'/.test(src('js/drag/drag-ui.js')), 'sticky footer (shared .mx-foot)');
   var A = CB.game.achievements;
   assert.ok(A.list.filter(function (a) { return a.category === 'drag'; }).length >= 10, 'drag achievements');
   assert.strictEqual(typeof CB.drag.ui.openNet === 'undefined' ? 'browser-only' : 'fn', 'browser-only', 'openNet is part of the browser half');

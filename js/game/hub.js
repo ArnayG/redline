@@ -986,7 +986,7 @@ CB.game = CB.game || {};
 --gh-line2:var(--line-2,#3a3b44);--gh-text:var(--text,#ecebe6);--gh-dim:var(--text-dim,#9b9890);--gh-mute:var(--text-faint,#6c6a64);--gh-accent:var(--accent,#c9a56b);--gh-accent2:var(--accent-hi,#e7cd9a);--gh-hot:var(--race,#e0412f);
 --gh-good:var(--good,#3fbf7f);--gh-warn:var(--warn,#e3a33a);--gh-bad:var(--bad,#e5484d);--gh-blue:var(--accent-2,#6aa6d8);--gh-font:var(--font,"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
 --gh-mono:var(--mono,"SF Mono",ui-monospace,Menlo,Consolas,monospace);--gh-r:var(--radius,12px);--gh-r-sm:var(--radius-sm,9px);--gh-cut:0px;
-position:fixed;inset:0;z-index:9000;background:var(--gh-bg);color:var(--gh-text);font:14px/1.5 var(--gh-font);display:flex;flex-direction:column;overflow:hidden;
+position:fixed;inset:0;z-index:9000;background:var(--gh-bg);color:var(--gh-text);font:var(--fs-md)/1.5 var(--gh-font);display:flex;flex-direction:column;overflow:hidden;
 -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none}
 #game-hub.is-routed{position:absolute;z-index:auto}
 #game-hub *{box-sizing:border-box}
@@ -999,64 +999,64 @@ background-image:radial-gradient(120% 80% at 50% -10%,var(--studio-spot,rgba(201
 #game-hub .gh-top{position:relative;z-index:3;display:flex;align-items:center;gap:18px;height:56px;padding:0 28px;border-bottom:1px solid var(--gh-line);
 background:var(--glass,rgba(18,19,23,.72));backdrop-filter:saturate(160%) blur(18px)}
 #game-hub.is-routed .gh-top{height:44px}#game-hub.is-routed .gh-brand,#game-hub.is-routed .gh-wallet{display:none}
-#game-hub .gh-brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.24em;font-size:14px;cursor:pointer;background:none;border:0;padding:6px 0}
-#game-hub .gh-brand i{display:block;width:22px;height:22px;border-radius:6px;background:var(--accent-grad,linear-gradient(135deg,#f1dcae,#c9a56b))}
-#game-hub .gh-brand small{white-space:nowrap;font-weight:500;letter-spacing:.2em;color:var(--gh-dim);font-size:10px;margin-left:4px}
-#game-hub .gh-crumbs{display:flex;align-items:center;gap:8px;color:var(--gh-dim);font-size:12px;letter-spacing:.14em;text-transform:uppercase;min-width:0;overflow:hidden;white-space:nowrap}
+#game-hub .gh-brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.24em;font-size:var(--fs-md);cursor:pointer;background:none;border:0;padding:6px 0}
+#game-hub .gh-brand i{display:block;width:22px;height:22px;border-radius:var(--radius-xs);background:var(--accent-grad,linear-gradient(135deg,#f1dcae,#c9a56b))}
+#game-hub .gh-brand small{white-space:nowrap;font-weight:500;letter-spacing:.2em;color:var(--gh-dim);font-size:var(--fs-2xs);margin-left:4px}
+#game-hub .gh-crumbs{display:flex;align-items:center;gap:8px;color:var(--gh-dim);font-size:var(--fs-sm);letter-spacing:.14em;text-transform:uppercase;min-width:0;overflow:hidden;white-space:nowrap}
 #game-hub .gh-crumbs b{color:var(--gh-text);font-weight:700}
 #game-hub .gh-crumbs span::before{content:"/";margin-right:8px;color:var(--gh-mute)}#game-hub .gh-crumbs span.first::before{content:none}
 #game-hub .gh-crumb{all:unset;cursor:pointer;color:inherit;letter-spacing:inherit;border-radius:3px;transition:color .15s}#game-hub .gh-crumb:hover,#game-hub .gh-crumb:focus-visible{color:var(--gh-text);text-decoration:underline;text-underline-offset:3px}
 #game-hub .gh-spacer{flex:1}
 #game-hub .gh-wallet{display:flex;align-items:center;gap:14px;flex-shrink:0}#game-hub .gh-driver-txt{white-space:nowrap}#game-hub .gh-crumbs .gh-crumb-gap{color:var(--gh-mute);letter-spacing:.05em}
-#game-hub .gh-credits{white-space:nowrap;font-family:var(--gh-mono);font-size:14px;font-weight:650;color:var(--gh-accent);padding:6px 12px;border:1px solid var(--gh-line);border-radius:var(--pill,999px);
+#game-hub .gh-credits{white-space:nowrap;font-family:var(--gh-mono);font-size:var(--fs-md);font-weight:650;color:var(--gh-accent);padding:6px 12px;border:1px solid var(--gh-line);border-radius:var(--pill,999px);
 background:var(--accent-softer,rgba(201,165,107,.07));transition:color .3s}
 #game-hub .gh-credits.is-bump{animation:gh-bump .6s}
-@keyframes gh-bump{0%{transform:scale(1)}30%{transform:scale(1.08);color:#fff}100%{transform:scale(1)}}
+@keyframes gh-bump{0%{transform:scale(1)}30%{transform:scale(1.08);color:var(--text-strong)}100%{transform:scale(1)}}
 #game-hub .gh-driver{display:flex;align-items:center;gap:10px;background:none;border:0;cursor:pointer;padding:4px;border-radius:30px}
-#game-hub .gh-avatar{position:relative;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;color:#111}
+#game-hub .gh-avatar{position:relative;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:var(--fs-sm);color:#111}
 #game-hub .gh-avatar svg{position:absolute;inset:-4px;width:46px;height:46px;transform:rotate(-90deg)}
 #game-hub .gh-driver-txt{text-align:left;line-height:1.15}
-#game-hub .gh-driver-txt b{display:block;font-size:13px}
-#game-hub .gh-driver-txt small{color:var(--gh-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
-#game-hub .gh-main{position:relative;z-index:2;flex:1;overflow:auto;overflow-x:hidden;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#333 transparent}
+#game-hub .gh-driver-txt b{display:block;font-size:var(--fs-sm)}
+#game-hub .gh-driver-txt small{color:var(--gh-dim);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase}
+#game-hub .gh-main{position:relative;z-index:2;flex:1;overflow:auto;overflow-x:hidden;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
 #game-hub .gh-screen{padding:28px 40px 60px;max-width:1500px;margin:0 auto;animation:gh-in .42s cubic-bezier(.2,.8,.2,1) both}
 #game-hub.is-back .gh-screen{animation-name:gh-in-back}
 @keyframes gh-in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
 @keyframes gh-in-back{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 #game-hub .gh-foot{position:relative;z-index:3;display:flex;align-items:center;gap:22px;height:40px;padding:0 28px;border-top:1px solid var(--gh-line);
-font-size:11.5px;color:var(--gh-dim);background:var(--glass,rgba(18,19,23,.72))}
-#game-hub .gh-foot kbd{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;margin-right:6px;border:1px solid var(--gh-line2);border-bottom-width:2px;border-radius:5px;
-font:600 10px var(--gh-mono);color:var(--gh-text);background:var(--gh-panel2)}
+font-size:var(--fs-xs);color:var(--gh-dim);background:var(--glass,rgba(18,19,23,.72))}
+#game-hub .gh-foot kbd{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;margin-right:6px;border:1px solid var(--gh-line2);border-bottom-width:2px;border-radius:var(--radius-xs);
+font:600 var(--fs-2xs) var(--gh-mono);color:var(--gh-text);background:var(--gh-panel2)}
 #game-hub .gh-foot kbd.pad{border-radius:50%;min-width:20px;padding:0}
 #game-hub .gh-foot kbd.pad-a{background:#1d7a3e;border-color:#3ecf8e}#game-hub .gh-foot kbd.pad-b{background:#7a1d1d;border-color:#ff5d5d}
 #game-hub .gh-status{margin-left:auto;display:flex;gap:14px;align-items:center}
 #game-hub .gh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--gh-mute)}
 #game-hub .gh-dot.on{background:var(--gh-good);box-shadow:0 0 8px var(--gh-good)}
 /* headings */
-#game-hub .gh-h1{font-size:32px;line-height:1.1;font-weight:650;letter-spacing:-.02em;margin:0 0 6px;font-family:var(--serif,var(--gh-font))}
+#game-hub .gh-h1{font-size:var(--fs-title);line-height:1.08;font-weight:var(--fw-title);letter-spacing:var(--tracking-title);margin:0 0 var(--sp-2);font-family:var(--serif,var(--gh-font));color:var(--text-strong)}
 #game-hub .gh-h1 em{font-style:normal;color:var(--gh-accent)}
-#game-hub .gh-kicker{display:flex;align-items:center;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-accent);margin-bottom:8px}
-#game-hub .gh-kicker::before{content:"";width:18px;height:2px;border-radius:2px;background:var(--accent-grad,var(--gh-accent))}
-#game-hub .gh-sub{color:var(--gh-dim);max-width:720px;margin:0 0 26px}
-#game-hub .gh-h2{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-dim);margin:30px 0 12px;display:flex;align-items:center;gap:12px}
+#game-hub .gh-kicker{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-2xs);font-weight:700;letter-spacing:var(--tracking-caps);line-height:1.3;text-transform:uppercase;color:var(--gh-accent);margin:0 0 var(--sp-2)}
+#game-hub .gh-kicker::before{content:"";flex:none;width:18px;height:2px;border-radius:2px;background:currentColor}
+#game-hub .gh-sub{color:var(--gh-dim);font-size:var(--fs-sm);line-height:1.5;max-width:68ch;margin:0 0 var(--sp-6)}
+#game-hub .gh-h2{font-size:var(--fs-2xs);font-weight:700;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--gh-dim);margin:30px 0 12px;display:flex;align-items:center;gap:12px}
 #game-hub .gh-h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--gh-line2),transparent)}
 #game-hub .gh-head{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:8px}
 #game-hub .gh-head > div:first-child{flex:1;min-width:280px}
 /* buttons */
 /* .gh-btn renders exactly like the Atelier's .cb-btn (css/styles.css § 04) */
 #game-hub .gh-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;height:auto;padding:0 16px;border:1px solid var(--gh-line);
-background:linear-gradient(180deg,var(--panel-3,#22232a),var(--gh-panel2));color:var(--gh-text);font-weight:600;font-size:13px;letter-spacing:.015em;cursor:pointer;text-decoration:none;
+background:linear-gradient(180deg,var(--panel-3,#22232a),var(--gh-panel2));color:var(--gh-text);font-weight:600;font-size:var(--fs-sm);letter-spacing:.015em;cursor:pointer;text-decoration:none;
 border-radius:var(--gh-r-sm);box-shadow:0 1px 0 rgba(255,255,255,.04) inset,var(--shadow-sm,0 1px 2px rgba(0,0,0,.4));transition:background .2s,border-color .2s,transform .12s,color .2s;outline:none;white-space:nowrap}
 #game-hub .gh-btn:hover{border-color:color-mix(in srgb,var(--gh-accent) 45%,var(--gh-line));color:var(--text-strong,#fff)}
 #game-hub .gh-btn:active{transform:translateY(1px) scale(.985)}
 #game-hub .gh-btn.primary{background:var(--accent-grad,linear-gradient(135deg,#f1dcae,#c9a56b));background-size:160% 160%;color:var(--accent-ink,#17130b);border-color:transparent;
 box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 8px 22px -10px var(--accent-ring,rgba(201,165,107,.45))}
 #game-hub .gh-btn.primary:hover{background-position:100% 50%;color:var(--accent-ink,#17130b);transform:translateY(-1px)}
-#game-hub .gh-btn.hot{background:linear-gradient(135deg,var(--race-2,#ff7a45),var(--gh-hot));border-color:transparent;color:#fff;box-shadow:0 8px 22px -10px var(--gh-hot)}
+#game-hub .gh-btn.hot{background:linear-gradient(135deg,var(--race-2,#ff7a45),var(--gh-hot));border-color:transparent;color:var(--mode-ink);box-shadow:0 8px 22px -10px var(--gh-hot)}
 #game-hub .gh-btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--gh-dim)}
 #game-hub .gh-btn.ghost:hover{background:var(--gh-panel2);border-color:var(--gh-line);color:var(--gh-text)}
 #game-hub .gh-btn.danger{border-color:color-mix(in srgb,var(--gh-bad) 50%,transparent);color:var(--gh-bad);background:var(--bad-soft,rgba(229,72,77,.14))}
-#game-hub .gh-btn.small{min-height:28px;height:auto;padding:0 10px;font-size:12px;border-radius:7px}
+#game-hub .gh-btn.small{min-height:28px;height:auto;padding:0 10px;font-size:var(--fs-sm);border-radius:var(--radius-xs)}
 #game-hub .gh-btn[disabled]{opacity:.38;cursor:not-allowed;filter:grayscale(.6)}
 #game-hub .gh-btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 /* focus */
@@ -1077,28 +1077,28 @@ border:1px solid var(--gh-line);border-radius:var(--gh-r);padding:18px;cursor:po
 #game-hub .gh-card:hover,#game-hub .gh-card.is-focus{transform:translateY(-2px);border-color:color-mix(in srgb,var(--gh-accent) 38%,var(--gh-line));box-shadow:0 14px 30px -18px rgba(0,0,0,.8),0 0 0 1px var(--accent-softer,transparent)}
 #game-hub .gh-card.is-locked{cursor:default;filter:saturate(.25);opacity:.62}
 #game-hub .gh-card.is-locked:hover{transform:none}
-#game-hub .gh-card h3{margin:0 0 4px;font-size:16px;font-weight:650;letter-spacing:-.01em}
-#game-hub .gh-card p{margin:0;color:var(--gh-dim);font-size:12.5px}
+#game-hub .gh-card h3{margin:0 0 4px;font-size:var(--fs-lg);font-weight:650;letter-spacing:-.01em}
+#game-hub .gh-card p{margin:0;color:var(--gh-dim);font-size:var(--fs-sm)}
 #game-hub .gh-card .gh-card-foot{margin-top:auto;padding-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 #game-hub .gh-card .gh-stripe{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c,var(--gh-accent))}
 /* chips = the Atelier's .cb-badge */
-#game-hub .gh-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:var(--pill,999px);font-size:11px;font-weight:650;letter-spacing:.02em;
+#game-hub .gh-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:var(--pill,999px);font-size:var(--fs-xs);font-weight:650;letter-spacing:.02em;
 background:var(--gh-panel2);border:1px solid var(--gh-line);color:var(--gh-dim);white-space:nowrap}
 #game-hub .gh-chip.good{color:var(--gh-good);border-color:color-mix(in srgb,var(--gh-good) 40%,transparent);background:var(--good-soft,rgba(63,191,127,.13))}
 #game-hub .gh-chip.warn{color:var(--gh-warn);border-color:color-mix(in srgb,var(--gh-warn) 40%,transparent);background:var(--warn-soft,rgba(227,163,58,.13))}
 #game-hub .gh-chip.bad{color:var(--gh-bad);border-color:color-mix(in srgb,var(--gh-bad) 40%,transparent);background:var(--bad-soft,rgba(229,72,77,.14))}
 #game-hub .gh-chip.gold{color:var(--accent-ink,#17130b);background:var(--accent-grad,var(--gh-accent));border-color:transparent}
-#game-hub .gh-pi{display:inline-flex;align-items:stretch;height:22px;font:800 11px var(--gh-mono);border-radius:6px;overflow:hidden;border:1px solid var(--gh-line2)}
+#game-hub .gh-pi{display:inline-flex;align-items:stretch;height:22px;font:800 var(--fs-xs) var(--gh-mono);border-radius:var(--radius-xs);overflow:hidden;border:1px solid var(--gh-line2)}
 #game-hub .gh-pi b{background:var(--c);color:#0b0b0b;padding:0 6px;display:grid;place-items:center}
 #game-hub .gh-pi span{padding:0 6px;display:grid;place-items:center;background:var(--gh-panel2);color:var(--gh-text)}
-#game-hub .gh-pi i{font:700 10px var(--gh-font);font-style:normal;letter-spacing:.06em;text-transform:uppercase;padding:0 7px;display:grid;place-items:center;background:var(--gh-panel2);color:var(--gh-dim);border-right:1px solid var(--gh-line2)}
-#game-hub .gh-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px}
+#game-hub .gh-pi i{font:700 var(--fs-2xs) var(--gh-font);font-style:normal;letter-spacing:.06em;text-transform:uppercase;padding:0 7px;display:grid;place-items:center;background:var(--gh-panel2);color:var(--gh-dim);border-right:1px solid var(--gh-line2)}
+#game-hub .gh-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:var(--fs-sm)}
 #game-hub .gh-kv dt{color:var(--gh-dim)}#game-hub .gh-kv dd{margin:0;text-align:right;font-family:var(--gh-mono);font-variant-numeric:tabular-nums}
-#game-hub .gh-bar{position:relative;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+#game-hub .gh-bar{position:relative;height:6px;background:color-mix(in srgb,var(--text) 9%,transparent);border-radius:3px;overflow:hidden}
 #game-hub .gh-bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--gh-accent),var(--gh-accent2));border-radius:3px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 #game-hub .gh-bar.good i{background:var(--gh-good)}#game-hub .gh-bar.warn i{background:var(--gh-warn)}#game-hub .gh-bar.bad i{background:var(--gh-bad)}
 #game-hub .gh-empty{padding:40px;text-align:center;color:var(--gh-dim);border:1px dashed var(--gh-line2);border-radius:var(--gh-r);background:var(--gh-bg2)}
-#game-hub .gh-empty b{display:block;color:var(--gh-text);font-size:16px;margin-bottom:6px}
+#game-hub .gh-empty b{display:block;color:var(--gh-text);font-size:var(--fs-lg);margin-bottom:6px}
 #game-hub .gh-loading{display:flex;align-items:center;gap:14px;padding:26px;border:1px solid var(--gh-line);border-radius:var(--gh-r);background:var(--gh-panel);color:var(--gh-dim)}
 #game-hub .gh-loading::before{content:"";width:22px;height:22px;border-radius:50%;border:2px solid var(--gh-line2);border-top-color:var(--gh-accent);animation:gh-spin 1s linear infinite;flex:none}
 #game-hub .gh-loading b{color:var(--gh-text)}
@@ -1114,15 +1114,15 @@ opacity:0;animation:gh-fade .01s 1.4s forwards,gh-sheen 4.5s 1.4s ease-in-out in
 #game-hub .gh-title-logo span.is-red{background:linear-gradient(180deg,#ff8a6a 0%,#ff4b33 40%,#c22a17 58%,#ff6a4d 72%,#a8200f 100%);-webkit-background-clip:text;background-clip:text}
 @keyframes gh-letter{to{opacity:1;transform:none}}
 @keyframes gh-sheen{0%{background-position:150% 0}55%,100%{background-position:-60% 0}}
-#game-hub .gh-title-tag{margin-top:14px;font-size:13px;letter-spacing:.7em;text-transform:uppercase;color:var(--gh-accent);opacity:0;animation:gh-fade 1s 1s forwards;padding-left:.7em}
+#game-hub .gh-title-tag{margin-top:14px;font-size:var(--fs-sm);letter-spacing:.7em;text-transform:uppercase;color:var(--gh-accent);opacity:0;animation:gh-fade 1s 1s forwards;padding-left:.7em}
 #game-hub .gh-title-car{position:relative;width:min(760px,80vw);margin-top:3vh;opacity:0;transform:translateX(-60px);animation:gh-car-in 1.3s .5s cubic-bezier(.15,.85,.25,1) forwards}
 #game-hub .gh-title-car svg{width:100%;height:auto;display:block;filter:drop-shadow(0 30px 40px rgba(0,0,0,.7))}
 #game-hub .gh-title-car::after{content:"";position:absolute;left:5%;right:5%;bottom:-6%;height:30%;background:radial-gradient(closest-side,rgba(212,176,106,.22),transparent);filter:blur(10px);z-index:-1}
 @keyframes gh-car-in{to{opacity:1;transform:none}}
-#game-hub .gh-title-press{margin-top:5vh;font-size:12px;letter-spacing:.42em;text-transform:uppercase;color:var(--gh-text);opacity:0;animation:gh-fade .8s 1.8s forwards,gh-pulse 2s 2.6s ease-in-out infinite}
+#game-hub .gh-title-press{margin-top:5vh;font-size:var(--fs-sm);letter-spacing:.42em;text-transform:uppercase;color:var(--gh-text);opacity:0;animation:gh-fade .8s 1.8s forwards,gh-pulse 2s 2.6s ease-in-out infinite}
 @keyframes gh-fade{to{opacity:1}}
 @keyframes gh-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-#game-hub .gh-title-meta{position:absolute;bottom:22px;left:28px;right:28px;display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-mute)}
+#game-hub .gh-title-meta{position:absolute;bottom:22px;left:28px;right:28px;display:flex;justify-content:space-between;font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;color:var(--gh-mute)}
 #game-hub .gh-wheel-spin{animation:gh-spin .5s linear infinite}
 #game-hub .gh-car-sheen{animation:gh-carsheen 5s ease-in-out infinite}
 @keyframes gh-carsheen{0%,100%{transform:translateX(-30%)}50%{transform:translateX(30%)}}
@@ -1134,16 +1134,16 @@ background:radial-gradient(90% 120% at 85% 60%,var(--accent-softer,rgba(201,165,
 #game-hub .gh-home-hero::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--gh-accent),var(--gh-hot) 70%,transparent)}
 #game-hub .gh-home-txt{min-width:0;display:flex;flex-direction:column;gap:12px}
 #game-hub .gh-home-txt .gh-kicker{margin:0}
-#game-hub .gh-hero-name{font-size:var(--fs-3xl,38px);font-weight:600;letter-spacing:-.02em;line-height:1.05;font-family:var(--serif,var(--gh-font));overflow-wrap:anywhere}
+#game-hub .gh-hero-name{font-size:var(--fs-3xl);font-weight:var(--fw-title);letter-spacing:var(--tracking-title);color:var(--text-strong);line-height:1.05;font-family:var(--serif,var(--gh-font));overflow-wrap:anywhere}
 #game-hub .gh-home-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 #game-hub .gh-home-cta{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin-top:6px}
-#game-hub .gh-btn.big{min-height:var(--control-h-lg,46px);padding:6px 18px;font-size:14px;border-radius:12px;text-align:left;gap:10px}
+#game-hub .gh-btn.big{min-height:var(--control-h-lg,46px);padding:6px 18px;font-size:var(--fs-md);border-radius:var(--radius);text-align:left;gap:10px}
 #game-hub .gh-btn.big>span{display:flex;flex-direction:column;line-height:1.2}
-#game-hub .gh-btn.big small{font-size:11px;font-weight:500;letter-spacing:0;opacity:.72;white-space:nowrap}
+#game-hub .gh-btn.big small{font-size:var(--fs-xs);font-weight:500;letter-spacing:0;opacity:.72;white-space:nowrap}
 #game-hub .gh-home-prog{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:1px;margin-top:10px;background:var(--gh-line);border:1px solid var(--gh-line);border-radius:var(--gh-r);overflow:hidden}
-#game-hub .gh-home-prog>div{background:var(--gh-panel);padding:10px 14px;min-width:0;font-size:12.5px}
+#game-hub .gh-home-prog>div{background:var(--gh-panel);padding:10px 14px;min-width:0;font-size:var(--fs-sm)}
 #game-hub .gh-home-lv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
-#game-hub .gh-home-lv .gh-num{color:var(--gh-dim);font-size:11px}
+#game-hub .gh-home-lv .gh-num{color:var(--gh-dim);font-size:var(--fs-xs)}
 #game-hub .gh-home-lv .gh-bar{grid-column:1/-1}
 #game-hub .gh-home-stat small{display:block;font-size:var(--fs-2xs,10.5px);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim);margin-bottom:2px}
 #game-hub .gh-home-stat span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1156,17 +1156,17 @@ background:radial-gradient(90% 120% at 85% 60%,var(--accent-softer,rgba(201,165,
 -webkit-mask-image:radial-gradient(75% 85% at 50% 48%,#000 62%,transparent 100%);mask-image:radial-gradient(75% 85% at 50% 48%,#000 62%,transparent 100%)}
 #game-hub .gh-hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--gh-line);border:1px solid var(--gh-line);border-radius:var(--gh-r);overflow:hidden;margin-top:6px}
 #game-hub .gh-hero-stats div{background:var(--gh-panel);padding:10px 14px}
-#game-hub .gh-hero-stats b{display:block;font:700 18px var(--gh-mono);font-variant-numeric:tabular-nums}
-#game-hub .gh-hero-stats small{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim)}
+#game-hub .gh-hero-stats b{display:block;font:700 var(--fs-lg) var(--gh-mono);font-variant-numeric:tabular-nums}
+#game-hub .gh-hero-stats small{font-size:var(--fs-2xs);letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim)}
 #game-hub .gh-modes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
 #game-hub .gh-mode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:132px;padding:16px;text-align:left;cursor:pointer;overflow:hidden;
 border:1px solid var(--gh-line);border-radius:var(--gh-r);background:linear-gradient(165deg,var(--mcs,var(--accent-soft)),transparent 62%),linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));
 transition:transform .2s var(--ease,ease),border-color .2s,box-shadow .25s}
 #game-hub .gh-mode::before{content:"";position:absolute;left:16px;right:16px;top:0;height:2px;border-radius:0 0 2px 2px;background:var(--mc,var(--gh-accent));opacity:.85}
 #game-hub .gh-mode-art{position:absolute;right:-22px;bottom:-26px;color:var(--mc,var(--gh-accent));opacity:.07;transition:opacity .25s,transform .35s var(--ease-out,ease)}
-#game-hub .gh-mode-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;margin-bottom:auto;color:var(--mc,var(--gh-accent));background:var(--mcs,var(--accent-soft));border:1px solid color-mix(in srgb,var(--mc,var(--gh-accent)) 30%,transparent)}
-#game-hub .gh-mode-lbl{position:relative;margin-top:14px;font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:1.2;white-space:nowrap}
-#game-hub .gh-mode-ds{position:relative;font-size:11.5px;color:var(--gh-dim);line-height:1.35;min-height:2.7em}
+#game-hub .gh-mode-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:var(--radius-sm);margin-bottom:auto;color:var(--mc,var(--gh-accent));background:var(--mcs,var(--accent-soft));border:1px solid color-mix(in srgb,var(--mc,var(--gh-accent)) 30%,transparent)}
+#game-hub .gh-mode-lbl{position:relative;margin-top:14px;font-size:var(--fs-lg);font-weight:650;letter-spacing:-.01em;line-height:1.2;white-space:nowrap}
+#game-hub .gh-mode-ds{position:relative;font-size:var(--fs-xs);color:var(--gh-dim);line-height:1.35;min-height:2.7em}
 #game-hub .gh-mode:hover,#game-hub .gh-mode.is-focus{transform:translateY(-3px);border-color:color-mix(in srgb,var(--mc,var(--gh-accent)) 55%,var(--gh-line));box-shadow:0 18px 36px -22px var(--mc,var(--gh-accent))}
 #game-hub .gh-mode:hover .gh-mode-art,#game-hub .gh-mode.is-focus .gh-mode-art{opacity:.18;transform:rotate(-6deg) scale(1.05)}
 #game-hub .gh-mode:active{transform:translateY(-1px) scale(.99)}
@@ -1174,203 +1174,205 @@ transition:transform .2s var(--ease,ease),border-color .2s,box-shadow .25s}
 #game-hub .gh-link,#game-hub .gh-mode,#game-hub .gh-home-cta .gh-btn{min-width:0}
 #game-hub .gh-link{display:flex;align-items:center;gap:12px;min-height:58px;padding:10px 12px;text-align:left;cursor:pointer;border:1px solid var(--gh-line);border-radius:var(--gh-r-sm);
 background:var(--gh-panel);transition:border-color .2s,background .2s}
-#game-hub .gh-link-ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:9px;background:var(--gh-panel2);color:var(--gh-accent);border:1px solid var(--gh-line)}
+#game-hub .gh-link-ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:var(--radius-sm);background:var(--gh-panel2);color:var(--gh-accent);border:1px solid var(--gh-line)}
 #game-hub .gh-link-txt{min-width:0;flex:1}
-#game-hub .gh-link-txt b{display:block;font-size:13.5px;font-weight:650}
-#game-hub .gh-link-txt small{display:block;font-size:11.5px;color:var(--gh-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#game-hub .gh-link-txt b{display:block;font-size:var(--fs-md);font-weight:650}
+#game-hub .gh-link-txt small{display:block;font-size:var(--fs-xs);color:var(--gh-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #game-hub .gh-link-go{color:var(--gh-mute);transition:transform .2s,color .2s}
 #game-hub .gh-link:hover,#game-hub .gh-link.is-focus{border-color:color-mix(in srgb,var(--gh-accent) 40%,var(--gh-line));background:var(--gh-panel2)}
 #game-hub .gh-link:hover .gh-link-go,#game-hub .gh-link.is-focus .gh-link-go{transform:translateX(3px);color:var(--gh-accent)}
-#game-hub .gh-home .badge{font:700 10px var(--gh-mono);padding:2px 7px;border-radius:10px;background:var(--gh-accent);color:var(--accent-ink,#17130b);margin-left:8px;vertical-align:2px;font-style:normal}
+#game-hub .gh-home .badge{font:700 var(--fs-2xs) var(--gh-mono);padding:2px 7px;border-radius:var(--radius-sm);background:var(--gh-accent);color:var(--accent-ink,#17130b);margin-left:8px;vertical-align:2px;font-style:normal}
 @media (max-width:1179px){#game-hub .gh-modes{grid-template-columns:repeat(4,minmax(0,1fr))}}
 #game-hub .gh-home-lv>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:1100px){#game-hub .gh-home-hero{grid-template-columns:1fr;gap:8px}#game-hub .gh-home-car{order:-1}#game-hub .gh-home-car .car svg{max-width:520px}#game-hub .gh-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:640px){#game-hub .gh-home-hero{padding:18px 16px;border-radius:var(--radius-lg,16px)}#game-hub .gh-hero-name{font-size:26px}
+@media (max-width:640px){#game-hub .gh-home-hero{padding:18px 16px;border-radius:var(--radius-lg,16px)}#game-hub .gh-hero-name{font-size:var(--fs-2xl)}
 #game-hub .gh-home-cta{display:grid;grid-template-columns:minmax(0,1fr)}#game-hub .gh-home-cta .gh-btn{justify-content:flex-start}
 #game-hub .gh-home-prog{grid-template-columns:1fr 1fr}#game-hub .gh-home-lv{grid-column:1/-1}
-#game-hub .gh-hero-stats div{padding:8px 10px}#game-hub .gh-hero-stats b{font-size:15px}#game-hub .gh-hero-stats small{font-size:9px;letter-spacing:.1em}
+#game-hub .gh-hero-stats div{padding:8px 10px}#game-hub .gh-hero-stats b{font-size:var(--fs-md)}#game-hub .gh-hero-stats small{font-size:var(--fs-2xs);letter-spacing:.1em}
 #game-hub .gh-modes{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#game-hub .gh-mode{min-height:112px;padding:14px}#game-hub .gh-mode-lbl{margin-top:10px}
 #game-hub .gh-links{grid-template-columns:minmax(0,1fr)}
 #game-hub .gh-btn.big small{white-space:normal}#game-hub .gh-home-hero{grid-template-columns:minmax(0,1fr)}
-#game-hub .gh-title-tag{letter-spacing:.36em;font-size:11px;padding-left:.36em;text-align:center}}
-@media (max-height:520px) and (min-width:641px){#game-hub .gh-home-hero{grid-template-columns:1fr 1fr;padding:16px 20px}#game-hub .gh-home-car{order:0}#game-hub .gh-hero-name{font-size:24px}#game-hub .gh-home-prog{display:none}}
+#game-hub .gh-title-tag{letter-spacing:.36em;font-size:var(--fs-xs);padding-left:.36em;text-align:center}}
+@media (max-height:520px) and (min-width:641px){#game-hub .gh-home-hero{grid-template-columns:1fr 1fr;padding:16px 20px}#game-hub .gh-home-car{order:0}#game-hub .gh-hero-name{font-size:var(--fs-2xl)}#game-hub .gh-home-prog{display:none}}
 /* tabs */
 /* tabs = the Atelier's .cb-tab-list / .cb-tab */
-#game-hub .gh-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--gh-bg2);border:1px solid var(--gh-line);border-radius:12px;margin:6px 0 22px;overflow-x:auto;max-width:100%}
+#game-hub .gh-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--gh-bg2);border:1px solid var(--gh-line);border-radius:var(--radius);margin:6px 0 22px;overflow-x:auto;max-width:100%}
 #game-hub .gh-tabs>.gh-tab{flex:none}
 #game-hub .gh-tabs.gh-tabs-wrap{flex-wrap:wrap;overflow:visible;row-gap:2px}
-#game-hub .gh-tab{position:relative;min-height:32px;padding:0 14px;background:none;border:1px solid transparent;border-radius:9px;cursor:pointer;color:var(--gh-dim);font-weight:650;font-size:12.5px;white-space:nowrap}
+#game-hub .gh-tab{position:relative;min-height:32px;padding:0 14px;background:none;border:1px solid transparent;border-radius:var(--radius-sm);cursor:pointer;color:var(--gh-dim);font-weight:650;font-size:var(--fs-sm);white-space:nowrap}
 #game-hub .gh-tab:hover{color:var(--gh-text);background:var(--gh-panel2)}
-#game-hub .gh-tab.is-active{color:var(--text-strong,#fff);background:linear-gradient(180deg,var(--panel-3,#22232a),var(--gh-panel2));border-color:var(--gh-line)}
+#game-hub .gh-tab.is-active{color:var(--text-strong,#fff);background:linear-gradient(180deg,var(--panel-3,#22232a),var(--gh-panel2));border-color:var(--gh-line);box-shadow:0 2px 8px -3px rgba(0,0,0,.5)}
 #game-hub .gh-tab.is-active::after{content:"";position:absolute;left:30%;right:30%;bottom:3px;height:2px;border-radius:2px;background:var(--accent-grad,var(--gh-accent))}
-#game-hub .gh-tab .k{font:600 9px var(--gh-mono);color:var(--gh-mute);margin-left:6px}
+#game-hub .gh-tab .k{font:600 var(--fs-2xs) var(--gh-mono);color:var(--gh-mute);margin-left:6px}
 /* career map */
 #game-hub .gh-tiermap{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:10px 0 6px}
-#game-hub .gh-tier{position:relative;padding:18px 16px 16px;min-height:170px;border:1px solid var(--gh-line);background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.01));
+#game-hub .gh-tier{position:relative;padding:18px 16px 16px;min-height:170px;border:1px solid var(--gh-line);background:linear-gradient(160deg,color-mix(in srgb,var(--text) 5%,transparent),color-mix(in srgb,var(--text) 1%,transparent)),var(--gh-panel);
 cursor:pointer;text-align:left;border-radius:var(--gh-r);transition:transform .2s,background .2s}
-#game-hub .gh-tier:hover,#game-hub .gh-tier.is-focus{transform:translateY(-3px);background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.02))}
-#game-hub .gh-tier.is-active{border-color:var(--c);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 18%,transparent),rgba(255,255,255,.01))}
+#game-hub .gh-tier:hover,#game-hub .gh-tier.is-focus{transform:translateY(-3px);background:linear-gradient(160deg,color-mix(in srgb,var(--text) 9%,transparent),color-mix(in srgb,var(--text) 2%,transparent)),var(--gh-panel)}
+#game-hub .gh-tier.is-active{border-color:var(--c);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 18%,transparent),color-mix(in srgb,var(--text) 1%,transparent)),var(--gh-panel)}
 #game-hub .gh-tier .n{font:650 42px/1 var(--serif,var(--gh-font));color:var(--c);opacity:.9}
-#game-hub .gh-tier h3{margin:8px 0 6px;font-size:15px;font-weight:650;letter-spacing:-.005em}
+#game-hub .gh-tier h3{margin:8px 0 6px;font-size:var(--fs-md);font-weight:650;letter-spacing:-.005em}
 #game-hub .gh-tier .lock{position:absolute;top:14px;right:22px;color:var(--gh-dim)}
 #game-hub .gh-tier.is-locked{opacity:.5}
 #game-hub .gh-tier .gh-bar{margin-top:12px}
 #game-hub .gh-tier-link{position:absolute;top:50%;right:-14px;width:14px;height:2px;background:var(--gh-line2)}
 #game-hub .gh-champ .gh-art{height:110px;margin:-18px -18px 14px;position:relative;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,var(--c) 30%,#0b0b0d),#0b0b0d 70%)}
 #game-hub .gh-champ .gh-art .gh-track-svg{position:absolute;right:10px;top:8px;color:rgba(255,255,255,.75)}
-#game-hub .gh-champ .gh-art .rounds{position:absolute;left:16px;bottom:12px;font:650 32px/1 var(--serif,var(--gh-font));color:#f3f1ea}
-#game-hub .gh-champ .gh-art .rounds small{font-size:11px;letter-spacing:.2em;font-style:normal;color:rgba(243,241,234,.62);margin-left:6px}
-#game-hub .gh-reasons{margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--gh-bad);background:rgba(255,93,93,.06);font-size:12px;color:color-mix(in srgb,var(--gh-bad) 55%,var(--gh-text));list-style:none}
+#game-hub .gh-champ .gh-art .rounds{position:absolute;left:16px;bottom:12px;font:650 var(--fs-title)/1 var(--serif,var(--gh-font));color:#f3f1ea}
+#game-hub .gh-champ .gh-art .rounds small{font-size:var(--fs-xs);letter-spacing:.2em;font-style:normal;color:rgba(243,241,234,.62);margin-left:6px}
+#game-hub .gh-reasons{margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--gh-bad);background:var(--bad-soft);font-size:var(--fs-sm);color:color-mix(in srgb,var(--gh-bad) 55%,var(--gh-text));list-style:none}
 #game-hub .gh-reasons li+li{margin-top:3px}
-#game-hub .gh-ok{margin:10px 0 0;padding:8px 12px;border-left:3px solid var(--gh-good);background:rgba(62,207,142,.06);font-size:12px;color:#aef3d0}
+#game-hub .gh-ok{margin:10px 0 0;padding:8px 12px;border-left:3px solid var(--gh-good);background:var(--good-soft);font-size:var(--fs-sm);color:color-mix(in srgb,var(--gh-good) 55%,var(--gh-text))}
 /* calendar */
 #game-hub .gh-cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
 #game-hub .gh-round{position:relative;padding:14px;border:1px solid var(--gh-line);background:linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));border-radius:var(--gh-r);text-align:left;cursor:pointer}
 #game-hub .gh-round.is-done{opacity:.7}
-#game-hub .gh-round.is-next{border-color:var(--gh-accent);background:linear-gradient(180deg,rgba(212,176,106,.12),rgba(212,176,106,.02))}
-#game-hub .gh-round .r{font:800 11px var(--gh-mono);letter-spacing:.14em;color:var(--gh-accent)}
-#game-hub .gh-round h4{margin:4px 0 2px;font-size:14px}
-#game-hub .gh-round .res{position:absolute;top:12px;right:12px;font:800 15px var(--gh-mono)}
-#game-hub .gh-round .gh-track-svg{display:block;margin:8px 0 4px;color:rgba(255,255,255,.6)}
+#game-hub .gh-round.is-next{border-color:var(--gh-accent);background:linear-gradient(180deg,var(--accent-soft),var(--accent-softer)),var(--gh-panel)}
+#game-hub .gh-round .r{font:800 var(--fs-xs) var(--gh-mono);letter-spacing:.14em;color:var(--gh-accent)}
+#game-hub .gh-round h4{margin:4px 0 2px;font-size:var(--fs-md)}
+#game-hub .gh-round .res{position:absolute;top:12px;right:12px;font:800 var(--fs-md) var(--gh-mono)}
+#game-hub .gh-round .gh-track-svg{display:block;margin:8px 0 4px;color:var(--gh-dim)}
 #game-hub .gh-cal .gh-round{display:flex;flex-direction:column;min-width:0}
 #game-hub .gh-round .r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
 #game-hub .gh-round h4{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:26px}
 #game-hub .gh-round>small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#game-hub .gh-round-foot{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;color:var(--gh-dim);font-size:11.5px;margin-top:auto}
+#game-hub .gh-round-foot{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;color:var(--gh-dim);font-size:var(--fs-xs);margin-top:auto}
 #game-hub .gh-round-foot>span{overflow:hidden;text-overflow:ellipsis}
 #game-hub .gh-round-foot svg{flex:none}
-#game-hub .gh-round-tag{height:18px;margin-top:6px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#game-hub .gh-round-tag{height:18px;margin-top:6px;font-size:var(--fs-2xs);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #game-hub .gh-round-tag b{color:var(--gh-warn);font-weight:800}
 /* tables */
-#game-hub table.gh-table{width:100%;border-collapse:collapse;font-size:13px}
-#game-hub .gh-table th{text-align:left;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--gh-line2)}
+#game-hub table.gh-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+#game-hub .gh-table th{text-align:left;font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--gh-line2)}
 #game-hub .gh-table td{padding:9px 10px;border-bottom:1px solid var(--gh-line)}
 #game-hub .gh-table td.n,#game-hub .gh-table th.n{text-align:right;font-family:var(--gh-mono);font-variant-numeric:tabular-nums}
-#game-hub .gh-table tr.is-player td{background:rgba(212,176,106,.12);color:#fff;font-weight:700}
+#game-hub .gh-table tr.is-player td{background:var(--accent-soft);color:var(--text-strong);font-weight:700}
 #game-hub .gh-table tr.is-player td:first-child{box-shadow:inset 3px 0 0 var(--gh-accent)}
-#game-hub .gh-pos{display:inline-grid;place-items:center;width:28px;height:24px;font:700 12px var(--gh-mono);background:var(--gh-panel2);border-radius:6px}
+#game-hub .gh-pos{display:inline-grid;place-items:center;width:28px;height:24px;font:700 var(--fs-sm) var(--gh-mono);background:var(--gh-panel2);border-radius:var(--radius-xs)}
 #game-hub .gh-pos.p1{background:linear-gradient(180deg,#ffe28a,#c99a22);color:#1a1200}
 #game-hub .gh-pos.p2{background:linear-gradient(180deg,#f2f4f7,#9aa3ad);color:#111}
 #game-hub .gh-pos.p3{background:linear-gradient(180deg,#f0b585,#a3602f);color:#1a0b00}
-#game-hub .gh-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:middle;border:1px solid rgba(255,255,255,.3)}
+#game-hub .gh-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:middle;border:1px solid var(--gh-line2)}
 /* briefing */
 #game-hub .gh-brief{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
-#game-hub .gh-brief-map{position:relative;min-height:320px;display:grid;place-items:center;background:radial-gradient(closest-side,rgba(212,176,106,.08),transparent),#0b0c0f}
-#game-hub .gh-brief-map .gh-track-svg{color:#e9e3d6;max-width:100%;height:auto}
+#game-hub .gh-brief-map{position:relative;min-height:320px;display:grid;place-items:center;background:radial-gradient(closest-side,var(--accent-softer),transparent),var(--bg-2);border:1px solid var(--gh-line);border-radius:var(--gh-r)}
+#game-hub .gh-brief-map .gh-track-svg{color:var(--gh-text);max-width:100%;height:auto}
 #game-hub .gh-brief-map .gh-track-runner{animation:gh-run 6s linear infinite}
 @keyframes gh-run{to{stroke-dashoffset:-1000}}
 #game-hub .gh-cond{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
 #game-hub .gh-cond div{padding:12px;border:1px solid var(--gh-line);background:var(--gh-panel);border-radius:var(--gh-r-sm)}
-#game-hub .gh-cond small{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim)}
-#game-hub .gh-cond b{font-size:16px}
+#game-hub .gh-cond small{display:block;font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim)}
+#game-hub .gh-cond b{font-size:var(--fs-lg)}
 /* rewards */
 #game-hub .gh-rewards{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-#game-hub .gh-result-hero{position:relative;padding:28px;overflow:hidden;background:linear-gradient(135deg,rgba(212,176,106,.16),rgba(12,13,16,.95) 60%);border:1px solid rgba(212,176,106,.3)}
-#game-hub .gh-result-pos{font:650 112px/0.9 var(--serif,var(--gh-font));letter-spacing:-.04em;background:linear-gradient(180deg,#fff,#d4b06a);-webkit-background-clip:text;background-clip:text;color:transparent}
+#game-hub .gh-result-hero{position:relative;padding:28px;overflow:hidden;background:linear-gradient(135deg,var(--accent-soft),transparent 60%),var(--gh-panel);border:1px solid var(--accent-ring)}
+#game-hub .gh-result-pos{font:650 112px/0.9 var(--serif,var(--gh-font));letter-spacing:-.04em;background:linear-gradient(180deg,var(--text-strong),var(--gh-accent));-webkit-background-clip:text;background-clip:text;color:transparent}
 #game-hub .gh-result-pos small{font-size:36px}
 #game-hub .gh-count{font:800 44px/1 var(--gh-mono);font-variant-numeric:tabular-nums;color:var(--gh-accent2)}
-#game-hub .gh-count.xp{color:#9fd0ff}
+#game-hub .gh-count.xp{color:var(--gh-blue)}
 #game-hub .gh-breakdown{list-style:none;margin:14px 0 0;padding:0}
 #game-hub .gh-breakdown li{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--gh-line);opacity:0;transform:translateX(-10px);transition:.35s}
 #game-hub .gh-breakdown li.in{opacity:1;transform:none}
 #game-hub .gh-breakdown li span:first-child{flex:1;color:var(--gh-dim)}
 #game-hub .gh-breakdown li .c{font-family:var(--gh-mono);color:var(--gh-accent2);min-width:110px;text-align:right}
-#game-hub .gh-breakdown li .x{font-family:var(--gh-mono);color:#9fd0ff;min-width:80px;text-align:right}
-#game-hub .gh-xpbar{position:relative;height:10px;background:var(--gh-panel2);margin-top:12px;border-radius:10px;overflow:hidden}
-#game-hub .gh-xpbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#3987e5,#9fd0ff);box-shadow:0 0 18px rgba(57,135,229,.6)}
+#game-hub .gh-breakdown li .x{font-family:var(--gh-mono);color:var(--gh-blue);min-width:80px;text-align:right}
+#game-hub .gh-xpbar{position:relative;height:10px;background:var(--gh-panel2);margin-top:12px;border-radius:var(--radius-sm);overflow:hidden}
+#game-hub .gh-xpbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,color-mix(in srgb,var(--gh-blue) 70%,#000),var(--gh-blue));box-shadow:0 0 18px var(--accent-2-soft)}
 #game-hub .gh-levelup{position:fixed;inset:0;z-index:20;display:grid;place-items:center;pointer-events:none;background:radial-gradient(closest-side,rgba(212,176,106,.25),rgba(0,0,0,.75));animation:gh-fade .3s forwards}
 #game-hub .gh-levelup.out{animation:gh-out .5s forwards}
 @keyframes gh-out{to{opacity:0}}
 #game-hub .gh-levelup .box{text-align:center;transform:scale(.6);animation:gh-pop .7s cubic-bezier(.2,1.6,.3,1) forwards}
 #game-hub .gh-levelup .lv{font:650 150px/0.9 var(--serif,var(--gh-font));background:linear-gradient(180deg,#fff,#f3d9a0 40%,#d4b06a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 30px rgba(212,176,106,.6))}
-#game-hub .gh-levelup .t{font-size:14px;letter-spacing:.6em;text-transform:uppercase;color:var(--gh-accent2)}
+#game-hub .gh-levelup .t{font-size:var(--fs-md);letter-spacing:.6em;text-transform:uppercase;color:var(--gh-accent2)}
 #game-hub .gh-levelup canvas{position:absolute;inset:0;width:100%;height:100%}
 @keyframes gh-pop{to{transform:none}}
 /* garage */
-#game-hub .gh-carcard .gh-art{height:150px;margin:-18px -18px 12px;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 85%,rgba(212,176,106,.12),transparent 60%),linear-gradient(180deg,#15161b,#0b0c0f);border-bottom:1px solid var(--gh-line);position:relative}
+#game-hub .gh-carcard .gh-art{height:150px;margin:-18px -18px 12px;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 85%,rgba(212,176,106,.12),transparent 60%),linear-gradient(180deg,var(--studio-top),var(--studio-floor));border-bottom:1px solid var(--gh-line);position:relative}
 #game-hub .gh-carcard .gh-art svg{width:88%;height:auto}
 #game-hub .gh-carcard.is-active{border-color:var(--gh-accent)}
 #game-hub .gh-carcard .act{position:absolute;top:10px;left:10px}
 #game-hub .gh-carcard .gh-btns{margin-top:10px}
-#game-hub .gh-cond-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:11.5px;color:var(--gh-dim)}
+#game-hub .gh-cond-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:var(--fs-xs);color:var(--gh-dim)}
 #game-hub .gh-cond-row .gh-bar{flex:1}
 /* workshop */
 #game-hub .gh-ws{display:grid;grid-template-columns:1fr 360px;gap:22px}
 #game-hub .gh-ws-group{margin-bottom:18px}
-#game-hub .gh-ws-group h4{margin:0 0 8px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-dim)}
+#game-hub .gh-ws-group h4{margin:0 0 8px;font-size:var(--fs-xs);letter-spacing:.2em;text-transform:uppercase;color:var(--gh-dim)}
 #game-hub .gh-opts{display:flex;flex-wrap:wrap;gap:8px}
 #game-hub .gh-opt{position:relative;padding:8px 12px;min-width:110px;border:1px solid var(--gh-line);background:var(--gh-panel);cursor:pointer;text-align:left;border-radius:var(--gh-r-sm)}
-#game-hub .gh-opt b{display:block;font-size:12.5px}
-#game-hub .gh-opt small{color:var(--gh-dim);font-family:var(--gh-mono);font-size:10.5px}
-#game-hub .gh-opt.is-sel{border-color:var(--gh-accent);background:rgba(212,176,106,.12)}
-#game-hub .gh-opt.is-orig::after{content:"FITTED";position:absolute;top:-7px;right:6px;font:700 8px var(--gh-mono);background:#2a2b30;padding:1px 4px;color:var(--gh-dim)}
+#game-hub .gh-opt b{display:block;font-size:var(--fs-sm)}
+#game-hub .gh-opt small{color:var(--gh-dim);font-family:var(--gh-mono);font-size:var(--fs-2xs)}
+#game-hub .gh-opt.is-sel{border-color:var(--gh-accent);background:var(--accent-soft)}
+#game-hub .gh-opt.is-orig::after{content:"FITTED";position:absolute;top:-7px;right:6px;font:700 var(--fs-2xs) var(--gh-mono);background:var(--panel-3);padding:1px 4px;border-radius:var(--radius-xs);color:var(--gh-dim)}
 #game-hub .gh-opt.is-locked{opacity:.45;cursor:not-allowed}
 #game-hub .gh-opt.is-locked small{color:var(--gh-warn)}
 /* settings */
 #game-hub .gh-set{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;max-width:900px}
 #game-hub .gh-row{display:flex;align-items:center;gap:18px;padding:12px 16px;background:var(--gh-panel);border:1px solid var(--line-soft,transparent);border-left:3px solid transparent;border-radius:var(--gh-r-sm);min-height:56px}
-#game-hub .gh-row:focus-within,#game-hub .gh-row.is-focus-row{border-left-color:var(--gh-accent);background:rgba(212,176,106,.06)}
+#game-hub .gh-row:focus-within,#game-hub .gh-row.is-focus-row{border-left-color:var(--gh-accent);background:var(--accent-softer)}
 #game-hub .gh-row > label,#game-hub .gh-row > .lbl{flex:1;min-width:0}
-#game-hub .gh-row .lbl b{display:block;font-size:13.5px}
-#game-hub .gh-row .lbl small{color:var(--gh-dim);font-size:11.5px}
+#game-hub .gh-row .lbl b{display:block;font-size:var(--fs-md)}
+#game-hub .gh-row .lbl small{color:var(--gh-dim);font-size:var(--fs-xs)}
 /* segmented = the Atelier's .cb-seg */
-#game-hub .gh-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--gh-line);border-radius:10px;background:var(--gh-bg2);overflow:hidden}
-#game-hub .gh-seg button{height:30px;padding:0 12px;border:0;border-radius:7px;background:transparent;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--gh-dim)}
-#game-hub .gh-seg button:hover{color:var(--gh-text)}
-#game-hub .gh-seg button.is-on{background:var(--accent-soft,rgba(201,165,107,.14));color:var(--gh-accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--gh-accent) 40%,transparent)}
-#game-hub .gh-switch{position:relative;width:46px;height:24px;border-radius:12px;border:1px solid var(--gh-line2);background:var(--gh-panel2);cursor:pointer;transition:background .2s;flex:none}
-#game-hub .gh-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#777;transition:.2s}
-#game-hub .gh-switch.is-on{background:rgba(212,176,106,.35);border-color:var(--gh-accent)}
+#game-hub .gh-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--gh-line);border-radius:var(--radius);background:var(--gh-bg2);overflow:hidden}
+#game-hub .gh-seg button{position:relative;min-height:32px;padding:0 12px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:var(--fs-sm);font-weight:650;color:var(--gh-dim);white-space:nowrap;transition:color var(--dur-2) var(--ease),background var(--dur-2) var(--ease)}
+#game-hub .gh-seg button:hover:not(.is-on){color:var(--gh-text);background:var(--gh-panel2)}
+#game-hub .gh-seg button.is-on{color:var(--text-strong);background:linear-gradient(180deg,var(--panel-3),var(--gh-panel2));border-color:var(--gh-line);box-shadow:0 2px 8px -3px rgba(0,0,0,.5)}
+#game-hub .gh-seg button.is-on::after{content:"";position:absolute;left:30%;right:30%;bottom:3px;height:2px;border-radius:2px;background:var(--accent-grad,var(--gh-accent))}
+[data-theme="light"] #game-hub .gh-seg button.is-on,[data-theme="light"] #game-hub .gh-tab.is-active{background:var(--panel);box-shadow:0 2px 6px -3px rgba(40,32,18,.25)}
+#game-hub .gh-switch{position:relative;width:46px;height:24px;border-radius:var(--radius);border:1px solid var(--gh-line2);background:var(--gh-panel2);cursor:pointer;transition:background .2s;flex:none}
+#game-hub .gh-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--gh-mute);transition:.2s}
+#game-hub .gh-switch.is-on{background:color-mix(in srgb,var(--gh-accent) 35%,transparent);border-color:var(--gh-accent)}
 #game-hub .gh-switch.is-on::after{left:25px;background:var(--gh-accent2)}
-#game-hub input[type=range].gh-range{-webkit-appearance:none;appearance:none;width:220px;height:4px;background:linear-gradient(90deg,var(--gh-accent) var(--v,50%),rgba(255,255,255,.12) var(--v,50%));border-radius:2px;outline:none}
+#game-hub input[type=range].gh-range{-webkit-appearance:none;appearance:none;width:220px;height:4px;background:linear-gradient(90deg,var(--gh-accent) var(--v,50%),color-mix(in srgb,var(--text) 14%,transparent) var(--v,50%));border-radius:2px;outline:none}
 #game-hub input[type=range].gh-range::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--gh-accent);cursor:pointer}
 #game-hub input[type=range].gh-range::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--gh-accent)}
 #game-hub .gh-rv{width:48px;text-align:right;font-family:var(--gh-mono);color:var(--gh-dim)}
 #game-hub input.gh-input{height:36px;padding:0 12px;border:1px solid var(--gh-line);background:var(--gh-bg2);color:var(--gh-text);font:inherit;border-radius:var(--gh-r-sm);min-width:220px;user-select:text;-webkit-user-select:text}
 #game-hub input.gh-input:focus{border-color:var(--gh-accent);outline:none}
 #game-hub .gh-keys{display:flex;gap:6px;flex-wrap:wrap}
-#game-hub .gh-key{min-width:64px;height:32px;padding:0 10px;border:1px solid var(--gh-line2);border-bottom-width:3px;border-radius:6px;background:var(--gh-panel2);cursor:pointer;font:700 11.5px var(--gh-mono);color:var(--gh-text)}
+#game-hub .gh-key{min-width:64px;height:32px;padding:0 10px;border:1px solid var(--gh-line2);border-bottom-width:3px;border-radius:var(--radius-xs);background:var(--gh-panel2);cursor:pointer;font:700 var(--fs-xs) var(--gh-mono);color:var(--gh-text)}
 #game-hub .gh-key.empty{color:var(--gh-mute);border-style:dashed}
 #game-hub .gh-key.is-capturing{border-color:var(--gh-accent);color:var(--gh-accent2);animation:gh-pulse 1s infinite}
 #game-hub .gh-colors{display:flex;gap:8px}
 #game-hub .gh-color{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer}
-#game-hub .gh-color.is-on{border-color:#fff;box-shadow:0 0 0 2px var(--gh-accent)}
+#game-hub .gh-color.is-on{border-color:var(--text-strong);box-shadow:0 0 0 2px var(--gh-accent)}
 /* profile */
 #game-hub .gh-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 #game-hub .gh-tile{padding:16px;border:1px solid var(--gh-line);background:linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));border-radius:var(--gh-r)}
-#game-hub .gh-tile small{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim);margin-bottom:6px}
-#game-hub .gh-tile b{font:800 26px/1 var(--gh-mono);font-variant-numeric:tabular-nums}
-#game-hub .gh-tile span{display:block;font-size:11.5px;color:var(--gh-dim);margin-top:6px}
+#game-hub .gh-tile small{display:block;font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--gh-dim);margin-bottom:6px}
+#game-hub .gh-tile b{font:800 var(--fs-2xl)/1 var(--gh-mono);font-variant-numeric:tabular-nums}
+#game-hub .gh-tile span{display:block;font-size:var(--fs-xs);color:var(--gh-dim);margin-top:6px}
 #game-hub .gh-chart{position:relative;height:240px}
 #game-hub .gh-chart canvas{position:absolute;inset:0;width:100%;height:100%}
-#game-hub .gh-chart-tip{position:absolute;pointer-events:none;padding:7px 10px;background:#0b0c0f;border:1px solid var(--gh-line2);font-size:11.5px;border-radius:3px;white-space:nowrap;
+#game-hub .gh-chart-tip{position:absolute;pointer-events:none;padding:7px 10px;background:var(--glass-strong);border:1px solid var(--gh-line2);font-size:var(--fs-xs);border-radius:var(--radius-xs);box-shadow:var(--elev-2);white-space:nowrap;
 transform:translate(-50%,calc(-100% - 12px));opacity:0;transition:opacity .12s;z-index:3}
 #game-hub .gh-chart-tip b{font-family:var(--gh-mono)}
 #game-hub .gh-chart-title{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
-#game-hub .gh-chart-title h3{margin:0;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+#game-hub .gh-chart-title h3{margin:0;font-size:var(--fs-sm);letter-spacing:.14em;text-transform:uppercase}
 #game-hub .gh-chart-title small{color:var(--gh-dim)}
-#game-hub .gh-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--gh-dim);margin-top:8px}
+#game-hub .gh-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--gh-dim);margin-top:8px}
 #game-hub .gh-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 /* trophies */
-#game-hub .gh-cabinet{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px;padding:26px;background:linear-gradient(180deg,#141518,#0c0d10);border:1px solid var(--gh-line);
-box-shadow:inset 0 -30px 60px rgba(0,0,0,.6)}
-#game-hub .gh-trophy{text-align:center;padding:14px 8px 10px;border-bottom:6px solid #23252b;position:relative}
+#game-hub .gh-cabinet{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px;padding:26px;background:linear-gradient(180deg,var(--gh-panel2),var(--bg-2));border:1px solid var(--gh-line);border-radius:var(--gh-r);
+box-shadow:inset 0 -30px 60px -30px rgba(0,0,0,.35)}
+#game-hub .gh-trophy{text-align:center;padding:14px 8px 10px;border-bottom:6px solid var(--gh-line);position:relative}
 #game-hub .gh-trophy svg{width:96px;height:120px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6))}
 #game-hub .gh-trophy.is-empty svg{opacity:.18;filter:grayscale(1)}
-#game-hub .gh-trophy b{display:block;font-size:12.5px;margin-top:6px}
-#game-hub .gh-trophy small{color:var(--gh-dim);font-size:11px}
+#game-hub .gh-trophy b{display:block;font-size:var(--fs-sm);margin-top:6px}
+#game-hub .gh-trophy small{color:var(--gh-dim);font-size:var(--fs-xs)}
 /* modal */
 #game-hub .gh-modal{position:absolute;inset:0;z-index:30;display:grid;place-items:center;background:var(--scrim,rgba(4,4,6,.62));backdrop-filter:blur(6px);animation:gh-fade .2s forwards;opacity:0}
 #game-hub .gh-modal-card{width:min(560px,92vw);max-height:86vh;overflow:auto;background:linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));border:1px solid var(--gh-line);border-radius:var(--radius-lg,16px);padding:26px;
 box-shadow:var(--shadow-lg,0 30px 80px -20px rgba(0,0,0,.8));animation:gh-in .3s both}
-#game-hub .gh-modal-card h2{margin:0 0 8px;font-size:22px;font-weight:650;letter-spacing:-.015em;font-family:var(--serif,var(--gh-font))}
+#game-hub .gh-modal-card h2{margin:0 0 8px;font-size:var(--fs-xl);font-weight:var(--fw-title);letter-spacing:var(--tracking-title);color:var(--text-strong);font-family:var(--serif,var(--gh-font))}
 #game-hub .gh-modal-card p{color:var(--gh-dim)}
 #game-hub .gh-modal-card .gh-btns{margin-top:22px;justify-content:flex-end}
-#game-hub .gh-capture{position:absolute;inset:0;z-index:40;display:grid;place-items:center;background:rgba(0,0,0,.8);font-size:18px;text-align:center}
-#game-hub .gh-capture b{display:block;font-size:32px;font-weight:650;margin-bottom:6px;color:var(--gh-accent)}
+#game-hub .gh-capture{position:absolute;inset:0;z-index:40;display:grid;place-items:center;background:var(--scrim);backdrop-filter:blur(6px);font-size:var(--fs-lg);text-align:center}
+#game-hub .gh-capture b{display:block;font-size:var(--fs-title);font-weight:650;margin-bottom:6px;color:var(--gh-accent)}
 /* toast */
 #game-hub .gh-toasts{position:absolute;right:24px;bottom:64px;z-index:35;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
-#game-hub .gh-toast{padding:12px 16px;min-width:240px;max-width:400px;min-height:48px;display:flex;align-items:center;background:var(--glass-strong,#17181d);border:1px solid var(--gh-line);border-left:3px solid var(--gh-accent);border-radius:14px;font-size:13px;
+#game-hub .gh-toast{padding:12px 16px;min-width:240px;max-width:400px;min-height:48px;display:flex;align-items:center;background:var(--glass-strong,#17181d);border:1px solid var(--gh-line);border-left:3px solid var(--gh-accent);border-radius:var(--radius);font-size:var(--fs-sm);color:var(--gh-text);
 animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));backdrop-filter:blur(14px)}
 #game-hub .gh-toast.good{border-left-color:var(--gh-good)}#game-hub .gh-toast.bad{border-left-color:var(--gh-bad)}#game-hub .gh-toast.warn{border-left-color:var(--gh-warn)}
 #game-hub .gh-toast.out{opacity:0;transform:translateX(20px);transition:.3s}
@@ -1379,20 +1381,20 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
 #game-hub .gh-ach .ic{width:48px;height:48px;flex:none}
 #game-hub .gh-ach .ic svg{width:48px;height:48px}
 #game-hub .gh-ach.is-locked .ic{filter:grayscale(1) brightness(.5)}
-#game-hub .gh-ach h4{margin:0 0 2px;font-size:13.5px}
-#game-hub .gh-ach p{margin:0 0 8px;font-size:12px;color:var(--gh-dim)}
+#game-hub .gh-ach h4{margin:0 0 2px;font-size:var(--fs-md)}
+#game-hub .gh-ach p{margin:0 0 8px;font-size:var(--fs-sm);color:var(--gh-dim)}
 #game-hub .gh-ring{display:flex;align-items:center;gap:22px}
 #game-hub .gh-ring svg{width:130px;height:130px}
 /* challenge medals */
 #game-hub .gh-medals{display:flex;gap:6px}
-#game-hub .gh-medal{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:800 9px var(--gh-mono);color:#111;opacity:.25}
+#game-hub .gh-medal{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:800 var(--fs-2xs) var(--gh-mono);color:#111;opacity:.25}
 #game-hub .gh-medal.on{opacity:1;box-shadow:0 0 10px currentColor}
 #game-hub .gh-medal.bronze{background:#c27a43;color:#c27a43}#game-hub .gh-medal.silver{background:#c6ccd4;color:#c6ccd4}#game-hub .gh-medal.gold{background:#f0c246;color:#f0c246}
 #game-hub .gh-medal span{color:#111}
 /* setup forms (quick race) */
 #game-hub .gh-setup{display:grid;grid-template-columns:1fr 380px;gap:22px}
 #game-hub .gh-trackcard{padding:0;overflow:hidden}
-#game-hub .gh-trackcard .gh-art{height:120px;display:grid;place-items:center;background:#0c0d10;color:rgba(255,255,255,.8);border-bottom:1px solid var(--gh-line)}
+#game-hub .gh-trackcard .gh-art{height:120px;display:grid;place-items:center;background:linear-gradient(180deg,var(--studio-top),var(--studio-floor));color:var(--gh-text);border-bottom:1px solid var(--gh-line)}
 #game-hub .gh-trackcard .bd{padding:12px 14px}
 #game-hub .gh-trackcard.is-sel{border-color:var(--gh-accent);box-shadow:inset 0 0 0 1px var(--gh-accent)}
 #game-hub .gh-diff{display:inline-flex;gap:2px}
@@ -1401,7 +1403,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
 @media (max-width:1100px){#game-hub .gh-menu,#game-hub .gh-brief,#game-hub .gh-rewards,#game-hub .gh-ws,#game-hub .gh-setup{grid-template-columns:1fr}
 #game-hub .gh-menu-hero{border-left:0;padding-left:0}#game-hub .gh-tiermap{grid-template-columns:repeat(2,1fr)}#game-hub .gh-tiles{grid-template-columns:repeat(3,1fr)}
 #game-hub .gh-grid.c3,#game-hub .gh-grid.c4{grid-template-columns:repeat(2,1fr)}#game-hub .gh-news{grid-template-columns:1fr}}
-@media (max-width:640px){#game-hub .gh-screen{padding:18px 16px 50px}#game-hub .gh-h1{font-size:28px}#game-hub .gh-grid.c2,#game-hub .gh-grid.c3,#game-hub .gh-grid.c4{grid-template-columns:1fr}
+@media (max-width:640px){#game-hub .gh-screen{padding:18px 16px 50px}#game-hub .gh-h1{font-size:var(--fs-2xl)}#game-hub .gh-grid.c2,#game-hub .gh-grid.c3,#game-hub .gh-grid.c4{grid-template-columns:1fr}
 #game-hub .gh-tiles{grid-template-columns:repeat(2,1fr)}#game-hub .gh-driver-txt,#game-hub .gh-crumbs{display:none}#game-hub .gh-foot{display:none}}
 #game-hub.reduced *,#game-hub.reduced *::before,#game-hub.reduced *::after{animation-duration:.001s!important;animation-delay:0s!important;transition-duration:.001s!important}
 @media (prefers-reduced-motion:reduce){#game-hub *{animation-duration:.001s!important;animation-delay:0s!important}}
@@ -3298,7 +3300,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     if (!H) return;
     sfx('level');
     var ov = div('gh-levelup', '<canvas></canvas><div class="box"><div class="t">Level up</div><div class="lv">' + level + '</div><div class="t">' + esc(levelTitle(level)) + '</div>' +
-      (arr(unlocks).length ? '<div style="margin-top:18px;font-size:12px;letter-spacing:.14em;color:var(--gh-dim);text-transform:uppercase">Unlocked · ' + esc(arr(unlocks).slice(0, 4).map(function (u) { return u.name || titleCase(u.id); }).join(' · ')) + (arr(unlocks).length > 4 ? ' +' + (arr(unlocks).length - 4) : '') + '</div>' : '') + '</div>');
+      (arr(unlocks).length ? '<div style="margin-top:18px;font-size:var(--fs-sm);letter-spacing:.14em;color:var(--gh-dim);text-transform:uppercase">Unlocked · ' + esc(arr(unlocks).slice(0, 4).map(function (u) { return u.name || titleCase(u.id); }).join(' · ')) + (arr(unlocks).length > 4 ? ' +' + (arr(unlocks).length - 4) : '') + '</div>' : '') + '</div>');
     H.root.appendChild(ov);
     confetti(ov.querySelector('canvas'), 2800);
     later(function () { ov.classList.add('out'); }, 2600);
@@ -3450,7 +3452,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         out += '<div class="gh-tiermap">' + model.tiers.map(function (t, i) {
           return '<button class="gh-tier' + (i === tierIdx ? ' is-active' : '') + (t.unlocked ? '' : ' is-locked') + '" style="--c:' + esc(t.color) + '" data-nav data-key="tier-' + i + '" data-act="tier" data-i="' + i + '">' +
             (t.unlocked ? '' : '<span class="lock">' + icon('lock', 16) + '</span>') + '<div class="n">' + (i + 1) + '</div><h3>' + esc(t.name) + '</h3>' +
-            '<p style="margin:0;font-size:11.5px;color:var(--gh-dim)">' + (t.unlocked ? t.championships.filter(function (c) { return c.complete; }).length + ' / ' + t.championships.length + ' complete' : esc(t.lockReason)) + '</p>' +
+            '<p style="margin:0;font-size:var(--fs-xs);color:var(--gh-dim)">' + (t.unlocked ? t.championships.filter(function (c) { return c.complete; }).length + ' / ' + t.championships.length + ' complete' : esc(t.lockReason)) + '</p>' +
             '<div class="gh-bar"><i style="width:' + (t.progress * 100).toFixed(0) + '%"></i></div>' + (i < model.tiers.length - 1 ? '<span class="gh-tier-link"></span>' : '') + '</button>';
         }).join('') + '</div>';
         if (tier) {
@@ -3561,7 +3563,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     // action bar
     out += '<div class="gh-panel" style="margin:18px 0;display:flex;gap:18px;align-items:center;flex-wrap:wrap">' +
       '<div style="width:180px">' + (build ? carArt(build, { uid: 'ch' }) : '') + '</div>' +
-      '<div style="flex:1;min-width:240px"><div class="gh-kicker" style="margin-bottom:4px">Your entry</div><b style="font-size:16px">' + esc(car ? car.name : 'No car') + '</b> ' + (build ? piBadge(build) : '') + carEligibilityHTML(elig) + '</div>' +
+      '<div style="flex:1;min-width:240px"><div class="gh-kicker" style="margin-bottom:4px">Your entry</div><b style="font-size:var(--fs-lg)">' + esc(car ? car.name : 'No car') + '</b> ' + (build ? piBadge(build) : '') + carEligibilityHTML(elig) + '</div>' +
       '<div class="gh-btns">';
     if (vm.locked) out += '<span class="gh-chip">' + icon('lock', 12) + ' ' + esc(vm.lockReason) + '</span>';
     else if (vm.complete) out += '<button class="gh-btn primary" data-nav data-act="restart" data-autofocus>New season</button>';
@@ -3685,7 +3687,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         '<div class="gh-panel"><div class="gh-kicker">Team briefing</div><p style="margin:0 0 8px">' + esc(text) + '</p>' + lines.map(function (l) { return '<p style="margin:0 0 8px;color:var(--gh-dim)">' + esc(typeof l === 'string' ? l : l.text) + '</p>'; }).join('') +
         (br.rivalLine || br.rival ? '<blockquote style="margin:12px 0 0;padding:10px 14px;border-left:3px solid var(--gh-hot);background:rgba(232,50,43,.06);font-style:italic">“' + esc(br.rivalLine || (isObj(br.rival) ? br.rival.line : br.rival)) + '”' + (isObj(br.rival) && br.rival.name ? '<br><small style="font-style:normal;color:var(--gh-dim)">— ' + esc(br.rival.name) + '</small>' : '') + '</blockquote>' : '') +
         (br.stakes ? '<p style="margin:12px 0 0;color:var(--gh-accent2)"><b>Stakes:</b> ' + esc(typeof br.stakes === 'string' ? br.stakes : arr(br.stakes).join(' · ')) + '</p>' : '') + '</div>' +
-        '<div class="gh-panel" style="margin-top:14px"><div class="gh-kicker">Your car</div><div style="display:flex;gap:14px;align-items:center"><div style="width:170px">' + (build ? carArt(build, { uid: 'br' }) : '') + '</div><div><b>' + esc(car ? car.name : 'No car') + '</b>' + (build && modelName(build) ? '<div style="color:var(--gh-dim);font-size:12px">' + esc(modelName(build)) + '</div>' : '') + '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">' + (build ? piBadge(build) : '') +
+        '<div class="gh-panel" style="margin-top:14px"><div class="gh-kicker">Your car</div><div style="display:flex;gap:14px;align-items:center"><div style="width:170px">' + (build ? carArt(build, { uid: 'br' }) : '') + '</div><div><b>' + esc(car ? car.name : 'No car') + '</b>' + (build && modelName(build) ? '<div style="color:var(--gh-dim);font-size:var(--fs-sm)">' + esc(modelName(build)) + '</div>' : '') + '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">' + (build ? piBadge(build) : '') +
         (condition ? '<span class="gh-chip ' + condition.kind + '">' + condition.label + ' ' + pct(car.condition) + '</span>' : '') + '</div></div></div>' + carEligibilityHTML(elig) +
         (car && num(car.condition, 1) < 0.6 ? '<ul class="gh-reasons" style="border-left-color:var(--gh-warn);color:color-mix(in srgb,var(--gh-warn) 60%,var(--gh-text));background:rgba(240,180,41,.06)"><li>Worn car: performance and reliability suffer. Consider a repair (' + esc(fmtCredits(repairQuote(car).credits)) + ').</li></ul>' : '') + '</div>' +
         '<div class="gh-panel" style="margin-top:14px;padding:8px 8px 2px"><div class="gh-kicker" style="padding:8px 8px 0">Championship standings</div>' + standingsTable(rows, { limit: 5 }) + '</div>' +
@@ -3758,7 +3760,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         : m.challenge ? '<div class="gh-result-pos" style="font-size:72px">' + esc(fmtScore(m.challenge.def || {}, m.challenge.score)) + '</div><div style="color:var(--gh-dim)">' + esc(m.challenge.medal ? titleCase(m.challenge.medal) + ' medal' : 'No medal') + (isNum(m.challenge.best) ? ' · best ' + esc(fmtScore(m.challenge.def || {}, m.challenge.best)) : '') + '</div>'
         : isRace && pos ? '<div class="gh-result-pos">' + (dnf ? 'DNF' : 'P' + pos) + '<small> / ' + (s.fieldSize || '—') + '</small></div>'
         : '<div class="gh-result-pos" style="font-size:72px">' + fmtTime(s.bestLap_s) + '</div><div style="color:var(--gh-dim)">Best lap</div>';
-      var champBanner = m.championshipComplete ? '<div class="gh-panel cut" style="margin-top:16px;display:flex;gap:16px;align-items:center;border-color:rgba(212,176,106,.5)"><div style="width:70px">' + trophySVG(m.trophy ? trophyMedal(m.trophy) : 'gold') + '</div><div><div class="gh-kicker">Championship complete</div><b style="font-size:18px">' +
+      var champBanner = m.championshipComplete ? '<div class="gh-panel cut" style="margin-top:16px;display:flex;gap:16px;align-items:center;border-color:var(--accent-ring)"><div style="width:70px">' + trophySVG(m.trophy ? trophyMedal(m.trophy) : 'gold') + '</div><div><div class="gh-kicker">Championship complete</div><b style="font-size:var(--fs-lg)">' +
         esc(m.trophy && m.trophy.name ? m.trophy.name : 'Season over') + '</b><p style="margin:4px 0 0;color:var(--gh-dim)">' + (m.trophy && m.trophy.position ? 'Final position: ' + ordinal(m.trophy.position) : 'Check the trophy cabinet') + '</p></div></div>' : '';
       var me = resultRows(m.results).filter(function (c) { return c && c.isPlayer; })[0] || {};
       host.innerHTML = '<div class="gh-kicker">' + esc(m.context && m.context.label ? m.context.label : titleCase(m.kind || 'race')) + ' · ' + esc(trackName(m.trackId)) + '</div>' +
@@ -3769,9 +3771,9 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         (s.distance_km ? '<dt>Distance</dt><dd>' + fmtDist(s.distance_km, units) + '</dd>' : '') + (s.overtakes ? '<dt>Overtakes</dt><dd>' + s.overtakes + '</dd>' : '') + '</dl></div>' + champBanner +
         (m.records && m.records.length ? '<div class="gh-panel" style="margin-top:16px"><div class="gh-kicker">New records</div>' + m.records.map(function (r) { return '<div>' + icon('star', 14) + ' ' + (r.type === 'bestLap' ? 'Personal best lap at ' : 'First lap time at ') + esc(trackName(r.trackId, true)) + ' — <b class="gh-num">' + fmtTime(r.value) + '</b>' + (r.prev ? ' <small style="color:var(--gh-good)">(−' + (r.prev - r.value).toFixed(3) + 's)</small>' : '') + '</div>'; }).join('') + '</div>' : '') +
         (m.standings ? '<div class="gh-panel" style="margin-top:16px;padding:8px 8px 2px"><div class="gh-kicker" style="padding:8px 8px 0">Championship standings</div>' + standingsTable(m.standings, { limit: 6 }) + '</div>' : '') +
-        '</div><div><div class="gh-panel cut"><div class="gh-grid c2"><div><small style="letter-spacing:.18em;color:var(--gh-dim);font-size:10px">CREDITS EARNED</small><div class="gh-count" data-count="credits">CR 0</div></div>' +
-        '<div><small style="letter-spacing:.18em;color:var(--gh-dim);font-size:10px">XP EARNED</small><div class="gh-count xp" data-count="xp">0</div></div></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-top:18px;font-size:12px;color:var(--gh-dim)"><span data-lvl>Level ' + m.before.level + '</span><span data-xpleft></span></div>' +
+        '</div><div><div class="gh-panel cut"><div class="gh-grid c2"><div><small style="letter-spacing:.18em;color:var(--gh-dim);font-size:var(--fs-2xs)">CREDITS EARNED</small><div class="gh-count" data-count="credits">CR 0</div></div>' +
+        '<div><small style="letter-spacing:.18em;color:var(--gh-dim);font-size:var(--fs-2xs)">XP EARNED</small><div class="gh-count xp" data-count="xp">0</div></div></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-top:18px;font-size:var(--fs-sm);color:var(--gh-dim)"><span data-lvl>Level ' + m.before.level + '</span><span data-xpleft></span></div>' +
         '<div class="gh-xpbar"><i style="width:' + (num(getPath(m, 'before.info.progress'), 0) * 100).toFixed(1) + '%"></i></div>' +
         '<ul class="gh-breakdown">' + arr(m.breakdown).map(function (b) {
           return '<li><span>' + esc(b.label) + '</span><span class="c">' + (num(b.credits, 0) ? (b.credits < 0 ? '−' : '+') + esc(fmtCredits(Math.abs(b.credits))) : '') + '</span><span class="x">' + (num(b.xp, 0) ? (b.xp < 0 ? '−' : '+') + fmtInt(Math.abs(b.xp)) + ' XP' : '') + '</span></li>';
@@ -3852,7 +3854,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
   }
   function stepperHTML(key, value, min, max) {
     return '<div class="gh-btns" style="gap:6px"><button class="gh-btn small" data-nav data-key="st-' + key + '-dn" data-act="step" data-k="' + key + '" data-d="-1"' + (value <= min ? ' disabled' : '') + '>−</button>' +
-      '<b class="gh-num" style="min-width:34px;text-align:center;font-size:16px">' + value + '</b>' +
+      '<b class="gh-num" style="min-width:34px;text-align:center;font-size:var(--fs-lg)">' + value + '</b>' +
       '<button class="gh-btn small" data-nav data-key="st-' + key + '-up" data-act="step" data-k="' + key + '" data-d="1"' + (value >= max ? ' disabled' : '') + '>+</button></div>';
   }
   function switchHTML(key, on, label) {
@@ -3886,8 +3888,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var lock = opts.ignoreLocks ? null : trackLocked(t.id);
       var st = getPath(P(), 'stats.tracks.' + t.id) || {};
       return '<button class="gh-card gh-trackcard' + (t.id === selected ? ' is-sel' : '') + (lock ? ' is-locked' : '') + '" data-nav data-key="tr-' + esc(t.id) + '" data-act="track" data-id="' + esc(t.id) + '">' +
-        '<div class="gh-art">' + trackPreviewSVG(t.id, 180, 100, { width: 6 }) + '</div><div class="bd"><h3 style="font-size:14px">' + esc(t.short || t.name) +
-        (isDriftTrackDef(t) ? ' <span class="gh-chip warn" style="font-size:10px;padding:1px 6px">Drift</span>' : '') + '</h3>' +
+        '<div class="gh-art">' + trackPreviewSVG(t.id, 180, 100, { width: 6 }) + '</div><div class="bd"><h3 style="font-size:var(--fs-md)">' + esc(t.short || t.name) +
+        (isDriftTrackDef(t) ? ' <span class="gh-chip warn" style="font-size:var(--fs-2xs);padding:1px 6px">Drift</span>' : '') + '</h3>' +
         '<p>' + esc([t.country, fmtDist(trackLength(t.id) / 1000, units)].filter(Boolean).join(' · ')) + '</p>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">' + diffPips(num(t.difficulty, 3)) +
         (lock ? '<span class="gh-chip">' + icon('lock', 11) + ' L' + (lock.level || '?') + '</span>' : st.bestLap_s ? '<span class="gh-chip">PB ' + fmtTime(st.bestLap_s) + '</span>' : '') + '</div></div></button>';
@@ -3895,7 +3897,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
   }
   function carPanelHTML(title) {
     var car = activeCar(), b = activeBuild();
-    return '<div class="gh-panel cut"><div class="gh-kicker">' + esc(title || 'Your car') + '</div><div class="gh-hero-name" style="font-size:20px">' + esc(car ? car.name : buildName(b)) + '</div>' +
+    return '<div class="gh-panel cut"><div class="gh-kicker">' + esc(title || 'Your car') + '</div><div class="gh-hero-name" style="font-size:var(--fs-xl)">' + esc(car ? car.name : buildName(b)) + '</div>' +
       '<div style="display:flex;gap:6px;margin:8px 0">' + (b ? piBadge(b) : '') + (car ? '<span class="gh-chip ' + conditionLabel(car.condition).kind + '">' + pct(car.condition) + '</span>' : '<span class="gh-chip warn">Garage build (not owned)</span>') + '</div>' +
       '<div>' + carArt(b, { uid: 'setup' }) + '</div>' + (b ? carStatsStrip(b) : '') +
       '<div class="gh-btns" style="margin-top:12px"><button class="gh-btn small" data-nav data-act="garage">Change car</button></div></div>';
@@ -4027,7 +4029,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         rowHTML('Weather', '', segHTML('weather', st.weather, WEATHERS)) + rowHTML('Time of day', '', segHTML('timeOfDay', st.timeOfDay, TIMES)) + '</div>' +
         '<h2 class="gh-h2">Personal bests</h2><div class="gh-panel" style="padding:6px"><table class="gh-table"><thead><tr><th>Circuit</th><th class="n">Sessions</th><th class="n">Best lap</th></tr></thead><tbody>' +
         rows.map(function (r) { return '<tr class="' + (r.id === st.trackId ? 'is-player' : '') + '"><td>' + esc(r.name) + '</td><td class="n">' + r.races + '</td><td class="n">' + fmtTime(r.best) + '</td></tr>'; }).join('') + '</tbody></table></div></div>' +
-        '<div>' + carPanelHTML('Car') + '<div class="gh-panel" style="margin-top:14px"><div class="gh-kicker">Target</div><div class="gh-count" style="font-size:34px">' + fmtTime(getPath(tracks, st.trackId + '.bestLap_s')) + '</div><p style="color:var(--gh-dim);margin:4px 0 12px">Personal best at ' + esc(trackName(st.trackId, true)) + (raceRec ? '' : '') + '</p>' +
+        '<div>' + carPanelHTML('Car') + '<div class="gh-panel" style="margin-top:14px"><div class="gh-kicker">Target</div><div class="gh-count" style="font-size:var(--fs-title)">' + fmtTime(getPath(tracks, st.trackId + '.bestLap_s')) + '</div><p style="color:var(--gh-dim);margin:4px 0 12px">Personal best at ' + esc(trackName(st.trackId, true)) + (raceRec ? '' : '') + '</p>' +
         '<button class="gh-btn hot" style="width:100%" data-nav data-act="go" data-autofocus>' + icon('timer', 16) + ' Start time trial</button></div></div></div>';
       onAct(host, setupActions('tt', st, {
         go: function () {
@@ -4095,7 +4097,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         '<div class="gh-btns"><span class="gh-chip gold">' + golds + ' gold</span><span class="gh-chip">' + medals + ' / ' + list.length + ' medals</span></div></div>' +
         (usingPlaceholders ? moduleMissing('Challenges', 'The driving school layouts register themselves when js/game/challenges.js loads. A preview of the curriculum is shown below.') + '<div style="height:16px"></div>' : '') +
         (driftAvailable() ? '<div class="gh-panel cut gh-drift-cta" style="display:flex;gap:18px;align-items:center;margin-bottom:16px;border-color:var(--gh-line2)">' +
-          '<span style="color:var(--gh-accent)">' + icon('drift', 30) + '</span><div class="gh-drift-cta-txt" style="flex:1"><div class="gh-kicker">Drift school · 3D</div><b style="font-size:17px">Drift score attack and tandem battles</b>' +
+          '<span style="color:var(--gh-accent)">' + icon('drift', 30) + '</span><div class="gh-drift-cta-txt" style="flex:1"><div class="gh-kicker">Drift school · 3D</div><b style="font-size:var(--fs-lg)">Drift score attack and tandem battles</b>' +
           '<p style="margin:4px 0 0;color:var(--gh-dim)">Full drift sessions on the dedicated drift venues: clipping zones, combos, medals and an AI lead car to chase.</p></div>' +
           '<div class="gh-btns"><button class="gh-btn hot" data-nav data-act="drift" data-mode="trial">Score attack</button><button class="gh-btn" data-nav data-act="drift" data-mode="tandem">Tandem</button></div></div>' : '') +
         '<div class="gh-grid auto">' + list.map(function (c) {
@@ -4473,10 +4475,10 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
      ====================================================================== */
   function ringSVG(p, label, sub) {
     var r = 54, c = 2 * Math.PI * r;
-    return '<svg viewBox="0 0 130 130" aria-hidden="true"><circle cx="65" cy="65" r="' + r + '" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>' +
+    return '<svg viewBox="0 0 130 130" aria-hidden="true"><circle cx="65" cy="65" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="10"/>' +
       '<circle cx="65" cy="65" r="' + r + '" fill="none" stroke="var(--gh-accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="' + (c * clamp(p, 0, 1)).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 65 65)"/>' +
-      '<text x="65" y="66" text-anchor="middle" font-family="SF Mono,Menlo,monospace" font-size="24" font-weight="800" fill="#f2eee6">' + esc(label) + '</text>' +
-      '<text x="65" y="86" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="10" letter-spacing="2" fill="#9b978d">' + esc(sub) + '</text></svg>';
+      '<text x="65" y="66" text-anchor="middle" style="font:800 24px var(--mono);fill:var(--text-strong)">' + esc(label) + '</text>' +
+      '<text x="65" y="86" text-anchor="middle" letter-spacing="2" style="font:600 10px var(--font);fill:var(--text-dim)">' + esc(sub) + '</text></svg>';
   }
   var TIER_COLORS = { bronze: '#c27a43', silver: '#c6ccd4', gold: '#f0c246', platinum: '#a9dcea' };
   screen('achievements', {
@@ -4496,7 +4498,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       rows.sort(function (x, y) { return (y.un - x.un) || (num(y.pr && y.pr.pct, 0) - num(x.pr && x.pr.pct, 0)); });
       host.innerHTML = '<div class="gh-head"><div><div class="gh-kicker">Achievements</div><h1 class="gh-h1">Medals &amp; <em>milestones</em></h1><p class="gh-sub">Every achievement pays XP and credits. Hidden ones reveal themselves when you earn them.</p></div>' +
         '<div class="gh-ring">' + ringSVG(sum.pct, Math.round(sum.pct * 100) + '%', sum.unlocked + ' / ' + sum.total) +
-        '<div>' + ['bronze', 'silver', 'gold', 'platinum'].map(function (t) { var b = sum.byTier[t] || { unlocked: 0, total: 0 }; return '<div style="display:flex;gap:10px;align-items:center;font-size:12px;margin:4px 0"><i style="width:10px;height:10px;border-radius:50%;background:' + TIER_COLORS[t] + '"></i><span style="width:70px">' + titleCase(t) + '</span><b class="gh-num">' + b.unlocked + ' / ' + b.total + '</b></div>'; }).join('') +
+        '<div>' + ['bronze', 'silver', 'gold', 'platinum'].map(function (t) { var b = sum.byTier[t] || { unlocked: 0, total: 0 }; return '<div style="display:flex;gap:10px;align-items:center;font-size:var(--fs-sm);margin:4px 0"><i style="width:10px;height:10px;border-radius:50%;background:' + TIER_COLORS[t] + '"></i><span style="width:70px">' + titleCase(t) + '</span><b class="gh-num">' + b.unlocked + ' / ' + b.total + '</b></div>'; }).join('') +
         '<div class="gh-btns" style="margin-top:10px"><button class="gh-btn small" data-nav data-act="gallery">Open gallery</button></div></div></div></div>' +
         tabsHTML([{ id: 'all', name: 'All', count: arr(A.list).length }].concat(cats.map(function (c) { var b = sum.byCategory[c.id] || {}; return { id: c.id, name: c.name, count: b.total != null ? b.unlocked + '/' + b.total : null }; })), tab).replace('class="gh-tabs"', 'class="gh-tabs gh-tabs-wrap"') +
         '<div style="margin-bottom:14px">' + segHTML('filter', filter, [{ id: 'all', name: 'All' }, { id: 'unlocked', name: 'Unlocked' }, { id: 'locked', name: 'In progress' }]) + '</div>' +
@@ -4558,7 +4560,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         (last ? '<button class="gh-btn primary" data-nav data-act="last" data-autofocus>' + icon('play', 14) + ' Last race</button>' : '') +
         '<button class="gh-btn" data-nav data-act="library">Library &amp; import</button></div></div>' +
         (list.length ? '<div class="gh-grid auto" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">' + list.map(function (r, i) {
-          return '<div class="gh-card" style="cursor:default"><div class="gh-art" style="height:110px;margin:-18px -18px 12px;display:grid;place-items:center;background:#0c0d10;color:rgba(255,255,255,.75)">' + (r.trackId ? trackPreviewSVG(r.trackId, 180, 96, { width: 6 }) : icon('film', 40)) + '</div>' +
+          return '<div class="gh-card" style="cursor:default"><div class="gh-art" style="height:110px;margin:-18px -18px 12px;display:grid;place-items:center;background:linear-gradient(180deg,var(--studio-top),var(--studio-floor));color:var(--gh-text)">' + (r.trackId ? trackPreviewSVG(r.trackId, 180, 96, { width: 6 }) : icon('film', 40)) + '</div>' +
             '<div style="display:flex;justify-content:space-between;gap:8px"><h3>' + esc(r.name || r.trackName || trackName(r.trackId, true)) + '</h3>' + (r.pinned ? '<span class="gh-chip gold">Pinned</span>' : '') + '</div>' +
             '<p>' + esc([titleCase(r.mode), r.laps ? r.laps + ' laps' : null, r.cars ? r.cars + ' cars' : null, r.duration ? fmtDuration(r.duration) : null].filter(Boolean).join(' · ')) + '</p>' +
             '<p style="margin-top:4px">' + (r.position ? 'Finished ' + ordinal(r.position) + ' · ' : '') + (r.bestLap ? 'Best ' + fmtTime(r.bestLap) + ' · ' : '') + (r.createdAt ? fmtDate(r.createdAt) : '') + '</p>' +
@@ -4795,7 +4797,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         body = '<h2 class="gh-h2" style="margin-top:0">Keyboard</h2><p class="gh-sub" style="margin-top:-6px">Select a slot and press a key. Backspace clears the slot. A key already in use moves to the new action.</p>' +
           actions.map(function (a) {
             var codes = arr(binds[a.id]);
-            var head = a.group && a.group !== lastGroup ? '<div style="margin:16px 0 6px;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gh-accent)">' + esc(a.group) + '</div>' : '';
+            var head = a.group && a.group !== lastGroup ? '<div style="margin:16px 0 6px;font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;color:var(--gh-accent)">' + esc(a.group) + '</div>' : '';
             lastGroup = a.group;
             return head + rowHTML(a.label, '', '<div class="gh-keys">' + [0, 1, 2].map(function (slot) {
               var c = codes[slot];
@@ -4891,7 +4893,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           var text = '';
           modal({
             kicker: 'Profile data', title: 'Import profile', wide: true,
-            body: '<p>Paste an exported profile JSON or choose a file. This replaces your current progress.</p><textarea class="gh-input" style="width:100%;height:180px;padding:10px;font-family:var(--gh-mono);font-size:11px" data-nav></textarea><input type="file" accept=".json,application/json" style="margin-top:10px;color:var(--gh-dim)">',
+            body: '<p>Paste an exported profile JSON or choose a file. This replaces your current progress.</p><textarea class="gh-input" style="width:100%;height:180px;padding:10px;font-family:var(--gh-mono);font-size:var(--fs-xs)" data-nav></textarea><input type="file" accept=".json,application/json" style="margin-top:10px;color:var(--gh-dim)">',
             mount: function (card) {
               var ta = card.querySelector('textarea'), f = card.querySelector('input[type=file]');
               ta.addEventListener('input', function () { text = ta.value; });
@@ -4932,24 +4934,24 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
 #game-hub .gh-tiles .gh-tile span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #game-hub .gh-chart-tip small{color:var(--gh-dim)}
 #game-hub .gh-ach[data-nav]{cursor:default}
-#game-hub .gh-ach.is-focus{border-color:rgba(212,176,106,.5)}
+#game-hub .gh-ach.is-focus{border-color:var(--accent-ring)}
 #game-hub .gh-row .gh-keys .gh-key.is-focus{border-color:var(--gh-accent)}
 #game-hub .gh-row > .gh-seg,#game-hub .gh-row > .gh-btns,#game-hub .gh-row > .gh-keys{flex:none}
 #game-hub .gh-card .gh-art .gh-chip.act{position:absolute;top:10px;left:10px}
 #game-hub .gh-champ{min-height:340px}
-#game-hub .gh-champ h3{font-size:16px}
+#game-hub .gh-champ h3{font-size:var(--fs-lg)}
 #game-hub .gh-round.is-focus{border-color:var(--gh-accent)}
 #game-hub .gh-trackcard .gh-art .gh-track-svg{max-width:90%;height:auto}
 #game-hub .gh-trackcard.is-focus .gh-track-runner,#game-hub .gh-trackcard.is-sel .gh-track-runner{animation:gh-run 5s linear infinite}
 #game-hub .gh-result-hero .gh-kv{max-width:360px}
 #game-hub .gh-modal-card .gh-car-svg{width:100%;height:auto}
-#game-hub .gh-modal-card .gh-hero-stats b{font-size:16px}
+#game-hub .gh-modal-card .gh-hero-stats b{font-size:var(--fs-lg)}
 #game-hub .gh-panel .gh-car-svg{width:100%;height:auto;display:block}
 #game-hub .gh-cabinet .gh-trophy:hover svg{transform:translateY(-3px);transition:transform .2s}
 #game-hub .gh-seg button.is-focus{box-shadow:inset 0 0 0 2px var(--gh-accent)!important}
 #game-hub .gh-color.is-focus{box-shadow:0 0 0 3px var(--gh-accent)!important}
 #game-hub .gh-opt.is-focus{border-color:var(--gh-accent2)}
-#game-hub .gh-tab.is-focus{color:var(--gh-accent2);box-shadow:none!important;background:rgba(212,176,106,.08)}
+#game-hub .gh-tab.is-focus{color:var(--gh-accent);box-shadow:none!important;background:var(--accent-softer)}
 #game-hub textarea.gh-input{resize:vertical;user-select:text;-webkit-user-select:text}
 #game-hub .gh-car-empty{display:grid;place-items:center;height:120px;color:var(--gh-mute);border:1px dashed var(--gh-line2)}
 @media (max-width:1100px){#game-hub .gh-champ{min-height:0}}
@@ -4964,21 +4966,21 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
 #game-hub .gh-title-meta{bottom:max(22px,env(safe-area-inset-bottom));left:max(28px,env(safe-area-inset-left));right:max(28px,env(safe-area-inset-right))}
 @media (max-width:640px){#game-hub .gh-title-meta{flex-wrap:wrap;justify-content:center;gap:4px 14px;left:16px;right:16px}}
 /* phones in landscape: the title screen fits the short viewport */
-@media (max-height:520px){#game-hub .gh-title-logo{font-size:clamp(40px,15vh,110px);margin-top:0}#game-hub .gh-title-tag{margin-top:6px;font-size:11px}
+@media (max-height:520px){#game-hub .gh-title-logo{font-size:clamp(40px,15vh,110px);margin-top:0}#game-hub .gh-title-tag{margin-top:6px;font-size:var(--fs-xs)}
 #game-hub .gh-title-car{width:min(760px,80vw,110vh);margin-top:1vh}#game-hub .gh-title-press{margin-top:2vh}#game-hub .gh-title-meta{bottom:max(10px,env(safe-area-inset-bottom))}
 #game-hub .gh-menu{min-height:0}}
 /* touch: >= 40px tap targets; keyboard / gamepad hints are hidden */
 @media (pointer:coarse){#game-hub .gh-foot{display:none}
-#game-hub .gh-tab,#game-hub .gh-btn,#game-hub .gh-btn.small,#game-hub .gh-input{min-height:40px}
-#game-hub .gh-seg button{height:auto;min-height:40px}
-#game-hub .gh-key{height:40px}
-#game-hub .gh-color{width:40px;height:40px;flex:none}
+#game-hub .gh-tab,#game-hub .gh-btn,#game-hub .gh-btn.small,#game-hub .gh-input{min-height:var(--touch-min)}
+#game-hub .gh-tab,#game-hub .gh-seg button{min-height:var(--touch-min)}
+#game-hub .gh-key{height:var(--touch-min)}
+#game-hub .gh-color{width:var(--touch-min);height:var(--touch-min);flex:none}
 #game-hub .gh-colors{flex-wrap:wrap}
-#game-hub .gh-btn.small{min-width:40px}
+#game-hub .gh-btn.small{min-width:var(--touch-min)}
 #game-hub .gh-switch::before{content:"";position:absolute;left:50%;top:50%;width:54px;height:44px;transform:translate(-50%,-50%)}
-#game-hub input[type=range].gh-range{height:40px;background:linear-gradient(90deg,var(--gh-accent) var(--v,50%),rgba(255,255,255,.12) var(--v,50%)) center/100% 4px no-repeat}
+#game-hub input[type=range].gh-range{height:40px;background:linear-gradient(90deg,var(--gh-accent) var(--v,50%),color-mix(in srgb,var(--text) 14%,transparent) var(--v,50%)) center/100% 4px no-repeat}
 #game-hub input[type=range].gh-range::-webkit-slider-thumb{width:22px;height:22px}
-#game-hub .gh-crumb{display:inline-flex;align-items:center;min-height:40px}}
+#game-hub .gh-crumb{display:inline-flex;align-items:center;min-height:var(--touch-min)}}
 `;
 
   /* ======================================================================

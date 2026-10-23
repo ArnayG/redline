@@ -214,80 +214,67 @@ CB.derby = CB.derby || {};
   function icon(n, size) { return '<svg viewBox="0 0 24 24" width="' + (size || 18) + '" height="' + (size || 18) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON[n] || ICON.star) + '</svg>'; }
 
   /* ================================================================== styles */
+  /* Shared screen family (css/styles.css § 18): the root carries .mx + data-mode="derby", so .mx-head / .mx-sec / .mx-card /
+     .mx-side / .mx-sum / .mx-foot / .mx-menu / .mx-res-title / .mx-touch give the setup, pause and results the same look as
+     every other mode with the derby accent (--mx). Only derby-specific pieces are styled here, from the § 01 tokens. */
   var CSS = [
-    '.dd-root{position:relative;min-height:100%;color:var(--text);font-family:var(--font,system-ui,sans-serif);background:radial-gradient(1100px 520px at 18% -12%,var(--mode-derby-soft),transparent 62%),var(--bg)}',
+    '.dd-root{position:relative;min-height:100%;color:var(--text);font-family:var(--font);background:radial-gradient(1100px 520px at 18% -12%,var(--mx-soft),transparent 62%),var(--bg)}',
     '.dd-setup{max-width:1500px;margin:0 auto;padding:var(--sp-5) max(var(--sp-4),env(safe-area-inset-right)) var(--sp-6) max(var(--sp-4),env(safe-area-inset-left));display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:var(--sp-5)}',
-    '.dd-head{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap}',
-    '.dd-kicker{font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--mode-derby)}',
-    '.dd-title{font-family:var(--serif,Georgia,serif);font-size:var(--fs-3xl);font-weight:600;letter-spacing:-.02em;margin:var(--sp-1) 0 0;line-height:1.05;color:var(--text-strong,var(--text))}',
-    '.dd-sub{color:var(--text-dim);font-size:var(--fs-sm,13px);margin-top:var(--sp-2);max-width:640px}',
-    '.dd-headbar{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}',
-    '.dd-sec{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg,14px);padding:var(--sp-4);margin-bottom:var(--sp-4)}',
-    '.dd-sec h3{margin:0 0 var(--sp-3);font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);flex-wrap:wrap}',
-    '.dd-sec h3 .t{display:inline-flex;align-items:center;gap:var(--sp-2);color:var(--text)}',
-    '.dd-step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;font:800 11px var(--mono,monospace);letter-spacing:0;color:var(--mode-derby);background:var(--mode-derby-soft);border:1px solid color-mix(in srgb,var(--mode-derby) 35%,transparent)}',
+    '.dd-head{grid-column:1/-1}',
     '.dd-tabs{margin-bottom:var(--sp-3)}.dd-tabs .cb-tab-list{display:inline-flex}.dd-tabs .cb-tab{flex:0 0 auto}',
-    '.dd-segt{display:inline-flex;flex-wrap:wrap}.dd-segt .cb-tab{flex:0 0 auto;min-height:var(--control-h-sm,30px)}',
+    '.dd-segt{display:inline-flex;flex-wrap:wrap}.dd-segt .cb-tab{flex:0 0 auto;min-height:var(--control-h-sm)}',
     '.dd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:var(--sp-2)}',
-    '.dd-card{text-align:left;border:1px solid var(--line);background:var(--panel-2);color:var(--text);border-radius:var(--radius-sm,10px);padding:var(--sp-2) var(--sp-3);cursor:pointer;font:inherit;position:relative;min-height:var(--control-h-lg,46px);transition:border-color var(--dur-2,.15s),background var(--dur-2,.15s),box-shadow var(--dur-2,.15s)}',
-    '.dd-card:hover{border-color:var(--line-2)}.dd-card.is-on{border-color:var(--mode-derby);box-shadow:0 0 0 1px var(--mode-derby) inset;background:linear-gradient(160deg,var(--mode-derby-soft),transparent 70%),var(--panel-2)}',
-    '.dd-card:focus-visible{outline:none;box-shadow:var(--focus)}',
-    '.dd-card.is-off{opacity:.42}.dd-card .n{font-weight:700;font-size:var(--fs-sm,13px);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.dd-card .m{font-size:var(--fs-xs,11px);color:var(--text-dim);display:block;margin-top:2px}.dd-sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:6px;box-shadow:0 0 0 1px var(--line)}',
-    '.dd-bars{display:grid;grid-template-columns:auto 1fr;gap:2px 6px;align-items:center;margin-top:6px;font-size:10px;color:var(--text-dim)}',
-    '.dd-bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.dd-bar i{display:block;height:100%;background:var(--mode-derby)}.dd-bar i.p{background:var(--accent)}',
-    '.dd-acc{display:grid;grid-template-columns:34px 1fr;gap:4px var(--sp-2)}.dd-acc .ic{grid-row:span 2;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--panel-3,var(--bg-3))}',
-    '.dd-acc .n{padding-right:30px}.dd-acc .pts{position:absolute;right:8px;top:9px;font:700 10px var(--mono,monospace);color:var(--accent)}',
-    '.dd-badge{font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:4px;padding:1px 5px;margin-left:4px;background:var(--mode-derby-soft);color:var(--mode-derby);border:1px solid color-mix(in srgb,var(--mode-derby) 40%,transparent);vertical-align:1px}',
-    '.dd-slots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-3)}.dd-slot{border:1px dashed var(--line-2);border-radius:9px;padding:6px;font-size:10px;color:var(--text-dim);min-height:46px}',
-    '.dd-slot b{display:block;color:var(--text);font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-slot.is-full{border-style:solid;border-color:color-mix(in srgb,var(--mode-derby) 55%,var(--line));background:var(--mode-derby-soft)}',
-    '.dd-meter{display:flex;align-items:center;gap:var(--sp-2);font:700 12px var(--mono,monospace);letter-spacing:0;text-transform:none;color:var(--text)}.dd-meter .dd-bar{width:140px;height:6px}.dd-meter .dd-bar i{background:var(--accent)}.dd-meter.is-over{color:var(--bad)}.dd-meter.is-over .dd-bar i{background:var(--bad)}',
-    '.dd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--sp-3)}.dd-chips .cb-btn{min-height:var(--control-h-sm,30px);border:1px solid var(--line);border-radius:var(--pill,999px)}.dd-chips .cb-btn:hover{border-color:color-mix(in srgb,var(--mode-derby) 45%,var(--line))}',
-    '.dd-arenas{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}.dd-arena canvas{width:100%;height:96px;display:block;border-radius:7px;background:#0d0e11;margin-bottom:6px}',
-    '.dd-pips{color:var(--mode-derby);font-size:10px;letter-spacing:1px}',
-    '.dd-rows{display:grid;grid-template-columns:150px 1fr;gap:var(--sp-3) var(--sp-4);align-items:center;font-size:var(--fs-sm,13px)}.dd-rows label{color:var(--text-dim)}',
+    '.dd-card.is-off{opacity:.42}.dd-card .n{font-weight:700;font-size:var(--fs-sm);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.dd-card .m{font-size:var(--fs-xs);color:var(--text-dim);display:block;margin-top:2px}.dd-sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:6px;box-shadow:0 0 0 1px var(--line)}',
+    '.dd-bars{display:grid;grid-template-columns:auto 1fr;gap:2px 6px;align-items:center;margin-top:6px;font-size:var(--fs-2xs);color:var(--text-dim)}',
+    '.dd-bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.dd-bar i{display:block;height:100%;background:var(--mx)}.dd-bar i.p{background:var(--accent)}',
+    '.dd-acc{display:grid;grid-template-columns:34px 1fr;gap:var(--sp-1) var(--sp-2)}.dd-acc .ic{grid-row:span 2;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--panel-3)}',
+    '.dd-acc .n{padding-right:30px}.dd-acc .pts{position:absolute;right:var(--sp-2);top:9px;font:700 var(--fs-2xs) var(--mono);color:var(--accent)}',
+    '.dd-badge{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.06em;line-height:1.2;border-radius:var(--radius-xs);padding:0 5px;margin-left:var(--sp-1);background:var(--mx-soft);color:var(--mx);border:1px solid color-mix(in srgb,var(--mx) 40%,transparent);vertical-align:1px}',
+    '.dd-slots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-3)}.dd-slot{border:1px dashed var(--line-2);border-radius:var(--radius-sm);padding:6px;font-size:var(--fs-2xs);color:var(--text-dim);min-height:46px}',
+    '.dd-slot b{display:block;color:var(--text);font-size:var(--fs-xs);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-slot.is-full{border-style:solid;border-color:color-mix(in srgb,var(--mx) 55%,var(--line));background:var(--mx-soft)}',
+    '.dd-meter{display:flex;align-items:center;gap:var(--sp-2);font:700 var(--fs-xs) var(--mono);letter-spacing:0;text-transform:none;color:var(--text)}.dd-meter .dd-bar{width:140px;height:6px}.dd-meter .dd-bar i{background:var(--accent)}.dd-meter.is-over{color:var(--bad)}.dd-meter.is-over .dd-bar i{background:var(--bad)}',
+    '.dd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--sp-3)}.dd-chips .cb-btn{min-height:var(--control-h-sm);border:1px solid var(--line);border-radius:var(--pill)}.dd-chips .cb-btn:hover{border-color:color-mix(in srgb,var(--mx) 45%,var(--line))}',
+    '.dd-arenas{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}.dd-arena canvas{width:100%;height:96px;display:block;border-radius:var(--radius-xs);margin-bottom:6px}',
+    '.dd-pips{color:var(--mx);font-size:var(--fs-2xs);letter-spacing:1px}',
+    '.dd-rows{display:grid;grid-template-columns:150px 1fr;gap:var(--sp-3) var(--sp-4);align-items:center;font-size:var(--fs-sm)}.dd-rows label{color:var(--text-dim)}',
     '.dd-range{display:flex;align-items:center;gap:var(--sp-3)}.dd-range input{width:200px;accent-color:var(--accent)}',
-    '.dd-side{position:sticky;top:var(--sp-3);align-self:start}.dd-prev{position:relative;height:250px;border-radius:var(--radius-lg,12px);overflow:hidden;background:radial-gradient(circle at 50% 70%,var(--panel-3,#2a2c33),var(--bg-2,#0d0e11));border:1px solid var(--line)}',
-    '.dd-prev canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.dd-sum{margin-top:var(--sp-3);font-size:var(--fs-sm,13px);line-height:1.55;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg,14px);padding:var(--sp-3) var(--sp-4)}',
-    '.dd-sum h4{margin:0 0 var(--sp-1);font-family:var(--serif,Georgia,serif);font-weight:600;font-size:var(--fs-lg,18px)}.dd-sum .dd-k{color:var(--text-dim);font-size:var(--fs-2xs);letter-spacing:.14em;text-transform:uppercase;margin-right:4px}',
-    '.dd-foot{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) max(var(--sp-6),env(safe-area-inset-right)) max(var(--sp-3),env(safe-area-inset-bottom)) max(var(--sp-6),env(safe-area-inset-left));border-top:1px solid var(--line);background:var(--glass,rgba(18,19,23,.72));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
-    '.dd-foot-sum{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}.dd-foot-sum b{font-size:var(--fs-md,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-foot-sum span{font-size:var(--fs-xs,11.5px);color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.dd-foot .dd-cta{display:flex;gap:var(--sp-2);align-items:center;flex:none}.dd-foot .rx-btn.big{min-width:200px;justify-content:center}',
-    '.dd-root .cb-btn{min-height:var(--control-h-md,38px)}.dd-root .cb-btn.big,.dd-root .rx-btn.big{min-height:var(--control-h-lg,46px);padding:0 var(--sp-6);font-size:var(--fs-md,14px);letter-spacing:.04em}',
-    '.dd-errs{color:var(--bad);font-size:12px;margin-top:6px}',
-    '.dd-btn{border:1px solid var(--line);background:var(--panel-2);color:var(--text);border-radius:10px;padding:9px 14px;font:700 13px inherit;cursor:pointer;min-height:42px}',
-    '.dd-btn.primary{background:var(--accent-grad,var(--accent));border-color:transparent;color:var(--accent-ink,#17130b)}',
-    '.dd-play{position:fixed;inset:0;z-index:40;background:#000;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}',
+    '.dd-prev{position:relative;height:250px;border-radius:var(--radius-lg);overflow:hidden;background:radial-gradient(circle at 50% 70%,var(--panel-3),var(--bg-2));border:1px solid var(--line)}',
+    '.dd-prev canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.dd-sum{line-height:1.55}',
+    '.dd-sum h4{margin-bottom:var(--sp-1)}.dd-sum .dd-k{color:var(--text-dim);font-size:var(--fs-2xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;margin-right:var(--sp-1)}',
+    '.dd-errs{color:var(--bad);font-size:var(--fs-xs);margin-top:6px}.dd-note{margin-top:var(--sp-2)}',
+    /* play layer: the 3D view (always dark, both themes) + DOM touch controls on the shared .mx-touch base (HUD tokens) */
+    '.dd-play{position:fixed;inset:0;z-index:var(--z-overlay);background:black;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}',
     '.dd-play canvas.dd-hud{position:absolute;left:0;top:0;width:100%;height:100%;display:block}',
-    '.dd-load{position:absolute;inset:0;display:grid;place-items:center;background:#0b0b0d;color:#fff;font:800 15px system-ui;letter-spacing:.1em;z-index:5}',
-    '.dd-t{position:absolute;z-index:4;display:grid;place-items:center;border-radius:14px;background:rgba(20,22,28,.55);border:1px solid rgba(255,255,255,.18);color:#fff;font:900 12px system-ui;letter-spacing:.06em;touch-action:none;-webkit-tap-highlight-color:transparent;overflow:hidden;text-align:center}',
-    '.dd-t.is-down{background:rgba(224,65,47,.55);border-color:rgba(255,255,255,.4)}.dd-t .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(255,255,255,.18)}',
-    '.dd-t.round{border-radius:50%}.dd-t.act{background:rgba(255,177,58,.28);border-color:rgba(255,177,58,.75);font-size:10px;line-height:1.1;padding:4px}.dd-t.act.not-ready{opacity:.45}',
-    '.dd-t .knob{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.55)}',
-    '.dd-t .chg{position:absolute;left:0;bottom:0;height:4px;background:#ffb13a}',
-    '.dd-t.boost{background:rgba(30,90,180,.4);border:0;font-size:12px;letter-spacing:.1em}.dd-t.boost span{position:relative;z-index:2}',
-    '.dd-t.boost .ring{position:absolute;inset:0;border-radius:50%;-webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%)}',
-    '.dd-t.boost.is-ready{background:rgba(58,160,255,.6);box-shadow:0 0 18px rgba(58,160,255,.8)}.dd-t.boost.is-on{background:rgba(255,255,255,.75);color:#0b2a52}',
-    '.dd-score{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:var(--sp-3) 0}.dd-score div{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12px;display:flex;justify-content:space-between}',
-    '.dd-score b{color:var(--accent);font-family:var(--mono,monospace)}.dd-big{display:flex;gap:var(--sp-5);flex-wrap:wrap;margin:var(--sp-4) 0 var(--sp-1)}.dd-big div{font-size:var(--fs-2xs);color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase;font-weight:700}',
-    '.dd-big b{display:block;font:600 var(--fs-2xl)/1.15 var(--serif,Georgia,serif);color:var(--text-strong,var(--text));letter-spacing:-.01em;text-transform:none}.dd-big .gold b{color:var(--accent)}.dd-big .mvp b{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.dd-ovl{position:absolute;inset:0;z-index:8;display:grid;place-items:center;background:rgba(5,5,8,.62);backdrop-filter:blur(3px)}',
-    '.dd-menu{background:var(--panel,#141519);border:1px solid var(--line,#2b2c33);border-radius:16px;padding:18px;min-width:280px;max-width:92vw;display:grid;gap:8px}',
-    '.dd-menu h2{margin:0 0 6px;font-size:20px;letter-spacing:.08em}',
-    '.dd-spec{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));display:flex;gap:8px}',
+    '.dd-load{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:black;color:var(--hud-dim);font:700 var(--fs-sm)/1.4 var(--font);letter-spacing:var(--tracking-caps);text-transform:uppercase}',
+    '.dd-t{overflow:hidden;text-align:center}.dd-t.is-down{background:color-mix(in srgb,var(--mode-derby) 55%,transparent)}',
+    '.dd-t .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:var(--hud-press)}',
+    '.dd-t.round{border-radius:50%}.dd-t.act{background:color-mix(in srgb,var(--hud-warn) 28%,transparent);border-color:color-mix(in srgb,var(--hud-warn) 75%,transparent);font-size:var(--fs-2xs);padding:var(--sp-1)}.dd-t.act.not-ready{opacity:.45}',
+    '.dd-t .knob{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--hud-press);border:2px solid var(--hud-dim)}',
+    '.dd-t .chg{position:absolute;left:0;bottom:0;height:4px;background:var(--hud-warn)}',
+    '.dd-t.boost{background:rgba(30,90,180,.4);border:0;font-size:var(--fs-xs);letter-spacing:.1em}.dd-t.boost span{position:relative;z-index:2}',
+    '.dd-t.boost .ring{position:absolute;inset:0;border-radius:50%;-webkit-mask:radial-gradient(circle,transparent 62%,black 63%);mask:radial-gradient(circle,transparent 62%,black 63%)}',
+    '.dd-t.boost.is-ready{background:rgba(58,160,255,.6);box-shadow:0 0 18px rgba(58,160,255,.8)}.dd-t.boost.is-on{background:var(--hud-ink);color:var(--accent-2)}',
+    /* pause / spectate (cards over the 3D view use the theme panel; .mx-ovl scrim) */
+    '.dd-play .mx-menu{max-height:calc(100vh - 2 * var(--sp-4));max-height:calc(100dvh - 2 * var(--sp-4));overflow-y:auto}',
+    '.dd-spec{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:max(var(--sp-3),env(safe-area-inset-bottom));display:flex;gap:var(--sp-2)}',
+    '.dd-spec .cb-btn:not(.primary){background:var(--hud-panel);border-color:var(--hud-line);color:var(--hud-ink)}',
+    /* results */
     '.dd-res{max-width:1100px;margin:0 auto;padding:var(--sp-6) max(var(--sp-4),env(safe-area-inset-right)) var(--sp-10) max(var(--sp-4),env(safe-area-inset-left));color:var(--text)}',
-    '.dd-res h1{font-family:var(--serif,Georgia,serif);font-size:var(--fs-3xl);margin:var(--sp-1) 0 0;font-weight:600;letter-spacing:-.02em;line-height:1.08;color:var(--text-strong,var(--text))}.dd-res h1.win{color:var(--accent)}',
-    '.dd-hl{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin:var(--sp-4) 0}.dd-hl span{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px}',
-    '.dd-hl b{color:var(--accent)}.dd-tbl-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg,14px)}.dd-tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}',
-    '.dd-tbl th{text-align:left;font-size:var(--fs-2xs);letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);padding:8px 10px;border-bottom:1px solid var(--line)}',
-    '.dd-tbl td{padding:8px 10px;border-bottom:1px solid var(--line-soft)}.dd-tbl tr:last-child td{border-bottom:0}.dd-tbl tr.me td{background:var(--mode-derby-soft)}.dd-tbl .num{font-variant-numeric:tabular-nums;text-align:right}',
+    '.dd-score{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:var(--sp-3) 0}.dd-score div{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:7px 10px;font-size:var(--fs-xs);display:flex;justify-content:space-between}',
+    '.dd-score b{color:var(--accent);font-family:var(--mono)}.dd-big{display:flex;gap:var(--sp-5);flex-wrap:wrap;margin:var(--sp-4) 0 var(--sp-1)}.dd-big div{font-size:var(--fs-2xs);color:var(--text-dim);letter-spacing:var(--tracking-caps);text-transform:uppercase;font-weight:700}',
+    '.dd-big b{display:block;font:var(--fw-title) var(--fs-2xl)/1.15 var(--serif);color:var(--text-strong);letter-spacing:-.01em;text-transform:none}.dd-big .gold b{color:var(--accent)}.dd-big .mvp b{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.dd-hl{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin:var(--sp-4) 0}.dd-hl .mx-chip{min-height:30px;padding:0 var(--sp-3);font-size:var(--fs-sm);font-weight:500;color:var(--text)}',
+    '.dd-hl b{color:var(--accent)}.dd-tbl-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg)}.dd-tbl{width:100%;border-collapse:collapse;font-size:var(--fs-sm);min-width:720px}',
+    '.dd-tbl th{text-align:left;font-size:var(--fs-2xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-dim);padding:var(--sp-2) 10px;border-bottom:1px solid var(--line)}',
+    '.dd-tbl td{padding:var(--sp-2) 10px;border-bottom:1px solid var(--line-soft)}.dd-tbl tr:last-child td{border-bottom:0}.dd-tbl tr.me td{background:var(--mx-soft)}.dd-tbl .num{font-variant-numeric:tabular-nums;text-align:right}',
     '.dd-actions{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-5)}',
-    '@media (max-width:980px){.dd-setup{grid-template-columns:minmax(0,1fr)}.dd-side{position:static;order:-1}.dd-prev{height:200px}}',
-    '@media (max-width:640px){.dd-foot{flex-wrap:wrap;gap:var(--sp-2);padding-left:max(var(--sp-4),env(safe-area-inset-left));padding-right:max(var(--sp-4),env(safe-area-inset-right))}.dd-foot .dd-cta{width:100%}.dd-foot .dd-cta .rx-btn.big{flex:1;min-width:0}}',
-    '@media (max-width:600px){.dd-meter .dd-bar{width:72px}.dd-sec h3{letter-spacing:.14em}.dd-rows{grid-template-columns:1fr}.dd-slots{grid-template-columns:repeat(3,minmax(0,1fr))}.dd-title{font-size:var(--fs-2xl)}.dd-res h1{font-size:var(--fs-2xl)}.dd-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}',
+    /* narrow: one column; the header stays first, then the car preview, then the steps */
+    '@media (max-width:980px){.dd-setup{grid-template-columns:minmax(0,1fr)}.dd-head{order:-2}.dd-side{position:static;order:-1}.dd-prev{height:200px}}',
+    '@media (max-width:600px){.dd-meter .dd-bar{width:72px}.dd-rows{grid-template-columns:1fr}.dd-slots{grid-template-columns:repeat(3,minmax(0,1fr))}.dd-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.dd-actions .cb-btn{flex:1 1 auto}.dd-prev{height:170px}}',
     '@media (max-width:560px){.dd-back .lbl{display:none}.dd-back{padding:0 var(--sp-3)}}',
-    '@media (pointer:coarse){.dd-root .cb-btn,.dd-root .cb-tab,.dd-card{min-height:var(--touch-min,44px)}.dd-segt .cb-tab,.dd-chips .cb-btn{min-height:40px}}',
-    '@media (max-height:500px) and (orientation:landscape){.dd-prev{height:150px}.dd-setup{padding-top:var(--sp-3)}.dd-foot{padding-top:var(--sp-2);padding-bottom:max(var(--sp-2),env(safe-area-inset-bottom))}.dd-foot .dd-cta{width:auto}}'
+    '@media (pointer:coarse){.dd-root .cb-btn,.dd-root .cb-tab,.dd-card{min-height:var(--touch-min)}.dd-segt .cb-tab,.dd-chips .cb-btn{min-height:var(--touch-min)}.dd-play .cb-btn{min-height:var(--touch-min)}}',
+    '@media (max-height:500px) and (orientation:landscape){.dd-prev{height:150px}.dd-setup{padding-top:var(--sp-3)}.dd-foot{padding-top:var(--sp-2);padding-bottom:max(var(--sp-2),env(safe-area-inset-bottom))}.dd-foot .mx-cta{width:auto}.dd-play .mx-menu{grid-template-columns:1fr 1fr;width:min(560px,92vw);max-width:none;padding:var(--sp-3) var(--sp-4);gap:6px}.dd-play .mx-menu h2{grid-column:1/-1}.dd-play .mx-menu .cb-btn{min-height:var(--control-h-md)}}'
   ].join('\n');
   function injectStyles() {
     if (!hasDOM || document.getElementById('dd-styles')) return;
@@ -347,13 +334,13 @@ CB.derby = CB.derby || {};
     var root = U.root; root.innerHTML = '';
     var wrap = h('div', { class: 'dd-setup' });
     root.appendChild(wrap);
-    wrap.appendChild(h('div', { class: 'dd-head' },
-      h('div', null, h('div', { class: 'dd-kicker', text: 'Demolition Derby · last car standing' }), h('h1', { class: 'dd-title', text: 'Wreck them all' }),
-        h('div', { class: 'dd-sub', text: 'Pick a car, bolt on weapons, wreck everyone. Where you get hit changes how you drive.' })),
-      h('div', { class: 'dd-headbar' },
-        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('cam', 14) + ' Controls', title: 'Controls / phone wheel', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
-        h('button', { class: 'cb-btn ghost dd-back', type: 'button', 'aria-label': 'Main menu', html: icon('back', 16) + '<span class="lbl">Main menu</span>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
-    var main = h('div'), side = h('div', { class: 'dd-side' });
+    wrap.appendChild(h('header', { class: 'dd-head mx-head' },
+      h('div', null, h('div', { class: 'mx-kicker', text: 'Demolition Derby · last car standing' }), h('h1', { class: 'mx-title', text: 'Wreck them all' }),
+        h('p', { class: 'mx-sub', text: 'Pick a car, bolt on weapons, wreck everyone. Where you get hit changes how you drive.' })),
+      h('div', { class: 'mx-headbar' },
+        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('cam', 16) + '<span>Controls</span>', title: 'Controls / phone wheel', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
+        h('button', { class: 'cb-btn ghost cb-back dd-back', type: 'button', 'aria-label': 'Main menu', title: 'Main menu (Esc)', html: icon('back', 16) + '<span class="lbl">Main menu</span><kbd>Esc</kbd>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
+    var main = h('div'), side = h('aside', { class: 'dd-side mx-side' });
     wrap.appendChild(main); wrap.appendChild(side);
     U.mainEl = main;
     fillMain();
@@ -377,8 +364,8 @@ CB.derby = CB.derby || {};
   }
 
   function carSection() {
-    var S = U.S, sec = h('section', { class: 'dd-sec', 'aria-label': 'Car' });
-    sec.appendChild(h('h3', null, h('span', { class: 't', html: '<span class="dd-step">1</span>Car' }), h('span', { class: 'dd-sub', style: { margin: 0, textTransform: 'none', letterSpacing: 0 }, text: 'Heavy = tough · power = punch' })));
+    var S = U.S, sec = h('section', { class: 'dd-sec mx-sec', 'aria-label': 'Car' });
+    sec.appendChild(h('h3', { class: 'mx-sec-title' }, h('span', { class: 't', html: '<span class="mx-step">1</span>Car' }), h('span', { class: 'mx-hint', text: 'Heavy = tough · power = punch' })));
     var tabs = h('div', { class: 'dd-tabs' }), tl = h('div', { class: 'cb-tab-list', role: 'tablist' });
     tabs.appendChild(tl);
     var mine = S.source !== 'preset';
@@ -401,14 +388,14 @@ CB.derby = CB.derby || {};
         var sp1 = P.specOf('saved:' + e.id, e.build);
         grid.appendChild(carCard(e.name || P.buildName(e.build), e.build, sp1, X.rating(sp1), S.source === 'saved' && S.savedId === e.id, function () { S.source = 'saved'; S.savedId = e.id; persist(); rerender(); }));
       });
-      if (!grid.children.length) grid.appendChild(h('div', { class: 'dd-sub', text: 'No saved builds yet — build one in the Garage, or pick a preset.' }));
+      if (!grid.children.length) grid.appendChild(h('div', { class: 'mx-hint', text: 'No saved builds yet — build one in the Garage, or pick a preset.' }));
     }
     sec.appendChild(grid);
     return sec;
   }
   function carCard(name, b, sp, rt, on, pick) {
     var hp = sp ? Math.round(sp.powerKw / 0.7457) : '—', kg = sp ? Math.round(sp.baseMass) : '—';
-    return h('button', { type: 'button', class: 'dd-card' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: pick },
+    return h('button', { type: 'button', class: 'dd-card mx-card' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: pick },
       h('span', { class: 'n' }, h('span', { class: 'dd-sw', style: { background: P.paintOf(b) } }), name),
       h('span', { class: 'm', text: hp + ' hp · ' + kg + ' kg · ' + (sp ? sp.drive.toUpperCase() : '') + (sp && sp.enginePos !== 'front' ? ' · ' + sp.enginePos + '-engine' : '') }),
       h('span', { class: 'dd-bars' }, 'Tough', h('span', { class: 'dd-bar' }, h('i', { style: { width: (rt.tough / 5 * 100) + '%' } })),
@@ -416,11 +403,11 @@ CB.derby = CB.derby || {};
   }
 
   function loadoutSection() {
-    var S = U.S, A = AC(), sec = h('section', { class: 'dd-sec', 'aria-label': 'Accessories loadout' });
+    var S = U.S, A = AC(), sec = h('section', { class: 'dd-sec mx-sec', 'aria-label': 'Accessories loadout' });
     var v = A.validate(S.accessories);
     var meter = h('span', { class: 'dd-meter' + (v.points > v.budget ? ' is-over' : '') }, v.points + ' / ' + v.budget + ' pts',
       h('span', { class: 'dd-bar' }, h('i', { style: { width: Math.min(100, v.points / v.budget * 100) + '%' } })), '+' + v.mass + ' kg');
-    sec.appendChild(h('h3', null, h('span', { class: 't', html: '<span class="dd-step">2</span>Accessories loadout' }), meter));
+    sec.appendChild(h('h3', { class: 'mx-sec-title' }, h('span', { class: 't', html: '<span class="mx-step">2</span>Accessories loadout' }), meter));
     // slots
     var slots = h('div', { class: 'dd-slots' }), fitted = {};
     S.accessories.forEach(function (id) { var d = A.DEFS[id]; if (d) (fitted[d.slot] = fitted[d.slot] || []).push(d); });
@@ -439,7 +426,7 @@ CB.derby = CB.derby || {};
       var test = on ? null : A.validate(S.accessories.concat([d.id]));
       var blocked = test && !test.ok;
       var ai = v.actives.indexOf(d.id);
-      grid.appendChild(h('button', { type: 'button', class: 'dd-card dd-acc' + (on ? ' is-on' : '') + (blocked ? ' is-off' : ''), 'aria-pressed': on ? 'true' : 'false',
+      grid.appendChild(h('button', { type: 'button', class: 'dd-card mx-card dd-acc' + (on ? ' is-on' : '') + (blocked ? ' is-off' : ''), 'aria-pressed': on ? 'true' : 'false',
         title: d.desc + (blocked ? '\n\n' + test.errors.join(' · ') : ''),
         onclick: function () {
           if (on) S.accessories = S.accessories.filter(function (x) { return x !== d.id; });
@@ -461,18 +448,18 @@ CB.derby = CB.derby || {};
     });
     sec.appendChild(grid);
     if (v.errors.length) sec.appendChild(h('div', { class: 'dd-errs', text: v.errors.join(' · ') }));
-    sec.appendChild(h('div', { class: 'dd-sub', html: 'ACTION 1 = <b>F</b> / <b>J</b> · pad X · ACTION 2 = <b>G</b> / <b>K</b> · pad B · touch buttons · phone wheel ITEM / NITRO' }));
+    sec.appendChild(h('div', { class: 'mx-hint dd-note', html: 'ACTION 1 = <b>F</b> / <b>J</b> · pad X · ACTION 2 = <b>G</b> / <b>K</b> · pad B · touch buttons · phone wheel ITEM / NITRO' }));
     return sec;
   }
 
   function arenaSection() {
-    var S = U.S, sec = h('section', { class: 'dd-sec', 'aria-label': 'Arena' });
-    sec.appendChild(h('h3', null, h('span', { class: 't', html: '<span class="dd-step">3</span>Arena' })));
+    var S = U.S, sec = h('section', { class: 'dd-sec mx-sec', 'aria-label': 'Arena' });
+    sec.appendChild(h('h3', { class: 'mx-sec-title' }, h('span', { class: 't', html: '<span class="mx-step">3</span>Arena' })));
     var grid = h('div', { class: 'dd-grid dd-arenas' });
     AR().list().forEach(function (a) {
       var cv = h('canvas', { width: 420, height: 192, 'aria-hidden': 'true' });
       var on = S.arenaId === a.id;
-      grid.appendChild(h('button', { type: 'button', class: 'dd-card dd-arena' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { S.arenaId = a.id; persist(); rerender(); } },
+      grid.appendChild(h('button', { type: 'button', class: 'dd-card mx-card dd-arena' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { S.arenaId = a.id; persist(); rerender(); } },
         cv, h('span', { class: 'n', text: a.name }),
         h('span', { class: 'm' }, h('span', { class: 'dd-pips', text: '●●●●●'.slice(0, a.difficulty) + '○○○○○'.slice(a.difficulty) }), ' · ' + a.timeOfDay + ' · ' + a.surface.kind),
         h('span', { class: 'm', text: a.tagline })));
@@ -493,8 +480,8 @@ CB.derby = CB.derby || {};
   }
 
   function matchSection() {
-    var S = U.S, sec = h('section', { class: 'dd-sec', 'aria-label': 'Match rules' });
-    sec.appendChild(h('h3', null, h('span', { class: 't', html: '<span class="dd-step">4</span>Match' })));
+    var S = U.S, sec = h('section', { class: 'dd-sec mx-sec', 'aria-label': 'Match rules' });
+    sec.appendChild(h('h3', { class: 'mx-sec-title' }, h('span', { class: 't', html: '<span class="mx-step">4</span>Match' })));
     var rows = h('div', { class: 'dd-rows' });
     var oppVal = h('b', { text: S.opponents + ' AI' });
     var rng = h('input', { type: 'range', min: 3, max: 11, step: 1, value: S.opponents, 'aria-label': 'Opponents', oninput: function (e) { S.opponents = +e.target.value; oppVal.textContent = S.opponents + ' AI'; persist(); updateSum(); } });
@@ -517,20 +504,20 @@ CB.derby = CB.derby || {};
     var cv = h('canvas', { class: 'dd-prev-cv', 'aria-label': 'Car preview' });
     box.appendChild(h('div', { class: 'dd-prev' }, cv));
     U.prevCanvas = cv;
-    U.sumEl = h('div', { class: 'dd-sum' });
+    U.sumEl = h('div', { class: 'dd-sum mx-sum' });
     box.appendChild(U.sumEl);
     return box;
   }
   /** sticky footer (like the race setup's .rx-footer): session summary + Quick derby + the gold Start CTA, always reachable */
   function footer() {
     var S = U.S, v = AC().validate(S.accessories);
-    U.footSum = h('div', { class: 'dd-foot-sum' });
-    return h('div', { class: 'dd-foot' }, U.footSum,
-      h('div', { class: 'dd-cta' },
-        h('button', { class: 'cb-btn ghost big', type: 'button', 'data-dd': 'quick', html: icon('bolt', 16) + ' Quick derby', title: 'Your last car and loadout on a random arena', onclick: function () {
+    U.footSum = h('div', { class: 'mx-foot-sum' });
+    return h('footer', { class: 'dd-foot mx-foot' }, U.footSum,
+      h('div', { class: 'mx-cta' },
+        h('button', { class: 'cb-btn ghost large', type: 'button', 'data-dd': 'quick', html: icon('bolt', 16) + '<span>Quick derby</span>', title: 'Your last car and loadout on a random arena', onclick: function () {
           var ids = AR().ids(); if (!AC().validate(S.accessories).ok) S.accessories = AC().sanitize(DEFAULTS_ACC());
           S.arenaId = ids[Math.floor(Math.random() * ids.length)] || S.arenaId; persist(); startMatch(); } }),
-        h('button', { class: 'cb-btn primary rx-btn big', type: 'button', disabled: v.ok ? null : true, 'data-dd': 'start', html: icon('play', 16) + ' Start derby', onclick: function () { startMatch(); } })));
+        h('button', { class: 'cb-btn primary large', type: 'button', disabled: v.ok ? null : true, 'data-dd': 'start', html: icon('play', 16) + '<span>Start derby</span>', onclick: function () { startMatch(); } })));
   }
   function updateSum() {
     if (!U.sumEl) return;
@@ -712,7 +699,7 @@ CB.derby = CB.derby || {};
   function buildTouch(R) {
     var T = R.input.touch; T.active = true;
     var el = h('div', { class: 'dd-touch' });
-    function btn(cls, label) { var b = h('div', { class: 'dd-t ' + cls, role: 'button', 'aria-label': label }); b.innerHTML = label; el.appendChild(b); return b; }
+    function btn(cls, label) { var b = h('div', { class: 'mx-touch dd-t ' + cls, role: 'button', 'aria-label': label }); b.innerHTML = label; el.appendChild(b); return b; }
     var steer = btn('steer', ''), knob = h('div', { class: 'knob' }); steer.appendChild(knob); steer.setAttribute('aria-label', 'Steering');
     var sid = null;
     function sAt(e) { var r = steer.getBoundingClientRect(); var x = clamp((e.clientX - (r.left + r.width / 2)) / (r.width * 0.42), -1, 1); T.steer = -x; knob.style.transform = 'translateX(' + (x * r.width * 0.36) + 'px)'; }
@@ -1056,9 +1043,9 @@ CB.derby = CB.derby || {};
   function showSpecBar(R) {
     if (R.specEl) return;
     var bar = h('div', { class: 'dd-spec' },
-      h('button', { class: 'dd-btn', type: 'button', 'aria-label': 'Previous car', html: icon('back', 16), onclick: function () { cycleSpectate(-1); } }),
-      h('button', { class: 'dd-btn primary', type: 'button', text: 'Results', onclick: function () { finish(true); } }),
-      h('button', { class: 'dd-btn', type: 'button', 'aria-label': 'Next car', html: icon('next', 16), onclick: function () { cycleSpectate(1); } }));
+      h('button', { class: 'cb-btn', type: 'button', 'aria-label': 'Previous car', html: icon('back', 16), onclick: function () { cycleSpectate(-1); } }),
+      h('button', { class: 'cb-btn primary', type: 'button', text: 'Results', onclick: function () { finish(true); } }),
+      h('button', { class: 'cb-btn', type: 'button', 'aria-label': 'Next car', html: icon('next', 16), onclick: function () { cycleSpectate(1); } }));
     R.play.appendChild(bar); R.specEl = bar;
   }
   function pause() {
@@ -1066,18 +1053,18 @@ CB.derby = CB.derby || {};
     if (R.replay) endReplay(R);
     R.paused = true; R.input.clear(); if (R.sfx) R.sfx.suspend();
     var S = U.S;
-    var menu = h('div', { class: 'dd-menu', role: 'dialog', 'aria-label': 'Paused' },
-      h('h2', { text: 'PAUSED' }),
-      h('button', { class: 'dd-btn primary', type: 'button', 'data-autofocus': '', text: 'Resume', onclick: resume }),
-      h('button', { class: 'dd-btn', type: 'button', text: 'Restart derby', onclick: function () { startMatch({ seed: R.cfg.seed + 1 }); } }),
-      R.renderer && R.renderer.cycleCamera ? h('button', { class: 'dd-btn', type: 'button', text: 'Camera: ' + (R.renderer.cameraLabel ? R.renderer.cameraLabel() : R.renderer.getCamera()), onclick: function (e) { onAction('camera'); e.target.textContent = 'Camera: ' + (R.renderer.cameraLabel ? R.renderer.cameraLabel() : R.renderer.getCamera()); } }) : null,
-      h('button', { class: 'dd-btn', type: 'button', text: 'Sound: ' + (S.muted ? 'off' : 'on'), onclick: function (e) { onAction('mute'); e.target.textContent = 'Sound: ' + (S.muted ? 'off' : 'on'); } }),
-      h('button', { class: 'dd-btn', type: 'button', text: 'Takedown replays: ' + (S.replays ? 'on' : 'off'), onclick: function (e) { S.replays = !S.replays; APP.persist(); e.target.textContent = 'Takedown replays: ' + (S.replays ? 'on' : 'off'); } }),
-      R.renderer && R.renderer.setQuality ? h('button', { class: 'dd-btn', type: 'button', text: 'Graphics: ' + R.renderer.getQuality(), onclick: function (e) {
+    var menu = h('div', { class: 'mx-menu dd-menu', role: 'dialog', 'aria-label': 'Paused' },
+      h('h2', { text: 'Paused' }),
+      h('button', { class: 'cb-btn primary', type: 'button', 'data-autofocus': '', text: 'Resume', onclick: resume }),
+      h('button', { class: 'cb-btn', type: 'button', text: 'Restart derby', onclick: function () { startMatch({ seed: R.cfg.seed + 1 }); } }),
+      R.renderer && R.renderer.cycleCamera ? h('button', { class: 'cb-btn', type: 'button', text: 'Camera: ' + (R.renderer.cameraLabel ? R.renderer.cameraLabel() : R.renderer.getCamera()), onclick: function (e) { onAction('camera'); e.target.textContent = 'Camera: ' + (R.renderer.cameraLabel ? R.renderer.cameraLabel() : R.renderer.getCamera()); } }) : null,
+      h('button', { class: 'cb-btn', type: 'button', text: 'Sound: ' + (S.muted ? 'off' : 'on'), onclick: function (e) { onAction('mute'); e.target.textContent = 'Sound: ' + (S.muted ? 'off' : 'on'); } }),
+      h('button', { class: 'cb-btn', type: 'button', text: 'Takedown replays: ' + (S.replays ? 'on' : 'off'), onclick: function (e) { S.replays = !S.replays; APP.persist(); e.target.textContent = 'Takedown replays: ' + (S.replays ? 'on' : 'off'); } }),
+      R.renderer && R.renderer.setQuality ? h('button', { class: 'cb-btn', type: 'button', text: 'Graphics: ' + R.renderer.getQuality(), onclick: function (e) {
         var qs = ['low', 'medium', 'high'], qn = qs[(qs.indexOf(R.renderer.getQuality()) + 1) % qs.length]; R.renderer.setQuality(qn); R.quality = qn; U.S.quality = qn; APP.persist(); e.target.textContent = 'Graphics: ' + qn; } }) : null,
-      h('button', { class: 'dd-btn', type: 'button', text: 'Quit to setup', onclick: function () { APP.showSetup(); } }),
-      h('button', { class: 'dd-btn', type: 'button', text: 'Main menu', onclick: function () { var r = APP.router(); if (r) r.go('menu'); } }));
-    var ov = h('div', { class: 'dd-ovl' }, menu);
+      h('button', { class: 'cb-btn', type: 'button', text: 'Quit to setup', onclick: function () { APP.showSetup(); } }),
+      h('button', { class: 'cb-btn', type: 'button', text: 'Main menu', onclick: function () { var r = APP.router(); if (r) r.go('menu'); } }));
+    var ov = h('div', { class: 'mx-ovl dd-ovl' }, menu);
     R.play.appendChild(ov); R.pauseEl = ov;
     var f = menu.querySelector('[data-autofocus]'); if (f) f.focus();
   }
@@ -1173,15 +1160,15 @@ CB.derby = CB.derby || {};
         '<td class="num">' + s.maxImpact_kph + '</td><td class="num">' + Math.round(s.survived_s) + 's</td><td>' + (r.alive ? 'alive · ' + Math.round(r.health * 100) + '%' : esc(r.elimReason || 'out')) + '</td></tr>';
     }).join('');
     var wrap = h('div', { class: 'dd-res' });
-    wrap.innerHTML = '<div class="dd-kicker">Derby results · ' + esc(res.arenaName) + ' · ' + esc(res.difficulty) + ' · ' + Math.round(res.duration_s) + ' s' + (res.endReason === 'time' ? ' · time limit' : '') + '</div>' +
-      '<h1 class="' + (won ? 'win' : '') + '">' + (won ? 'Last car standing!' : 'You finished ' + ordinal(me.position || total).toLowerCase() + ' of ' + total) + '</h1>' +
-      '<div class="dd-sub">' + (won ? 'You survived the derby.' : 'Winner: ' + esc((res.classification[0] || {}).isPlayer ? 'You' : (res.classification[0] || {}).name || '—')) + ' · MVP: ' + esc(res.mvpId === 'player' ? 'You' : (res.classification.filter(function (r) { return r.id === res.mvpId; })[0] || {}).name || res.mvpName || '—') + '</div>' +
-      scoreHtml + '<div class="dd-hl">' + hl.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
+    wrap.innerHTML = '<div class="mx-kicker">Derby results · ' + esc(res.arenaName) + ' · ' + esc(res.difficulty) + ' · ' + Math.round(res.duration_s) + ' s' + (res.endReason === 'time' ? ' · time limit' : '') + '</div>' +
+      '<h1 class="mx-res-title' + (won ? ' win' : '') + '">' + (won ? 'Last car standing!' : 'You finished ' + ordinal(me.position || total).toLowerCase() + ' of ' + total) + '</h1>' +
+      '<p class="mx-sub">' + (won ? 'You survived the derby.' : 'Winner: ' + esc((res.classification[0] || {}).isPlayer ? 'You' : (res.classification[0] || {}).name || '—')) + ' · MVP: ' + esc(res.mvpId === 'player' ? 'You' : (res.classification.filter(function (r) { return r.id === res.mvpId; })[0] || {}).name || res.mvpName || '—') + '</p>' +
+      scoreHtml + '<div class="dd-hl">' + hl.map(function (x) { return '<span class="mx-chip">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="dd-tbl-wrap"><table class="dd-tbl"><thead><tr><th>#</th><th>Driver</th><th>Car</th><th>Accessories</th><th class="num">Dealt</th><th class="num">Taken</th><th class="num">Hits</th><th class="num">Kills</th><th class="num">T-bones</th><th class="num">Max km/h</th><th class="num">Time</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     var acts = h('div', { class: 'dd-actions' },
-      h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dd': 'rematch', html: icon('play', 16) + ' Rematch', onclick: function () { startMatch({}); } }),
-      h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Change loadout', onclick: function () { APP.showSetup(); } }),
-      h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Main menu', onclick: function () { var r = APP.router(); if (r) r.go('menu'); } }));
+      h('button', { class: 'cb-btn primary large', type: 'button', 'data-dd': 'rematch', html: icon('play', 16) + '<span>Rematch</span>', onclick: function () { startMatch({}); } }),
+      h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Change loadout', onclick: function () { APP.showSetup(); } }),
+      h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Main menu', onclick: function () { var r = APP.router(); if (r) r.go('menu'); } }));
     wrap.appendChild(acts);
     root.appendChild(wrap);
     window.scrollTo(0, 0);
@@ -1206,7 +1193,7 @@ CB.derby = CB.derby || {};
     P.injectStyles();
     U.layer = layer; U.params = params || {};
     U.S = P.loadSettings();
-    if (!U.root || U.root.parentNode !== layer) { layer.innerHTML = ''; U.root = h('div', { class: 'dd-root' }); layer.appendChild(U.root); }
+    if (!U.root || U.root.parentNode !== layer) { layer.innerHTML = ''; U.root = h('div', { class: 'dd-root mx', 'data-mode': 'derby' }); layer.appendChild(U.root); }
     if (U.params.arena && AR().get(U.params.arena)) U.S.arenaId = U.params.arena;
     if (U.params.quick === '1' || U.params.quick === 1 || U.params.quick === true) { startMatch({}); return; }
     if (U.screen === 'play' && U.R) return;
@@ -1224,6 +1211,16 @@ CB.derby = CB.derby || {};
     if (!r || typeof r.on !== 'function' || U.registered) return;
     U.registered = true;
     r.on('derby', enter, leave);
+    // Esc on the setup screen = the header's "Main menu" (same shortcut as the race / drift / arcade setups);
+    // never while a dialog is open or a field has focus, and the play layer keeps Esc for pause.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || e.defaultPrevented || U.screen !== 'setup' || !U.root || !U.root.isConnected) return;
+      if (r.current && r.current().route !== 'derby') return;
+      var t = e.target, tag = t && t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+      if (document.querySelector('.cb-modal.is-open, .cb-modal:not([hidden]), [role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault(); r.go('menu');
+    });
   }
   if (CB.router && CB.router.on) register();
   document.addEventListener('cb:router-ready', register);
@@ -1247,7 +1244,7 @@ CB.derby = CB.derby || {};
       var r = CB.router;
       if (r && r.current && r.current().route !== 'derby') r.go('derby');
       if (!U.S) { P.injectStyles(); U.S = P.loadSettings(); }
-      if (!U.root) { var L = r && r.layer ? r.layer('derby') : document.body; U.root = h('div', { class: 'dd-root' }); L.appendChild(U.root); U.layer = L; }
+      if (!U.root) { var L = r && r.layer ? r.layer('derby') : document.body; U.root = h('div', { class: 'dd-root mx', 'data-mode': 'derby' }); L.appendChild(U.root); U.layer = L; }
       if (o.arenaId) U.S.arenaId = o.arenaId;
       if (o.presetId) { U.S.source = 'preset'; U.S.presetId = o.presetId; }
       if (o.accessories) U.S.accessories = AC().sanitize(o.accessories);

@@ -1,0 +1,57 @@
+{
+ "css/styles.css": {
+  "hex": 66,
+  "fontSize": 132,
+  "fontFam": 0
+ },
+ "js/app.js": {
+  "hex": 0,
+  "fontSize": 3,
+  "fontFam": 0
+ },
+ "js/f1/f1-ui.js": {
+  "hex": 1,
+  "fontSize": 0,
+  "fontFam": 0
+ },
+ "js/game/achievements.js": {
+  "hex": 5,
+  "fontSize": 0,
+  "fontFam": 0
+ },
+ "js/game/hub.js": {
+  "hex": 49,
+  "fontSize": 10,
+  "fontFam": 0
+ },
+ "js/game/replay.js": {
+  "hex": 10,
+  "fontSize": 0,
+  "fontFam": 0
+ },
+ "js/garage.js": {
+  "hex": 65,
+  "fontSize": 59,
+  "fontFam": 2
+ },
+ "js/panels-chassis.js": {
+  "hex": 0,
+  "fontSize": 20,
+  "fontFam": 0
+ },
+ "js/panels-powertrain.js": {
+  "hex": 0,
+  "fontSize": 18,
+  "fontFam": 0
+ },
+ "js/panels-style.js": {
+  "hex": 11,
+  "fontSize": 16,
+  "fontFam": 0
+ },
+ "js/race/race-ui.js": {
+  "hex": 31,
+  "fontSize": 82,
+  "fontFam": 0
+ }
+}

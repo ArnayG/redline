@@ -404,7 +404,8 @@ CB.drag = CB.drag || {};
     pause: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
     dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', ghost: '<path d="M5 20V10a7 7 0 0 1 14 0v10l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><circle cx="9.5" cy="10" r="1"/><circle cx="14.5" cy="10" r="1"/>',
     trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 20h6M12 13v7"/>', next: '<path d="M9 18l6-6-6-6"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
-    check: '<path d="M5 12l5 5 9-10"/>', tree: '<path d="M12 3v15M8 21h8"/><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="10" r="1.6"/><circle cx="12" cy="14" r="1.6"/>'
+    check: '<path d="M5 12l5 5 9-10"/>', restart: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', setup: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+    sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>', mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/>', tree: '<path d="M12 3v15M8 21h8"/><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="10" r="1.6"/><circle cx="12" cy="14" r="1.6"/>'
   };
   function icon(n, size) { return '<svg viewBox="0 0 24 24" width="' + (size || 18) + '" height="' + (size || 18) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON[n] || ICON.bolt) + '</svg>'; }
   function seg(opts, val, onPick, label) {
@@ -417,8 +418,8 @@ CB.drag = CB.drag || {};
     return w;
   }
   function sec(step, title, hint) {
-    var s = h('section', { class: 'dg-sec', 'aria-label': title });
-    s.appendChild(h('h3', null, h('span', { class: 't', html: '<span class="dg-step">' + step + '</span>' + esc(title) }), hint ? h('span', { class: 'dg-hint', text: hint }) : null));
+    var s = h('section', { class: 'mx-sec dg-sec', 'aria-label': title });
+    s.appendChild(h('h3', { class: 'mx-sec-title' }, h('span', { class: 't', html: '<i class="mx-step">' + step + '</i>' + esc(title) }), hint ? h('span', { class: 'mx-hint', text: hint }) : null));
     return s;
   }
   function row(rows, label, ctl) { rows.appendChild(h('label', { class: 'dg-lbl', text: label })); rows.appendChild(ctl); }
@@ -451,18 +452,32 @@ CB.drag = CB.drag || {};
     var root = U.root; root.innerHTML = '';
     var wrap = h('div', { class: 'dg-setup' });
     root.appendChild(wrap);
-    wrap.appendChild(h('div', { class: 'dg-head' },
-      h('div', null, h('div', { class: 'dg-kicker', text: 'Drag Racing · heads-up on the strip' }), h('h1', { class: 'dg-title', text: 'Light the tree' }),
-        h('div', { class: 'dg-sub', text: 'Burnout, stage, launch on green, nail your shifts. Every horsepower, kilo and gear ratio from the Garage shows up on the timeslip.' })),
-      h('div', { class: 'dg-headbar' },
+    wrap.appendChild(h('header', { class: 'mx-head dg-head' },
+      h('div', null, h('div', { class: 'mx-kicker', text: 'Drag Racing · heads-up on the strip' }), h('h1', { class: 'mx-title', text: 'Light the tree' }),
+        h('p', { class: 'mx-sub', text: 'Burnout, stage, launch on green, nail your shifts. Every horsepower, kilo and gear ratio from the Garage shows up on the timeslip.' })),
+      h('div', { class: 'mx-headbar' },
         h('button', { class: 'cb-btn ghost', type: 'button', 'data-dg': 'howto', html: icon('tree', 14) + ' How to drag race', onclick: function () { startRun({ tutorial: true }); } }),
         (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('cam', 14) + ' Controls', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
-        h('button', { class: 'cb-btn ghost dg-back', type: 'button', 'aria-label': 'Main menu', html: icon('back', 16) + '<span class="lbl">Main menu</span>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
-    var main = h('div', { class: 'dg-main' }), side = h('aside', { class: 'dg-side' });
+        h('button', { class: 'cb-btn ghost cb-back dg-back', type: 'button', 'aria-label': 'Main menu', title: 'Main menu (Esc)', html: icon('back', 16) + '<span class="lbl">Main menu</span><kbd>Esc</kbd>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
+    var main = h('div', { class: 'dg-main' }), side = h('aside', { class: 'mx-side dg-side' });
     wrap.appendChild(main); wrap.appendChild(side);
     U.mainEl = main; U.sideEl = side;
     fillMain(); fillSide();
     root.appendChild(footer());
+    bindSetupKeys();
+  }
+  /** Esc on the setup screen = "Main menu" (the shared screen-head back action), unless a dialog or a text field has it. */
+  function bindSetupKeys() {
+    if (U.setupKeys) return;
+    U.setupKeys = true;
+    document.addEventListener('keydown', function (e) {
+      if (e.code !== 'Escape' || e.defaultPrevented || U.screen !== 'setup') return;
+      var a = document.activeElement, tag = a && a.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (a && a.isContentEditable)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      var r = router(); if (!r || !r.current || r.current().route !== 'drag') return;
+      e.preventDefault(); r.go('menu');
+    });
   }
   function rerender() {
     if (U.screen !== 'setup' || !U.mainEl) return;
@@ -477,7 +492,7 @@ CB.drag = CB.drag || {};
     m.appendChild(carSection()); m.appendChild(oppSection()); m.appendChild(stripSection()); m.appendChild(rulesSection()); m.appendChild(assistSection()); m.appendChild(displaySection());
   }
   function carCard(o) {
-    return h('button', { type: 'button', class: 'dg-card' + (o.on ? ' is-on' : ''), 'aria-pressed': o.on ? 'true' : 'false', onclick: o.pick, title: o.title || null },
+    return h('button', { type: 'button', class: 'mx-card dg-card' + (o.on ? ' is-on' : ''), 'aria-pressed': o.on ? 'true' : 'false', onclick: o.pick, title: o.title || null },
       h('span', { class: 'n' }, o.color ? h('span', { class: 'dg-sw', style: { background: o.color } }) : null, o.name),
       h('span', { class: 'm', text: o.meta || '' }));
   }
@@ -495,7 +510,7 @@ CB.drag = CB.drag || {};
         grid.appendChild(carCard({ name: c.name, meta: c.hp + ' hp · ' + c.kg + ' kg · ' + c.drive.toUpperCase() + ' · 0–100 ' + c.s100 + ' s', on: S.source === 'stock' && S.stockId === c.id,
           title: 'Auto-config: the factory spec', pick: function () { S.source = 'stock'; S.stockId = c.id; S.tuneFD = null; S.tuneSpread = 1; persist(); rerender(); } }));
       });
-      if (!grid.children.length) grid.appendChild(h('div', { class: 'dg-sub', text: 'Stock specs are not available in this build.' }));
+      if (!grid.children.length) grid.appendChild(h('div', { class: 'mx-sub', text: 'Stock specs are not available in this build.' }));
     } else if (tab === 'preset') {
       P.presetList().forEach(function (p) {
         grid.appendChild(carCard({ name: p.name, meta: p.desc || p.tagline || '', color: P.paintOf(P.presetBuild(p.id)), on: S.source === 'preset' && S.presetId === p.id,
@@ -507,7 +522,7 @@ CB.drag = CB.drag || {};
       P.savedBuilds().forEach(function (e) {
         grid.appendChild(carCard({ name: e.name || P.buildName(e.build), meta: 'Saved build', color: P.paintOf(e.build), on: S.source === 'saved' && S.savedId === e.id, pick: function () { S.source = 'saved'; S.savedId = e.id; S.tuneFD = null; S.tuneSpread = 1; persist(); rerender(); } }));
       });
-      if (!grid.children.length) grid.appendChild(h('div', { class: 'dg-sub', text: 'No saved builds yet — build one in the Garage, or pick a stock car.' }));
+      if (!grid.children.length) grid.appendChild(h('div', { class: 'mx-sub', text: 'No saved builds yet — build one in the Garage, or pick a stock car.' }));
     }
     s.appendChild(grid);
     return s;
@@ -524,7 +539,7 @@ CB.drag = CB.drag || {};
       var list = h('ol', { class: 'dg-ladder' });
       AI.RIVALS.forEach(function (r, i) {
         var beaten = L.beaten.indexOf(r.id) >= 0, open = i <= nx, on = r.id === cur;
-        list.appendChild(h('li', null, h('button', { type: 'button', class: 'dg-rival' + (on ? ' is-on' : '') + (beaten ? ' is-beaten' : '') + (!open ? ' is-locked' : ''), disabled: open ? null : true, 'aria-pressed': on ? 'true' : 'false',
+        list.appendChild(h('li', null, h('button', { type: 'button', class: 'mx-card dg-rival' + (on ? ' is-on' : '') + (beaten ? ' is-beaten' : '') + (!open ? ' is-locked' : ''), disabled: open ? null : true, 'aria-pressed': on ? 'true' : 'false',
           onclick: function () { S.rivalId = r.id; persist(); rerender(); } },
           h('span', { class: 'dg-ava', style: { '--ava': r.color || '#888' }, 'aria-hidden': 'true' }, h('b', { text: (r.name.match(/["“]([^"”]+)["”]/) || [0, r.name])[1].slice(0, 2).toUpperCase() }), h('i', { text: String(AI.RIVALS.length - i) })),
           h('span', { class: 'who' }, h('b', { text: r.name }), h('small', { text: P.stockName(r.model) + ' · ' + r.difficulty })),
@@ -532,8 +547,8 @@ CB.drag = CB.drag || {};
       });
       body.appendChild(list);
       var rv = AI.ladder.get(cur);
-      if (rv) body.appendChild(h('div', { class: 'dg-sub', html: '<b>' + esc(rv.name) + '</b> — ' + esc(rv.bio || '') }));
-      if (nx >= AI.RIVALS.length) body.appendChild(h('div', { class: 'dg-sub', html: 'Ladder complete — you are the King of the Strip. ' }));
+      if (rv) body.appendChild(h('div', { class: 'mx-sub', html: '<b>' + esc(rv.name) + '</b> — ' + esc(rv.bio || '') }));
+      if (nx >= AI.RIVALS.length) body.appendChild(h('div', { class: 'mx-sub', html: 'Ladder complete — you are the King of the Strip. ' }));
     } else if (S.opponent === 'ai') {
       var sel = h('select', { class: 'cb-select dg-select', 'aria-label': 'Opponent car', onchange: function (e) { S.aiModel = e.target.value; persist(); updateFoot(); } });
       X.stockList().forEach(function (c) { sel.appendChild(h('option', { value: c.id, selected: c.id === S.aiModel ? true : null, text: c.name + ' (' + c.hp + ' hp)' })); });
@@ -545,17 +560,17 @@ CB.drag = CB.drag || {};
       var rows2 = h('div', { class: 'dg-rows' });
       row(rows2, 'Bracket', seg([{ v: 4, t: '4 cars' }, { v: 8, t: '8 cars' }], S.tSize, function (v) { S.tSize = v; persist(); rerender(); }));
       body.appendChild(rows2);
-      body.appendChild(h('div', { class: 'dg-sub', text: 'Single elimination against the rival ladder. Lose once and you are out; the other heats are run by the AI.' }));
+      body.appendChild(h('div', { class: 'mx-sub', text: 'Single elimination against the rival ladder. Lose once and you are out; the other heats are run by the AI.' }));
       if (U.tour && !U.tour.done) body.appendChild(h('button', { class: 'cb-btn ghost', type: 'button', html: icon('trophy', 15) + ' Resume tournament', onclick: showBracket }));
     } else if (S.opponent === 'ghost') {
       var g = CB.drag.timing ? CB.drag.timing.decodeGhost(S.ghostCode) : null;
       var ta = h('textarea', { class: 'cb-input dg-code', rows: 3, placeholder: 'Paste a ghost code (RLD1…) a friend copied from their timeslip', 'aria-label': 'Ghost code',
-        oninput: function (e) { S.ghostCode = e.target.value.trim(); persist(); var gg = CB.drag.timing.decodeGhost(S.ghostCode); st.textContent = gg ? '✓ ' + gg.name + ' · ' + gg.carName + ' · ' + gg.et.toFixed(3) + ' s over ' + (ST().get(gg.distanceId).name) : S.ghostCode ? 'Not a valid ghost code' : ''; st.className = 'dg-sub ' + (gg ? 'ok' : 'bad'); if (gg) { S.distanceId = gg.distanceId; persist(); } updateFoot(); } });
+        oninput: function (e) { S.ghostCode = e.target.value.trim(); persist(); var gg = CB.drag.timing.decodeGhost(S.ghostCode); st.textContent = gg ? '✓ ' + gg.name + ' · ' + gg.carName + ' · ' + gg.et.toFixed(3) + ' s over ' + (ST().get(gg.distanceId).name) : S.ghostCode ? 'Not a valid ghost code' : ''; st.className = 'mx-sub ' + (gg ? 'ok' : 'bad'); if (gg) { S.distanceId = gg.distanceId; persist(); } updateFoot(); } });
       ta.value = S.ghostCode || '';
-      var st = h('div', { class: 'dg-sub ' + (g ? 'ok' : S.ghostCode ? 'bad' : ''), text: g ? '✓ ' + g.name + ' · ' + g.carName + ' · ' + g.et.toFixed(3) + ' s over ' + ST().get(g.distanceId).name : S.ghostCode ? 'Not a valid ghost code' : '' });
+      var st = h('div', { class: 'mx-sub ' + (g ? 'ok' : S.ghostCode ? 'bad' : ''), text: g ? '✓ ' + g.name + ' · ' + g.carName + ' · ' + g.et.toFixed(3) + ' s over ' + ST().get(g.distanceId).name : S.ghostCode ? 'Not a valid ghost code' : '' });
       body.appendChild(ta); body.appendChild(st);
-    } else if (S.opponent === 'practice') body.appendChild(h('div', { class: 'dg-sub', text: 'No opponent and a slow-motion tree, with coaching tips when something goes wrong. Great for finding your launch rpm.' }));
-    else body.appendChild(h('div', { class: 'dg-sub', text: 'Just you and the clock: a test-and-tune pass for your timeslip and personal bests.' }));
+    } else if (S.opponent === 'practice') body.appendChild(h('div', { class: 'mx-sub', text: 'No opponent and a slow-motion tree, with coaching tips when something goes wrong. Great for finding your launch rpm.' }));
+    else body.appendChild(h('div', { class: 'mx-sub', text: 'Just you and the clock: a test-and-tune pass for your timeslip and personal bests.' }));
     s.appendChild(body);
     return s;
   }
@@ -567,7 +582,7 @@ CB.drag = CB.drag || {};
       var on = d.id === S.distanceId, frac = d.m ? clamp(d.m / 1000, 0.12, 1) : 1;
       var art = d.speed ? '<svg viewBox="0 0 60 24" aria-hidden="true"><path d="M8 20a22 22 0 0 1 44 0" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".35"/><path d="M8 20a22 22 0 0 1 ' + (d.roll ? 30 : 44) + ' -' + (d.roll ? 18 : 0) + '" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="30" cy="20" r="2.4" fill="currentColor"/></svg>'
         : '<span class="dg-strip"><i style="width:' + Math.round(frac * 100) + '%"></i></span>';
-      dg.appendChild(h('button', { type: 'button', class: 'dg-dist' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', title: d.name, onclick: function () { S.distanceId = d.id; persist(); rerender(); } },
+      dg.appendChild(h('button', { type: 'button', class: 'mx-card dg-dist' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', title: d.name, onclick: function () { S.distanceId = d.id; persist(); rerender(); } },
         h('b', { text: d.short || d.name }), h('span', { class: 'dg-dist-art', html: art }), h('small', { text: d.m ? (d.m < 999 ? Math.round(d.m) + ' m' : '1 km') : d.roll ? 'rolling start' : 'standing start' })));
     });
     row(rows, 'Distance', dg);
@@ -586,7 +601,7 @@ CB.drag = CB.drag || {};
       var inp = h('input', { type: 'number', class: 'cb-input dg-dial', step: '0.01', min: '3', max: '40', placeholder: auto ? auto.toFixed(2) + ' (auto)' : 'auto', 'aria-label': 'Dial-in (s)',
         onchange: function (e) { var v = parseFloat(e.target.value); S.dial = isFinite(v) && v > 2 ? Math.round(v * 100) / 100 : null; persist(); updateFoot(); } });
       if (S.dial != null) inp.value = S.dial.toFixed(2);
-      row(rows, 'Your dial-in (s)', h('div', { class: 'dg-inline' }, inp, h('span', { class: 'dg-hint', text: 'Closest to your dial without going under wins. Slower dial leaves first.' })));
+      row(rows, 'Your dial-in (s)', h('div', { class: 'dg-inline' }, inp, h('span', { class: 'mx-hint', text: 'Closest to your dial without going under wins. Slower dial leaves first.' })));
     }
     row(rows, 'Class', seg([{ v: 'street', t: 'Street' }, { v: 'pro-mod', t: 'Pro Mod (N2O legal)' }], S.cls, function (v) { S.cls = v; persist(); rerender(); }));
     if (S.cls === 'pro-mod') row(rows, 'N2O shot', seg([50, 100, 150, 250].map(function (n) { return { v: n, t: n + ' hp' }; }), S.nitrous_hp, function (v) { S.nitrous_hp = v; persist(); rerender(); }));
@@ -608,12 +623,12 @@ CB.drag = CB.drag || {};
     var fdVal = h('b', { class: 'dg-val', text: fd.toFixed(2) });
     var fdIn = h('input', { type: 'range', min: (Math.max(2.5, fd0 * 0.75)).toFixed(2), max: (Math.min(5.5, fd0 * 1.25)).toFixed(2), step: '0.01', value: fd.toFixed(2), 'aria-label': 'Final drive',
       oninput: function (e) { fdVal.textContent = (+e.target.value).toFixed(2); }, onchange: function (e) { S.tuneFD = +e.target.value; persist(); rerender(); } });
-    row(rows, 'Final drive', h('div', { class: 'dg-range' }, fdIn, fdVal, h('span', { class: 'dg-hint', text: 'stock ' + fd0.toFixed(2) + ' · higher = harder launch, lower trap' })));
+    row(rows, 'Final drive', h('div', { class: 'dg-range' }, fdIn, fdVal, h('span', { class: 'mx-hint', text: 'stock ' + fd0.toFixed(2) + ' · higher = harder launch, lower trap' })));
     if (!single) {
       var spVal = h('b', { class: 'dg-val', text: num(S.tuneSpread, 1).toFixed(2) });
       var spIn = h('input', { type: 'range', min: '0.85', max: '1.15', step: '0.01', value: num(S.tuneSpread, 1).toFixed(2), 'aria-label': 'Gear spread',
         oninput: function (e) { spVal.textContent = (+e.target.value).toFixed(2); }, onchange: function (e) { S.tuneSpread = +e.target.value; persist(); rerender(); } });
-      row(rows, 'Gear spread', h('div', { class: 'dg-range' }, spIn, spVal, h('span', { class: 'dg-hint', text: '< 1 closer ratios · > 1 shorter low gears' })));
+      row(rows, 'Gear spread', h('div', { class: 'dg-range' }, spIn, spVal, h('span', { class: 'mx-hint', text: '< 1 closer ratios · > 1 shorter low gears' })));
     }
     if (me.tuned) row(rows, '', h('button', { class: 'cb-btn ghost small', type: 'button', text: 'Reset to the car’s gearing', onclick: function () { S.tuneFD = null; S.tuneSpread = 1; persist(); rerender(); } }));
     s.appendChild(rows);
@@ -635,9 +650,9 @@ CB.drag = CB.drag || {};
   function fillSide() {
     var S = U.S, side = U.sideEl; if (!side) return; side.innerHTML = '';
     var me = X.playerCar(S), d = ST().get(S.distanceId);
-    var card = h('div', { class: 'dg-sum' });
+    var card = h('div', { class: 'mx-sum dg-sum' });
     var M = safe(function () { return CB.physics && me.build ? CB.physics.compute(me.build) : null; }) || {};
-    card.appendChild(h('div', { class: 'dg-kicker', text: 'Your car' }));
+    card.appendChild(h('div', { class: 'mx-kicker', text: 'Your car' }));
     card.appendChild(h('h4', { text: me.name || 'Car' }));
     card.appendChild(h('div', { class: 'dg-stats', html:
       '<div><span>Power</span><b>' + (M.power_hp ? Math.round(M.power_hp) + ' hp' : '—') + '</b></div>' +
@@ -658,7 +673,7 @@ CB.drag = CB.drag || {};
       p60.querySelector('b').textContent = p && p.sixty ? p.sixty.toFixed(2) + ' s' : p === false ? 'n/a' : '…';
       pred.title = 'Headless run: auto-shift, perfect light and launch, ' + ST().SURFACES[S.surface].name.toLowerCase();
     });
-    side.appendChild(h('div', { class: 'dg-tip', html: '<b>How to launch</b><ol><li>Hold <b>brake + throttle</b> in the box for a burnout (hot tyres = grip).</li><li>Creep forward until the <b>stage</b> bulbs light.</li><li>Hold the brake and rev into the <b>green band</b>.</li><li>Release on <b>green</b> (Pro tree: anticipate the ambers).</li><li>Shift when the lights flash.</li></ol>' }));
+    side.appendChild(h('div', { class: 'mx-sum dg-tip', html: '<b>How to launch</b><ol><li>Hold <b>brake + throttle</b> in the box for a burnout (hot tyres = grip).</li><li>Creep forward until the <b>stage</b> bulbs light.</li><li>Hold the brake and rev into the <b>green band</b>.</li><li>Release on <b>green</b> (Pro tree: anticipate the ambers).</li><li>Shift when the lights flash.</li></ol>' }));
   }
   function oppSummary(S) {
     var AI = CB.drag.ai;
@@ -669,10 +684,10 @@ CB.drag = CB.drag || {};
     return S.opponent === 'practice' ? 'practice (slow-motion tree)' : 'solo pass';
   }
   function footer() {
-    var f = h('div', { class: 'dg-foot' });
-    f.appendChild(h('div', { class: 'dg-foot-sum' }, h('b', { 'data-dg': 'sum1' }), h('span', { 'data-dg': 'sum2' })));
-    f.appendChild(h('div', { class: 'dg-cta' },
-      h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'start', html: icon('play', 16) + ' <span>Race</span>', onclick: function () { startFromSetup(); } })));
+    var f = h('footer', { class: 'mx-foot dg-foot' });
+    f.appendChild(h('div', { class: 'mx-foot-sum' }, h('b', { 'data-dg': 'sum1' }), h('span', { 'data-dg': 'sum2' })));
+    f.appendChild(h('div', { class: 'mx-cta' },
+      h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'start', html: icon('play', 16) + ' <span>Start race</span>', onclick: function () { startFromSetup(); } })));
     setTimeout(updateFoot, 0);
     return f;
   }
@@ -683,18 +698,18 @@ CB.drag = CB.drag || {};
     if (a) a.textContent = (me.name || 'Car') + (me.tuned ? ' (tuned)' : '') + ' · ' + oppSummary(S);
     if (b) b.textContent = [d.name, S.venue === 'street' ? 'street · flag' : (S.treeType === 'pro' ? 'Pro tree' : 'Sportsman tree'), ST().SURFACES[S.surface].name, S.night ? 'night' : null, S.bracket ? 'bracket' : null, S.cls === 'pro-mod' ? 'Pro Mod · N2O ' + S.nitrous_hp : null, S.autoShift ? 'auto-shift' : 'manual'].filter(Boolean).join(' · ');
     var ghostBad = S.opponent === 'ghost' && !(CB.drag.timing && CB.drag.timing.decodeGhost(S.ghostCode));
-    if (go) { go.disabled = !me.build || ghostBad || !CB.drag.session ? true : false; var sp = go.querySelector('span'); if (sp) sp.textContent = S.opponent === 'tournament' ? (U.tour && !U.tour.done ? 'Next heat' : 'Start tournament') : S.opponent === 'solo' ? 'Make a pass' : S.opponent === 'practice' ? 'Practice' : 'Race'; }
+    if (go) { go.disabled = !me.build || ghostBad || !CB.drag.session ? true : false; var sp = go.querySelector('span'); if (sp) sp.textContent = S.opponent === 'tournament' ? (U.tour && !U.tour.done ? 'Next heat' : 'Start tournament') : S.opponent === 'solo' ? 'Make a pass' : S.opponent === 'practice' ? 'Start practice' : 'Start race'; }
   }
 
   function offerTutorial() {
     var ov = h('div', { class: 'dg-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'First time on the strip?' });
     var card = h('div', { class: 'dg-modal-card' },
-      h('div', { class: 'dg-kicker', text: 'First time on the strip?' }),
+      h('div', { class: 'mx-kicker', text: 'First time on the strip?' }),
       h('h2', { text: 'Learn to drag race in two minutes' }),
-      h('p', { class: 'dg-sub', text: 'A guided practice pass: burnout, staging, revs in the band, leaving on green and shifting at the top. No opponent, slow-motion tree.' }),
+      h('p', { class: 'mx-sub', text: 'A guided practice pass: burnout, staging, revs in the band, leaving on green and shifting at the top. No opponent, slow-motion tree.' }),
       h('div', { class: 'dg-actions' },
-        h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'tut-go', html: icon('play', 16) + ' Start the tutorial', onclick: function () { close(); startRun({ tutorial: true }); } }),
-        h('button', { class: 'cb-btn ghost big', type: 'button', 'data-dg': 'tut-skip', text: 'Skip — race now', onclick: function () { close(); markTutorial(true); startFromSetup(); } })));
+        h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'tut-go', html: icon('play', 16) + ' Start the tutorial', onclick: function () { close(); startRun({ tutorial: true }); } }),
+        h('button', { class: 'cb-btn ghost large', type: 'button', 'data-dg': 'tut-skip', text: 'Skip — race now', onclick: function () { close(); markTutorial(true); startFromSetup(); } })));
     ov.appendChild(card);
     function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); }
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
@@ -742,14 +757,14 @@ CB.drag = CB.drag || {};
     U.screen = 'play'; setDriving(true);
     var root = U.root; root.innerHTML = '';
     var play = h('div', { class: 'dg-play' }), cv = h('canvas', { class: 'dg-hud' });
-    var load = h('div', { class: 'dg-load', text: 'TO THE STAGING LANES…' });
+    var load = h('div', { class: 'dg-load', role: 'status', html: '<span class="dg-load-spin" aria-hidden="true"></span><span class="dg-load-t">To the staging lanes…</span>' });
     play.appendChild(cv); play.appendChild(load); root.appendChild(play);
     var R = U.R = { cfg: cfg, ctx: ctx, me: me, play: play, canvas: cv, c2d: null, session: null, renderer: null, hud: CB.drag.hud ? CB.drag.hud.create() : null, sfx: null, raf: 0, last: 0,
       paused: false, ended: false, frames: 0, fpsEma: 60, msEma: 16.7, lastSnap: null, offs: [], touch: false, tb: {}, samples: [], greenT: null, overT: null, fpsLog: [] };
     R.input = X.createInput({ onAction: onAction });
     R.coach = ctx.tutorial ? { i: 0, shifts: 0, c: {}, shown: -1 } : null;
     R.slowT = 0;
-    try { R.session = session || CB.drag.session.create(cfg); } catch (e) { load.textContent = 'Could not start: ' + (e && e.message); console.error(e); return; }
+    try { R.session = session || CB.drag.session.create(cfg); } catch (e) { load.querySelector('.dg-load-t').textContent = 'Could not start: ' + (e && e.message); console.error(e); return; }
     R.net = o.net || null;
     R.sfx = CB.drag.sfx ? CB.drag.sfx.create({ muted: S.muted }) : null;
     if (R.sfx) R.sfx.start();
@@ -827,7 +842,7 @@ CB.drag = CB.drag || {};
   function buildTouch(R) {
     var T = R.input.touch; T.active = true;
     var el = h('div', { class: 'dg-touch' });
-    function btn(cls, label) { var b = h('div', { class: 'dg-t ' + cls, role: 'button', 'aria-label': label.replace(/<[^>]+>/g, '') || cls }); b.innerHTML = label; el.appendChild(b); return b; }
+    function btn(cls, label) { var b = h('div', { class: 'mx-touch dg-t ' + cls, role: 'button', 'aria-label': label.replace(/<[^>]+>/g, '') || cls }); b.innerHTML = label; el.appendChild(b); return b; }
     function pedal(cls, label, key) {
       var b = btn(cls, '<span class="fill"></span><span class="lb">' + label + '</span>'), fill = b.querySelector('.fill'), id = null;
       function at(e) { var r = b.getBoundingClientRect(); var v = clamp(0.35 + 0.65 * (1 - (e.clientY - r.top) / r.height) * 1.25, 0.25, 1); T[key] = v; fill.style.height = Math.round(v * 100) + '%'; }
@@ -1029,16 +1044,18 @@ CB.drag = CB.drag || {};
     var R = U.R; if (!R || R.paused || R.ended) return;
     R.paused = true; R.input.clear();
     var S = U.S;
-    var ov = h('div', { class: 'dg-ovl' }), m = h('div', { class: 'dg-menu', role: 'dialog', 'aria-label': 'Paused' },
+    var dn = (ST().get(R.cfg.distanceId || S.distanceId) || {}).name || '';
+    var sndLbl = function () { return icon(S.muted ? 'mute' : 'sound', 16) + '<span>Sound: ' + (S.muted ? 'off' : 'on') + '</span>'; };
+    var ov = h('div', { class: 'mx-ovl dg-ovl' }), m = h('div', { class: 'mx-menu dg-menu', role: 'dialog', 'aria-label': 'Paused' },
+      h('div', { class: 'mx-kicker', text: 'Drag Racing' + (dn ? ' · ' + dn : '') + (R.net ? ' · online' : '') }),
       h('h2', { text: 'Paused' }),
-      h('button', { class: 'cb-btn primary', type: 'button', text: 'Resume', onclick: resume }),
-      R.net ? null : h('button', { class: 'cb-btn ghost', type: 'button', text: 'Restart run', onclick: function () { onAction('restart'); } }),
-      R.renderer && R.renderer.cycleCamera ? h('button', { class: 'cb-btn ghost', type: 'button', text: 'Camera', onclick: function () { onAction('camera'); } }) : null,
-      h('button', { class: 'cb-btn ghost', type: 'button', text: 'Sound: ' + (S.muted ? 'off' : 'on'), onclick: function (e) { onAction('mute'); e.target.textContent = 'Sound: ' + (S.muted ? 'off' : 'on'); } }),
-      (CB.input && CB.input.sources && CB.input.sources.menuItems) ? null : null,
-      R.net ? h('button', { class: 'cb-btn ghost', type: 'button', text: 'Leave race', onclick: function () { var nt = R.net; teardown(); U.screen = null; safe(function () { if (nt.onClose) nt.onClose(null); }); } })
-        : h('button', { class: 'cb-btn ghost', type: 'button', text: 'Quit to setup', onclick: function () { showSetup(); } }),
-      h('button', { class: 'cb-btn ghost', type: 'button', text: 'Main menu', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
+      h('button', { class: 'cb-btn primary', type: 'button', html: icon('play', 16) + '<span>Resume</span>', onclick: resume }),
+      R.net ? null : h('button', { class: 'cb-btn', type: 'button', html: icon('restart', 16) + '<span>Restart run</span>', onclick: function () { onAction('restart'); } }),
+      R.renderer && R.renderer.cycleCamera ? h('button', { class: 'cb-btn', type: 'button', html: icon('cam', 16) + '<span>Camera</span>', onclick: function () { onAction('camera'); } }) : null,
+      h('button', { class: 'cb-btn', type: 'button', html: sndLbl(), onclick: function (e) { onAction('mute'); e.currentTarget.innerHTML = sndLbl(); } }),
+      R.net ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('back', 16) + '<span>Leave race</span>', onclick: function () { var nt = R.net; teardown(); U.screen = null; safe(function () { if (nt.onClose) nt.onClose(null); }); } })
+        : h('button', { class: 'cb-btn', type: 'button', html: icon('setup', 16) + '<span>Change setup</span>', onclick: function () { showSetup(); } }),
+      h('button', { class: 'cb-btn ghost', type: 'button', html: icon('back', 16) + '<span>Main menu</span>', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
     ov.appendChild(m); R.play.appendChild(ov); R.pauseEl = ov;
     var first = m.querySelector('button'); if (first) first.focus();
   }
@@ -1122,14 +1139,14 @@ CB.drag = CB.drag || {};
     var title = me.red ? 'Red light' : me.dq ? 'Disqualified' : !op ? 'Pass complete' : me.won ? (res.holeshot ? 'Holeshot win!' : 'Win light!') : me.breakout ? 'Broke out' : 'Beaten';
     var wrap = h('div', { class: 'dg-res' });
     var units = S.units;
-    wrap.appendChild(h('div', { class: 'dg-kicker', text: 'Timeslip · ' + (res.distanceName || '') + (res.bracket ? ' · bracket' : '') + (op ? ' · vs ' + op.name : '') }));
-    wrap.appendChild(h('h1', { class: me.won || !op && !me.red ? 'win' : '', text: title }));
+    wrap.appendChild(h('div', { class: 'mx-kicker', text: 'Timeslip · ' + (res.distanceName || '') + (res.bracket ? ' · bracket' : '') + (op ? ' · vs ' + op.name : '') }));
+    wrap.appendChild(h('h1', { class: 'mx-res-title' + (me.won || !op && !me.red ? ' win' : ''), text: title }));
     var sub = [];
     if (me.et != null) sub.push('ET ' + fmtET(me.et) + ' s' + (me.trap ? ' @ ' + fmtV(me.trap, units) : ''));
     if (op && res.margin_s != null && isFinite(res.margin_s)) sub.push('margin ' + Math.abs(res.margin_s).toFixed(3) + ' s');
     if (res.pb && res.pb.pb && res.pb.prev) sub.push('NEW PERSONAL BEST (was ' + fmtET(res.pb.prev.et) + ')');
     else if (res.pb && res.pb.pb) sub.push('first timed pass in this car');
-    wrap.appendChild(h('div', { class: 'dg-sub', text: sub.join(' · ') }));
+    wrap.appendChild(h('div', { class: 'mx-sub', text: sub.join(' · ') }));
     var grid = h('div', { class: 'dg-res-grid' });
     var slip = h('pre', { class: 'dg-slip', 'aria-label': 'Timeslip', text: slipFor(res) });
     grid.appendChild(h('div', { class: 'dg-printer' }, h('div', { class: 'dg-printer-slot' }), h('div', { class: 'dg-slip-wrap' }, slip)));
@@ -1144,29 +1161,29 @@ CB.drag = CB.drag || {};
     if (tot) hl.push('Shifts <b>' + num(sh.perfect, 0) + ' perfect · ' + num(sh.good, 0) + ' good · ' + num(sh.early, 0) + ' early · ' + num(sh.late, 0) + ' late</b>');
     if (res.bracket) hl.push('Dial <b>' + fmtET(me.dial) + '</b>' + (me.breakout ? ' · broke out' : ''));
     info.appendChild(h('div', { class: 'dg-hl', html: hl.map(function (x) { return '<span>' + x + '</span>'; }).join('') }));
-    if (res.payout) info.appendChild(h('div', { class: 'dg-pay', html: '<div class="dg-kicker">Payout</div>' + res.payout.items.map(function (i) { return '<div><span>' + esc(i.label) + '</span><b>+' + i.n + '</b></div>'; }).join('') + '<div class="tot"><span>Total</span><b>+' + res.payout.total + ' cr</b></div>' }));
+    if (res.payout) info.appendChild(h('div', { class: 'dg-pay', html: '<div class="mx-kicker">Payout</div>' + res.payout.items.map(function (i) { return '<div><span>' + esc(i.label) + '</span><b>+' + i.n + '</b></div>'; }).join('') + '<div class="tot"><span>Total</span><b>+' + res.payout.total + ' cr</b></div>' }));
     if (res.tutorial) info.appendChild(h('div', { class: 'dg-note', html: '<b>Tutorial complete!</b> You know the routine: burnout, stage, revs in the band, go on green, shift at the top. Time to race a rival.' }));
-    if (res.tips && res.tips.length) info.appendChild(h('div', { class: 'dg-tips', html: '<div class="dg-kicker">Coach’s notes</div>' + res.tips.map(function (t) { return '<div class="' + t.kind + '">' + esc(t.text) + '</div>'; }).join('') }));
+    if (res.tips && res.tips.length) info.appendChild(h('div', { class: 'dg-tips', html: '<div class="mx-kicker">Coach’s notes</div>' + res.tips.map(function (t) { return '<div class="' + t.kind + '">' + esc(t.text) + '</div>'; }).join('') }));
     if (res.ladder) info.appendChild(h('div', { class: 'dg-note', html: res.ladder.champion ? '<b>King of the Strip!</b> Every rival on the ladder is beaten.' : res.ladder.first ? '<b>' + esc(res.ladder.rival.name) + '</b> is beaten. ' + (res.ladder.next ? 'Next up: <b>' + esc(res.ladder.next.name) + '</b>.' : '') : 'Rival beaten again.' }));
     if (res.tournament) info.appendChild(h('div', { class: 'dg-note', html: res.tournament.won ? '<b>Tournament champion!</b>' : res.tournament.out ? 'Eliminated from the tournament.' : 'Through to the next round.' }));
     grid.appendChild(info);
     wrap.appendChild(grid);
     var AI = CB.drag.ai;
     var acts = h('div', { class: 'dg-actions' });
-    if (res.tutorial) acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('next', 16) + ' Race a rival', onclick: function () { S.opponent = 'ladder'; persist(); startRun({}); } }));
-    if (res.tutorial) { /* the CTA above */ } else if (net) acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('back', 16) + ' Back to lobby', onclick: function () { if (net.onClose) safe(function () { net.onClose(res); }); else if (net.onBack) safe(net.onBack); else { var rt = router(); if (rt) rt.go('multiplayer'); } } }));
-    else if (res.tournament && !res.tournament.done) acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('trophy', 16) + ' Bracket & next heat', onclick: showBracket }));
-    else if (res.tournament) acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('trophy', 16) + ' Final bracket', onclick: showBracket }));
-    else if (res.ladder && res.ladder.next && me.won) acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('next', 16) + ' Next rival', onclick: function () { S.rivalId = res.ladder.next.id; persist(); startRun({}); } }));
-    else acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'again', html: icon('play', 16) + ' Run again', onclick: function () { startRun({}); } }));
-    if (!net && (res.ladder || S.opponent === 'ladder')) acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Rematch', onclick: function () { startRun({}); } }));
-    acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', html: icon('copy', 15) + ' Copy slip', onclick: function () { copyText(slipFor(res), 'Timeslip copied'); } }));
-    acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', html: icon('dl', 15) + ' Slip image', onclick: function () { downloadSlip(slipFor(res), me.won); } }));
+    if (res.tutorial) acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('next', 16) + ' Race a rival', onclick: function () { S.opponent = 'ladder'; persist(); startRun({}); } }));
+    if (res.tutorial) { /* the CTA above */ } else if (net) acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('back', 16) + ' Back to lobby', onclick: function () { if (net.onClose) safe(function () { net.onClose(res); }); else if (net.onBack) safe(net.onBack); else { var rt = router(); if (rt) rt.go('multiplayer'); } } }));
+    else if (res.tournament && !res.tournament.done) acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('trophy', 16) + ' Bracket & next heat', onclick: showBracket }));
+    else if (res.tournament) acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('trophy', 16) + ' Final bracket', onclick: showBracket }));
+    else if (res.ladder && res.ladder.next && me.won) acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('next', 16) + ' Next rival', onclick: function () { S.rivalId = res.ladder.next.id; persist(); startRun({}); } }));
+    else acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'again', html: icon('play', 16) + ' Run again', onclick: function () { startRun({}); } }));
+    if (!net && (res.ladder || S.opponent === 'ladder')) acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Rematch', onclick: function () { startRun({}); } }));
+    acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', html: icon('copy', 15) + ' Copy slip', onclick: function () { copyText(slipFor(res), 'Timeslip copied'); } }));
+    acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', html: icon('dl', 15) + ' Slip image', onclick: function () { downloadSlip(slipFor(res), me.won); } }));
     if (U.R == null && U.lastGhost !== undefined) { /* noop */ }
     var gcode = res.ghostCode || (U.lastRun && U.lastRun.ghostCode);
-    if (gcode) acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', html: icon('ghost', 15) + ' Share ghost code', title: 'A friend pastes it under Opponent › Friend’s ghost', onclick: function () { copyText(gcode, 'Ghost code copied — send it to a friend'); } }));
-    if (!net) acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Setup', onclick: showSetup }));
-    if (!net) acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Main menu', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
+    if (gcode) acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', html: icon('ghost', 15) + ' Share ghost code', title: 'A friend pastes it under Opponent › Friend’s ghost', onclick: function () { copyText(gcode, 'Ghost code copied — send it to a friend'); } }));
+    if (!net) acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Change setup', onclick: showSetup }));
+    if (!net) acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Main menu', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
     wrap.appendChild(acts);
     root.appendChild(wrap);
     if (U.layer) U.layer.scrollTop = 0;
@@ -1223,12 +1240,12 @@ CB.drag = CB.drag || {};
     var AI = CB.drag.ai, t = U.tour.t, root = U.root; root.innerHTML = '';
     var wrap = h('div', { class: 'dg-res' });
     var champ = AI.tournament.champion(t), pend = AI.tournament.pending(t);
-    wrap.appendChild(h('div', { class: 'dg-kicker', text: 'Elimination · ' + t.size + ' cars · ' + ST().get(U.S.distanceId).name }));
-    wrap.appendChild(h('h1', { class: champ && champ.isPlayer ? 'win' : '', text: champ ? (champ.isPlayer ? 'Tournament champion!' : champ.name + ' wins the tournament') : AI.tournament.playerOut(t) ? 'Eliminated' : 'Tournament bracket' }));
+    wrap.appendChild(h('div', { class: 'mx-kicker', text: 'Elimination · ' + t.size + ' cars · ' + ST().get(U.S.distanceId).name }));
+    wrap.appendChild(h('h1', { class: 'mx-res-title' + (champ && champ.isPlayer ? ' win' : ''), text: champ ? (champ.isPlayer ? 'Tournament champion!' : champ.name + ' wins the tournament') : AI.tournament.playerOut(t) ? 'Eliminated' : 'Tournament bracket' }));
     var br = h('div', { class: 'dg-bracket' });
     var rnames = t.rounds.length === 3 ? ['Quarter-finals', 'Semi-finals', 'Final'] : ['Semi-finals', 'Final'];
     t.rounds.forEach(function (rd, ri) {
-      var col = h('div', { class: 'dg-round' }, h('div', { class: 'dg-kicker', text: rnames[ri] || 'Round ' + (ri + 1) }));
+      var col = h('div', { class: 'dg-round' }, h('div', { class: 'mx-kicker', text: rnames[ri] || 'Round ' + (ri + 1) }));
       rd.forEach(function (m) {
         function ent(i) { if (i == null) return h('div', { class: 'e tbd', text: 'TBD' }); var e = t.entrants[i]; return h('div', { class: 'e' + (m.winner === i ? ' w' : m.winner != null ? ' l' : '') + (e.isPlayer ? ' me' : '') }, h('b', { text: e.isPlayer ? 'You' : e.name }), h('small', { text: e.isPlayer ? (e.carName || '') : P.stockName(e.model) })); }
         col.appendChild(h('div', { class: 'dg-match' }, ent(m.a), ent(m.b), m.summary ? h('div', { class: 'sum', text: m.summary }) : null));
@@ -1239,13 +1256,13 @@ CB.drag = CB.drag || {};
     var acts = h('div', { class: 'dg-actions' });
     if (pend && pend.player) {
       var opp = pend.a.isPlayer ? pend.b : pend.a;
-      acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'heat', html: icon('play', 16) + ' Race ' + esc(opp.name.split(' ')[0]) + ' (' + esc(P.stockName(opp.model)) + ')',
+      acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'heat', html: icon('play', 16) + ' Race ' + esc(opp.name.split(' ')[0]) + ' (' + esc(P.stockName(opp.model)) + ')',
         onclick: function () { var mm = t.rounds[pend.round][pend.match]; startRun({ opp: X.entryFor(opp, U.S), tour: { round: pend.round, match: pend.match, a: mm.a, b: mm.b } }); } }));
     } else {
-      acts.appendChild(h('button', { class: 'cb-btn primary rx-btn big', type: 'button', 'data-dg': 'heat', html: icon('trophy', 16) + ' New tournament', onclick: function () { U.tour = null; newTournament(); showBracket(); } }));
+      acts.appendChild(h('button', { class: 'cb-btn primary large', type: 'button', 'data-dg': 'heat', html: icon('trophy', 16) + ' New tournament', onclick: function () { U.tour = null; newTournament(); showBracket(); } }));
     }
-    acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Setup', onclick: showSetup }));
-    acts.appendChild(h('button', { class: 'cb-btn ghost big', type: 'button', text: 'Main menu', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
+    acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Change setup', onclick: showSetup }));
+    acts.appendChild(h('button', { class: 'cb-btn ghost large', type: 'button', text: 'Main menu', onclick: function () { var r = router(); if (r) r.go('menu'); } }));
     wrap.appendChild(acts);
     root.appendChild(wrap);
     if (U.layer) U.layer.scrollTop = 0;
@@ -1267,7 +1284,7 @@ CB.drag = CB.drag || {};
   function enter(layer, params) {
     U.layer = layer; U.params = params || {};
     U.S = P.loadSettings();
-    if (!U.root || U.root.parentNode !== layer) { layer.innerHTML = ''; U.root = h('div', { class: 'dg-root' }); layer.appendChild(U.root); }
+    if (!U.root || U.root.parentNode !== layer) { layer.innerHTML = ''; U.root = h('div', { class: 'dg-root mx', 'data-mode': 'drag' }); layer.appendChild(U.root); }
     var q = U.params;
     if (q.car && CB.stock && CB.stock.SPECS && CB.stock.SPECS[q.car]) { U.S.source = 'stock'; U.S.stockId = q.car; U.S.tuneFD = null; U.S.tuneSpread = 1; }
     if (q.dist && ST().DISTANCES.some(function (d) { return d.id === q.dist; })) U.S.distanceId = q.dist;
@@ -1311,7 +1328,7 @@ CB.drag = CB.drag || {};
       var r = CB.router;
       if (r && r.current && r.current().route !== 'drag') r.go('drag');
       if (!U.S) U.S = P.loadSettings();
-      if (!U.root) { var L = r && r.layer ? r.layer('drag') : document.body; U.root = h('div', { class: 'dg-root' }); L.appendChild(U.root); U.layer = L; }
+      if (!U.root) { var L = r && r.layer ? r.layer('drag') : document.body; U.root = h('div', { class: 'dg-root mx', 'data-mode': 'drag' }); L.appendChild(U.root); U.layer = L; }
       ['stockId', 'distanceId', 'opponent', 'difficulty', 'treeType', 'venue', 'surface', 'cls', 'nitrous_hp', 'tc', 'quality', 'touch', 'camera', 'aiModel', 'rivalId', 'units', 'tSize'].forEach(function (k) { if (o[k] != null) U.S[k] = o[k]; });
       ['autoShift', 'autoStage', 'deep', 'skipBurnout', 'night', 'bracket', 'muted', 'showFps', 'launchControl'].forEach(function (k) { if (o[k] != null) U.S[k] = !!o[k]; });
       if (o.stockId) U.S.source = 'stock';
@@ -1336,7 +1353,7 @@ CB.drag = CB.drag || {};
     var r = CB.router;
     if (!U.S) U.S = P.loadSettings();
     var L = U.layer || (r && r.layer ? r.layer('drag') : null) || document.body;
-    if (!U.root || !U.root.parentNode) { U.root = h('div', { class: 'dg-root' }); L.appendChild(U.root); U.layer = L; }
+    if (!U.root || !U.root.parentNode) { U.root = h('div', { class: 'dg-root mx', 'data-mode': 'drag' }); L.appendChild(U.root); U.layer = L; }
     var self = o.selfLane === 1 ? 1 : 0, lanes = o.lanes || [], mine = lanes[self] || {};
     var cfg = { playerLane: self, distanceId: o.distanceId || 'quarter', venue: o.venue || 'strip', surface: o.surface || 'prepped', night: !!o.night, treeType: o.treeType || 'pro', lanes: lanes };
     var me = { build: mine.build, base: mine.build, name: mine.carName || 'Car', key: 'net', modelId: mine.modelId || null, tuned: false };
