@@ -43,11 +43,12 @@ CB.arcade = CB.arcade || {};
   var CSS = [
     '.arc-touch{position:absolute;right:200px;bottom:calc(min(42vh,260px) + 6px);display:flex;align-items:flex-end;gap:12px;z-index:5;pointer-events:none}',
     '.arc-touch>*{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none}',
-    '.arc-btn{display:grid;place-items:center;border-radius:50%;border:2px solid rgba(255,255,255,.28);background:rgba(8,12,22,.55);color:#fff;font:800 12px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:.1em;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
-    '.arc-btn.nitro{width:86px;height:86px;background:radial-gradient(circle at 40% 35%,rgba(80,170,255,.55),rgba(10,40,120,.55));border-color:rgba(127,227,255,.7);font-size:15px}',
+    /* in-game touch controls share the HUD tokens (css/styles.css § 01 --hud-*): dark legible glass in both themes */
+    '.arc-btn{display:grid;place-items:center;border-radius:50%;border:2px solid var(--hud-line,rgba(255,255,255,.28));background:var(--hud-panel-soft,rgba(8,12,22,.55));color:var(--hud-ink,#fff);font:800 var(--fs-sm,12px)/1 var(--hud-font,system-ui,sans-serif);letter-spacing:.1em;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
+    '.arc-btn.nitro{width:86px;height:86px;background:radial-gradient(circle at 40% 35%,color-mix(in srgb,var(--mode-arcade,#5b8cff) 60%,transparent),rgba(10,40,120,.55));border-color:color-mix(in srgb,var(--mode-arcade,#5b8cff) 70%,#fff);font-size:var(--fs-md,15px)}',
     '.arc-btn.item{width:66px;height:66px;position:relative}',
     '.arc-btn.item canvas{width:44px;height:44px}',
-    '.arc-btn.is-down{transform:scale(.94);border-color:#fff}',
+    '.arc-btn.is-down{transform:scale(.94);border-color:var(--hud-ink,#fff)}',
     '.arc-btn .arc-fill{position:absolute;inset:0;border-radius:50%;pointer-events:none}'
   ].join('\n');
 

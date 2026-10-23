@@ -1553,10 +1553,10 @@ CB.race = CB.race || {};
     /* UNIFY-SPEC: every --rx-* token is an alias of the shared design tokens in css/styles.css (fallbacks for standalone pages) */
     '#race-root{--rx-accent:var(--accent,#c9a56b);--rx-accent-ink:var(--accent-ink,#17130b);--rx-bg:var(--bg,#0b0b0d);--rx-panel:var(--panel,#141519);--rx-panel-2:var(--panel-2,#1b1c21);',
     '--rx-line:var(--line-soft,rgba(255,255,255,.055));--rx-line-2:var(--line,#2b2c33);--rx-text:var(--text,#ecebe6);--rx-dim:var(--text-dim,#9b9890);--rx-faint:var(--text-faint,#6c6a64);',
-    '--rx-good:var(--good,#3fbf7f);--rx-warn:var(--warn,#e3a33a);--rx-bad:var(--bad,#e5484d);--rx-purple:#b26bff;--rx-red:var(--race,#e0412f);',
-    '--rx-font:var(--font,"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif);',
-    '--rx-mono:var(--mono,"SF Mono",ui-monospace,Menlo,Consolas,monospace);',
-    'position:fixed;inset:0;z-index:9000;color:var(--rx-text);font-family:var(--rx-font);font-size:14px;line-height:1.4;',
+    '--rx-good:var(--good,#3fbf7f);--rx-warn:var(--warn,#e3a33a);--rx-bad:var(--bad,#e5484d);--rx-purple:var(--hud-purple,#b26bff);--rx-red:var(--race,#e0412f);',
+    '--rx-font:var(--font);',
+    '--rx-mono:var(--mono);',
+    'position:fixed;inset:0;z-index:9000;color:var(--rx-text);font-family:var(--rx-font);font-size:var(--fs-md);line-height:1.4;',
     'background:var(--rx-bg);overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}',
     '#race-root *,#race-root *::before,#race-root *::after{box-sizing:border-box}',
     '#race-root button{font-family:inherit;color:inherit}',
@@ -1589,9 +1589,9 @@ CB.race = CB.race || {};
     '#race-root .rx-host{position:absolute;inset:0;pointer-events:none}',
     '#race-root .rx-host>*{pointer-events:auto}',
     /* generic */
-    '#race-root .rx-eyebrow{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--rx-dim);font-weight:600}',
+    '#race-root .rx-eyebrow{font-size:var(--fs-2xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--rx-dim);font-weight:600}',
     '#race-root .rx-eyebrow.accent{color:var(--rx-accent)}',
-    '#race-root .rx-display{font-family:var(--serif,Georgia,serif);font-weight:600;font-style:normal;letter-spacing:-.02em;text-transform:none;line-height:1}',
+    '#race-root .rx-display{font-family:var(--serif);font-weight:600;font-style:normal;letter-spacing:-.02em;text-transform:none;line-height:1}',
     '#race-root .rx-num{font-family:var(--rx-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}',
     '#race-root .rx-panel{background:var(--surface-grad,none),var(--glass,rgba(18,19,23,.72));border:1px solid var(--rx-line-2);border-radius:var(--radius-lg,16px);',
     'box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
@@ -1599,14 +1599,14 @@ CB.race = CB.race || {};
     '#race-root .rx-btn{cursor:pointer}',
     '#race-root .rx-btn:focus-visible,#race-root .rx-seg-btn:focus-visible,#race-root .rx-track-card:focus-visible,#race-root .rx-toggle:focus-visible{outline:none;box-shadow:var(--focus,0 0 0 2px var(--rx-accent))}',
     '#race-root .rx-btn.primary[disabled]{filter:grayscale(1) brightness(.7);cursor:not-allowed}',
-    '#race-root .rx-btn.big{min-height:46px;padding:0 26px;font-size:14px;border-radius:var(--radius,12px);font-weight:750;letter-spacing:.06em;text-transform:uppercase}',
+    '#race-root .rx-btn.big{min-height:var(--control-h-lg);padding:0 var(--sp-6);font-size:var(--fs-md);border-radius:var(--radius-sm);font-weight:650;letter-spacing:.01em}',
     '#race-root .rx-btn.icon{width:36px;min-height:36px;padding:0}',
     '#race-root .rx-kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:5px;',
-    'border:1px solid var(--rx-line-2);border-bottom-width:2px;background:rgba(255,255,255,.05);font-family:var(--rx-mono);font-size:11px;color:var(--rx-text)}',
-    '#race-root .rx-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid var(--rx-line-2);font-size:11.5px;color:var(--rx-dim);white-space:nowrap}',
+    'border:1px solid var(--rx-line-2);border-bottom-width:2px;background:rgba(255,255,255,.05);font-family:var(--rx-mono);font-size:var(--fs-xs);color:var(--rx-text)}',
+    '#race-root .rx-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid var(--rx-line-2);font-size:var(--fs-xs);color:var(--rx-dim);white-space:nowrap}',
     '#race-root .rx-chip.accent{color:var(--rx-accent);border-color:var(--accent-ring,rgba(201,165,107,.45))}',
     '#race-root .rx-skew{display:inline-block;width:26px;height:4px;background:var(--rx-accent);transform:skewX(-30deg);margin-right:10px;vertical-align:middle}',
-    '#race-root .rx-stripe{height:3px;background:linear-gradient(90deg,var(--rx-red) 0 33%,#fff 33% 66%,var(--rx-accent) 66%)}',
+    '#race-root .rx-stripe{height:3px;background:linear-gradient(90deg,var(--rx-red) 0 33%,var(--text-strong) 33% 66%,var(--rx-accent) 66%)}',
     /* scrollbars */
     '#race-root .rx-scroll{overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}',
     '#race-root .rx-scroll::-webkit-scrollbar{width:8px;height:8px}#race-root .rx-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px}',
@@ -1614,11 +1614,11 @@ CB.race = CB.race || {};
     '#race-root .rx-setup{position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr auto;animation:rx-fade .35s ease}',
     '#race-root .rx-topbar{display:flex;align-items:center;gap:18px;padding:14px 28px;border-bottom:1px solid var(--rx-line-2);background:var(--glass,rgba(18,19,23,.72));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
     '#race-root .rx-brand{display:flex;align-items:center;gap:12px}',
-    '#race-root .rx-brand-mark{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--rx-accent),#6b5420);color:#111;font-weight:800;font-size:16px;letter-spacing:-.05em;box-shadow:0 6px 18px -6px var(--rx-accent)}',
-    '#race-root .rx-brand-name{font-weight:800;letter-spacing:.24em;font-size:12px;text-transform:uppercase}',
-    '#race-root .rx-brand-sub{font-size:10.5px;letter-spacing:.3em;color:var(--rx-accent);text-transform:uppercase;font-weight:700}',
+    '#race-root .rx-brand-mark{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;background:var(--accent-grad);color:var(--accent-ink);font-weight:800;font-size:var(--fs-lg);letter-spacing:-.05em;box-shadow:0 6px 18px -6px var(--rx-accent)}',
+    '#race-root .rx-brand-name{font-weight:800;letter-spacing:.24em;font-size:var(--fs-sm);text-transform:uppercase}',
+    '#race-root .rx-brand-sub{font-size:var(--fs-2xs);letter-spacing:.3em;color:var(--rx-accent);text-transform:uppercase;font-weight:700}',
     '#race-root .rx-steps{display:flex;gap:6px;margin:0 auto;min-width:0}',
-    '#race-root .rx-step{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--rx-faint);padding:6px 12px;border-radius:999px;border:1px solid transparent;font-weight:700;white-space:nowrap;flex:0 0 auto}',
+    '#race-root .rx-step{font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--rx-faint);padding:6px 12px;border-radius:999px;border:1px solid transparent;font-weight:700;white-space:nowrap;flex:0 0 auto}',
     '#race-root .rx-step.is-on{color:var(--rx-text);border-color:var(--rx-line-2);background:rgba(255,255,255,.04)}',
     '#race-root .rx-step b{color:var(--rx-accent);margin-right:6px}',
     '#race-root .rx-setup-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,1fr);gap:22px;padding:22px 28px;min-height:0}',
@@ -1626,21 +1626,21 @@ CB.race = CB.race || {};
     '#race-root .rx-col>*{flex-shrink:0}',
     '#race-root .rx-col.rx-scroll{padding-right:6px}',
     '#race-root .rx-section-title{display:flex;align-items:center;justify-content:space-between;margin:2px 0 -4px}',
-    '#race-root .rx-section-title h3{margin:0;font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:800}',
+    '#race-root .rx-section-title h3{margin:0;display:inline-flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-2xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;font-weight:700;color:var(--rx-text)}',
     /* featured track */
     '#race-root .rx-featured{position:relative;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(220px,1fr);min-height:300px;overflow:hidden}',
     '#race-root .rx-featured-map{position:relative;min-height:300px;border-right:1px solid var(--rx-line);background:radial-gradient(80% 80% at 50% 50%,rgba(255,255,255,.035),transparent 70%)}',
     '#race-root .rx-featured-map canvas{position:absolute;inset:0;width:100%;height:100%}',
-    '#race-root .rx-map-legend{position:absolute;left:14px;bottom:12px;display:flex;gap:10px;font-size:10.5px;color:var(--rx-dim);letter-spacing:.1em;text-transform:uppercase}',
+    '#race-root .rx-map-legend{position:absolute;left:14px;bottom:12px;display:flex;gap:10px;font-size:var(--fs-2xs);color:var(--rx-dim);letter-spacing:.1em;text-transform:uppercase}',
     '#race-root .rx-map-legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}',
     '#race-root .rx-featured-info{padding:22px 22px 18px;display:flex;flex-direction:column;gap:12px}',
-    '#race-root .rx-track-name{font-size:34px}',
-    '#race-root .rx-track-desc{color:var(--rx-dim);font-size:13px;max-width:44ch}',
+    '#race-root .rx-track-name{font-size:var(--fs-title)}',
+    '#race-root .rx-track-desc{color:var(--rx-dim);font-size:var(--fs-sm);max-width:44ch}',
     '#race-root .rx-statgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--rx-line);border:1px solid var(--rx-line);border-radius:10px;overflow:hidden;margin-top:auto}',
     '#race-root .rx-statgrid>div{background:var(--panel,rgba(12,13,15,.92));padding:10px 12px}',
-    '#race-root .rx-stat-l{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--rx-dim);font-weight:600}',
-    '#race-root .rx-stat-v{font-size:17px;font-weight:700;margin-top:2px}',
-    '#race-root .rx-stat-v small{font-size:11px;color:var(--rx-dim);font-weight:500;margin-left:3px}',
+    '#race-root .rx-stat-l{font-size:var(--fs-2xs);letter-spacing:.16em;text-transform:uppercase;color:var(--rx-dim);font-weight:600}',
+    '#race-root .rx-stat-v{font-size:var(--fs-lg);font-weight:700;margin-top:2px}',
+    '#race-root .rx-stat-v small{font-size:var(--fs-xs);color:var(--rx-dim);font-weight:500;margin-left:3px}',
     '#race-root .rx-pips{display:inline-flex;gap:3px;vertical-align:middle}',
     '#race-root .rx-pips i{width:12px;height:5px;border-radius:1px;background:rgba(255,255,255,.12);transform:skewX(-20deg)}',
     '#race-root .rx-pips i.on{background:var(--rx-accent)}',
@@ -1652,76 +1652,76 @@ CB.race = CB.race || {};
     '#race-root .rx-track-thumb{position:relative;height:104px;border-bottom:1px solid var(--rx-line);background:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0 6px,transparent 6px 12px)}',
     '#race-root .rx-track-thumb canvas{position:absolute;inset:0;width:100%;height:100%}',
     '#race-root .rx-track-meta{padding:10px 12px 12px}',
-    '#race-root .rx-track-meta b{display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#race-root .rx-track-meta span{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11px;color:var(--rx-dim);margin-top:4px}',
+    '#race-root .rx-track-meta b{display:block;font-size:var(--fs-sm);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#race-root .rx-track-meta span{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--rx-dim);margin-top:4px}',
     '#race-root .rx-track-meta .rx-track-stat{display:block;white-space:nowrap;margin:0;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis}#race-root .rx-track-meta .rx-pips{flex-shrink:0}',
-    '#race-root .rx-track-badge{position:absolute;right:8px;top:8px;padding:1px 7px;font-size:10px;background:var(--glass-strong,rgba(0,0,0,.6))}',
-    '#race-root .rx-track-pb{position:absolute;left:10px;top:10px;font-size:10px;padding:2px 7px;border-radius:999px;background:var(--glass-strong,rgba(0,0,0,.6));border:1px solid var(--rx-line-2);color:var(--rx-accent)}',
+    '#race-root .rx-track-badge{position:absolute;right:8px;top:8px;padding:1px 7px;font-size:var(--fs-2xs);background:var(--glass-strong,rgba(0,0,0,.6))}',
+    '#race-root .rx-track-pb{position:absolute;left:10px;top:10px;font-size:var(--fs-2xs);padding:2px 7px;border-radius:999px;background:var(--glass-strong,rgba(0,0,0,.6));border:1px solid var(--rx-line-2);color:var(--rx-accent)}',
     /* car card */
     '#race-root .rx-car.cb-card{display:grid;padding:16px 18px;gap:16px}#race-root .rx-car.cb-card:hover{transform:none}',
-    '#race-root .rx-car-make{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--rx-accent);font-weight:700}',
+    '#race-root .rx-car-make{font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;color:var(--rx-accent);font-weight:700}',
     '#race-root .rx-car{padding:16px 18px;display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center;position:relative;overflow:hidden}',
     '#race-root .rx-car::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 120% at 0% 50%,var(--rx-paint,var(--accent-soft,rgba(201,165,107,.14))),transparent 70%);opacity:.22;pointer-events:none}',
     '#race-root .rx-car-thumb{position:relative;height:90px;display:flex;align-items:center;justify-content:center}',
     '#race-root .rx-car-thumb svg{max-width:100%;max-height:100%;filter:drop-shadow(0 8px 10px rgba(0,0,0,.6))}',
-    '#race-root .rx-car-name{font-family:var(--serif,Georgia,serif);font-size:21px;font-weight:600;letter-spacing:-.01em}',
-    '#race-root .rx-car-sub{color:var(--rx-dim);font-size:12px;margin-top:2px}',
+    '#race-root .rx-car-name{font-family:var(--serif);font-size:var(--fs-xl);font-weight:600;letter-spacing:-.01em}',
+    '#race-root .rx-car-sub{color:var(--rx-dim);font-size:var(--fs-sm);margin-top:2px}',
     '#race-root .rx-car-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin-top:12px}',
-    '#race-root .rx-car-stats .rx-stat-v{font-size:18px}',
+    '#race-root .rx-car-stats .rx-stat-v{font-size:var(--fs-lg)}',
     '#race-root .rx-car-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}',
     '#race-root .rx-est{position:absolute;top:10px;right:12px}',
     /* form controls */
     '#race-root .rx-form{padding:16px 18px;display:flex;flex-direction:column;gap:16px}',
     '#race-root .rx-field{display:flex;flex-direction:column;gap:8px}',
     '#race-root .rx-field-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}',
-    '#race-root .rx-label{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--rx-dim);font-weight:700}',
-    '#race-root .rx-field-val{font-size:12px;color:var(--rx-text)}',
-    '#race-root .rx-field-desc{font-size:11.5px;color:var(--rx-faint);min-height:1em}',
+    '#race-root .rx-label{font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--rx-dim);font-weight:700}',
+    '#race-root .rx-field-val{font-size:var(--fs-sm);color:var(--rx-text)}',
+    '#race-root .rx-field-desc{font-size:var(--fs-xs);color:var(--rx-faint);min-height:1em}',
     '#race-root .rx-field.is-disabled{opacity:.38;pointer-events:none}',
     '#race-root .rx-field.is-locked{opacity:.5;pointer-events:none}',
     '#race-root .rx-track-card.is-locked{opacity:.32;cursor:not-allowed}',
     /* segmented controls are the shared .cb-seg-btns / .cb-seg-btn */
     '#race-root .rx-seg{display:flex;flex-wrap:wrap;width:100%}',
-    '#race-root .rx-seg-btn{flex:1 1 auto;cursor:pointer;padding:0 8px;font:inherit;font-size:12px;font-weight:600}',
+    '#race-root .rx-seg-btn{flex:1 1 auto;cursor:pointer;padding:0 8px;font:inherit;font-size:var(--fs-sm);font-weight:600}',
     '#race-root .rx-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}',
     '#race-root .rx-stepper{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}',
-    '#race-root .rx-stepper .rx-btn{width:36px;height:36px;padding:0;justify-content:center;font-size:18px}',
-    '#race-root .rx-stepper-val{min-width:56px;text-align:center;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}',
+    '#race-root .rx-stepper .rx-btn{width:36px;height:36px;padding:0;justify-content:center;font-size:var(--fs-lg)}',
+    '#race-root .rx-stepper-val{min-width:56px;text-align:center;font-size:var(--fs-xl);font-weight:700;font-variant-numeric:tabular-nums}',
     '#race-root .rx-quick{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto;min-width:0}',
-    '#race-root .rx-quick button{appearance:none;border:1px solid var(--rx-line);background:transparent;border-radius:6px;padding:4px 7px;min-width:28px;min-height:28px;font-size:11px;color:var(--rx-dim);cursor:pointer}',
+    '#race-root .rx-quick button{appearance:none;border:1px solid var(--rx-line);background:transparent;border-radius:6px;padding:4px 7px;min-width:28px;min-height:28px;font-size:var(--fs-xs);color:var(--rx-dim);cursor:pointer}',
     '#race-root .rx-quick button:hover,#race-root .rx-quick button.is-active{color:var(--rx-text);border-color:var(--rx-accent)}',
     '#race-root .rx-toggles{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
     '#race-root .rx-toggle{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm,9px);border:1px solid var(--rx-line);background:var(--rx-panel-2);cursor:pointer;text-align:left;appearance:none;width:100%;font:inherit;color:inherit}',
     '#race-root .rx-toggle:hover{border-color:var(--rx-line-2)}',
     '#race-root .rx-toggle.is-on{border-color:color-mix(in srgb,var(--rx-accent) 30%,var(--rx-line-2))}',
     '#race-root .rx-toggle-text{flex:1;min-width:0}',
-    '#race-root .rx-toggle-text b{display:block;font-size:12.5px;font-weight:600}',
-    '#race-root .rx-toggle-text small{display:block;font-size:10.5px;color:var(--rx-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#race-root .rx-toggle-text b{display:block;font-size:var(--fs-sm);font-weight:600}',
+    '#race-root .rx-toggle-text small{display:block;font-size:var(--fs-2xs);color:var(--rx-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     /* switches are the shared .cb-switch */
     '#race-root .rx-switch{display:block}',
     '#race-root .rx-range{width:100%;accent-color:var(--rx-accent)}',
-    '#race-root .rx-banner{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,176,32,.35);background:rgba(255,176,32,.07);font-size:12.5px}',
+    '#race-root .rx-banner{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,176,32,.35);background:rgba(255,176,32,.07);font-size:var(--fs-sm)}',
     '#race-root .rx-banner.bad{border-color:rgba(255,77,77,.45);background:rgba(255,77,77,.08)}',
     '#race-root .rx-banner ul{margin:4px 0 0;padding-left:16px;color:var(--rx-dim)}',
-    '#race-root .rx-banner code{font-family:var(--rx-mono);font-size:11.5px;color:var(--rx-text)}',
-    '#race-root .rx-keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;font-size:12px;color:var(--rx-dim)}',
+    '#race-root .rx-banner code{font-family:var(--rx-mono);font-size:var(--fs-xs);color:var(--rx-text)}',
+    '#race-root .rx-keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;font-size:var(--fs-sm);color:var(--rx-dim)}',
     '#race-root .rx-keys>span:nth-child(odd){display:flex;gap:4px;justify-content:flex-end}',
     '#race-root details.rx-details{border-top:1px solid var(--rx-line);padding-top:12px}',
-    '#race-root details.rx-details summary{cursor:pointer;list-style:none;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--rx-dim);font-weight:700;display:flex;align-items:center;gap:8px}',
+    '#race-root details.rx-details summary{cursor:pointer;list-style:none;font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase;color:var(--rx-dim);font-weight:700;display:flex;align-items:center;gap:8px}',
     '#race-root details.rx-details summary::-webkit-details-marker{display:none}',
     '#race-root details.rx-details[open] summary{color:var(--rx-text);margin-bottom:12px}',
     /* footer */
-    '#race-root .rx-footer{display:flex;align-items:center;gap:18px;padding:14px 28px;border-top:1px solid var(--rx-line);background:var(--glass,rgba(18,19,23,.72));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
+    '#race-root .rx-footer{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) var(--sp-6);border-top:1px solid var(--line);background:var(--glass-strong,rgba(14,15,18,.9));backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px)}',
     '#race-root .rx-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}',
-    '#race-root .rx-summary b{font-family:var(--serif,Georgia,serif);font-size:16px;font-weight:600;margin-right:6px}',
-    '#race-root .rx-footer .rx-btn.big{margin-left:auto;min-width:220px;justify-content:center}',
+    '#race-root .rx-summary b{font-family:var(--font);font-size:var(--fs-md);font-weight:650;color:var(--text-strong);margin-right:var(--sp-1)}',
+    '#race-root .rx-footer .rx-btn.big{margin-left:auto;min-width:200px;justify-content:center}',
     /* ---------------- loading / grid */
     '#race-root .rx-loading{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,440px);gap:28px;padding:48px 56px;',
     'background:linear-gradient(90deg,rgba(5,6,7,.94) 0%,rgba(5,6,7,.78) 55%,rgba(5,6,7,.9) 100%);animation:rx-fade .3s ease}',
     '#race-root .rx-load-left{display:flex;flex-direction:column;justify-content:flex-end;gap:18px;min-width:0}',
     '#race-root .rx-load-title{font-size:clamp(44px,7vw,96px)}',
     '#race-root .rx-load-title span{color:var(--rx-accent)}',
-    '#race-root .rx-progress{display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--rx-dim);max-width:420px}',
+    '#race-root .rx-progress{display:flex;flex-direction:column;gap:7px;font-size:var(--fs-sm);color:var(--rx-dim);max-width:420px}',
     '#race-root .rx-progress div{display:flex;align-items:center;gap:10px}',
     '#race-root .rx-progress i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);flex:none}',
     '#race-root .rx-progress .is-done i{background:var(--rx-good);box-shadow:0 0 8px var(--rx-good)}',
@@ -1736,11 +1736,11 @@ CB.race = CB.race || {};
     '#race-root .rx-grid-slot:nth-child(even){margin-top:22px;margin-bottom:-22px}',
     '#race-root .rx-grid-slot.is-player{border-color:var(--rx-accent);background:var(--accent-softer,rgba(201,165,107,.07))}',
     '#race-root .rx-grid-slot .rx-livery{width:5px;align-self:stretch;flex:none}',
-    '#race-root .rx-grid-pos{font-family:var(--rx-mono);font-size:11px;color:var(--rx-dim);width:22px;text-align:right;flex:none}',
+    '#race-root .rx-grid-pos{font-family:var(--rx-mono);font-size:var(--fs-xs);color:var(--rx-dim);width:22px;text-align:right;flex:none}',
     '#race-root .rx-grid-who{min-width:0;flex:1}',
-    '#race-root .rx-grid-who b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#race-root .rx-grid-who small{display:block;font-size:10.5px;color:var(--rx-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '#race-root .rx-carnum{flex:none;min-width:26px;height:20px;padding:0 4px;border-radius:4px;display:grid;place-items:center;font-size:11px;font-weight:800;font-family:var(--rx-mono)}',
+    '#race-root .rx-grid-who b{display:block;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#race-root .rx-grid-who small{display:block;font-size:var(--fs-2xs);color:var(--rx-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#race-root .rx-carnum{flex:none;min-width:26px;height:20px;padding:0 4px;border-radius:4px;display:grid;place-items:center;font-size:var(--fs-xs);font-weight:800;font-family:var(--rx-mono)}',
     '#race-root .rx-go-row{display:flex;align-items:center;gap:14px;margin-top:6px}',
     /* ---------------- race overlays */
     '#race-root .rx-race{position:absolute;inset:0;pointer-events:none}',
@@ -1748,14 +1748,14 @@ CB.race = CB.race || {};
     '#race-root .rx-quickbar{position:absolute;top:50%;right:12px;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;opacity:.45;transition:opacity .2s}',
     '#race-root .rx-quickbar:hover{opacity:1}',
     /* multiplayer: ping / drivers / sync pill, end-of-session banner, pause-menu player list */
-    '#race-root .rx-net{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;background:rgba(8,9,11,.66);border:1px solid var(--rx-line-2);font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--rx-text);pointer-events:none;white-space:nowrap;font-variant-numeric:tabular-nums;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
+    '#race-root .rx-net{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;background:rgba(8,9,11,.66);border:1px solid var(--rx-line-2);font-size:var(--fs-xs);font-weight:600;letter-spacing:.02em;color:var(--rx-text);pointer-events:none;white-space:nowrap;font-variant-numeric:tabular-nums;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
     '#race-root .rx-net.is-drift{left:auto;right:12px;transform:none}',
     '#race-root .rx-net i{width:7px;height:7px;border-radius:50%;background:var(--rx-good);box-shadow:0 0 6px currentColor}',
     '#race-root .rx-net.q-fair i{background:var(--rx-warn)}#race-root .rx-net.q-poor i{background:var(--rx-bad)}',
-    '#race-root .rx-net-banner{position:absolute;left:50%;top:44px;transform:translateX(-50%);padding:10px 16px;border-radius:10px;background:rgba(8,9,11,.86);border:1px solid var(--rx-bad);color:var(--rx-text);font-weight:700;font-size:13px;pointer-events:none}',
+    '#race-root .rx-net-banner{position:absolute;left:50%;top:44px;transform:translateX(-50%);padding:10px 16px;border-radius:10px;background:rgba(8,9,11,.86);border:1px solid var(--rx-bad);color:var(--rx-text);font-weight:700;font-size:var(--fs-sm);pointer-events:none}',
     '#race-root .rx-net-card{margin:4px 0 14px}#race-root .rx-net-card .rx-net{margin:6px 0 8px;transform:none;display:inline-flex}',
     '#race-root .rx-net-list{display:flex;flex-direction:column;gap:4px}',
-    '#race-root .rx-net-row{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.04);font-size:12.5px}',
+    '#race-root .rx-net-row{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.04);font-size:var(--fs-sm)}',
     '#race-root .rx-net-row.is-me{border-left:3px solid var(--rx-accent)}#race-root .rx-net-row.is-off{opacity:.5}',
     // portrait phones: the top centre is taken by the leaderboard and the position box (the pill covered P2/3 and
     // LEADER); park it bottom-left, above the pedals and the steering pad
@@ -1771,75 +1771,75 @@ CB.race = CB.race || {};
     /* phone portrait: the canvas HUD's tower, timing + sector boxes and minimap fill the top third, so the start
        lights sit smaller, below them (they used to cover the sector boxes) */
     '@media (orientation:portrait) and (max-width:600px){#race-root .rx-lights{top:31%;transform:translateX(-50%) scale(.72);transform-origin:50% 0}}',
-    '#race-root .rx-go{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);font-size:clamp(60px,12vw,150px);color:#fff;text-shadow:0 0 40px rgba(34,224,107,.8);pointer-events:none;animation:rx-go .9s ease-out forwards}',
+    '#race-root .rx-go{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);font-size:clamp(60px,12vw,150px);color:var(--hud-ink);text-shadow:0 0 40px rgba(34,224,107,.8);pointer-events:none;animation:rx-go .9s ease-out forwards}',
     '#race-root .rx-feed{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;gap:6px;pointer-events:none;width:min(560px,90vw)}',
     '#race-root .rx-feed-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:9px;background:rgba(8,9,11,.82);border:1px solid var(--rx-line-2);',
-    'border-left:3px solid var(--rx-accent);font-size:13px;font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:rx-feed-in .3s ease both;transition:opacity .5s,transform .5s}',
+    'border-left:3px solid var(--rx-accent);font-size:var(--fs-sm);font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:rx-feed-in .3s ease both;transition:opacity .5s,transform .5s}',
     '#race-root .rx-feed-item.purple{border-left-color:var(--rx-purple)}#race-root .rx-feed-item.bad{border-left-color:var(--rx-bad)}',
     '#race-root .rx-feed-item.good{border-left-color:var(--rx-good)}#race-root .rx-feed-item.is-out{opacity:0;transform:translateY(8px)}',
-    '#race-root .rx-feed-item .rx-eyebrow{font-size:9.5px}',
+    '#race-root .rx-feed-item .rx-eyebrow{font-size:var(--fs-2xs)}',
     '#race-root .rx-hints{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:8px 14px;border-radius:10px;',
-    'background:rgba(0,0,0,.55);border:1px solid var(--rx-line);font-size:11.5px;color:var(--rx-dim);pointer-events:none;transition:opacity .8s;max-width:92vw}',
+    'background:rgba(0,0,0,.55);border:1px solid var(--rx-line);font-size:var(--fs-xs);color:var(--rx-dim);pointer-events:none;transition:opacity .8s;max-width:92vw}',
     '#race-root .rx-hints span{display:inline-flex;align-items:center;gap:5px}',
     '#race-root .rx-hints.is-hidden{opacity:0}',
     '#race-root .rx-finish{position:absolute;left:0;right:0;top:20%;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none;animation:rx-fade .5s ease}',
     '#race-root .rx-finish-flag{width:min(520px,80vw);height:22px;background:repeating-conic-gradient(#fff 0 25%,#111 0 50%) 0 0/22px 22px;transform:skewX(-14deg);box-shadow:0 10px 30px rgba(0,0,0,.6)}',
     '#race-root .rx-finish-text{font-size:clamp(40px,7vw,84px);text-shadow:0 6px 30px rgba(0,0,0,.8)}',
-    '#race-root .rx-finish-sub{font-size:15px;color:var(--rx-dim);background:rgba(0,0,0,.6);padding:6px 14px;border-radius:999px}',
-    '#race-root .rx-fallback-note{position:absolute;left:50%;transform:translateX(-50%);bottom:62px;white-space:nowrap;font-size:11px;color:var(--rx-warn);background:rgba(0,0,0,.6);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,176,32,.3);pointer-events:none}',
+    '#race-root .rx-finish-sub{font-size:var(--fs-md);color:var(--rx-dim);background:rgba(0,0,0,.6);padding:6px 14px;border-radius:999px}',
+    '#race-root .rx-fallback-note{position:absolute;left:50%;transform:translateX(-50%);bottom:62px;white-space:nowrap;font-size:var(--fs-xs);color:var(--rx-warn);background:rgba(0,0,0,.6);padding:6px 10px;border-radius:8px;border:1px solid rgba(255,176,32,.3);pointer-events:none}',
     /* touch */
     '#race-root .rx-touch{position:absolute;inset:auto 0 0 0;height:min(42vh,260px);pointer-events:none;display:flex;justify-content:space-between;align-items:flex-end;padding:0 16px 18px;gap:12px}',
     '#race-root .rx-touch>*{pointer-events:auto;touch-action:none}',
-    '#race-root .rx-steerpad{position:relative;width:min(46vw,300px);height:96px;border-radius:48px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
-    '#race-root .rx-steerpad::before{content:"‹  ›";position:absolute;inset:0;display:grid;place-items:center;font-size:36px;color:rgba(255,255,255,.18);letter-spacing:40px;padding-left:40px}',
+    '#race-root .rx-steerpad{position:relative;width:min(46vw,300px);height:96px;border-radius:48px;background:var(--hud-panel-soft,rgba(0,0,0,.35));border:1px solid var(--hud-line,rgba(255,255,255,.14));backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
+    '#race-root .rx-steerpad::before{content:"‹  ›";position:absolute;inset:0;display:grid;place-items:center;font-size:var(--fs-title);color:rgba(255,255,255,.18);letter-spacing:40px;padding-left:40px}',
     '#race-root .rx-knob{position:absolute;top:50%;left:50%;width:76px;height:76px;margin:-38px 0 0 -38px;border-radius:50%;background:radial-gradient(circle at 40% 35%,rgba(255,255,255,.35),rgba(255,255,255,.08));border:1px solid rgba(255,255,255,.3);box-shadow:0 8px 20px rgba(0,0,0,.5);will-change:transform}',
     '#race-root .rx-pedals{display:flex;align-items:flex-end;gap:10px}',
-    '#race-root .rx-pedal{width:74px;height:140px;border-radius:16px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;font-size:11px;letter-spacing:.14em;font-weight:800;color:rgba(255,255,255,.7);position:relative;overflow:hidden;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
+    '#race-root .rx-pedal{width:74px;height:140px;border-radius:16px;border:1px solid var(--hud-line,rgba(255,255,255,.16));background:var(--hud-panel-soft,rgba(0,0,0,.35));font:800 var(--fs-xs) var(--hud-font);display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;font-size:var(--fs-xs);letter-spacing:.14em;font-weight:800;color:var(--hud-dim,rgba(255,255,255,.7));position:relative;overflow:hidden;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
     '#race-root .rx-pedal.gas{height:170px}',
     '#race-root .rx-pedal .rx-fill{position:absolute;left:0;right:0;bottom:0;height:0;opacity:.45}',
     '#race-root .rx-pedal.gas .rx-fill{background:linear-gradient(0deg,var(--rx-good),transparent)}',
     '#race-root .rx-pedal.brake .rx-fill{background:linear-gradient(0deg,var(--rx-bad),transparent)}',
     '#race-root .rx-pedal span{position:relative}',
     '#race-root .rx-touch-aux{display:flex;flex-direction:column;gap:8px}',
-    '#race-root .rx-tbtn{width:58px;height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.4);font-size:11px;font-weight:800;letter-spacing:.08em;color:rgba(255,255,255,.75);display:grid;place-items:center}',
-    '#race-root .rx-tbtn.is-down,#race-root .rx-pedal.is-down{border-color:var(--rx-accent);color:#fff}',
+    '#race-root .rx-tbtn{width:58px;height:46px;border-radius:12px;border:1px solid var(--hud-line,rgba(255,255,255,.16));background:var(--hud-panel-soft,rgba(0,0,0,.4));font:800 var(--fs-xs) var(--hud-font);font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;color:var(--hud-dim,rgba(255,255,255,.75));display:grid;border-radius:var(--hud-radius,12px);place-items:center}',
+    '#race-root .rx-tbtn.is-down,#race-root .rx-pedal.is-down{border-color:var(--rx-accent);color:var(--hud-ink,#fff);background:var(--hud-press,rgba(255,255,255,.22))}',
     /* ---------------- modal (pause / results / error) */
     '#race-root .rx-modal{position:absolute;inset:0;display:grid;place-items:center;padding:24px;background:radial-gradient(80% 80% at 50% 40%,rgba(0,0,0,.45),rgba(0,0,0,.82));backdrop-filter:blur(7px) saturate(.7);-webkit-backdrop-filter:blur(7px) saturate(.7);animation:rx-fade .2s ease}',
     '#race-root .rx-pause{width:min(880px,100%);display:grid;grid-template-columns:300px 1fr;overflow:hidden}',
     '#race-root .rx-pause-menu{padding:26px 22px;display:flex;flex-direction:column;gap:8px;border-right:1px solid var(--rx-line);background:rgba(0,0,0,.25)}',
-    '#race-root .rx-pause-menu h2{margin:0 0 4px;font-size:40px}',
+    '#race-root .rx-pause-menu h2{margin:0 0 4px;font-size:var(--fs-title)}',
     '#race-root .rx-pause-menu .rx-btn{justify-content:flex-start;padding:12px 14px}',
     '#race-root .rx-pause-menu .rx-btn.is-focus{border-color:var(--rx-accent)}',
     '#race-root .rx-pause-side{padding:24px;display:flex;flex-direction:column;gap:18px;max-height:min(80vh,640px)}',
     '#race-root .rx-pause-status{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}',
     '#race-root .rx-tile{padding:12px;border-radius:10px;border:1px solid var(--rx-line);background:rgba(255,255,255,.025)}',
-    '#race-root .rx-tile .rx-stat-v{font-size:20px}',
+    '#race-root .rx-tile .rx-stat-v{font-size:var(--fs-xl)}',
     '#race-root .rx-tile.accent{border-color:var(--accent-ring,rgba(201,165,107,.45));background:var(--accent-softer,rgba(201,165,107,.07))}',
     '#race-root .rx-tile.purple .rx-stat-v{color:var(--rx-purple)}',
     /* results */
-    '#race-root .rx-results{position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr auto;animation:rx-fade .35s ease;background:linear-gradient(180deg,rgba(5,6,7,.9),rgba(5,6,7,.97));backdrop-filter:blur(10px) saturate(.7);-webkit-backdrop-filter:blur(10px) saturate(.7)}',
+    '#race-root .rx-results{position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr auto;animation:rx-fade .35s ease;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 90%,transparent),color-mix(in srgb,var(--bg) 97%,transparent));backdrop-filter:blur(10px) saturate(.7);-webkit-backdrop-filter:blur(10px) saturate(.7)}',
     '#race-root .rx-res-head{display:flex;align-items:flex-end;gap:28px;padding:28px 32px 18px;border-bottom:1px solid var(--rx-line)}',
     '#race-root .rx-res-pos{font-size:clamp(64px,9vw,120px);color:var(--rx-accent);text-shadow:0 10px 40px var(--accent-ring,rgba(201,165,107,.45))}',
     '#race-root .rx-res-pos small{font-size:.35em;color:var(--rx-text);margin-left:6px}',
     '#race-root .rx-res-title{display:flex;flex-direction:column;gap:6px;padding-bottom:10px}',
-    '#race-root .rx-res-title h2{margin:0;font-size:30px}',
+    '#race-root .rx-res-title h2{margin:0;font-size:var(--fs-title);font-weight:var(--fw-title);letter-spacing:var(--tracking-title);line-height:1.08}',
     '#race-root .rx-badges{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto;padding-bottom:12px}',
-    '#race-root .rx-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;',
+    '#race-root .rx-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-size:var(--fs-sm);font-weight:800;letter-spacing:.1em;text-transform:uppercase;',
     'background:linear-gradient(90deg,var(--accent-soft,rgba(201,165,107,.14)),var(--accent-softer,rgba(201,165,107,.07)));border:1px solid var(--rx-accent);color:var(--rx-text);animation:rx-pop .5s cubic-bezier(.2,1.6,.4,1) both}',
     '#race-root .rx-badge.purple{background:linear-gradient(90deg,rgba(178,107,255,.3),rgba(178,107,255,.08));border-color:var(--rx-purple)}',
     '#race-root .rx-badge.good{background:linear-gradient(90deg,rgba(61,220,132,.25),rgba(61,220,132,.06));border-color:var(--rx-good)}',
     '#race-root .rx-res-main{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(320px,1fr);gap:20px;padding:20px 32px;min-height:0}',
     '#race-root .rx-table-wrap{min-height:0;padding:6px 0}',
-    '#race-root table.rx-table{width:100%;border-collapse:collapse;font-size:13px}',
-    '#race-root .rx-table th{position:sticky;top:0;background:var(--panel-2,#111215);text-align:left;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--rx-dim);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--rx-line)}',
+    '#race-root table.rx-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}',
+    '#race-root .rx-table th{position:sticky;top:0;background:var(--panel-2,#111215);text-align:left;font-size:var(--fs-2xs);letter-spacing:.16em;text-transform:uppercase;color:var(--rx-dim);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--rx-line)}',
     '#race-root .rx-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.045);white-space:nowrap}',
     '#race-root .rx-table tr{animation:rx-slide .35s both}',
     '#race-root .rx-table tr.is-player td{background:var(--accent-softer,rgba(201,165,107,.07))}',
     '#race-root .rx-table tr.is-player td:first-child{box-shadow:inset 3px 0 0 var(--rx-accent)}',
     '#race-root .rx-table .r{text-align:right}',
-    '#race-root .rx-table .pos{font-weight:700;font-size:15px;width:44px;font-variant-numeric:tabular-nums}',
+    '#race-root .rx-table .pos{font-weight:700;font-size:var(--fs-md);width:44px;font-variant-numeric:tabular-nums}',
     '#race-root .rx-table .who{display:flex;align-items:center;gap:10px}',
-    '#race-root .rx-table .who small{display:block;color:var(--rx-dim);font-size:11px}',
+    '#race-root .rx-table .who small{display:block;color:var(--rx-dim);font-size:var(--fs-xs)}',
     '#race-root .rx-purple{color:var(--rx-purple)}#race-root .rx-bad{color:var(--rx-bad)}#race-root .rx-good{color:var(--rx-good)}#race-root .rx-dim{color:var(--rx-dim)}',
     '#race-root .rx-res-side{display:flex;flex-direction:column;gap:14px;min-height:0}',
     '#race-root .rx-res-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}',
@@ -1847,17 +1847,17 @@ CB.race = CB.race || {};
     '#race-root .rx-chart canvas{display:block;width:100%;height:190px}',
     '#race-root .rx-chart.small canvas{height:120px}',
     '#race-root .rx-chart-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}',
-    '#race-root .rx-legend{display:flex;gap:12px;font-size:11px;color:var(--rx-dim)}',
+    '#race-root .rx-legend{display:flex;gap:12px;font-size:var(--fs-xs);color:var(--rx-dim)}',
     '#race-root .rx-legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}',
-    '#race-root .rx-res-foot{display:flex;align-items:center;gap:12px;padding:14px 32px;border-top:1px solid var(--rx-line);background:var(--glass,rgba(0,0,0,.5));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
+    '#race-root .rx-res-foot{display:flex;align-items:center;gap:12px;padding:14px 32px;border-top:1px solid var(--rx-line);background:var(--glass-strong,rgba(14,15,18,.9));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}',
     '#race-root .rx-res-foot .rx-spacer{flex:1}',
     '#race-root .rx-res-foot .rx-res-keys{white-space:nowrap}@media (max-width:1360px){#race-root .rx-res-foot .rx-res-keys{display:none}}',   // keyboard hint: never wraps into a 3-line column
     /* error */
     '#race-root .rx-error{width:min(620px,100%);padding:26px}',
-    '#race-root .rx-error pre{max-height:180px;overflow:auto;font-family:var(--rx-mono);font-size:11px;color:var(--rx-dim);background:rgba(0,0,0,.4);padding:10px;border-radius:8px;white-space:pre-wrap}',
+    '#race-root .rx-error pre{max-height:180px;overflow:auto;font-family:var(--rx-mono);font-size:var(--fs-xs);color:var(--rx-dim);background:rgba(0,0,0,.4);padding:10px;border-radius:8px;white-space:pre-wrap}',
     /* toast */
     '#race-root .rx-toasts{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:5}',
-    '#race-root .rx-toast{padding:8px 16px;border-radius:999px;background:var(--glass-strong,rgba(10,11,13,.9));border:1px solid var(--rx-line-2);font-size:12.5px;font-weight:600;animation:rx-feed-in .25s both;transition:opacity .4s}',
+    '#race-root .rx-toast{padding:8px 16px;border-radius:999px;background:var(--glass-strong,rgba(10,11,13,.9));border:1px solid var(--rx-line-2);font-size:var(--fs-sm);font-weight:600;animation:rx-feed-in .25s both;transition:opacity .4s}',
     /* animations */
     '@keyframes rx-fade{from{opacity:0}to{opacity:1}}',
     '@keyframes rx-slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}',
@@ -1876,7 +1876,7 @@ CB.race = CB.race || {};
     '#race-root .rx-modal{place-items:start center;overflow:auto}',
     '#race-root .rx-pause{grid-template-columns:minmax(0,1fr);max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow:auto}#race-root .rx-pause-side{max-height:none}',
     '#race-root .rx-pause-menu{border-right:0;border-bottom:1px solid var(--rx-line)}}',
-    '@media (max-width:900px){#race-root .rx-topbar{gap:10px}#race-root .rx-step{padding:4px 6px;letter-spacing:.06em;font-size:9.5px}#race-root .rx-step b{margin-right:3px}}',
+    '@media (max-width:900px){#race-root .rx-topbar{gap:10px}#race-root .rx-step{padding:4px 6px;letter-spacing:.06em;font-size:var(--fs-2xs)}#race-root .rx-step b{margin-right:3px}}',
     '@media (max-width:720px){#race-root .rx-featured{grid-template-columns:1fr}#race-root .rx-featured-map{min-height:220px;border-right:0;border-bottom:1px solid var(--rx-line)}',
     '#race-root .rx-topbar,#race-root .rx-footer,#race-root .rx-setup-main{padding-left:14px;padding-right:14px}#race-root .rx-footer{flex-wrap:wrap}#race-root .rx-footer .rx-btn.big{width:100%}',
     '#race-root .rx-car{grid-template-columns:1fr}#race-root .rx-toggles,#race-root .rx-two{grid-template-columns:1fr}#race-root .rx-res-head{flex-wrap:wrap;padding:18px}',
@@ -1889,40 +1889,40 @@ CB.race = CB.race || {};
     'display:flex;flex-direction:column;justify-content:flex-end;gap:10px;min-height:0;color:var(--rx-text);',
     'background:var(--surface-grad,none),var(--panel,rgba(10,11,13,.95));transition:transform .2s cubic-bezier(.2,.8,.2,1),border-color .2s,box-shadow .2s}',
     '#race-root .rx-disc-card:hover,#race-root .rx-disc-card:focus-visible{transform:translateY(-4px);border-color:var(--rx-disc,var(--rx-accent));box-shadow:0 30px 70px -30px var(--rx-disc,var(--rx-accent));outline:none}',
-    '#race-root .rx-disc-card.is-last::after{content:"Last played";position:absolute;top:18px;right:18px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--rx-disc);border:1px solid var(--rx-disc);border-radius:999px;padding:4px 10px}',
+    '#race-root .rx-disc-card.is-last::after{content:"Last played";position:absolute;top:18px;right:18px;font-size:var(--fs-2xs);letter-spacing:.2em;text-transform:uppercase;color:var(--rx-disc);border:1px solid var(--rx-disc);border-radius:999px;padding:4px 10px}',
     '#race-root .rx-disc-art{position:absolute;inset:0;z-index:0;opacity:.9;pointer-events:none}',
     '#race-root .rx-disc-art svg{width:100%;height:100%;display:block}',
     '#race-root .rx-disc-art::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,9,11,.92) 0%,rgba(8,9,11,.7) 38%,rgba(8,9,11,.15) 70%,transparent),linear-gradient(0deg,rgba(8,9,11,.85),transparent 55%)}',
     '#race-root .rx-disc-card>*:not(.rx-disc-art){position:relative;z-index:1}',
-    '#race-root .rx-disc-name{font-size:clamp(54px,8vw,112px);font-family:var(--serif,Georgia,serif);font-weight:600;letter-spacing:-.03em;line-height:.9;',
-    'background:linear-gradient(180deg,#fff,var(--rx-disc,var(--rx-accent)));-webkit-background-clip:text;background-clip:text;color:transparent}',
-    '#race-root .rx-disc-desc{max-width:44ch;color:#cfcac0;font-size:14.5px}',
-    '#race-root .rx-disc-list{list-style:none;margin:4px 0 6px;padding:0;display:grid;gap:5px;color:var(--rx-dim);font-size:12.5px}',
+    '#race-root .rx-disc-name{font-size:clamp(54px,8vw,112px);font-family:var(--serif);font-weight:600;letter-spacing:-.03em;line-height:.9;',
+    'background:linear-gradient(180deg,var(--hud-ink),var(--rx-disc,var(--rx-accent)));-webkit-background-clip:text;background-clip:text;color:transparent}',
+    '#race-root .rx-disc-desc{max-width:44ch;color:var(--hud-dim);font-size:var(--fs-md)}',
+    '#race-root .rx-disc-list{list-style:none;margin:4px 0 6px;padding:0;display:grid;gap:5px;color:var(--rx-dim);font-size:var(--fs-sm)}',
     '#race-root .rx-disc-list li::before{content:"";display:inline-block;width:14px;height:2px;margin-right:9px;vertical-align:middle;background:var(--rx-disc,var(--rx-accent));transform:skewX(-30deg)}',
     '#race-root .rx-disc-go{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--rx-disc,var(--rx-accent))}',
-    '#race-root .rx-disc-foot{display:flex;align-items:center;gap:14px;padding:14px 28px;border-top:1px solid var(--rx-line);color:var(--rx-dim);font-size:12px}',
+    '#race-root .rx-disc-foot{display:flex;align-items:center;gap:14px;padding:14px 28px;border-top:1px solid var(--rx-line);color:var(--rx-dim);font-size:var(--fs-sm)}',
     '#race-root .rx-disc-foot .rx-seg{margin-left:auto}',
     '@media (max-width:820px){#race-root .rx-disc-main{grid-template-columns:1fr;overflow:auto}#race-root .rx-disc-card{min-height:300px}}',
     '#race-root .rx-step.is-link{cursor:pointer;pointer-events:auto}',
     '#race-root .rx-step.is-link:hover{color:var(--rx-text)}',
-    '#race-root .rx-chip.drift{color:#ff7a3d;border-color:rgba(255,122,61,.45)}',
-    '#race-root .rx-chip.arcade{color:#ffcf3a;border-color:rgba(255,207,58,.5)}',
-    '#race-root .rx-arcade-handling{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid rgba(255,207,58,.4);border-radius:10px;color:#ffcf3a;font-size:13px;font-weight:600}',
-    '#race-root .rx-arcade-intro{display:flex;flex-direction:column;gap:6px;padding:12px 14px;margin-bottom:12px;border-color:rgba(255,207,58,.35)}',
-    '#race-root .rx-arcade-intro p{margin:0;font-size:13px;line-height:1.45;color:var(--rx-dim)}',
+    '#race-root .rx-chip.drift{color:var(--mode-drift);border-color:color-mix(in srgb,var(--mode-drift) 45%,transparent)}',
+    '#race-root .rx-chip.arcade{color:var(--mode-arcade);border-color:color-mix(in srgb,var(--mode-arcade) 50%,transparent)}',
+    '#race-root .rx-arcade-handling{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid color-mix(in srgb,var(--mode-arcade) 40%,transparent);border-radius:var(--radius-sm);color:var(--mode-arcade);background:var(--mode-arcade-soft);font-size:var(--fs-sm);font-weight:600}',
+    '#race-root .rx-arcade-intro{display:flex;flex-direction:column;gap:6px;padding:12px 14px;margin-bottom:12px;border-color:color-mix(in srgb,var(--mode-arcade) 35%,var(--rx-line-2))}',
+    '#race-root .rx-arcade-intro p{margin:0;font-size:var(--fs-sm);line-height:1.45;color:var(--rx-dim)}',
     /* ---------------- drift results */
     '#race-root .rx-drift-score{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap}',
-    '#race-root .rx-drift-total{font-size:clamp(48px,7vw,92px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:.9;color:#fff}',
-    '#race-root .rx-medal{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:12px;border:1px solid currentColor}',
+    '#race-root .rx-drift-total{font-size:clamp(48px,7vw,92px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:.9;color:var(--text-strong)}',
+    '#race-root .rx-medal{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:var(--fs-sm);border:1px solid currentColor}',
     '#race-root .rx-medal i{width:14px;height:14px;border-radius:50%;background:currentColor;box-shadow:0 0 14px currentColor}',
     '#race-root .rx-ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}',
     '#race-root .rx-ladder>div{border:1px solid var(--rx-line);border-radius:10px;padding:9px 11px;opacity:.55}',
     '#race-root .rx-ladder>div.got{opacity:1;border-color:currentColor;background:rgba(255,255,255,.03)}',
-    '#race-root .rx-ladder b{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase}',
+    '#race-root .rx-ladder b{display:block;font-size:var(--fs-2xs);letter-spacing:.18em;text-transform:uppercase}',
     '@media (max-width:700px){#race-root .rx-ladder{grid-template-columns:repeat(2,minmax(0,1fr))}}',
     '#race-root .rx-drift-panel{padding:22px 24px;display:flex;flex-direction:column;gap:14px;min-height:0}',
     '#race-root .rx-drift-bar{height:8px;border-radius:8px;background:rgba(255,255,255,.07);overflow:hidden}',
-    '#race-root .rx-drift-bar i{display:block;height:100%;background:linear-gradient(90deg,#ff5a1f,#ffb020)}',
+    '#race-root .rx-drift-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--mode-drift),var(--warn))}',
     /* ---------------- phones / tablets (touch only; desktop untouched): 40px+ tap targets, safe areas, no hover-only UI,
        no zoom / selection / callout while driving, scroll-as-a-page setup + results on short landscape screens */
     '#race-root .rx-rotate{display:none}',
@@ -1931,7 +1931,7 @@ CB.race = CB.race || {};
     '#race-root .rx-quickbar{opacity:.92;right:max(10px,env(safe-area-inset-right))}#race-root .rx-quickbar .rx-btn.icon{width:44px;min-height:44px;height:44px}',
     '#race-root .rx-hints,#race-root span.rx-dim:has(>.rx-kbd),#race-root .rx-btn>.rx-kbd{display:none}',
     '#race-root .rx-btn,#race-root .rx-seg-btn,#race-root .cb-tab{min-height:44px}',
-    '#race-root .rx-stepper .rx-btn{width:44px;height:44px}#race-root .rx-quick{gap:6px}#race-root .rx-quick button{min-width:44px;min-height:40px;padding:4px 10px;font-size:12.5px}',
+    '#race-root .rx-stepper .rx-btn{width:44px;height:44px}#race-root .rx-quick{gap:6px}#race-root .rx-quick button{min-width:44px;min-height:40px;padding:4px 10px;font-size:var(--fs-sm)}',
     '#race-root .rx-step{min-height:40px;display:inline-flex;align-items:center}#race-root .rx-steps{align-items:center}#race-root .rx-footer>.rx-btn:last-child{margin-left:auto!important}',
     '#race-root details.rx-details summary{min-height:44px}#race-root .rx-range{height:40px}',
     '#race-root .rx-modal{z-index:8;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}',
@@ -1941,7 +1941,7 @@ CB.race = CB.race || {};
     /* "rotate your phone" prompt while driving in portrait: dims the view but never blocks it (touches pass through) */
     '#race-root .rx-rotate{position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;padding:24px;background:rgba(5,5,7,.55);pointer-events:none}',
     '#race-root .rx-rotate-card{pointer-events:auto;width:min(300px,100%);display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 20px 18px;border-radius:18px;text-align:center;background:rgba(14,15,18,.94);border:1px solid var(--accent-ring,rgba(201,165,107,.45));box-shadow:0 24px 60px rgba(0,0,0,.6)}',
-    '#race-root .rx-rotate-card b{font-size:18px;line-height:1.2}#race-root .rx-rotate-card p{margin:0;color:var(--rx-dim);font-size:13px;line-height:1.45}',
+    '#race-root .rx-rotate-card b{font-size:var(--fs-lg);line-height:1.2}#race-root .rx-rotate-card p{margin:0;color:var(--rx-dim);font-size:var(--fs-sm);line-height:1.45}',
     '#race-root .rx-rotate-ico{color:var(--rx-accent);animation:rx-rot-hint 2.4s ease-in-out infinite}',
     '@keyframes rx-rot-hint{0%,25%{transform:rotate(0)}55%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}',
     '#race-root .rx-rotate-card .rx-btn{min-height:44px;padding:0 18px}}',
@@ -1963,18 +1963,57 @@ CB.race = CB.race || {};
        steering pad. All tap targets stay >= 44px, every edge is safe-area aware. */
     '@media (pointer:coarse) and (max-height:500px) and (orientation:landscape){',
     '#race-root .rx-touch{padding-bottom:max(10px,env(safe-area-inset-bottom));gap:8px}',
-    '#race-root .rx-steerpad{width:min(34vw,260px);height:84px;border-radius:42px}#race-root .rx-steerpad::before{font-size:30px;letter-spacing:30px;padding-left:30px}',
+    '#race-root .rx-steerpad{width:min(34vw,260px);height:84px;border-radius:42px}#race-root .rx-steerpad::before{font-size:var(--fs-2xl);letter-spacing:30px;padding-left:30px}',
     '#race-root .rx-pedals{gap:8px}#race-root .rx-touch-aux{gap:6px}#race-root .rx-tbtn{width:52px;height:44px}',
     '#race-root .rx-pedal{width:64px;height:100px;padding-bottom:10px}#race-root .rx-pedal.gas{height:116px}',
     '#race-root .rx-quickbar{gap:6px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 192px)}',
     '#race-root .arc-touch{right:max(16px,env(safe-area-inset-right));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 124px);gap:10px}',
-    '#race-root .arc-btn.nitro{width:60px;height:60px;font-size:13px}#race-root .arc-btn.item{width:50px;height:50px}#race-root .arc-btn.item canvas{width:34px;height:34px}',
-    'html body .cw-pip{width:150px;left:max(16px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 94px)}html body .cw-pip .cw-pl{padding:3px 5px;font-size:9.5px}',
+    '#race-root .arc-btn.nitro{width:60px;height:60px;font-size:var(--fs-sm)}#race-root .arc-btn.item{width:50px;height:50px}#race-root .arc-btn.item canvas{width:34px;height:34px}',
+    'html body .cw-pip{width:150px;left:max(16px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 94px)}html body .cw-pip .cw-pl{padding:3px 5px;font-size:var(--fs-2xs)}',
     'html body .cw-hud{top:auto;transform:none;right:max(16px,env(safe-area-inset-right));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 128px);min-width:0;flex-direction:row;gap:6px;padding:6px 12px;border-radius:12px}',
-    'html body .cw-hud b{font-size:22px}html body .cw-hud b.is-rev{font-size:26px}html body .cw-hud small{display:none}html body .cw-hud .cw-hand svg{width:22px;height:22px}',
+    'html body .cw-hud b{font-size:var(--fs-xl)}html body .cw-hud b.is-rev{font-size:var(--fs-2xl)}html body .cw-hud small{display:none}html body .cw-hud .cw-hand svg{width:22px;height:22px}',
     'html body:has(#race-root .arc-touch) .cw-hud{right:calc(max(16px,env(safe-area-inset-right)) + 130px)}}',
     // the Arcade ITEM / NITRO buttons belong to the driving screen only (they stayed over the results table)
     '#race-root:not([data-screen="race"]) .arc-touch{display:none}',
+    /* ---------------- screen family (css/styles.css § 18): Race · Drift · Arcade share the Derby / F1 / Drag look; only the mode accent changes */
+    '#race-root[data-mode="race"]{--rx-accent:var(--mode-race,#e0412f);--rx-accent-soft:var(--mode-race-soft,rgba(224,65,47,.14))}',
+    '#race-root[data-mode="drift"]{--rx-accent:var(--mode-drift,#ff7a2b);--rx-accent-soft:var(--mode-drift-soft,rgba(255,122,43,.14))}',
+    '#race-root[data-mode="arcade"]{--rx-accent:var(--mode-arcade,#5b8cff);--rx-accent-soft:var(--mode-arcade-soft,rgba(91,140,255,.15))}',
+    /* head: kicker + serif title, then the Race·Drift·Arcade switch, the step pills and "Main menu" */
+    '#race-root .rx-headline{display:flex;flex-direction:column;justify-content:center;min-width:0;flex:0 1 auto}',
+    '#race-root .rx-headline .mx-kicker{margin:0 0 2px;white-space:nowrap}',
+    '#race-root .rx-headline .mx-title{font-size:var(--fs-xl);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '@media (min-width:1200px) and (min-height:821px){#race-root .rx-headline .mx-title{font-size:var(--fs-title)}}',
+    '#race-root .rx-topbar{padding-top:var(--sp-3);padding-bottom:var(--sp-3);gap:var(--sp-5)}',
+    '#race-root .rx-topbar>.rx-back{margin-left:auto;flex:none}#race-root .rx-steps{margin:0 auto 0 0}',
+    '@media (max-width:1100px){#race-root .rx-steps{display:none}}',
+    '@media (max-width:720px){#race-root .rx-topbar{flex-wrap:wrap;row-gap:var(--sp-2)}#race-root .rx-headline{order:-1;flex:1 1 100%}}',
+    '@media (max-height:500px){#race-root .rx-headline .mx-title{display:none}#race-root .rx-headline{order:0;flex:0 1 auto}#race-root .rx-topbar{flex-wrap:nowrap}}',
+    '#race-root .mx-kicker{color:var(--rx-accent)}',
+    /* section heads: caps label + numbered step badge in the mode accent; the dash keeps the accent too */
+    '#race-root .rx-section-title .mx-step{color:var(--rx-accent);background:var(--rx-accent-soft);border-color:color-mix(in srgb,var(--rx-accent) 35%,transparent)}',
+    '#race-root .rx-skew{width:18px;height:2px;border-radius:2px;transform:none;margin-right:var(--sp-1)}',
+    /* selected track / stunt card: the mode-accent ring + soft tint (like .mx-card.is-on) */
+    '#race-root .rx-track-card.is-selected{border-color:var(--rx-accent);box-shadow:inset 0 0 0 1px var(--rx-accent);background:linear-gradient(160deg,var(--rx-accent-soft),transparent 70%),var(--panel-2)}',
+    '#race-root .rx-track-card.is-selected::after{box-shadow:none}',
+    /* segmented controls: the .cb-tab-list / .cb-tab look (raised active tab, short accent underline) */
+    '#race-root .rx-seg.cb-seg-btns,#race-root .rx-seg .cb-seg-btns{padding:3px;border-radius:12px;box-shadow:none}',
+    '#race-root .rx-seg .cb-seg-btn{position:relative;min-height:32px;border-radius:9px;font-size:var(--fs-sm);font-weight:650}',
+    '#race-root .rx-seg .cb-seg-btn.is-active{color:var(--text-strong);border-color:var(--line);box-shadow:0 2px 8px -3px rgba(0,0,0,.5)}',
+    '[data-theme="light"] #race-root .rx-seg .cb-seg-btn.is-active{background:var(--panel);box-shadow:0 2px 6px -3px rgba(40,32,18,.25)}',
+    '#race-root .rx-seg .cb-seg-btn.is-active::after{content:"";position:absolute;left:30%;right:30%;bottom:3px;height:2px;border-radius:2px;background:var(--accent-grad)}',
+    '#race-root .rx-quick button.is-active{color:var(--text-strong);border-color:var(--rx-accent);background:var(--rx-accent-soft)}',
+    /* pause card = .mx-menu: serif title, full-width menu buttons */
+    '#race-root .rx-pause-menu h2{font-size:var(--fs-title);font-weight:var(--fw-title);letter-spacing:var(--tracking-title)}',
+    '#race-root .rx-pause-menu .rx-btn{min-height:var(--control-h-lg)}',
+    /* kickers sit on a short accent dash (§ 18) */
+    '#race-root .rx-eyebrow.mx-kicker{margin:0;letter-spacing:var(--tracking-caps);font-weight:700}',
+    '@media (pointer:coarse){#race-root .rx-seg .cb-seg-btn{min-height:44px}#race-root .rx-back{min-width:44px}}',
+    /* in-race overlays (lights, feed, hints, quickbar, rotate card) sit on the dark 3D view in both themes: HUD tokens */
+    '#race-root .rx-race{--rx-text:var(--hud-ink,#f4f5f7);--rx-dim:var(--hud-dim,rgba(244,245,247,.62));--rx-faint:var(--hud-faint,rgba(244,245,247,.3));--rx-line:var(--hud-line,rgba(255,255,255,.16));--rx-line-2:var(--hud-line,rgba(255,255,255,.16));--text:var(--hud-ink,#f4f5f7);--text-strong:var(--hud-ink,#fff);--text-dim:var(--hud-dim,rgba(244,245,247,.62));color:var(--rx-text)}',
+    '#race-root .rx-net,#race-root .rx-net-banner,#race-root .rx-fallback-note{color:var(--hud-ink,#f4f5f7)}',
+    /* the loading / grid screen follows the theme like the results screen (it covers the 3D view) */
+    '#race-root .rx-loading{background:linear-gradient(90deg,color-mix(in srgb,var(--bg) 94%,transparent) 0%,color-mix(in srgb,var(--bg) 78%,transparent) 55%,color-mix(in srgb,var(--bg) 90%,transparent) 100%)}',
   ].join('\n');
 
   /* ----------------------------------------------------------- canvas utils */
@@ -2330,7 +2369,8 @@ CB.race = CB.race || {};
     if (U && U.layer) {
       var n = routeName(U.opts.returnTo || U.opts._from || RT.from);
       var names = { atelier: 'Garage', menu: 'menu', career: 'career', garage: 'My Cars', challenges: 'challenges', profile: 'profile', settings: 'settings', replays: 'replays', achievements: 'achievements' };
-      return 'Back to ' + (names[n] || (isGameLaunch() ? 'career' : 'menu'));
+      var to = names[n] || (isGameLaunch() ? 'career' : 'menu');
+      return to === 'menu' ? 'Main menu' : 'Back to ' + to;   // copy shared by every screen head (css/styles.css § 18)
     }
     return isGameLaunch() ? 'Back to career' : 'Back to Garage';
   }
@@ -2364,6 +2404,9 @@ CB.race = CB.race || {};
   function setScreen(name) {
     U.screen = name;
     U.root.dataset.screen = name;
+    // screen family (css/styles.css § 18): the mode accent (--mode-race / -drift / -arcade) follows the discipline
+    U.root.dataset.mode = isArcadeS(U.settings) ? 'arcade' : U.settings.discipline === 'drift' ? 'drift' : 'race';
+    U.root.classList.add('mx');
     setDriving(name === 'race' || name === 'loading');
   }
   /** While driving the global nav bar is hidden (UNIFY-SPEC): flag on <html> + event + optional router hook. */
@@ -2668,6 +2711,7 @@ CB.race = CB.race || {};
     var top = h('header', { class: 'rx-topbar' },
       h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: drifting ? 'Drift Mode' : 'Race Mode' }))),
+      headline(refs, drifting ? 'drift' : 'race'),
       isGameLaunch() ? null : disciplineTabs(S.discipline),
       h('nav', { class: 'rx-steps' },
         h('span', { class: 'rx-step is-on is-link', role: 'button', tabindex: '0', title: 'Change discipline (Drift / Race)', html: '<b>01</b>' + (drifting ? 'Drift' : 'Race'),
@@ -2675,13 +2719,13 @@ CB.race = CB.race || {};
         h('span', { class: 'rx-step is-on', html: '<b>02</b>Circuit' }),
         h('span', { class: 'rx-step is-on', html: '<b>03</b>Session' }),
         h('span', { class: 'rx-step', html: '<b>04</b>Drive' })),
-      h('button', { class: 'cb-btn rx-btn ghost', type: 'button', onclick: close, title: backLabel() + ' (Esc)' }, icon('back', 16), backLabel(), kbd('Esc')));
+      h('button', { class: 'cb-btn rx-btn ghost cb-back rx-back', type: 'button', onclick: close, title: backLabel() + ' (Esc)', 'aria-label': backLabel() }, icon('back', 16), backLabel(), kbd('Esc')));
 
     /* left column: circuit */
     var left = h('div', { class: 'rx-col rx-scroll' });
     var banner = moduleBanner(mods);
     if (banner) left.appendChild(banner);
-    left.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Select circuit'),
+    left.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, stepBadge(2), 'Select circuit'),
       h('span', { class: 'rx-eyebrow', text: tracks.length ? plural(tracks.length, 'circuit') : '' })));
     var featured = h('div', { class: 'rx-panel rx-featured' });
     refs.featured = featured;
@@ -2717,7 +2761,7 @@ CB.race = CB.race || {};
     right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Your machine'),
       h('span', { class: 'rx-eyebrow accent', text: 'From the Garage' })));
     right.appendChild(carCard());
-    right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Session')));
+    right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, stepBadge(3), 'Session')));
     right.appendChild(sessionForm(mods));
 
     var main = h('div', { class: 'rx-setup-main' }, left, right);
@@ -2728,7 +2772,7 @@ CB.race = CB.race || {};
     var startBtn = h('button', { class: 'cb-btn rx-btn primary big', type: 'button', onclick: startRace }, icon(drifting ? 'drift' : 'flag', 18), drifting ? 'Start drift' : 'Start race');
     refs.startBtn = startBtn;
     var foot = h('footer', { class: 'rx-footer' }, summary,
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px', 'margin-left': 'auto' } }, kbd('Enter'), ' to start'),
+      h('span', { class: 'rx-dim', style: { 'font-size': 'var(--fs-sm)', 'margin-left': 'auto' } }, kbd('Enter'), ' to start'),
       startBtn);
     foot.lastChild.style.marginLeft = '0';
 
@@ -2763,13 +2807,14 @@ CB.race = CB.race || {};
     var top = h('header', { class: 'rx-topbar' },
       h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: 'Arcade Mode' }))),
+      headline(refs, 'arcade'),
       isGameLaunch() ? null : disciplineTabs('arcade'),
       h('nav', { class: 'rx-steps' },
         h('span', { class: 'rx-step is-on', html: '<b>01</b>Arcade' }),
         h('span', { class: 'rx-step is-on', html: '<b>02</b>Track' }),
         h('span', { class: 'rx-step is-on', html: '<b>03</b>Rules' }),
         h('span', { class: 'rx-step', html: '<b>04</b>Drive' })),
-      h('button', { class: 'cb-btn rx-btn ghost', type: 'button', onclick: close, title: backLabel() + ' (Esc)' }, icon('back', 16), backLabel(), kbd('Esc')));
+      h('button', { class: 'cb-btn rx-btn ghost cb-back rx-back', type: 'button', onclick: close, title: backLabel() + ' (Esc)', 'aria-label': backLabel() }, icon('back', 16), backLabel(), kbd('Esc')));
 
     var left = h('div', { class: 'rx-col rx-scroll' });
     var banner = moduleBanner(mods);
@@ -2782,7 +2827,7 @@ CB.race = CB.race || {};
     var stunts = list.filter(function (e) { return e.kind === 'stunt'; }), circuits = list.filter(function (e) { return e.kind !== 'stunt'; });
     function section(title, entries, eyebrow) {
       if (!entries.length) return;
-      left.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), title),
+      left.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, stepBadge(2), title),
         h('span', { class: 'rx-eyebrow', text: eyebrow })));
       var grid = h('div', { class: 'rx-track-grid' });
       entries.forEach(function (e) {
@@ -2814,7 +2859,7 @@ CB.race = CB.race || {};
     right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Your machine'),
       h('span', { class: 'rx-eyebrow accent', text: 'From the garage' })));
     right.appendChild(carCard());
-    right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Arcade session')));
+    right.appendChild(h('div', { class: 'rx-section-title' }, h('h3', null, stepBadge(3), 'Arcade session')));
     var form = h('div', { class: 'rx-panel rx-form' });
     var ARC_MODES = (arcadeMod() && arcadeMod().MODES) || [{ id: 'race', name: 'Race', desc: 'Grid start against arcade AI' }, { id: 'time-trial', name: 'Time trial', desc: 'Solo hot laps' }];
     var modeField = field('Mode', segmented(ARC_MODES, S.mode, function (v, o) { S.mode = v; persist(); modeField._desc.textContent = o.desc; refreshSetupState(); }), { desc: pick(ARC_MODES, S.mode).desc });
@@ -2859,7 +2904,8 @@ CB.race = CB.race || {};
     var startBtn = h('button', { class: 'cb-btn rx-btn primary big', type: 'button', onclick: startRace }, icon('bolt', 18), 'Start arcade');
     refs.startBtn = startBtn;
     var foot = h('footer', { class: 'rx-footer' }, summary,
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px', 'margin-left': 'auto' } }, kbd('Enter'), ' to start'), startBtn);
+      h('span', { class: 'rx-dim', style: { 'font-size': 'var(--fs-sm)', 'margin-left': 'auto' } }, kbd('Enter'), ' to start'), startBtn);
+    startBtn.style.marginLeft = '0';   // the hint keeps the CTA docked right, like the race / drift footer
     var screen = h('div', { class: 'rx-setup rx-arcade' }, top, main, foot);
     U.host.appendChild(screen);
     renderArcadeFeatured();
@@ -2957,15 +3003,16 @@ CB.race = CB.race || {};
     var top = h('header', { class: 'rx-topbar' },
       h('div', { class: 'rx-brand' }, h('div', { class: 'rx-brand-mark', text: 'R' }),
         h('div', null, h('div', { class: 'rx-brand-name', text: 'Redline' }), h('div', { class: 'rx-brand-sub', text: 'Choose your discipline' }))),
+      headline(null, 'discipline'),
       h('nav', { class: 'rx-steps', 'aria-hidden': 'true' },
         h('span', { class: 'rx-step is-on', html: '<b>01</b>Discipline' }),
         h('span', { class: 'rx-step', html: '<b>02</b>Circuit' }),
         h('span', { class: 'rx-step', html: '<b>03</b>Session' }),
         h('span', { class: 'rx-step', html: '<b>04</b>Drive' })),
-      h('button', { class: 'cb-btn rx-btn ghost', type: 'button', onclick: close, title: backLabel() + ' (Esc)' }, icon('back', 16), backLabel(), kbd('Esc')));
+      h('button', { class: 'cb-btn rx-btn ghost cb-back rx-back', type: 'button', onclick: close, title: backLabel() + ' (Esc)', 'aria-label': backLabel() }, icon('back', 16), backLabel(), kbd('Esc')));
     var cards = DISCIPLINES.map(function (d) {
       var off = d.id === 'drift' && !hasDrift;
-      var colour = d.id === 'drift' ? '#ff6a2b' : 'var(--rx-accent)';
+      var colour = d.id === 'drift' ? 'var(--mode-drift)' : 'var(--mode-race)';
       var card = h('button', { class: 'rx-disc-card' + (S.discipline === d.id ? ' is-last' : ''), type: 'button', 'data-disc': d.id,
           style: { '--rx-disc': colour }, disabled: off ? true : null,
           title: off ? 'Drift modules (js/race/drift/*) are not loaded on this page' : d.name + ' (' + d.name.charAt(0) + ')' },
@@ -2987,6 +3034,26 @@ CB.race = CB.race || {};
     U.disciplineCards = cards;
     var focus = cards[S.discipline === 'race' || !hasDrift ? 1 : 0];
     try { focus.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  }
+  /** Numbered section badge (css/styles.css § 18 .mx-step), the number of the matching step pill. */
+  function stepBadge(n) { return h('i', { class: 'mx-step', 'aria-hidden': 'true', text: String(n) }); }
+  /** Screen head shared with Derby / F1 / Drag (§ 18): mode-accent kicker + serif title. The kicker follows the session mode. */
+  var HEADLINES = { race: 'Go racing', drift: 'Go sideways', arcade: 'Point it and go', discipline: 'Choose your discipline' };
+  function headKicker(kind) {
+    var S = U && U.settings;
+    if (!S || kind === 'discipline') return 'Race · Drift';
+    if (kind === 'arcade') return 'Arcade · ' + (S.mode === 'time-trial' ? 'Time trial' : 'Race');
+    if (kind === 'drift') return 'Drift · ' + pick(DRIFT_MODES, S.driftMode).name;
+    return 'Race · ' + pick(MODES, S.mode).name;
+  }
+  function headline(refs, kind) {
+    var k = h('div', { class: 'mx-kicker rx-head-kicker', text: headKicker(kind) });
+    if (refs) refs.kicker = k;
+    return h('div', { class: 'rx-headline' }, k, h('h1', { class: 'mx-title rx-head-title', text: HEADLINES[kind] || '' }));
+  }
+  function syncHeadline() {
+    var refs = U && U.setupRefs;
+    if (refs && refs.kicker) refs.kicker.textContent = headKicker(isArcadeS(U.settings) ? 'arcade' : U.settings.discipline === 'drift' ? 'drift' : 'race');
   }
   /** Race | Drift switch (shared .cb-tabs look). Routed: navigates between #/race and #/drift. */
   function disciplineTabs(active) {
@@ -3300,6 +3367,7 @@ CB.race = CB.race || {};
   function refreshSetupState() {
     if (!U || !U.setupRefs) return;
     var S = U.settings, refs = U.setupRefs, mods = moduleStatus();
+    syncHeadline();
     if (S.discipline === 'drift') { refreshDriftSetup(S, refs, mods); return; }
     if (isArcadeS(S)) { refreshArcadeSetup(S, refs, mods); return; }
     var tt = S.mode === 'time-trial', pr = S.mode === 'practice';
@@ -3989,7 +4057,7 @@ CB.race = CB.race || {};
     var last = nameParts.length > 1 ? nameParts.pop() : '';
     var screen = h('div', { class: 'rx-loading' },
       h('div', { class: 'rx-load-left' },
-        h('div', { class: 'rx-eyebrow accent', text: (def.country || 'Circuit') + ' · ' + sessionLabel(S) }),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (def.country || 'Circuit') + ' · ' + sessionLabel(S) }),
         h('div', { class: 'rx-load-title rx-display' }, nameParts.join(' ') + (last ? ' ' : ''), last ? h('span', { text: last }) : null),
         h('div', { class: 'rx-summary' },
           h('span', { class: 'rx-chip', text: fmtLength(st.length_m, S.units) }),
@@ -4004,7 +4072,7 @@ CB.race = CB.race || {};
         h('div', { class: 'rx-progress' }, steps),
         h('div', { class: 'rx-go-row' }, go,
           h('button', { class: 'cb-btn rx-btn ghost', type: 'button', onclick: function () { teardownRace(); showSetup(); } }, icon('back', 14), 'Setup'),
-          h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), ' / ', kbd('A')))),
+          h('span', { class: 'rx-dim', style: { 'font-size': 'var(--fs-sm)' } }, kbd('Enter'), ' / ', kbd('A')))),
       h('div', { class: 'rx-panel rx-grid-panel' },
         h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), drifting ? 'Drift brief' : S.mode === 'race' ? 'Starting grid' : 'Session'),
           h('span', { class: 'rx-eyebrow', text: (U.race.def && U.race.def.name) || '' })),
@@ -4019,7 +4087,7 @@ CB.race = CB.race || {};
     var m = pick(DRIFT_MODES, S.driftMode);
     var zones = def && Array.isArray(def.driftZones) ? plural(def.driftZones.length, 'clipping zone') : 'Clipping zones generated from the corners';
     var row = function (label, value) {
-      return h('div', { class: 'rx-grid-slot is-player' }, h('span', { class: 'rx-livery', style: { background: 'linear-gradient(180deg,#ff7a3d,#ffb020)' } }),
+      return h('div', { class: 'rx-grid-slot is-player' }, h('span', { class: 'rx-livery', style: { background: 'linear-gradient(180deg,var(--mode-drift),var(--warn))' } }),
         h('span', { class: 'rx-grid-who' }, h('b', { text: label }), h('small', { text: value })));
     };
     list.appendChild(row(m.name, m.desc));
@@ -4517,9 +4585,9 @@ CB.race = CB.race || {};
       })());
     var card = h('div', { class: 'rx-panel rx-pause', role: 'dialog', 'aria-label': 'Paused' },
       h('div', { class: 'rx-pause-menu' },
-        h('div', { class: 'rx-eyebrow accent', text: (R.def.name || '') + ' · ' + (R.net ? 'Multiplayer · ' + (R.netMode === 'drift' ? 'Drift battle' : R.netMode === 'free' ? 'Free roam' : 'Race') : sessionLabel(S)) }),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (R.def.name || '') + ' · ' + (R.net ? 'Multiplayer · ' + (R.netMode === 'drift' ? 'Drift battle' : R.netMode === 'free' ? 'Free roam' : 'Race') : sessionLabel(S)) }),
         h('h2', { class: 'rx-display', text: R.net ? 'Menu' : 'Paused' }),
-        R.net ? h('div', { class: 'rx-dim', style: { margin: '-4px 0 10px', 'font-size': '12px' }, text: 'Online session: the race keeps running while this menu is open.' }) : null,
+        R.net ? h('div', { class: 'rx-dim', style: { margin: '-4px 0 10px', 'font-size': 'var(--fs-sm)' }, text: 'Online session: the race keeps running while this menu is open.' }) : null,
         mb('Resume', 'play', resumeRace, 'primary'),
         phoneButtons(mb),
         R.net ? null : mb('Restart session', 'restart', restartRace),
@@ -4528,7 +4596,7 @@ CB.race = CB.race || {};
           : S.mode !== 'race' ? mb(R.isDrift ? 'End run · results' : 'End session · results', 'flag', function () { endSession(); }) : null,
         R.net ? mb(netIsHost(R) ? 'Leave · ends the session' : 'Leave race · lobby', 'back', netLeave, 'ghost') : mb('Change setup', 'settings', function () { teardownRace(); showSetup(); }),
         R.net ? null : isGameLaunch() ? mb(backLabel(), 'back', close) : mb('Tune car · Garage', 'wrench', goAtelier),
-        !R.net && !isGameLaunch() && U.layer ? mb('Back to menu', 'back', goMenu, 'ghost') : null),
+        !R.net && !isGameLaunch() && U.layer ? mb('Main menu', 'back', goMenu, 'ghost') : null),
       h('div', { class: 'rx-pause-side rx-scroll' },
         status,
         R.net ? (U.netPauseBox = h('div', null, netPauseStatus(R))) : null,
@@ -4809,8 +4877,8 @@ CB.race = CB.race || {};
     var head = h('header', { class: 'rx-res-head' },
       h('div', { class: 'rx-res-pos rx-display rx-num' }, me ? 'P' : null, me ? String(me.position) : '—', me ? h('small', { text: '/' + rows.length }) : null),
       h('div', { class: 'rx-res-title' },
-        h('div', { class: 'rx-eyebrow accent', text: (R.def.name || '') + ' · Multiplayer · ' + (arc ? 'Arcade · ' : '') + (drift ? 'Drift battle' : free ? 'Free roam' : plural(R.settings.laps, 'lap')) }),
-        h('h2', { class: 'rx-display', text: title }, arc ? h('span', { class: 'rx-chip arcade rx-res-arcade', title: 'Arcade multiplayer: no records, no purse' }, icon('bolt', 12), 'ARCADE') : null),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (R.def.name || '') + ' · Multiplayer · ' + (arc ? 'Arcade · ' : '') + (drift ? 'Drift battle' : free ? 'Free roam' : plural(R.settings.laps, 'lap')) }),
+        h('h2', { class: 'rx-display mx-res-title', text: title }, arc ? h('span', { class: 'rx-chip arcade rx-res-arcade', title: 'Arcade multiplayer: no records, no purse' }, icon('bolt', 12), 'ARCADE') : null),
         h('div', { class: 'rx-dim' + (ended && !final ? ' rx-bad' : ''), 'data-net-note': final ? 'final' : 'pending', text: note })));
     var tbl = h('table', { class: 'rx-table' });
     tbl.appendChild(h('thead', null, h('tr', null, h('th', { text: 'Pos' }), h('th', { text: 'Driver' }),
@@ -4843,7 +4911,7 @@ CB.race = CB.race || {};
       (lob && (lob.view === 'closed' || (lob.core && lob.core.phase === 'closed')))));
     var back = h('button', { class: 'cb-btn rx-btn primary big', type: 'button', 'data-act': 'net-lobby', onclick: netLeave }, icon('back', 16), noRoom ? 'Back to multiplayer' : 'Back to lobby · rematch');
     var foot = h('footer', { class: 'rx-res-foot' }, h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim', style: { 'font-size': '12px' } }, kbd('Enter'), noRoom ? ' back to multiplayer' : ' back to lobby'), back);
+      h('span', { class: 'rx-dim', style: { 'font-size': 'var(--fs-sm)' } }, kbd('Enter'), noRoom ? ' back to multiplayer' : ' back to lobby'), back);
     U.host.appendChild(h('div', { class: 'rx-results', 'data-net': final ? 'final' : 'pending' }, head, main, foot));
     U.resultsRedraw = null;
     try { back.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
@@ -5200,9 +5268,9 @@ CB.race = CB.race || {};
       h('div', { class: 'rx-res-pos rx-display rx-num' }, mode === 'race' && myRow && !myRow.dnf ? 'P' : null, posText,
         mode === 'race' && myRow && !myRow.dnf ? h('small', { text: '/' + total }) : null),
       h('div', { class: 'rx-res-title' },
-        h('div', { class: 'rx-eyebrow accent', text: (R.def.name || '') + (chName ? ' · ' + (chEval.text || 'Challenge') : ' · ' + pick(MODES, mode).name + (mode === 'practice' ? '' : ' · ' + plural(S.laps, 'lap'))) }),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (R.def.name || '') + (chName ? ' · ' + (chEval.text || 'Challenge') : ' · ' + pick(MODES, mode).name + (mode === 'practice' ? '' : ' · ' + plural(S.laps, 'lap'))) }),
         R.isArcade ? h('span', { class: 'rx-chip arcade rx-res-arcade', title: 'Arcade handling: separate best laps' }, icon('bolt', 12), 'ARCADE') : null,
-        h('h2', { class: 'rx-display', text: title }),
+        h('h2', { class: 'rx-display mx-res-title', text: title }),
         h('div', { class: 'rx-dim', text: resultBuildName() + ' · ' + pick(WEATHERS, S.weather).name + ' · ' + pick(TIMES, S.timeOfDay).name })),
       badges);
 
@@ -5221,7 +5289,7 @@ CB.race = CB.race || {};
       var delta = gp && mode === 'race' && !r.dnf ? gp - r.position : 0;
       tbody.appendChild(h('tr', { class: r.isPlayer ? 'is-player' : '', style: { 'animation-delay': (i * 40) + 'ms' } },
         h('td', { class: 'pos rx-num' }, String(r.position),
-          delta ? h('span', { class: delta > 0 ? 'rx-good' : 'rx-bad', style: { 'font-size': '10px', 'margin-left': '5px', 'font-style': 'normal' }, text: (delta > 0 ? '▲' : '▼') + Math.abs(delta) }) : null),
+          delta ? h('span', { class: delta > 0 ? 'rx-good' : 'rx-bad', style: { 'font-size': 'var(--fs-2xs)', 'margin-left': '5px', 'font-style': 'normal' }, text: (delta > 0 ? '▲' : '▼') + Math.abs(delta) }) : null),
         h('td', null, h('div', { class: 'who' },
           h('span', { class: 'rx-carnum', style: { background: col, color: readableOn(col) }, text: r.number != null ? String(r.number) : '' }),
           h('div', null, h('b', { text: (r.name || 'Driver') + (r.isPlayer ? ' (you)' : '') }), h('small', { text: carSubtitle(r) })))),
@@ -5233,7 +5301,7 @@ CB.race = CB.race || {};
     tbl.appendChild(thead); tbl.appendChild(tbody);
     var tableWrap = h('div', { class: 'rx-panel rx-table-wrap rx-scroll' }, tbl);
     if (mode === 'race' && rows.some(function (r) { return /\*$/.test(r.gapText || ''); })) {
-      tableWrap.appendChild(h('div', { class: 'rx-dim', style: { 'font-size': '11px', padding: '8px 12px' }, text: '* still running when the session closed — gap estimated' }));
+      tableWrap.appendChild(h('div', { class: 'rx-dim', style: { 'font-size': 'var(--fs-xs)', padding: '8px 12px' }, text: '* still running when the session closed — gap estimated' }));
     }
 
     /* side: tiles + charts */
@@ -5286,7 +5354,7 @@ CB.race = CB.race || {};
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'replay', title: 'Broadcast replay with timeline, cameras and event markers', onclick: function () { openReplay(R, false); } }, icon('film', 16), 'Watch replay') : null,
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'photo', title: 'Free camera, filters and PNG export', onclick: function () { openReplay(R, true); } }, icon('camera', 16), 'Photo mode') : null,
       h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' race again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
+      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': 'var(--fs-sm)' } }, kbd('Enter'), oneShot ? ' continue' : ' race again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
       again);
 
     U.host.appendChild(h('div', { class: 'rx-results' }, head, main, foot));
@@ -5329,7 +5397,7 @@ CB.race = CB.race || {};
     var modeName = pick(DRIFT_MODES, raw.driftMode || S.driftMode).name;
     var head = h('header', { class: 'rx-res-head' },
       h('div', { class: 'rx-res-title' },
-        h('div', { class: 'rx-eyebrow', style: { color: '#ff7a3d' }, text: (R.def.name || '') + ' · Drift · ' + modeName }),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (R.def.name || '') + ' · Drift · ' + modeName }),
         h('div', { class: 'rx-drift-score' },
           h('div', { class: 'rx-drift-total rx-num', text: fmtPts(total) }),
           medal ? h('span', { class: 'rx-medal', style: { color: MEDAL_COLORS[medal] || '#fff' } }, h('i'), medal)
@@ -5375,7 +5443,7 @@ CB.race = CB.race || {};
     }
     var nextBox = next ? h('div', { class: 'rx-panel rx-drift-panel' },
       h('div', { class: 'rx-stat-l', text: 'Next: ' + next.medal }),
-      h('div', { class: 'rx-num', style: { 'font-size': '20px', 'font-weight': '800' }, text: fmtPts(next.need - total) + ' pts to go' }),
+      h('div', { class: 'rx-num', style: { 'font-size': 'var(--fs-xl)', 'font-weight': '800' }, text: fmtPts(next.need - total) + ' pts to go' }),
       h('div', { class: 'rx-drift-bar' }, h('i', { style: { width: Math.round(clamp(total / next.need, 0, 1) * 100) + '%' } }))) : null;
     var main = h('div', { class: 'rx-res-main' },
       h('div', { class: 'rx-panel rx-drift-panel rx-scroll' },
@@ -5394,7 +5462,7 @@ CB.race = CB.race || {};
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'replay', onclick: function () { openReplay(R, false); } }, icon('film', 16), 'Watch replay') : null,
       hasReplay ? h('button', { class: 'cb-btn rx-btn', type: 'button', 'data-act': 'photo', onclick: function () { openReplay(R, true); } }, icon('camera', 16), 'Photo mode') : null,
       h('span', { class: 'rx-spacer' }),
-      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': '12px' } }, kbd('Enter'), oneShot ? ' continue' : ' go again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
+      h('span', { class: 'rx-dim rx-res-keys', style: { 'font-size': 'var(--fs-sm)' } }, kbd('Enter'), oneShot ? ' continue' : ' go again · ', oneShot ? null : kbd('Esc'), oneShot ? null : ' setup'),
       again);
     U.host.appendChild(h('div', { class: 'rx-results' }, head, main, foot));
     U.resultsRedraw = null;
@@ -5537,7 +5605,7 @@ CB.race = CB.race || {};
     clear(U.host);
     var card = h('div', { class: 'rx-panel rx-error' },
       h('div', { class: 'rx-eyebrow', style: { color: 'var(--rx-bad)' } }, 'Race mode'),
-      h('h2', { class: 'rx-display', style: { margin: '6px 0 10px', 'font-size': '28px' }, text: 'Something went wrong' }),
+      h('h2', { class: 'rx-display', style: { margin: '6px 0 10px', 'font-size': 'var(--fs-2xl)' }, text: 'Something went wrong' }),
       h('p', { text: message }),
       detail ? h('pre', { text: String(detail).split('\n').slice(0, 12).join('\n') }) : null,
       h('div', { style: { display: 'flex', gap: '10px', 'margin-top': '14px' } },
