@@ -51,13 +51,13 @@ CB.race.drift = CB.race.drift || {};
   /* ------------------------------------------------------------ constants */
 
   var PAL = {
-    panel: 'rgba(9,10,14,0.80)',
-    panelSoft: 'rgba(9,10,14,0.55)',
-    edge: 'rgba(255,255,255,0.10)',
-    ink: '#f5f6f8',
-    inkDim: 'rgba(245,246,248,0.64)',
-    inkFaint: 'rgba(245,246,248,0.30)',
-    accent: '#ff5a1f',     // FORGE orange
+    panel: 'rgba(8,10,14,0.78)',          // --hud-panel (synced from the shared HUD tokens in create)
+    panelSoft: 'rgba(8,10,14,0.55)',      // --hud-panel-soft
+    edge: 'rgba(255,255,255,0.16)',       // --hud-line
+    ink: '#f4f5f7',                       // --hud-ink
+    inkDim: 'rgba(244,245,247,0.62)',     // --hud-dim
+    inkFaint: 'rgba(244,245,247,0.3)',    // --hud-faint
+    accent: '#ff7a2b',     // drift mode accent (--mode-drift)
     hot: '#ff3fa4',        // drift magenta
     cyan: '#2fe6ff',
     green: '#4dff9a',
@@ -69,6 +69,46 @@ CB.race.drift = CB.race.drift || {};
   };
   var FONT_UI = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";
   var FONT_NUM = "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace";
+
+  /* Shared HUD tokens (css/styles.css § 01 --hud-*, --mode-drift): every mode's HUD — race, drift, arcade, derby,
+     Formula 1, drag — draws with the same display + numeral fonts, panel fill / edge, ink and status colours, and
+     its own mode accent. The literals are the token values (Node tests, first frame); syncHud() reads the live
+     tokens once. HUDs stay dark over the 3D view in both themes, so the light theme's darkened accents are skipped. */
+  var HUD = {
+    font: "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif",
+    num: "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace",
+    panel: 'rgba(8,10,14,0.78)', panelSoft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)',
+    ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
+    accent: '#e7cd9a', good: '#3fdc8a', warn: '#ffb13a', bad: '#ff5a4d', mode: '#ff7a2b', radius: 10, radiusSm: 6
+  };
+  var HUD_VARS = { font: '--hud-font', num: '--hud-num', panel: '--hud-panel', panelSoft: '--hud-panel-soft', line: '--hud-line', ink: '--hud-ink',
+    dim: '--hud-dim', faint: '--hud-faint', accent: '--hud-accent', good: '--hud-good', warn: '--hud-warn', bad: '--hud-bad', mode: '--mode-drift',
+    radius: '--hud-radius', radiusSm: '--hud-radius-sm' };
+  var hudSynced = false;
+  function syncHud() {
+    if (hudSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return HUD;
+    hudSynced = true;
+    try {
+      var root = document.documentElement, cs = window.getComputedStyle(root), light = root.getAttribute('data-theme') === 'light';
+      Object.keys(HUD_VARS).forEach(function (k) {
+        if (k === 'mode' && light) return;
+        var v = String(cs.getPropertyValue(HUD_VARS[k]) || '').trim();
+        if (!v) return;
+        if (k === 'radius' || k === 'radiusSm') { var n = parseFloat(v); if (n >= 0) HUD[k] = n; } else HUD[k] = v;
+      });
+    } catch (e) { /* keep the literals */ }
+    return HUD;
+  }
+  /** A HUD panel fill at a given opacity (same tint as --hud-panel). */
+  function hudFill(a) { var m = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(HUD.panel); return 'rgba(' + (m ? m[1] + ',' + m[2] + ',' + m[3] : '8,10,14') + ',' + a + ')'; }
+  function syncTheme() {
+    if (hudSynced) return;
+    syncHud();
+    PAL.panel = HUD.panel; PAL.panelSoft = HUD.panelSoft; PAL.edge = HUD.line;
+    PAL.ink = HUD.ink; PAL.inkDim = HUD.dim; PAL.inkFaint = HUD.faint;
+    if (/^#[0-9a-f]{6}$/i.test(HUD.mode)) PAL.accent = HUD.mode;
+    FONT_UI = HUD.font; FONT_NUM = HUD.num;
+  }
   var TAU = Math.PI * 2;
   var DEG = 180 / Math.PI;
 
@@ -631,6 +671,7 @@ CB.race.drift = CB.race.drift || {};
   /* ============================================================== create */
 
   function create(canvas, opts) {
+    syncTheme();
     opts = Object.assign({}, opts || {});
     var units = opts.units === 'mph' ? 'mph' : 'kph';
     var projector = typeof opts.worldToScreen === 'function' ? opts.worldToScreen : rendererProjector(opts.renderer, canvas);

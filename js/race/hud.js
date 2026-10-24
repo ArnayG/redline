@@ -22,12 +22,12 @@ CB.race = CB.race || {};
   /* ------------------------------------------------------------ constants */
 
   var PAL = {
-    panel: 'rgba(10,12,16,0.82)',
-    panelSoft: 'rgba(10,12,16,0.62)',
-    panelEdge: 'rgba(255,255,255,0.08)',
-    ink: '#f4f5f7',
-    inkDim: 'rgba(244,245,247,0.62)',
-    inkFaint: 'rgba(244,245,247,0.32)',
+    panel: 'rgba(8,10,14,0.78)',          // --hud-panel (synced in syncTheme, like the rest of the chrome)
+    panelSoft: 'rgba(8,10,14,0.55)',      // --hud-panel-soft
+    panelEdge: 'rgba(255,255,255,0.16)',  // --hud-line
+    ink: '#f4f5f7',                       // --hud-ink
+    inkDim: 'rgba(244,245,247,0.62)',     // --hud-dim
+    inkFaint: 'rgba(244,245,247,0.3)',    // --hud-faint
     purple: '#b64dff',
     green: '#22d36b',
     yellow: '#ffd23f',
@@ -37,11 +37,43 @@ CB.race = CB.race || {};
     cyan: '#30e3ff',
     white: '#ffffff',
     gold: '#e8c25a',
-    accent: '#c9a56b'           // FORGE brand accent (css --accent; synced in syncTheme)
+    accent: '#e7cd9a'           // brand gold on the dark HUD (--hud-accent; synced in syncTheme)
   };
 
   var FONT_UI = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";
   var FONT_NUM = "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace";
+
+  /* Shared HUD tokens (css/styles.css § 01 --hud-*, --mode-race): every mode's HUD — race, drift, arcade, derby,
+     Formula 1, drag — draws with the same display + numeral fonts, panel fill / edge, ink and status colours, and
+     its own mode accent. The literals are the token values (Node tests, first frame); syncHud() reads the live
+     tokens once. HUDs stay dark over the 3D view in both themes, so the light theme's darkened accents are skipped. */
+  var HUD = {
+    font: "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif",
+    num: "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace",
+    panel: 'rgba(8,10,14,0.78)', panelSoft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)',
+    ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
+    accent: '#e7cd9a', good: '#3fdc8a', warn: '#ffb13a', bad: '#ff5a4d', mode: '#e0412f', radius: 10, radiusSm: 6
+  };
+  var HUD_VARS = { font: '--hud-font', num: '--hud-num', panel: '--hud-panel', panelSoft: '--hud-panel-soft', line: '--hud-line', ink: '--hud-ink',
+    dim: '--hud-dim', faint: '--hud-faint', accent: '--hud-accent', good: '--hud-good', warn: '--hud-warn', bad: '--hud-bad', mode: '--mode-race',
+    radius: '--hud-radius', radiusSm: '--hud-radius-sm' };
+  var hudSynced = false;
+  function syncHud() {
+    if (hudSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return HUD;
+    hudSynced = true;
+    try {
+      var root = document.documentElement, cs = window.getComputedStyle(root), light = root.getAttribute('data-theme') === 'light';
+      Object.keys(HUD_VARS).forEach(function (k) {
+        if (k === 'mode' && light) return;
+        var v = String(cs.getPropertyValue(HUD_VARS[k]) || '').trim();
+        if (!v) return;
+        if (k === 'radius' || k === 'radiusSm') { var n = parseFloat(v); if (n >= 0) HUD[k] = n; } else HUD[k] = v;
+      });
+    } catch (e) { /* keep the literals */ }
+    return HUD;
+  }
+  /** A HUD panel fill at a given opacity (same tint as --hud-panel). */
+  function hudFill(a) { var m = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(HUD.panel); return 'rgba(' + (m ? m[1] + ',' + m[2] + ',' + m[3] : '8,10,14') + ',' + a + ')'; }
 
   var TIRE_ICONS = {
     slick: { l: 'S', c: '#ff2e3d' },
@@ -406,19 +438,14 @@ CB.race = CB.race || {};
   /** UNIFY-SPEC: pick up the shared design tokens (css/styles.css) so the HUD matches every other screen. */
   var themeSynced = false;
   function syncTheme() {
-    if (themeSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return;
+    if (themeSynced) return;
     themeSynced = true;
-    try {
-      var cs = window.getComputedStyle(document.documentElement);
-      var race = String(cs.getPropertyValue('--accent') || '').trim(), text = String(cs.getPropertyValue('--text') || '').trim(),
-        gold = String(cs.getPropertyValue('--accent') || '').trim(), good = String(cs.getPropertyValue('--good') || '').trim();
-      if (/^#[0-9a-f]{6}$/i.test(race)) PAL.accent = race;
-      if (/^#[0-9a-f]{6}$/i.test(text) && lum(text) > 0.7) PAL.ink = text;   // never a dark (light-theme) ink over the 3D view
-      if (/^#[0-9a-f]{6}$/i.test(gold)) PAL.gold = gold;
-      if (/^#[0-9a-f]{6}$/i.test(good)) PAL.green = good;
-      var ui = String(cs.getPropertyValue('--font') || '').trim();
-      if (ui) FONT_UI = "'Barlow Condensed','Roboto Condensed'," + ui;
-    } catch (e) { /* keep the built-in palette */ }
+    // the shared --hud-* tokens, never the page palette: the light theme's dark ink / dark gold / dark green would
+    // vanish over the 3D view
+    syncHud();
+    PAL.panel = HUD.panel; PAL.panelSoft = HUD.panelSoft; PAL.panelEdge = HUD.line;
+    PAL.ink = HUD.ink; PAL.inkDim = HUD.dim; PAL.inkFaint = HUD.faint; PAL.accent = HUD.accent;
+    FONT_UI = HUD.font; FONT_NUM = HUD.num;
   }
 
   function create(canvas, geom, trackDef, opts) {

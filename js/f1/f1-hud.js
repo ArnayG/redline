@@ -24,12 +24,50 @@ CB.f1 = CB.f1 || {};
   'use strict';
 
   var hasDOM = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.createElement === 'function';
-  var FONT = "'Barlow Condensed','Roboto Condensed','Arial Narrow',system-ui,sans-serif";
-  var MONO = "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace";
-  var C = { panel: 'rgba(8,10,14,0.84)', soft: 'rgba(8,10,14,0.62)', ink: '#f4f5f7', dim: 'rgba(244,245,247,0.6)', faint: 'rgba(244,245,247,0.28)',
+  var FONT = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";   // --hud-font (synced in create)
+  var MONO = "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace";   // --hud-num
+  var C = { panel: 'rgba(8,10,14,0.78)', soft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)', ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
     purple: '#b64dff', green: '#22d36b', yellow: '#ffd23f', red: '#ff2e3d', blue: '#2f8bff', cyan: '#30e3ff', amber: '#ff9f1c' };
   var TYRE = { soft: ['S', '#ff2e3d'], medium: ['M', '#ffd23f'], hard: ['H', '#f4f5f7'], inter: ['I', '#22d36b'], wet: ['W', '#2f8bff'] };
   var PIT_ORDER = ['soft', 'medium', 'hard', 'inter', 'wet'];
+
+  /* Shared HUD tokens (css/styles.css § 01 --hud-*, --mode-f1): every mode's HUD — race, drift, arcade, derby,
+     Formula 1, drag — draws with the same display + numeral fonts, panel fill / edge, ink and status colours, and
+     its own mode accent. The literals are the token values (Node tests, first frame); syncHud() reads the live
+     tokens once. HUDs stay dark over the 3D view in both themes, so the light theme's darkened accents are skipped. */
+  var HUD = {
+    font: "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif",
+    num: "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace",
+    panel: 'rgba(8,10,14,0.78)', panelSoft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)',
+    ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
+    accent: '#e7cd9a', good: '#3fdc8a', warn: '#ffb13a', bad: '#ff5a4d', mode: '#ff1e3c', radius: 10, radiusSm: 6
+  };
+  var HUD_VARS = { font: '--hud-font', num: '--hud-num', panel: '--hud-panel', panelSoft: '--hud-panel-soft', line: '--hud-line', ink: '--hud-ink',
+    dim: '--hud-dim', faint: '--hud-faint', accent: '--hud-accent', good: '--hud-good', warn: '--hud-warn', bad: '--hud-bad', mode: '--mode-f1',
+    radius: '--hud-radius', radiusSm: '--hud-radius-sm' };
+  var hudSynced = false;
+  function syncHud() {
+    if (hudSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return HUD;
+    hudSynced = true;
+    try {
+      var root = document.documentElement, cs = window.getComputedStyle(root), light = root.getAttribute('data-theme') === 'light';
+      Object.keys(HUD_VARS).forEach(function (k) {
+        if (k === 'mode' && light) return;
+        var v = String(cs.getPropertyValue(HUD_VARS[k]) || '').trim();
+        if (!v) return;
+        if (k === 'radius' || k === 'radiusSm') { var n = parseFloat(v); if (n >= 0) HUD[k] = n; } else HUD[k] = v;
+      });
+    } catch (e) { /* keep the literals */ }
+    return HUD;
+  }
+  /** A HUD panel fill at a given opacity (same tint as --hud-panel). */
+  function hudFill(a) { var m = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(HUD.panel); return 'rgba(' + (m ? m[1] + ',' + m[2] + ',' + m[3] : '8,10,14') + ',' + a + ')'; }
+  function syncTheme() {
+    if (hudSynced) return;
+    syncHud();
+    C.panel = HUD.panel; C.soft = HUD.panelSoft; C.line = HUD.line; C.ink = HUD.ink; C.dim = HUD.dim; C.faint = HUD.faint;
+    FONT = HUD.font; MONO = HUD.num;
+  }
   var ERS_MODES = ['auto', 'harvest', 'overtake'];
 
   function clamp(v, a, b) { v = +v; if (v !== v) v = a; return v < a ? a : v > b ? b : v; }
@@ -107,7 +145,7 @@ CB.f1 = CB.f1 || {};
     ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
     ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
   }
-  function panel(ctx, x, y, w, h, r, fill) { rr(ctx, x, y, w, h, r); ctx.fillStyle = fill || C.panel; ctx.fill(); }
+  function panel(ctx, x, y, w, h, r, fill) { rr(ctx, x, y, w, h, r); ctx.fillStyle = fill || C.panel; ctx.fill(); ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.stroke(); }
   function txt(ctx, s, x, y, color, px, weight, align, fam) {
     ctx.font = (weight || 700) + ' ' + Math.round(px) + 'px ' + (fam || FONT);
     ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
@@ -123,6 +161,7 @@ CB.f1 = CB.f1 || {};
   /* ---------------------------------------------------------------- instance */
   function create(o) {
     o = o || {};
+    syncTheme();
     var session = o.session || 'race';
     var hooks = o.hooks || null;
     var ctl = { drs: false, ersBoost: false, ersMode: 'auto', pitCompound: o.pitCompound || (o.weather === 'wet' ? 'wet' : 'medium'), box: false };
@@ -209,7 +248,7 @@ CB.f1 = CB.f1 || {};
         var st = document.createElement('style'); st.id = 'f1-touch-css';
         st.textContent = '.f1-touch{position:absolute;right:200px;bottom:calc(min(42vh,260px) + 6px);display:flex;gap:10px;z-index:5;pointer-events:none}' +
           '.f1-touch>*{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;display:grid;place-items:center;width:62px;height:62px;border-radius:50%;' +
-          'border:2px solid rgba(255,255,255,.3);background:rgba(8,12,22,.6);color:#fff;font:800 13px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:.08em}' +
+          'border:2px solid var(--hud-line,rgba(255,255,255,.16));background:var(--hud-panel-soft,rgba(8,10,14,.55));color:var(--hud-ink,#f4f5f7);font:800 13px/1 var(--hud-font,system-ui,sans-serif);letter-spacing:.08em}' +
           '.f1-touch .is-on{border-color:#22d36b;box-shadow:0 0 18px rgba(34,211,107,.7)}.f1-touch .ers.is-down{border-color:#30e3ff;box-shadow:0 0 18px rgba(48,227,255,.7)}' +
           '.f1-touch .box.is-on{border-color:#ffd23f;box-shadow:0 0 18px rgba(255,210,63,.7)}' +
           '@media (max-height:500px){.f1-touch{right:12px;bottom:146px;gap:8px}.f1-touch>*{width:46px;height:46px;font-size:11px}}';

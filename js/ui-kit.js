@@ -953,7 +953,7 @@ if (typeof window !== 'undefined') window.CB = CB;
         onClose: function () { if (!done) resolve(false); },
         actions: [
           { label: opts.cancelLabel || 'Cancel', kind: 'ghost', onClick: function () { done = true; resolve(false); } },
-          { label: opts.okLabel || 'Confirm', kind: opts.danger ? 'primary danger' : 'primary', onClick: function () { done = true; resolve(true); } }
+          { label: opts.okLabel || opts.confirmLabel || 'Confirm', kind: opts.danger ? 'primary danger' : 'primary', onClick: function () { done = true; resolve(true); } }
         ]
       });
     });

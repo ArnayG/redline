@@ -16,7 +16,40 @@ CB.derby = CB.derby || {};
   'use strict';
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
-  var FONT = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  var FONT = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";   // --hud-font (synced in create)
+  var NUMF = "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace";   // --hud-num
+
+  /* Shared HUD tokens (css/styles.css § 01 --hud-*, --mode-derby): every mode's HUD — race, drift, arcade, derby,
+     Formula 1, drag — draws with the same display + numeral fonts, panel fill / edge, ink and status colours, and
+     its own mode accent. The literals are the token values (Node tests, first frame); syncHud() reads the live
+     tokens once. HUDs stay dark over the 3D view in both themes, so the light theme's darkened accents are skipped. */
+  var HUD = {
+    font: "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif",
+    num: "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace",
+    panel: 'rgba(8,10,14,0.78)', panelSoft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)',
+    ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
+    accent: '#e7cd9a', good: '#3fdc8a', warn: '#ffb13a', bad: '#ff5a4d', mode: '#f0582a', radius: 10, radiusSm: 6
+  };
+  var HUD_VARS = { font: '--hud-font', num: '--hud-num', panel: '--hud-panel', panelSoft: '--hud-panel-soft', line: '--hud-line', ink: '--hud-ink',
+    dim: '--hud-dim', faint: '--hud-faint', accent: '--hud-accent', good: '--hud-good', warn: '--hud-warn', bad: '--hud-bad', mode: '--mode-derby',
+    radius: '--hud-radius', radiusSm: '--hud-radius-sm' };
+  var hudSynced = false;
+  function syncHud() {
+    if (hudSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return HUD;
+    hudSynced = true;
+    try {
+      var root = document.documentElement, cs = window.getComputedStyle(root), light = root.getAttribute('data-theme') === 'light';
+      Object.keys(HUD_VARS).forEach(function (k) {
+        if (k === 'mode' && light) return;
+        var v = String(cs.getPropertyValue(HUD_VARS[k]) || '').trim();
+        if (!v) return;
+        if (k === 'radius' || k === 'radiusSm') { var n = parseFloat(v); if (n >= 0) HUD[k] = n; } else HUD[k] = v;
+      });
+    } catch (e) { /* keep the literals */ }
+    return HUD;
+  }
+  /** A HUD panel fill at a given opacity (same tint as --hud-panel). */
+  function hudFill(a) { var m = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(HUD.panel); return 'rgba(' + (m ? m[1] + ',' + m[2] + ',' + m[3] : '8,10,14') + ',' + a + ')'; }
 
   /* ------------------------------------------------------------------ pure layout */
   function layout(w, h, o) {
@@ -89,14 +122,14 @@ CB.derby = CB.derby || {};
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
   function panel(ctx, r, alpha) {
-    rr(ctx, r.x, r.y, r.w, r.h, 9);
-    ctx.fillStyle = 'rgba(10,10,14,' + (alpha == null ? 0.62 : alpha) + ')'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1; ctx.stroke();
+    rr(ctx, r.x, r.y, r.w, r.h, HUD.radius);
+    ctx.fillStyle = hudFill(alpha == null ? 0.78 : alpha); ctx.fill();
+    ctx.strokeStyle = HUD.line; ctx.lineWidth = 1; ctx.stroke();
   }
-  function text(ctx, s, x, y, size, color, align, weight) {
-    ctx.font = (weight || 700) + ' ' + size + 'px ' + FONT;
+  function text(ctx, s, x, y, size, color, align, weight, fam) {
+    ctx.font = (weight || 700) + ' ' + size + 'px ' + (fam || FONT);
     ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = color || '#fff';
+    ctx.fillStyle = color || HUD.ink;
     ctx.fillText(s, x, y);
   }
   function fit(ctx, s, maxW) {
@@ -149,12 +182,12 @@ CB.derby = CB.derby || {};
     if (small) return;
     // engine temperature bar under the car
     var ty = by + bh + 10, tw = r.w - 16;
-    text(ctx, 'TEMP', r.x + 8, ty, 9, 'rgba(255,255,255,.55)', 'left', 700);
+    text(ctx, 'TEMP', r.x + 8, ty, 9, HUD.dim, 'left', 700);
     var tx0 = r.x + 40, tw2 = tw - 32;
     rr(ctx, tx0, ty - 3, tw2, 6, 3); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
     var tp = clamp(num(eng.temp, 0), 0, 1);
-    if (tp > 0.01) { rr(ctx, tx0, ty - 3, Math.max(4, tw2 * tp), 6, 3); ctx.fillStyle = tp > 0.8 ? '#ff4a3a' : tp > 0.5 ? '#f0a030' : '#6ac0ff'; ctx.fill(); }
-    if (eng.stalled) text(ctx, 'ENGINE DEAD', cx, ty + 14, 9, '#ff6a5a', 'center', 800);
+    if (tp > 0.01) { rr(ctx, tx0, ty - 3, Math.max(4, tw2 * tp), 6, 3); ctx.fillStyle = tp > 0.8 ? HUD.bad : tp > 0.5 ? HUD.warn : '#6ac0ff'; ctx.fill(); }
+    if (eng.stalled) text(ctx, 'ENGINE DEAD', cx, ty + 14, 9, HUD.bad, 'center', 800);
   }
 
   function arenaPath(ctx, a, tx) {
@@ -186,7 +219,7 @@ CB.derby = CB.derby || {};
     if (!o.noPanel) panel(ctx, r, 0.55);
     arenaPath(ctx, a, tx);
     ctx.fillStyle = o.ground || 'rgba(255,255,255,.08)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = HUD.dim; ctx.lineWidth = 1.5; ctx.stroke();
     // open edges (rooftop) in red dashes
     if (a.boundary.type === 'poly' && a.boundary.open && a.boundary.open.length) {
       ctx.save(); ctx.strokeStyle = '#ff5040'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]);
@@ -370,6 +403,7 @@ CB.derby = CB.derby || {};
 
   /* ------------------------------------------------------------------ HUD instance */
   function create() {
+    syncHud(); FONT = HUD.font; NUMF = HUD.num;
     var H = { banner: null, flash: 0, lastAlive: null, lastPhase: null, lastT: 0, goT: -9, outT: null, hitT: -9 };
     function setBanner(textMain, sub, color, dur, t) { H.banner = { text: textMain, sub: sub || '', color: color || '#fff', until: t + (dur || 2), t0: t }; }
     function draw(ctx, snap, view) {
@@ -452,22 +486,22 @@ CB.derby = CB.derby || {};
       ctx.font = '800 ' + (small ? 10 : 12) + 'px ' + FONT;
       text(ctx, fit(ctx, nameS, hr.w - 70), hr.x + 10, hr.y + (small ? 9 : 13), small ? 10 : 12, 'rgba(255,255,255,.8)', 'left', 800);
       var hp = clamp(num(c.health, 0), 0, 1);
-      text(ctx, Math.round(hp * 100) + '%', hr.x + hr.w - 10, hr.y + (small ? 9 : 13), small ? 11 : 14, hp < 0.25 ? '#ff6a5a' : '#fff', 'right', 800);
+      text(ctx, Math.round(hp * 100) + '%', hr.x + hr.w - 10, hr.y + (small ? 9 : 13), small ? 11 : 14, hp < 0.25 ? HUD.bad : HUD.ink, 'right', 800, NUMF);
       var bx = hr.x + 10, by = hr.y + (small ? 18 : 25), bw = hr.w - 20, bh = small ? 8 : 12;
       rr(ctx, bx, by, bw, bh, bh / 2); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
-      if (hp > 0) { rr(ctx, bx, by, Math.max(bh, bw * hp), bh, bh / 2); ctx.fillStyle = hp > 0.6 ? '#4ccf7a' : hp > 0.3 ? '#f0b030' : '#ff4a3a'; ctx.fill(); }
-      if (!small) text(ctx, Math.round(num(c.speed, 0) * 3.6) + ' km/h' + (c.gear < 0 ? ' · R' : '') + (c.boosting ? ' · NITRO' : '') + (c.shield > 0 ? ' · SHIELD' : ''), bx, hr.y + hr.h - 6, 10, 'rgba(255,255,255,.55)', 'left', 600);
+      if (hp > 0) { rr(ctx, bx, by, Math.max(bh, bw * hp), bh, bh / 2); ctx.fillStyle = hp > 0.6 ? HUD.good : hp > 0.3 ? HUD.warn : HUD.bad; ctx.fill(); }
+      if (!small) text(ctx, Math.round(num(c.speed, 0) * 3.6) + ' km/h' + (c.gear < 0 ? ' · R' : '') + (c.boosting ? ' · NITRO' : '') + (c.shield > 0 ? ' · SHIELD' : ''), bx, hr.y + hr.h - 6, 10, HUD.dim, 'left', 600);
       // ---- damage diagram
       panel(ctx, L.diagram);
       drawCarDiagram(ctx, c, L.diagram, t);
       // ---- counter + timer
       var cr = L.count;
       panel(ctx, cr);
-      text(ctx, snap.aliveCount + ' / ' + snap.total, cr.x + cr.w / 2, cr.y + cr.h * (small ? 0.42 : 0.4), small ? 15 : 20, '#fff', 'center', 900);
-      text(ctx, 'LEFT', cr.x + cr.w / 2, cr.y + cr.h * 0.82, small ? 7 : 9, 'rgba(255,255,255,.55)', 'center', 800);
+      text(ctx, snap.aliveCount + ' / ' + snap.total, cr.x + cr.w / 2, cr.y + cr.h * (small ? 0.42 : 0.4), small ? 15 : 20, HUD.ink, 'center', 800, NUMF);
+      text(ctx, 'LEFT', cr.x + cr.w / 2, cr.y + cr.h * 0.82, small ? 7 : 9, HUD.dim, 'center', 800);
       if (snap.timeLeft_s != null) {
         var tl = Math.ceil(snap.timeLeft_s), mm = Math.floor(tl / 60), ss = tl % 60;
-        text(ctx, mm + ':' + (ss < 10 ? '0' : '') + ss, L.timer.x + L.timer.w / 2, L.timer.y + L.timer.h / 2, small ? 12 : 15, tl <= 10 ? '#ff6a5a' : '#fff', 'center', 800);
+        text(ctx, mm + ':' + (ss < 10 ? '0' : '') + ss, L.timer.x + L.timer.w / 2, L.timer.y + L.timer.h / 2, small ? 12 : 15, tl <= 10 ? HUD.bad : HUD.ink, 'center', 800, NUMF);
       }
       // ---- minimap
       if (snap.arena) drawMinimap(ctx, snap.arena, snap.cars, L.minimap, { followId: c.id, playerId: player ? player.id : null, safeScale: SD.safeScale, entities: snap.entities });
@@ -476,7 +510,7 @@ CB.derby = CB.derby || {};
         var scX = small ? L.minimap.x + L.minimap.w / 2 : W / 2;
         var scY = small ? L.minimap.y + L.minimap.h + 13 : L.timer.y + (snap.timeLeft_s != null ? L.timer.h + 4 : 0) + 12;
         var scoreV = c.isPlayer && c.stats && num(c.stats.score, 0) > 0 ? c.stats.score : JS.score;
-        rr(ctx, scX - (small ? 44 : 64), scY - (small ? 10 : 14), small ? 88 : 128, small ? 28 : 38, 8); ctx.fillStyle = 'rgba(10,10,14,.55)'; ctx.fill();
+        rr(ctx, scX - (small ? 44 : 64), scY - (small ? 10 : 14), small ? 88 : 128, small ? 28 : 38, 8); ctx.fillStyle = hudFill(.55); ctx.fill();
         text(ctx, String(Math.round(scoreV)).replace(/\B(?=(\d{3})+(?!\d))/g, ','), scX, scY, small ? 15 : 22, '#ffd84a', 'center', 900);
         text(ctx, 'SCORE', scX, scY + (small ? 11 : 15), small ? 7 : 9, 'rgba(255,216,74,.65)', 'center', 800);
         var comboLive = JS.combo > 1 && t - JS.comboT < 3.2;
@@ -489,7 +523,7 @@ CB.derby = CB.derby || {};
       if (c.ram && !view.spectating && !c.out) {
         var rg = small ? { x: L.diagram.x + L.diagram.w + 6, y: L.diagram.y, w: Math.max(80, hr.w - L.diagram.w - 6), h: 14 } : { x: hr.x, y: L.diagram.y + L.diagram.h + 8, w: hr.w, h: 16 };
         var rch = clamp(num(c.ram.charge, 0), 0, 1);
-        rr(ctx, rg.x, rg.y, rg.w, rg.h, rg.h / 2); ctx.fillStyle = 'rgba(10,10,14,.6)'; ctx.fill();
+        rr(ctx, rg.x, rg.y, rg.w, rg.h, rg.h / 2); ctx.fillStyle = hudFill(.6); ctx.fill();
         rr(ctx, rg.x + 2, rg.y + 2, Math.max(rg.h - 4, (rg.w - 4) * rch), rg.h - 4, (rg.h - 4) / 2);
         ctx.fillStyle = c.ram.active ? '#ffffff' : rch >= 0.999 ? '#3aa0ff' : 'rgba(58,160,255,.65)'; ctx.fill();
         var bk = view.keys && view.keys.boost ? view.keys.boost : 'SHIFT';
@@ -498,7 +532,7 @@ CB.derby = CB.derby || {};
       if (c.idle && !c.out && !view.spectating) {
         var ip = 0.6 + 0.4 * Math.sin(t * 8), iy = small ? L.diagram.y + L.diagram.h + 6 : L.diagram.y + L.diagram.h + 32;
         ctx.globalAlpha = ip; rr(ctx, hr.x, iy, small ? 150 : 210, small ? 18 : 24, 6); ctx.fillStyle = 'rgba(255,60,30,.85)'; ctx.fill();
-        text(ctx, 'CAMPING! Get in there', hr.x + 8, iy + (small ? 9 : 12), small ? 10 : 12, '#fff', 'left', 900); ctx.globalAlpha = 1;
+        text(ctx, 'CAMPING! Get in there', hr.x + 8, iy + (small ? 9 : 12), small ? 10 : 12, HUD.ink, 'left', 900); ctx.globalAlpha = 1;
       }
       // ---- kill feed
       var feed = (snap.feed || []).filter(function (f) { return t - f.t < 6; });
@@ -513,7 +547,7 @@ CB.derby = CB.derby || {};
         ctx.font = (f.kind === 'taunt' ? 'italic 700 ' : '700 ') + (small ? 11 : 13) + 'px ' + FONT;
         var tw = Math.min(L.feed.w, ctx.measureText(ftxt).width + 16);
         var x0 = small ? L.feed.x + (L.feed.w - tw) / 2 : L.feed.x + L.feed.w - tw;
-        rr(ctx, x0, y - (small ? 8 : 10), tw, small ? 16 : 20, 5); ctx.fillStyle = involved ? 'rgba(14,12,10,.82)' : 'rgba(10,10,14,.62)'; ctx.fill();
+        rr(ctx, x0, y - (small ? 8 : 10), tw, small ? 16 : 20, HUD.radiusSm); ctx.fillStyle = involved ? 'rgba(14,12,10,.82)' : hudFill(.62); ctx.fill();
         if (involved) { ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillRect(x0, y - (small ? 6 : 8), 3, small ? 12 : 16); }
         var ft = fit(ctx, ftxt, tw - 12);
         ctx.fillStyle = 'rgb(' + col + ')'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(ft, x0 + 8, y);
@@ -525,18 +559,18 @@ CB.derby = CB.derby || {};
       for (var k = 0; k < acc.length && k < L.acc.length && !view.spectating; k++) {
         var a3 = acc[k], r3 = L.acc[k];
         panel(ctx, r3, a3.button && a3.ready ? 0.7 : 0.5);
-        if (a3.active) { rr(ctx, r3.x, r3.y, r3.w, r3.h, 9); ctx.strokeStyle = '#ffb13a'; ctx.lineWidth = 2; ctx.stroke(); }
+        if (a3.active) { rr(ctx, r3.x, r3.y, r3.w, r3.h, HUD.radius); ctx.strokeStyle = HUD.warn; ctx.lineWidth = 2; ctx.stroke(); }
         var key = a3.button === 1 ? keys.a1 : a3.button === 2 ? keys.a2 : null;
         var lx = r3.x + 10;
         if (key) {
-          rr(ctx, lx, r3.y + 8, small ? 18 : 24, small ? 16 : 20, 4); ctx.fillStyle = a3.ready ? '#ffb13a' : 'rgba(255,255,255,.2)'; ctx.fill();
+          rr(ctx, lx, r3.y + 8, small ? 18 : 24, small ? 16 : 20, HUD.radiusSm); ctx.fillStyle = a3.ready ? '#ffb13a' : 'rgba(255,255,255,.2)'; ctx.fill();
           text(ctx, key, lx + (small ? 9 : 12), r3.y + (small ? 16 : 18), small ? 9 : 11, '#111', 'center', 900);
           lx += small ? 22 : 30;
         }
         ctx.font = '800 ' + (small ? 9 : 12) + 'px ' + FONT;
-        text(ctx, fit(ctx, accLabel(a3).toUpperCase(), r3.x + r3.w - lx - 8), lx, r3.y + (small ? 16 : 18), small ? 9 : 12, '#fff', 'left', 800);
+        text(ctx, fit(ctx, accLabel(a3).toUpperCase(), r3.x + r3.w - lx - 8), lx, r3.y + (small ? 16 : 18), small ? 9 : 12, HUD.ink, 'left', 800);
         var info = a3.kind === 'passive' ? 'PASSIVE' : a3.ammo != null && (a3.id === 'oil' || a3.id === 'caltrops' || a3.id === 'repair') ? '×' + a3.ammo : a3.cooldown > 0 ? a3.cooldown.toFixed(1) + 's' : a3.ready ? 'READY' : '';
-        if (!small) text(ctx, info, r3.x + r3.w - 10, r3.y + 38, 10, a3.ready && a3.kind !== 'passive' ? '#9be8a8' : 'rgba(255,255,255,.5)', 'right', 700);
+        if (!small) text(ctx, info, r3.x + r3.w - 10, r3.y + 38, 10, a3.ready && a3.kind !== 'passive' ? '#9be8a8' : HUD.dim, 'right', 700);
         if (a3.kind !== 'passive') {
           var cy0 = r3.y + r3.h - (small ? 9 : 12), cw0 = r3.w - 20;
           rr(ctx, r3.x + 10, cy0, cw0, 4, 2); ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fill();
@@ -549,7 +583,7 @@ CB.derby = CB.derby || {};
         var n = Math.ceil(snap.countdown_s), fr = snap.countdown_s - Math.floor(snap.countdown_s);
         var sz = (small ? 70 : 120) * (0.8 + 0.4 * fr);
         ctx.globalAlpha = 0.35 + 0.65 * fr;
-        text(ctx, String(Math.max(1, n)), W / 2, Hh * 0.42, sz, '#fff', 'center', 900);
+        text(ctx, String(Math.max(1, n)), W / 2, Hh * 0.42, sz, HUD.ink, 'center', 900);
         ctx.globalAlpha = 1;
         text(ctx, 'GET READY', W / 2, Hh * 0.42 + sz * 0.62, small ? 13 : 18, 'rgba(255,255,255,.8)', 'center', 800);
       } else if (t - H.goT < 1.1) {
@@ -576,8 +610,8 @@ CB.derby = CB.derby || {};
         ctx.font = '800 13px ' + FONT;
         var stxt = '◀  Spectating ' + (c.short || c.name) + '  ▶' + (view.touch ? '' : '   ·   Enter: results');
         var sw = ctx.measureText(stxt).width + 28;
-        rr(ctx, W / 2 - sw / 2, sy - 15, sw, 30, 8); ctx.fillStyle = 'rgba(10,10,14,.7)'; ctx.fill();
-        text(ctx, stxt, W / 2, sy, 13, '#fff', 'center', 800);
+        rr(ctx, W / 2 - sw / 2, sy - 15, sw, 30, 8); ctx.fillStyle = hudFill(.7); ctx.fill();
+        text(ctx, stxt, W / 2, sy, 13, HUD.ink, 'center', 800);
       }
       if (JS) drawJuice(ctx, JS, snap, view, L, t);
       if (view.fps) text(ctx, Math.round(view.fps) + ' fps', W - 8, Hh - 8, 10, 'rgba(255,255,255,.45)', 'right', 600);

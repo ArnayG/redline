@@ -19,7 +19,39 @@ CB.arcade = CB.arcade || {};
 (function () {
   'use strict';
 
-  var FONT = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";
+  var FONT = "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif";   // --hud-font (synced in create)
+
+  /* Shared HUD tokens (css/styles.css § 01 --hud-*, --mode-arcade): every mode's HUD — race, drift, arcade, derby,
+     Formula 1, drag — draws with the same display + numeral fonts, panel fill / edge, ink and status colours, and
+     its own mode accent. The literals are the token values (Node tests, first frame); syncHud() reads the live
+     tokens once. HUDs stay dark over the 3D view in both themes, so the light theme's darkened accents are skipped. */
+  var HUD = {
+    font: "'Barlow Condensed','Roboto Condensed','Arial Narrow','Helvetica Neue',system-ui,sans-serif",
+    num: "ui-monospace,'SF Mono','Roboto Mono',Menlo,Consolas,monospace",
+    panel: 'rgba(8,10,14,0.78)', panelSoft: 'rgba(8,10,14,0.55)', line: 'rgba(255,255,255,0.16)',
+    ink: '#f4f5f7', dim: 'rgba(244,245,247,0.62)', faint: 'rgba(244,245,247,0.3)',
+    accent: '#e7cd9a', good: '#3fdc8a', warn: '#ffb13a', bad: '#ff5a4d', mode: '#5b8cff', radius: 10, radiusSm: 6
+  };
+  var HUD_VARS = { font: '--hud-font', num: '--hud-num', panel: '--hud-panel', panelSoft: '--hud-panel-soft', line: '--hud-line', ink: '--hud-ink',
+    dim: '--hud-dim', faint: '--hud-faint', accent: '--hud-accent', good: '--hud-good', warn: '--hud-warn', bad: '--hud-bad', mode: '--mode-arcade',
+    radius: '--hud-radius', radiusSm: '--hud-radius-sm' };
+  var hudSynced = false;
+  function syncHud() {
+    if (hudSynced || typeof window === 'undefined' || typeof document === 'undefined' || !window.getComputedStyle || !document.documentElement) return HUD;
+    hudSynced = true;
+    try {
+      var root = document.documentElement, cs = window.getComputedStyle(root), light = root.getAttribute('data-theme') === 'light';
+      Object.keys(HUD_VARS).forEach(function (k) {
+        if (k === 'mode' && light) return;
+        var v = String(cs.getPropertyValue(HUD_VARS[k]) || '').trim();
+        if (!v) return;
+        if (k === 'radius' || k === 'radiusSm') { var n = parseFloat(v); if (n >= 0) HUD[k] = n; } else HUD[k] = v;
+      });
+    } catch (e) { /* keep the literals */ }
+    return HUD;
+  }
+  /** A HUD panel fill at a given opacity (same tint as --hud-panel). */
+  function hudFill(a) { var m = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(HUD.panel); return 'rgba(' + (m ? m[1] + ',' + m[2] + ',' + m[3] : '8,10,14') + ',' + a + ')'; }
   var NITRO_BLUE = '#2f8bff', NITRO_CYAN = '#7fe3ff';
   var SLOT_Y = 30;   // px: race-ui draws the ARCADE badge at the top centre (y 8..28)
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -174,6 +206,7 @@ CB.arcade = CB.arcade || {};
 
   function create(opts) {
     opts = opts || {};
+    syncHud(); FONT = HUD.font;
     var S = { calls: [], flash: 0, flashCol: '#ff3b3b', time: 0, nitroDisp: 0, itemPop: 0, lastItem: null, coinPop: 0, lastCoins: 0, revSeen: false,
       combo: {}, stars: 0, starsTotal: 0, starPop: 0 };
 
@@ -237,7 +270,7 @@ CB.arcade = CB.arcade || {};
       ctx.closePath(); ctx.fillStyle = '#ffd84a'; ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = 'rgba(8,10,16,.8)'; ctx.stroke();
       font(ctx, 800, (compact ? 13 : 15) * k); ctx.textAlign = 'left'; ctx.lineWidth = 3 * k;
       var txt = S.stars + ' / ' + S.starsTotal;
-      ctx.strokeText(txt, x + 2 * r + 6 * k, y + 1); ctx.fillStyle = '#fff'; ctx.fillText(txt, x + 2 * r + 6 * k, y + 1);
+      ctx.strokeText(txt, x + 2 * r + 6 * k, y + 1); ctx.fillStyle = HUD.ink; ctx.fillText(txt, x + 2 * r + 6 * k, y + 1);
       ctx.restore();
     }
 
@@ -248,7 +281,7 @@ CB.arcade = CB.arcade || {};
       ctx.save();
       ctx.translate(W / 2, y + sz / 2); ctx.scale(pop, pop); ctx.translate(-W / 2, -(y + sz / 2));
       rr(ctx, x, y, sz, sz, 14 * k);
-      ctx.fillStyle = 'rgba(10,12,18,.62)'; ctx.fill();
+      ctx.fillStyle = hudFill(.62); ctx.fill();
       ctx.lineWidth = 3 * k;
       var rg = ctx.createLinearGradient(x, y, x + sz, y + sz);
       var hue = (S.time * 90) % 360;
@@ -267,7 +300,7 @@ CB.arcade = CB.arcade || {};
       } else if (P.item) {
         drawIcon(ctx, P.item.id, W / 2, y + sz / 2, sz * 0.66);
         if (P.item.uses > 1) {
-          font(ctx, 800, 16 * k); ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3 * k;
+          font(ctx, 800, 16 * k); ctx.fillStyle = HUD.ink; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3 * k;
           ctx.strokeText('×' + P.item.uses, x + sz - 14 * k, y + sz - 12 * k); ctx.fillText('×' + P.item.uses, x + sz - 14 * k, y + sz - 12 * k);
         }
       } else {
@@ -292,7 +325,7 @@ CB.arcade = CB.arcade || {};
       var y = SLOT_Y + ((compact ? 4 : 8) + (compact ? 62 : 78) + 24) * k, x = W / 2 - tot / 2;
       chips.forEach(function (c, i) {
         var cx = x + i * (sz + gap) + sz / 2, cy = y + sz / 2;
-        ctx.beginPath(); ctx.arc(cx, cy, sz / 2, 0, Math.PI * 2); ctx.fillStyle = 'rgba(10,12,18,.6)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, sz / 2, 0, Math.PI * 2); ctx.fillStyle = hudFill(.6); ctx.fill();
         ctx.beginPath(); ctx.arc(cx, cy, sz / 2 - 1.5 * k, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(c[1] / c[2], 0, 1));
         ctx.strokeStyle = (itemDef(c[0]) || {}).color || '#fff'; ctx.lineWidth = 3 * k; ctx.stroke();
         drawIcon(ctx, c[0], cx, cy, sz * 0.6);
@@ -325,11 +358,11 @@ CB.arcade = CB.arcade || {};
         var cx = x - 34 * k, cy = y + h / 2, cr = 9 * k * (1 + S.coinPop * 0.35);
         ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fillStyle = '#ffcc33'; ctx.fill();
         ctx.lineWidth = 2 * k; ctx.strokeStyle = '#a87400'; ctx.stroke();
-        font(ctx, 800, 13 * k); ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+        font(ctx, 800, 13 * k); ctx.textAlign = 'left'; ctx.fillStyle = HUD.ink;
         ctx.fillText(String(P.coins), cx + 13 * k, cy + 1);
       }
       // bar
-      rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = 'rgba(10,12,18,.62)'; ctx.fill();
+      rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = hudFill(.62); ctx.fill();
       ctx.lineWidth = 1.5 * k; ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.stroke();
       var f = clamp(S.nitroDisp, 0, 1);
       if (f > 0.002) {
@@ -370,12 +403,12 @@ CB.arcade = CB.arcade || {};
 
     function drawRev(ctx, P, W, H, k) {
       var Rv = CB.arcade.nitro.REV, w = 260 * k, h = 14 * k, x = W / 2 - w / 2, y = H * 0.66;
-      rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = 'rgba(10,12,18,.66)'; ctx.fill();
+      rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = hudFill(.66); ctx.fill();
       ctx.fillStyle = 'rgba(120,230,120,.38)'; ctx.fillRect(x + w * Rv.sweetLo, y, w * (Rv.sweetHi - Rv.sweetLo), h);
       ctx.fillStyle = 'rgba(255,216,74,.65)'; ctx.fillRect(x + w * Rv.perfectLo, y, w * (Rv.perfectHi - Rv.perfectLo), h);
       ctx.fillStyle = 'rgba(255,70,60,.5)'; ctx.fillRect(x + w * Rv.over, y, w * (1 - Rv.over), h);
       var nx = x + w * clamp(P.rev, 0, 1);
-      ctx.fillStyle = P.flooded ? '#ff5a4e' : '#fff';
+      ctx.fillStyle = P.flooded ? HUD.bad : HUD.ink;
       ctx.beginPath(); ctx.moveTo(nx, y - 5 * k); ctx.lineTo(nx - 6 * k, y - 13 * k); ctx.lineTo(nx + 6 * k, y - 13 * k); ctx.closePath(); ctx.fill();
       ctx.fillRect(nx - 1.5 * k, y, 3 * k, h);
       font(ctx, 800, 13 * k, true); ctx.fillStyle = P.flooded ? '#ff5a4e' : 'rgba(255,255,255,.9)';
@@ -401,7 +434,7 @@ CB.arcade = CB.arcade || {};
         ctx.lineWidth = Math.max(3, px * 0.14); ctx.strokeStyle = 'rgba(8,10,16,.85)'; ctx.lineJoin = 'round';
         ctx.strokeText(c.text, 0, 0);
         ctx.fillStyle = c.color; ctx.fillText(c.text, 0, 0);
-        if (c.sub) { font(ctx, 800, px * 0.38); ctx.lineWidth = 3; ctx.strokeText(c.sub, 0, px * 0.62); ctx.fillStyle = '#fff'; ctx.fillText(c.sub, 0, px * 0.62); }
+        if (c.sub) { font(ctx, 800, px * 0.38); ctx.lineWidth = 3; ctx.strokeText(c.sub, 0, px * 0.62); ctx.fillStyle = HUD.ink; ctx.fillText(c.sub, 0, px * 0.62); }
         ctx.restore();
       }
     }

@@ -1,12 +1,7 @@
 {
  "css/styles.css": {
-  "hex": 66,
-  "fontSize": 132,
-  "fontFam": 0
- },
- "js/app.js": {
-  "hex": 0,
-  "fontSize": 3,
+  "hex": 46,
+  "fontSize": 2,
   "fontFam": 0
  },
  "js/f1/f1-ui.js": {
@@ -30,23 +25,13 @@
   "fontFam": 0
  },
  "js/garage.js": {
-  "hex": 65,
-  "fontSize": 59,
+  "hex": 59,
+  "fontSize": 24,
   "fontFam": 2
- },
- "js/panels-chassis.js": {
-  "hex": 0,
-  "fontSize": 20,
-  "fontFam": 0
- },
- "js/panels-powertrain.js": {
-  "hex": 0,
-  "fontSize": 18,
-  "fontFam": 0
  },
  "js/panels-style.js": {
   "hex": 11,
-  "fontSize": 16,
+  "fontSize": 0,
   "fontFam": 0
  },
  "js/race/race-ui.js": {
