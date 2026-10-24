@@ -117,7 +117,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       stats: { requests: 0, posts: 0, polls: 0, streams: 0, errors: 0, rateLimited: 0, sentFrames: 0, recvFrames: 0 } };
     sig._relayHub = H; H.C = C;
     var running = false, batchNo = 0, timer = null, timerAt = 0;
-    var up = { inFlight: 0, last: -1e9, holdUntil: 0, mul: 1, backoff: 0, since: 0 };
+    var up = { inFlight: 0, last: -1e9, holdUntil: 0, mul: 1, backoff: 0, since: 0, relBusy: 0 };
     var down = { polls: 0, lastPoll: -1e9, streams: 0, streamErrors: 0, nextTimer: null };
 
     var offMsg = sig.onMessage(function (from, msg) {
@@ -133,24 +133,31 @@ if (typeof window !== 'undefined') window.CB = CB;
       Object.keys(H.links).forEach(function (k) { var l = H.links[k]; delete H.links[k]; l._dead(reason); });
       stop();
     }
-    function hasData() { return Object.keys(H.links).some(function (k) { return H.links[k]._pending(); }); }
+    function hasData() { return Object.keys(H.links).some(function (k) { return H.links[k]._pending(up.relBusy > 0); }); }
     /** rel data, or a clock ping/pong (their timing feeds the RTT / clock-offset estimate: never hold them back) */
-    function hasRel() { return Object.keys(H.links).some(function (k) { return H.links[k]._urgent(); }); }
-    /** take one frame per link with queued data -> [{to, msgs:[frame]}], plus a restore() for failed requests */
+    function hasRel() { return Object.keys(H.links).some(function (k) { return H.links[k]._urgent(up.relBusy > 0); }); }
+    /** take one frame per link with queued data -> [{to, msgs:[frame]}], plus a restore() for failed requests.
+     *  'rel' data rides in ONE request at a time: two pipelined requests can reach the server out of order (a slow
+     *  PHP worker, a cold connection), and a rel frame overtaken by later ones for longer than gapSkip used to be
+     *  skipped by the receiver — lost. Until the request carrying rel data has been answered (or failed and put
+     *  its frames back), later requests carry 'fast' data only. */
     function drain() {
-      var posts = [], undo = [], budget = o.batchBytes;
+      var posts = [], undo = [], budget = o.batchBytes, noRel = up.relBusy > 0, rel = false;
       Object.keys(H.links).forEach(function (k) {
         var l = H.links[k];
         if (!l._pending()) return;
-        var t = l._take(budget);
+        var t = l._take(budget, noRel);
         if (!t) return;
         budget -= t.bytes;
+        if (t.rel.length) rel = true;
         posts.push({ to: l.to, msgs: [t.frame] });
         undo.push(function () { l._restore(t); });
       });
       if (posts.length) up.since = 0;
-      return { posts: posts, restore: function () { undo.forEach(function (f) { f(); }); } };
+      if (rel) up.relBusy++;
+      return { posts: posts, rel: rel, restore: function () { undo.forEach(function (f) { f(); }); } };
     }
+    function drained(d) { if (d.rel) up.relBusy--; }
     function fatal(e) {
       return sig.state === 'closed' || (e && (e.code === 'closed' || e.code === 'room-closed' || e.code === 'auth'));
     }
@@ -246,7 +253,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       down.polls++; down.lastPoll = C.now();
       H.stats.requests++; H.stats.polls++;
       sig.exchange(d.posts, o.longWait, { onDropped: dropped }).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
-        function (e) { d.restore(); failed(e); }).then(function () { down.polls--; reap(); pump(); });
+        function (e) { d.restore(); failed(e); }).then(function () { drained(d); down.polls--; reap(); pump(); });
     }
     function startPost(nopoll) {
       var d = drain();
@@ -254,7 +261,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       up.inFlight++; up.last = C.now();
       H.stats.requests++; H.stats.posts++;
       sig.exchange(d.posts, 0, { nopoll: !!nopoll, onDropped: dropped }).then(function () { H.stats.sentFrames += d.posts.length; succeeded(); },
-        function (e) { d.restore(); failed(e); }).then(function () { up.inFlight--; reap(); pump(); });
+        function (e) { d.restore(); failed(e); }).then(function () { drained(d); up.inFlight--; reap(); pump(); });
     }
 
     /** one short probe: does a streamed response arrive piece by piece (not buffered by a proxy / the host)? */
@@ -317,6 +324,7 @@ if (typeof window !== 'undefined') window.CB = CB;
           var l = H.links[p.to]; if (l) l._restoreFrame(p.msgs[0]);
         });
       }));
+      drained(d);
       posting = false;
       reap();
       if (hasData()) schedulePost();
@@ -381,12 +389,13 @@ if (typeof window !== 'undefined') window.CB = CB;
       if (gapTimer) { C.clearTimeout(gapTimer); gapTimer = null; }
       H.remove(L);
     };
-    L._pending = function () { return rel.length > 0 || fast.size > 0; };
-    L._urgent = function () { return rel.length > 0 || fast.has('_ping') || fast.has('_pong'); };
+    /** noRel: a request carrying rel data is still in flight (only 'fast' data may go now) */
+    L._pending = function (noRel) { return (!noRel && rel.length > 0) || fast.size > 0; };
+    L._urgent = function (noRel) { return (!noRel && rel.length > 0) || fast.has('_ping') || fast.has('_pong'); };
     /** build one frame within `budget` bytes; returns {frame, bytes, rel:[…], fast:[[k,p]…]} */
-    L._take = function (budget) {
+    L._take = function (budget, noRel) {
       var r = [], bytes = 0;
-      while (rel.length && (bytes + size(rel[0].p) <= budget || !r.length)) { var x = rel.shift(); r.push(x); bytes += size(x.p); }
+      while (!noRel && rel.length && (bytes + size(rel[0].p) <= budget || !r.length)) { var x = rel.shift(); r.push(x); bytes += size(x.p); }
       var f = [];
       if (!L.closed) fast.forEach(function (p, k) { if (bytes + size(p) <= budget) { f.push([k, p]); bytes += size(p); } });
       f.forEach(function (kp) { fast.delete(kp[0]); });

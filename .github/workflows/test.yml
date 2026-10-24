@@ -12,13 +12,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
       - name: Syntax check
         run: find js api tools tests -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Test suite
         run: node tests/run.js
         env:
-          # the full suite runs in one process and needs more than Node 20's default heap
+          # the full suite runs in one process and needs more than the default heap
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Build the cPanel zip
         run: node tools/build-zip.js --out /tmp/redline-cpanel.zip

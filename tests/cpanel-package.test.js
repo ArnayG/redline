@@ -278,7 +278,7 @@ phpTest('cpanel php: js/net/relay.js links over api/signal.php deliver rel in or
   var lg = RL.link(guest, 'host', function (ch, x) { atGuest.push([ch, x]); });
   for (var i = 0; i < 25; i++) { lg.send('rel', '{"t":"btn","i":' + i + '}'); lg.send('fast', '{"t":"in","q":' + i + '}'); }
   lh.send('rel', '{"t":"welcome"}');
-  for (var k = 0; k < 120 && (atHost.filter(function (m) { return m[0] === 'rel'; }).length < 25 || !atGuest.length); k++) await sleep(50);
+  for (var k = 0; k < 240 && (atHost.filter(function (m) { return m[0] === 'rel'; }).length < 25 || !atGuest.length); k++) await sleep(50);
   assert.deepEqual(atHost.filter(function (m) { return m[0] === 'rel'; }).map(function (m) { return JSON.parse(m[1]).i; }), Array.from({ length: 25 }, function (_, n) { return n; }));
   var fast = atHost.filter(function (m) { return m[0] === 'fast'; });
   assert.equal(JSON.parse(fast[fast.length - 1][1]).q, 24, 'newest input wins');
