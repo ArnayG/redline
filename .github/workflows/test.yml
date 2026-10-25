@@ -12,13 +12,17 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          # Pinned: the race / F1 / derby AI tests replay fixed seeds, and their outcome (a contact, a car off
+          # track) can flip on last-bit differences in Math results between V8 versions and CPUs. The suite
+          # passes on Node 20 x86-64 (here) and Node 24 arm64 (macOS dev machines); Node 24 x86-64 and Linux
+          # arm64 each flip a couple of seeds. Bump only together with a full green run on the new version.
+          node-version: 20
       - name: Syntax check
         run: find js api tools tests -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Test suite
         run: node tests/run.js
         env:
-          # the full suite runs in one process and needs more than the default heap
+          # the full suite runs in one process and needs more than Node 20's default heap
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Build the cPanel zip
         run: node tools/build-zip.js --out /tmp/redline-cpanel.zip
