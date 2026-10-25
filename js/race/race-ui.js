@@ -2004,7 +2004,7 @@ CB.race = CB.race || {};
     '#race-root .rx-seg .cb-seg-btn.is-active::after{content:"";position:absolute;left:30%;right:30%;bottom:3px;height:2px;border-radius:2px;background:var(--accent-grad)}',
     '#race-root .rx-quick button.is-active{color:var(--text-strong);border-color:var(--rx-accent);background:var(--rx-accent-soft)}',
     /* pause card = .mx-menu: serif title, full-width menu buttons */
-    '#race-root .rx-pause-menu h2{font-size:var(--fs-title);font-weight:var(--fw-title);letter-spacing:var(--tracking-title)}',
+    '#race-root .rx-pause-menu h2{font-size:var(--fs-xl);font-weight:var(--fw-title);letter-spacing:var(--tracking-title)}',
     '#race-root .rx-pause-menu .rx-btn{min-height:var(--control-h-lg)}',
     /* kickers sit on a short accent dash (§ 18) */
     '#race-root .rx-eyebrow.mx-kicker{margin:0;letter-spacing:var(--tracking-caps);font-weight:700}',
@@ -2012,8 +2012,13 @@ CB.race = CB.race || {};
     /* in-race overlays (lights, feed, hints, quickbar, rotate card) sit on the dark 3D view in both themes: HUD tokens */
     '#race-root .rx-race{--rx-text:var(--hud-ink,#f4f5f7);--rx-dim:var(--hud-dim,rgba(244,245,247,.62));--rx-faint:var(--hud-faint,rgba(244,245,247,.3));--rx-line:var(--hud-line,rgba(255,255,255,.16));--rx-line-2:var(--hud-line,rgba(255,255,255,.16));--text:var(--hud-ink,#f4f5f7);--text-strong:var(--hud-ink,#fff);--text-dim:var(--hud-dim,rgba(244,245,247,.62));color:var(--rx-text)}',
     '#race-root .rx-net,#race-root .rx-net-banner,#race-root .rx-fallback-note{color:var(--hud-ink,#f4f5f7)}',
-    /* the loading / grid screen follows the theme like the results screen (it covers the 3D view) */
-    '#race-root .rx-loading{background:linear-gradient(90deg,color-mix(in srgb,var(--bg) 94%,transparent) 0%,color-mix(in srgb,var(--bg) 78%,transparent) 55%,color-mix(in srgb,var(--bg) 90%,transparent) 100%)}',
+    /* in-session overlays (pause, loading / grid, countdown, error) look the same in every mode and stay dark in both
+       themes: .cb-dark (css/styles.css § 18) re-declares the dark palette on the subtree; re-alias the --rx-* tokens there */
+    '#race-root .cb-dark{--glass:rgba(18,19,23,.72);--glass-strong:rgba(14,15,18,.9);--surface-grad:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0) 60%);--rx-bg:var(--bg);--rx-panel:var(--panel);--rx-panel-2:var(--panel-2);--rx-line:rgba(255,255,255,.055);--rx-line-2:var(--line);--rx-text:var(--text);--rx-dim:var(--text-dim);--rx-faint:var(--text-faint);color:var(--rx-text)}',
+    /* pause card = .mx-menu: panel surface, --radius-lg, --elev-3, --sp-5 padding, serif --fs-xl title, left-aligned --control-h-lg buttons */
+    '#race-root .rx-pause{background:var(--panel);border-color:var(--line);border-radius:var(--radius-lg);box-shadow:var(--elev-3);backdrop-filter:none;-webkit-backdrop-filter:none}',
+    '#race-root .rx-pause-menu{padding:var(--sp-5);gap:var(--sp-2)}#race-root .rx-pause-side{padding:var(--sp-5)}',
+    '#race-root .rx-pause-menu .rx-btn{justify-content:flex-start;padding:0 var(--sp-4)}',
   ].join('\n');
 
   /* ----------------------------------------------------------- canvas utils */
@@ -4055,7 +4060,7 @@ CB.race = CB.race || {};
     U.loadingRefs = { steps: steps, bar: bar, go: go, gridList: gridList };
     var nameParts = String(def.name || def.id).split(' ');
     var last = nameParts.length > 1 ? nameParts.pop() : '';
-    var screen = h('div', { class: 'rx-loading' },
+    var screen = h('div', { class: 'rx-loading cb-dark' },
       h('div', { class: 'rx-load-left' },
         h('div', { class: 'rx-eyebrow accent mx-kicker', text: (def.country || 'Circuit') + ' · ' + sessionLabel(S) }),
         h('div', { class: 'rx-load-title rx-display' }, nameParts.join(' ') + (last ? ' ' : ''), last ? h('span', { text: last }) : null),
@@ -4140,7 +4145,7 @@ CB.race = CB.race || {};
       h('button', { class: 'cb-btn rx-btn icon', type: 'button', title: 'Camera (C)', html: svgIcon('camera', 16), onclick: function () { onRaceAction('camera'); } }),
       muteBtn,
       h('button', { class: 'cb-btn rx-btn icon', type: 'button', title: 'Pause (P / Esc)', html: svgIcon('pause', 16), onclick: function () { onRaceAction('pause'); } }));
-    var layer = h('div', { class: 'rx-race' }, lights, feed, quick, rotatePrompt());
+    var layer = h('div', { class: 'rx-race cb-dark' }, lights, feed, quick, rotatePrompt());
     if (S.showHints) {
       var hints = R.isDrift ? h('div', { class: 'rx-hints', style: { bottom: 'auto', top: '138px' } },
         h('span', null, kbd('↑'), 'Hold to drift'), h('span', null, kbd('←'), kbd('→'), 'Pick side · angle'), h('span', null, kbd('↓'), 'Less angle'),
@@ -4603,7 +4608,7 @@ CB.race = CB.race || {};
         h('div', { class: 'rx-section-title' }, h('h3', null, h('span', { class: 'rx-skew' }), 'Settings')),
         settingsBox,
         h('details', { class: 'rx-details' }, h('summary', null, icon('keyboard', 14), 'Controls'), keysReference())));
-    var modal = h('div', { class: 'rx-modal' }, card);
+    var modal = h('div', { class: 'rx-modal cb-dark' }, card);   // in-session overlays stay dark in both themes (§ 18 .cb-dark)
     modal.addEventListener('click', function (e) { if (e.target === modal) resumeRace(); });
     U.host.appendChild(modal);
     U.pauseRefs = { modal: modal, status: status, buttons: buttons, focus: 0, lastRefresh: 0 };
@@ -5612,7 +5617,7 @@ CB.race = CB.race || {};
         U.opts && U.opts.net ? h('button', { class: 'cb-btn rx-btn primary', type: 'button', onclick: netLeave }, icon('back', 14), 'Back to lobby')
           : h('button', { class: 'cb-btn rx-btn primary', type: 'button', onclick: function () { teardownRace(); showSetup(); } }, icon('back', 14), 'Back to setup'),
         U.opts && U.opts.net ? null : h('button', { class: 'cb-btn rx-btn', type: 'button', onclick: close }, backLabel())));
-    U.host.appendChild(h('div', { class: 'rx-modal' }, card));
+    U.host.appendChild(h('div', { class: 'rx-modal cb-dark' }, card));
   }
 
   /* ======================================================================
