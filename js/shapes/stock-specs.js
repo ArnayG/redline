@@ -265,6 +265,15 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (!m) return '';
     return [m.make, m.name, sp && sp.t].filter(Boolean).join(' ');
   }
+  /** True when a build name is an auto-given one (blank, "Untitled Build", a factory car's title, or the legacy
+   *  "Stock <car>"), so switching / re-applying a model may rename it; a name the player typed is kept. */
+  var titleSet = null;
+  function isAutoName(nm) {
+    nm = String(nm || '');
+    if (!nm || nm === 'Untitled Build' || /^Stock /.test(nm)) return true;
+    if (!titleSet) { titleSet = {}; Object.keys(SPECS).forEach(function (id) { var t = title(id); if (t) titleSet[t.slice(0, 60)] = 1; }); }
+    return Object.prototype.hasOwnProperty.call(titleSet, nm);
+  }
   function physics(b) {
     var P = CB.physics;
     if (!P || typeof P.compute !== 'function') return null;
@@ -393,7 +402,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     // meta: keep the build's identity; a default / earlier stock name becomes this car's stock name
     var meta = (base && base.meta) || b.meta;
     var nm = String(meta.name || '');
-    b.meta = { name: !nm || nm === 'Untitled Build' || /^Stock /.test(nm) ? ('Stock ' + title(m)).slice(0, 60) : nm,
+    b.meta = { name: isAutoName(nm) ? title(m).slice(0, 60) : nm,
       id: meta.id || b.meta.id, created: meta.created || b.meta.created, modified: Date.now(), presetId: null };
     return b;
   }
@@ -521,7 +530,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     var res = cached(m.id);
     if (!res) return null;
     var b = U().deepClone(res.build), meta = cur.meta || {}, nm = String(meta.name || '');
-    b.meta = { name: !nm || nm === 'Untitled Build' || /^Stock /.test(nm) ? ('Stock ' + res.title).slice(0, 60) : nm,
+    b.meta = { name: isAutoName(nm) ? String(res.title).slice(0, 60) : nm,
       id: meta.id || b.meta.id, created: meta.created || b.meta.created, modified: Date.now(), presetId: null };
     var label = 'Stock spec: ' + res.title;
     var changed = St.replace(b, { label: label });
@@ -545,7 +554,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     return res;
   }
 
-  CB.stock = { SPECS: SPECS, CLASS: CLASS, spec: spec, has: has, title: title, build: build, apply: apply, run: run, isStock: isStock,
+  CB.stock = { SPECS: SPECS, CLASS: CLASS, spec: spec, has: has, title: title, build: build, apply: apply, run: run, isStock: isStock, isAutoName: isAutoName,
     clearCache: function () { cache = {}; } };
 })();
 

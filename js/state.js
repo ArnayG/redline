@@ -21,7 +21,7 @@
      boot({force})                      restore order: '#b=' hash → autosave 'forge.current.v1' → default
      flushAutosave()
      defaultBuild()                     CB.data.defaultBuild() at the default real model's dimensions (fallback; share-code base)
-     starterBuild(model?)               factory (CB.stock) spec of model / the default model, "Stock <car>" (new builds, first boot)
+     starterBuild(model?)               factory (CB.stock) spec of model / the default model, "<car>" e.g. "Porsche 911 Carrera S" (new builds, first boot)
      realDims(model|id|build)           partial build with the real car's wheelbase/track/ride height/wheel Ø/tyres (CB.shapes.refBuild)
      applyModel(id, opts)               pick a real model (+ its style) and its real dims as ONE undo step
      matchRealDims(opts)                snap the build to its shown model's real dims (one step; false when nothing changes)
@@ -250,7 +250,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   /**
    * starterBuild(model?) — what a NEW build starts from: the factory (stock) spec of a real car (CB.stock, Auto-config)
    * — by default the default model (Porsche 911 Carrera S), so the Simple Garage shows real levels ("Stock") from the
-   * first visit instead of "Custom". Named like Auto-config names it ("Stock <car>") with a fresh meta. Falls back to
+   * first visit instead of "Custom". Named like Auto-config names it (the car's title) with a fresh meta. Falls back to
    * defaultBuild() when CB.stock / CB.physics are not loaded (Node suites, pages without stock specs) or the model has
    * no factory spec. Share codes still diff against CB.data.defaultBuild(), so links are unaffected.
    */
@@ -268,7 +268,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     try { res = St.build(id); } catch (e) { res = null; }
     if (!res || !U.isPlainObject(res.build)) return defaultBuild();
     var b = U.deepClone(res.build), t = Date.now();
-    b.meta = { name: ('Stock ' + (res.title || id)).slice(0, 60), id: U.uid('b'), created: t, modified: t, presetId: null };
+    b.meta = { name: String(res.title || id).slice(0, 60), id: U.uid('b'), created: t, modified: t, presetId: null };
     return b;
   }
   /**
@@ -343,6 +343,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     b.version = 1;
     var m = b.meta;
     m.name = String(m.name == null ? def.meta.name : m.name).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60) || 'Untitled Build';
+    // legacy auto name "Stock <factory car title>" -> just the title (a name the player typed is left alone)
+    if (/^Stock /.test(m.name) && CB.stock && typeof CB.stock.isAutoName === 'function' && CB.stock.isAutoName(m.name.slice(6))) m.name = m.name.slice(6);
     m.id = typeof m.id === 'string' && m.id ? m.id.slice(0, 64) : def.meta.id;
     m.created = num(m.created, def.meta.created);
     m.modified = num(m.modified, m.created);

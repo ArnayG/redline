@@ -15,7 +15,7 @@ test('starter: a new build is the factory Porsche 911 Carrera S, named like Auto
   var b = S.starterBuild();
   assert.equal(b.body.model, 'porsche-911-992');
   assert.ok(St.isStock(b), 'exactly the stock spec');
-  assert.equal(b.meta.name, 'Stock Porsche 911 Carrera S');
+  assert.equal(b.meta.name, 'Porsche 911 Carrera S');
   assert.equal(b.meta.presetId, null);
   assert.ok(b.meta.id && b.meta.id !== S.starterBuild().meta.id, 'fresh id per new build');
   // street-legal, rule-clean, and its numbers are the real car's (443 hp, 1515 kg, 0-100 3.5 s)
@@ -46,7 +46,7 @@ test('starter: boot with nothing saved starts on the factory car; a saved curren
     var info = S.boot({ force: true });
     if (info.source === 'default') {
       assert.ok(St.isStock(S.get()), 'first visit: stock spec');
-      assert.equal(S.get().meta.name, 'Stock Porsche 911 Carrera S');
+      assert.equal(S.get().meta.name, 'Porsche 911 Carrera S');
     }
     // an existing autosave (any build, e.g. an old "Untitled Build") is restored as it was
     if (store && store.setItem) {
@@ -69,7 +69,7 @@ test('starter: "New build" starts from the current model\'s factory spec; share 
   S.reset();
   assert.equal(S.get().body.model, 'bmw-m4-g82');
   assert.ok(St.isStock(S.get()), 'stock M4');
-  assert.equal(S.get().meta.name, 'Stock ' + St.title('bmw-m4-g82'));
+  assert.equal(S.get().meta.name, St.title('bmw-m4-g82'));
   assert.ok(S.canUndo(), 'the previous build stays in the undo history');
   // a factory car is not "unsaved work"; a tweak of it is
   assert.equal(CB.garage.isDirty(S.get()), false);
@@ -79,4 +79,26 @@ test('starter: "New build" starts from the current model\'s factory spec; share 
   var back = S.decode(S.encode(S.get()));
   assert.ok(back && St.isStock(back));
   S.reset({ resetHistory: true });
+});
+
+test('starter: auto names follow the model; a typed name is kept; legacy "Stock <car>" names still auto-rename', function () {
+  assert.equal(St.isAutoName('Porsche 911 Carrera S'), true);
+  assert.equal(St.isAutoName('Stock Porsche 911 Carrera S'), true, 'legacy saves');
+  assert.equal(St.isAutoName(''), true);
+  assert.equal(St.isAutoName('My project'), false);
+  S.replace(S.starterBuild(), { resetHistory: true });
+  S.applyModel('bmw-m4-g82');
+  St.run();
+  assert.equal(S.get().meta.name, St.title('bmw-m4-g82'));
+  var b = JSON.parse(JSON.stringify(S.get())); b.meta.name = 'Weekend car';
+  S.replace(S.normalize(b), { resetHistory: true });
+  St.run();
+  assert.equal(S.get().meta.name, 'Weekend car');
+});
+
+test('starter: a legacy "Stock <car>" save loads as just the car name', function () {
+  var b = JSON.parse(JSON.stringify(S.starterBuild())); b.meta.name = 'Stock Porsche 911 Carrera S';
+  assert.equal(S.normalize(b).meta.name, 'Porsche 911 Carrera S');
+  b.meta.name = 'Stock car project';
+  assert.equal(S.normalize(b).meta.name, 'Stock car project');
 });
