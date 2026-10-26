@@ -334,7 +334,7 @@ CB.game = CB.game || {};
     var top = clamp(140 + Math.cbrt(hp) * 26, 120, 480);
     return {
       power_hp: Math.round(hp), weight_kg: Math.round(weight), powerToWeight_hpPerTon: Math.round(ptw),
-      zeroTo60_s: Math.round(z60 * 10) / 10, topSpeed_kph: Math.round(top), lateralG: Math.round(mu * 100) / 100,
+      zeroTo60_s: Math.round(z60 * 10) / 10, zeroTo100_s: Math.round(z60 * 16.5) / 10, topSpeed_kph: Math.round(top), lateralG: Math.round(mu * 100) / 100,
       lapTime_s: 160 - Math.min(60, ptw / 12) - mu * 10, estimated: true
     };
   }
@@ -1159,6 +1159,9 @@ background:radial-gradient(90% 120% at 85% 60%,var(--accent-softer,rgba(201,165,
 #game-hub .gh-hero-stats b{display:block;font:700 var(--fs-lg) var(--gh-mono);font-variant-numeric:tabular-nums}
 #game-hub .gh-hero-stats small{font-size:var(--fs-2xs);letter-spacing:.16em;text-transform:uppercase;color:var(--gh-dim)}
 #game-hub .gh-modes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+/* 8 tiles (Multiplayer on): one row on wide screens, two even rows of four below — never a lone orphan tile */
+@media (min-width:1440px){#game-hub .gh-modes[data-n="8"]{grid-template-columns:repeat(8,minmax(0,1fr))}}
+@media (min-width:641px) and (max-width:1439px){#game-hub .gh-modes[data-n="8"]{grid-template-columns:repeat(4,minmax(0,1fr))}}
 #game-hub .gh-mode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:132px;padding:16px;text-align:left;cursor:pointer;overflow:hidden;
 border:1px solid var(--gh-line);border-radius:var(--gh-r);background:linear-gradient(165deg,var(--mcs,var(--accent-soft)),transparent 62%),linear-gradient(180deg,var(--gh-panel2),var(--gh-panel));
 transition:transform .2s var(--ease,ease),border-color .2s,box-shadow .25s}
@@ -2540,7 +2543,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
     return '<div class="gh-hero-stats">' +
       '<div><b>' + fmtInt(m.power_hp) + '</b><small>hp</small></div>' +
       '<div><b>' + fmtInt(m.weight_kg) + '</b><small>kg</small></div>' +
-      '<div><b>' + (isNum(m.zeroTo60_s) ? m.zeroTo60_s.toFixed(1) : '—') + '</b><small>0–60 s</small></div>' +
+      // sprint in the player's units: 0–100 km/h (as the Garage shows it) or 0–60 mph
+      (function () { var z = u === 'mph' ? m.zeroTo60_s : (isNum(m.zeroTo100_s) ? m.zeroTo100_s : null); return '<div><b>' + (isNum(z) ? z.toFixed(1) : '—') + '</b><small>' + (u === 'mph' ? '0–60 s' : '0–100 s') + '</small></div>'; })() +
       '<div><b>' + (u === 'mph' ? Math.round(num(m.topSpeed_kph, 0) * 0.621371) : fmtInt(m.topSpeed_kph)) + '</b><small>' + (u === 'mph' ? 'mph top' : 'km/h top') + '</small></div></div>';
   }
   function moduleMissing(name, what) {
@@ -2772,7 +2776,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           '</div></div>' +
           '<div class="gh-home-car"><div class="car" data-gh-hero3d>' + carArt(b, { uid: 'menu' }) + '</div>' + (b ? carStatsStrip(b) : '') + '</div>' +
         '</section>' +
-        '<h2 class="gh-h2">Play</h2><div class="gh-modes">' + tiles.join('') + '</div>' +
+        '<h2 class="gh-h2">Play</h2><div class="gh-modes" data-n="' + tiles.length + '">' + tiles.join('') + '</div>' +
         '<h2 class="gh-h2">Progress &amp; garage</h2><div class="gh-links">' + links.join('') + '</div>' +
         '</div>';
       heroStill(host.querySelector('[data-gh-hero3d]'), b);
@@ -4448,10 +4452,12 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           }).join('') + '</div></div>';
         }).join('');
       }).join('');
+      var wsMph = setting('units', 'kph') === 'mph';
       host.innerHTML = '<div class="gh-kicker">Workshop</div><h1 class="gh-h1">' + esc(car.name) + '</h1><p class="gh-sub">Swap components and see the invoice live. Removed parts are refunded at 50%; fitting and setup labour is charged per change.</p>' +
         '<div class="gh-ws"><div>' + groups + '</div><div><div style="position:sticky;top:10px;max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin"><div class="gh-panel cut"><div>' + carArt(draft, { uid: 'ws' }) + '</div>' +
         '<dl class="gh-kv" style="margin-top:10px"><dt>Power</dt><dd>' + delta(m0.power_hp, m1.power_hp, 'hp') + '</dd><dt>Weight</dt><dd>' + delta(m0.weight_kg, m1.weight_kg, 'kg', true) + '</dd>' +
-        '<dt>0–60 mph</dt><dd>' + delta(m0.zeroTo60_s, m1.zeroTo60_s, 's', true, 1) + '</dd><dt>Top speed</dt><dd>' + delta(m0.topSpeed_kph, m1.topSpeed_kph, 'km/h') + '</dd>' +
+        (wsMph ? '<dt>0–60 mph</dt><dd>' + delta(m0.zeroTo60_s, m1.zeroTo60_s, 's', true, 1) : '<dt>0–100 km/h</dt><dd>' + delta(m0.zeroTo100_s, m1.zeroTo100_s, 's', true, 1)) + '</dd><dt>Top speed</dt><dd>' +
+        (wsMph ? delta(m0.topSpeed_kph * 0.621371, m1.topSpeed_kph * 0.621371, 'mph') : delta(m0.topSpeed_kph, m1.topSpeed_kph, 'km/h')) + '</dd>' +
         '<dt>Lateral grip</dt><dd>' + delta(m0.lateralG, m1.lateralG, 'g', false, 2) + '</dd><dt>Performance index</dt><dd>' + delta(performanceIndex(m0), performanceIndex(m1)) + '</dd></dl>' +
         (elig ? carEligibilityHTML(elig) : '') +
         '<ul class="gh-breakdown">' + arr(q.lines).slice(0, 10).map(function (l) { var v = isNum(l.net) ? l.net : num(l.cost, 0) - num(l.refund, 0); return '<li class="in"><span>' + esc(l.label) + '</span><span class="c">' + (v < 0 ? '+' + esc(fmtCredits(-v)) : esc(fmtCredits(v))) + '</span></li>'; }).join('') + '</ul>' +
@@ -5017,7 +5023,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       staleOverlays: staleOverlays, rowHTML: rowHTML, ordinal: ordinal, conditionLabel: conditionLabel, titleCase: titleCase, shade: shade, medalThresholds: medalThresholds,
       buyCar: buyCar, sellCar: sellCar, repairCar: repairCar, applyUpgrade: applyUpgrade, upgradeQuote: upgradeQuote, priceOf: priceOf,
       chSaveRecord: chSaveRecord, challengeList: challengeList, driverInfo: driverInfo, calendarFor: calendarFor, standingsFor: standingsFor,
-      fallbackProfile: fallbackProfile, steerAssistLevel: steerAssistLevel, setSteerAssistLevel: setSteerAssistLevel, raceSettings: raceSettings,
+      fallbackProfile: fallbackProfile, steerAssistLevel: steerAssistLevel, setSteerAssistLevel: setSteerAssistLevel, raceSettings: raceSettings, carStatsStrip: carStatsStrip,
       CSS: function () { return CSS + CSS2; }
     }
   };

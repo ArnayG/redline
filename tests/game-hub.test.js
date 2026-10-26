@@ -61,3 +61,18 @@ T('route changes dismiss only transient UI opened under a different route', () =
   assert.deepEqual(S({ overlay: '#/replays', gallery: '#/achievements' }, '#/garage'), ['overlay', 'gallery']);
   assert.deepEqual(S({ overlay: '#/replays' }, '#/replays'), []);
 });
+
+T('hero stat strip: the sprint follows the units setting (0–100 km/h, as the Garage shows it, or 0–60 mph)', () => {
+  const b = globalThis.CB.state.normalize(globalThis.CB.data.defaultBuild());
+  const m = HUB._.metricsFor(b);
+  const html = HUB._.carStatsStrip(b);
+  assert.match(html, /0–100 s/);
+  assert.ok(html.indexOf('<b>' + m.zeroTo100_s.toFixed(1) + '</b>') >= 0, 'shows zeroTo100_s');
+  assert.ok(HUB._.estimateMetrics(b).zeroTo100_s > HUB._.estimateMetrics(b).zeroTo60_s);
+});
+
+T('home: the mode grid carries its tile count so 8 tiles never leave a lone orphan', () => {
+  const css = HUB._.CSS();
+  assert.match(css, /\.gh-modes\[data-n="8"\]\{grid-template-columns:repeat\(8/);
+  assert.match(css, /\(min-width:641px\) and \(max-width:1439px\)\{#game-hub \.gh-modes\[data-n="8"\]\{grid-template-columns:repeat\(4/);
+});
