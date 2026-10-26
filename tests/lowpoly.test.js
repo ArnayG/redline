@@ -89,7 +89,9 @@ test('lowpoly: every registered model builds (auto or authored) at both LODs, fi
         var wt = r.parts.filter(function (p) { return p.attach === 'wheel' || p.attach === 'caliper'; }).reduce(function (a, p) { return a + p.triangles; }, 0);
         // pickups opt into all-terrain tyres (wheels.tyre 'at': lug blocks on a grooved tread): their 33-35 in
         // off-road tyres are the most visible part of the truck, so they get a larger wheel allowance
-        assert.ok(wt <= (m.style === 'pickup' ? 1500 : 900), m.id + ' wheels ' + wt + ' tris');
+        // (+40 a wheel since the brake pass: a steel disc ring with a dark hat in front of the barrel and a curved
+        // caliper hugging the disc edge replaced the flat grey back plate and the radial caliper box)
+        assert.ok(wt <= (m.style === 'pickup' ? 1660 : 1060), m.id + ' wheels ' + wt + ' tris');
       }
       if (lod === 'low') assert.ok(t >= 120 && t <= 500, m.id + ' low LOD ' + t + ' tris');
       // high LOD: 3600 + 600 for the detailed rear (racing is seen from behind: multi-element tail lamps, light bars,

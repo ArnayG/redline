@@ -736,6 +736,42 @@ var CB = (globalThis.CB = globalThis.CB || {});
       B.poly(matSide || mat, f, sub(m, c3));
     }
   }
+  /** door-mirror housing from a side-profile polygon (fitted x, y) between za (inboard) and zb (outboard), signed:
+      full section for the inner 60 %, then the outboard end tapers (front pulled back toward the flat rear face,
+      height eased) so it reads as a moulded pod, not a brick; a gloss-black mirror glass sits on the rear face
+      (seen from the chase cam). 4-point profile: 16 housing + 4 cap + 4 glass triangles. */
+  function emitMirrorHousing(B, mat, pts2d, za, zb) {
+    var P = dedupe(pts2d.map(function (p) { return [+p[0], +p[1]]; }), 1e-6);
+    if (P.length < 3) return;
+    if (area2(P) < 0) P = P.slice().reverse();
+    var n = P.length, xr = Infinity, yc = 0, xc = 0;
+    P.forEach(function (p) { xr = Math.min(xr, p[0]); yc += p[1] / n; xc += p[0] / n; });
+    var S2 = P.map(function (p) { return [xr + (p[0] - xr) * 0.7, yc + (p[1] - yc) * 0.84]; });
+    var zm = za + (zb - za) * 0.6, sg = zb >= za ? 1 : -1;
+    function at(Q, i, z) { return [Q[i][0], Q[i][1], z]; }
+    var Z = [[P, za], [P, zm], [S2, zb]];
+    for (var r = 0; r < 2; r++) for (var i = 0; i < n; i++) {
+      var j = (i + 1) % n, A = Z[r], Bq = Z[r + 1];
+      var f = [at(A[0], i, A[1]), at(A[0], j, A[1]), at(Bq[0], j, Bq[1]), at(Bq[0], i, Bq[1])];
+      var mid = scl(add(add(f[0], f[1]), add(f[2], f[3])), 0.25);
+      B.poly(mat, f, sub(mid, [xc, yc, mid[2]]));
+    }
+    B.poly(mat, P.map(function (p) { return [p[0], p[1], za]; }), [0, 0, -sg]);
+    B.poly(mat, S2.map(function (p) { return [p[0], p[1], zb]; }), [0, 0, sg]);
+    // the glass: on the profile edge facing most rearward, inset, 3 mm proud
+    var best = -1, bn = 0;
+    for (var e = 0; e < n; e++) {
+      var a = P[e], b = P[(e + 1) % n], nx = (b[1] - a[1]), ny = -(b[0] - a[0]), l = Math.hypot(nx, ny) || 1;
+      if (-nx / l > bn) { bn = -nx / l; best = e; }
+    }
+    if (best < 0 || bn < 0.6) return;
+    var e0 = P[best], e1 = P[(best + 1) % n], f0 = S2[best], f1 = S2[(best + 1) % n];
+    function lerp2(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+    var g0 = lerp2(e0, e1, 0.14), g1 = lerp2(e0, e1, 0.86), h0 = lerp2(f0, f1, 0.16), h1 = lerp2(f0, f1, 0.84);
+    var zg0 = za + (zb - za) * 0.1, zg1 = za + (zb - za) * 0.93, k = (zg1 - zm) / (zb - zm);
+    var o0 = lerp2(g0, h0, k), o1 = lerp2(g1, h1, k);
+    B.poly('gloss', [[g0[0] - 0.003, g0[1], zg0], [g1[0] - 0.003, g1[1], zg0], [g1[0] - 0.003, g1[1], zm], [o1[0] - 0.003, o1[1], zg1], [o0[0] - 0.003, o0[1], zg1], [g0[0] - 0.003, g0[1], zm]], [-1, 0, 0]);
+  }
   /** n-gon cylinder along x / y / z */
   function emitCyl(B, mat, c, r, ry, l, axis, sides, matCap) {
     sides = sides || 8;
@@ -803,11 +839,19 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var Z0 = ring(lipIn, zr - depth - 0.05, b0), Z1 = ring(lipIn, zr - depth - 0.05, b1);
       emitPoly(rim, [I0, I1, Z1, Z0], dark, [-Math.cos((b0 + b1) / 2), -Math.sin((b0 + b1) / 2), 0]);
     }
-    // back plate (brake disc look; the hub hides its centre)
-    var bp = [];
-    for (k = 0; k < N; k++) { bp.push(ring(lipIn, zr - depth - 0.05, (k + 0.5) / N * TAU)); }
-    emitPoly(rim, bp, PAL.disc, [0, 0, 1]);
     var zs = zr - (style === 'dish' ? depth : 0.012), hubR = rr * (style === 'disc' ? 0.2 : 0.26);
+    // back of the barrel (dark), the brake disc in front of it: a steel ring with a dark hat at its centre, so the
+    // disc reads between the spokes as a separate part with depth instead of one grey plate filling the rim
+    var bp = [], zb = zr - depth - 0.05, zd = zb + 0.012, rD = lipIn * 0.86, rH = Math.max(hubR * 1.25, rD * 0.42);
+    for (k = 0; k < N; k++) { bp.push(ring(lipIn, zb, (k + 0.5) / N * TAU)); }
+    emitPoly(rim, bp, back, [0, 0, 1]);
+    for (k = 0; k < N; k++) {
+      var d0 = (k + 0.5) / N * TAU, d1 = (k + 1.5) / N * TAU, dj = 1 + (hash(k * 3 + 11) - 0.5) * 0.1;
+      emitPoly(rim, [ring(rD, zd, d0), ring(rD, zd, d1), ring(rH, zd, d1), ring(rH, zd, d0)], [PAL.disc[0] * dj, PAL.disc[1] * dj, PAL.disc[2] * dj], [0, 0, 1]);
+    }
+    var hp = [];
+    for (k = 0; k < 8; k++) hp.push(ring(rH, zd + 0.008, (k + 0.5) / 8 * TAU));
+    emitPoly(rim, hp, PAL.hat, [0, 0, 1]);
     function spoke(angA, angB, r0, r1, wA, wB, z0, z1, flat) {
       // ridged spoke: two facets meeting on the centre line (z0 at the hub, z1 at the lip), outer edges sunk by dz,
       // so it reads as a solid blade from every angle with 4 triangles (2 when flat: thin mesh spokes)
@@ -857,16 +901,22 @@ var CB = (globalThis.CB = globalThis.CB || {});
     emitPoly(rim, hub, fin, [0, 0, 1]);
     for (k = 0; k < 6; k++) { a = (k + 0.5) / 6 * TAU; cap.push([Math.cos(a) * hubR * 0.45, Math.sin(a) * hubR * 0.45, zs + 0.012]); }
     emitPoly(rim, cap, dark, [0, 0, 1]);
-    // caliper: box at the rear-top of the disc (wheel-local, not spinning)
+    // caliper (wheel-local, not spinning): a curved block hugging the outer edge of the disc behind the spokes, at
+    // the rear-top for the front axle / front-top for the rear — long round the disc and short radially, as the real
+    // one is (a radial box read as a yellow brick stuck in the spokes)
     if (o.caliper) {
-      var ca = o.front ? 150 * DEG : 30 * DEG, cr2 = lipIn * 0.82, cc = [Math.cos(ca) * cr2, Math.sin(ca) * cr2, zr - depth - 0.03];
-      var B2 = { poly: function (m, pts, hint) { return emitPoly(cal, pts, o.caliper, hint); } };
-      var faces = boxPts([0, 0, 0], [0.07, lipIn * 0.55, 0.05], 0);
-      var rot = ca - PI / 2, c3 = Math.cos(rot), s3 = Math.sin(rot);
-      faces.forEach(function (f) {
-        var g = f.map(function (p) { return [cc[0] + p[0] * c3 - p[1] * s3, cc[1] + p[0] * s3 + p[1] * c3, cc[2] + p[2]]; });
-        var m = scl(add(add(g[0], g[1]), add(g[2], g[3])), 0.25);
-        B2.poly(null, g, sub(m, cc));
+      var ca = o.front ? 150 * DEG : 30 * DEG, span = clamp(0.2 / Math.max(0.15, rD), 0.5, 1.0), nseg = 3;
+      var cr0 = rD * 0.66, cr1 = Math.min(lipIn - 0.008, rD * 1.06), cz0 = zd + 0.004, cz1 = Math.min(zs - 0.01, zd + 0.055);
+      var cc = o.caliper, cs = [cc[0] * 0.72, cc[1] * 0.72, cc[2] * 0.72];
+      for (k = 0; k < nseg; k++) {
+        var e0 = ca - span / 2 + span * k / nseg, e1 = ca - span / 2 + span * (k + 1) / nseg, em = (e0 + e1) / 2;
+        emitPoly(cal, [ring(cr0, cz1, e0), ring(cr1, cz1, e0), ring(cr1, cz1, e1), ring(cr0, cz1, e1)], cc, [0, 0, 1]);                     // face
+        emitPoly(cal, [ring(cr1, cz0, e0), ring(cr1, cz0, e1), ring(cr1, cz1, e1), ring(cr1, cz1, e0)], cs, [Math.cos(em), Math.sin(em), 0]); // outer
+        emitPoly(cal, [ring(cr0, cz0, e0), ring(cr0, cz1, e0), ring(cr0, cz1, e1), ring(cr0, cz0, e1)], cs, [-Math.cos(em), -Math.sin(em), 0]); // inner
+      }
+      [[ca - span / 2, -1], [ca + span / 2, 1]].forEach(function (e) {   // end caps
+        var t = [-Math.sin(e[0]) * e[1], Math.cos(e[0]) * e[1], 0];
+        emitPoly(cal, [ring(cr0, cz0, e[0]), ring(cr1, cz0, e[0]), ring(cr1, cz1, e[0]), ring(cr0, cz1, e[0])], cs, t);
       });
     }
     return { tyre: tyre, rim: rim, cal: cal };
@@ -1969,7 +2019,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
       both(function (s) {
         var pts = clampFlare(p.pts2d.map(function (q) { return [mx(q[0]) + dx, q[1] + dy]; }), arches);
         var dzs = mv ? mv.dz * (p.z0 + p.z1 < 0 ? -1 : 1) : 0;
-        emitPrism(B, mat, pts, (p.z0 * sz + dzs) * s, (p.z1 * sz + dzs) * s, 'z');
+        var za = (p.z0 * sz + dzs) * s, zb = (p.z1 * sz + dzs) * s;
+        if (mat === 'mirror' && B.colors && pts.length >= 3) {   // door mirror: tapered pod + glass (inboard end first)
+          if (Math.abs(za) > Math.abs(zb)) { var zt = za; za = zb; zb = zt; }
+          emitMirrorHousing(B, mat, pts, za, zb);
+        } else emitPrism(B, mat, pts, za, zb, 'z');
       });
     } else if (p.t === 'cyl') {
       both(function (s) {
@@ -1981,7 +2035,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
         var x0 = mx(p.x0) + dx, x1 = mx(p.x1) + dx, y0 = p.y0 + dy, y1 = p.y1 + dy, z0 = p.z0 * sz + (mv ? mv.dz : 0), z1 = p.z1 * sz + (mv ? mv.dz : 0);
         var prof = [[x1, y0 + (y1 - y0) * 0.15], [x1 - (x1 - x0) * 0.15, y1], [x0, y1 - (y1 - y0) * 0.1], [x0 + (x1 - x0) * 0.1, y0]];
         var zo = z1 - (z1 - z0) * 0.08;
-        emitPrism(B, mat, prof, s * (z0 + (z1 - z0) * 0.35), s * zo, 'z', mat);
+        if (B.colors) emitMirrorHousing(B, mat, prof, s * (z0 + (z1 - z0) * 0.35), s * zo);
+        else emitPrism(B, mat, prof, s * (z0 + (z1 - z0) * 0.35), s * zo, 'z', mat);
         emitBox(B, 'black', [(x0 + x1) / 2 + 0.01, y0 + (y1 - y0) * 0.3, s * (z0 + (z1 - z0) * 0.2)], [Math.max(0.03, (x1 - x0) * 0.35), 0.03, (z1 - z0) * 0.45], 0);
       });
     }
