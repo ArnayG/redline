@@ -252,10 +252,13 @@ test('coach: the tutorial steps advance on the player\'s actions; tips explain m
   ['rev higher', 'fewer revs', 'Cold tyres', 'early shifts', 'late shifts'].forEach(function (w) { assert.ok(t2.indexOf(w) >= 0, w); });
   assert.ok(/Great light/.test(X.tipsFor({ rt: 0.008 })[0].text));
   assert.strictEqual(X.isVs('practice'), false); assert.strictEqual(X.isVs('tutorial'), false); assert.strictEqual(X.isVs('ladder'), true);
-  // first person is the default (older saves migrate once)
-  assert.strictEqual(X.sanitizeSettings(null).camera, 'cockpit');
-  assert.strictEqual(X.sanitizeSettings({ camera: 'chase' }).camera, 'cockpit');
+  // 'auto' (chase while staging, cockpit from the green) is the default; older saves migrate once
+  assert.strictEqual(X.sanitizeSettings(null).camera, 'auto');
+  assert.strictEqual(X.sanitizeSettings({ camera: 'chase' }).camera, 'auto');
+  assert.strictEqual(X.sanitizeSettings({ camera: 'cockpit', camV: 2 }).camera, 'auto', 'the old cockpit default moves to auto');
   assert.strictEqual(X.sanitizeSettings({ camera: 'side', camV: 2 }).camera, 'side');
+  assert.strictEqual(X.sanitizeSettings({ camera: 'cockpit', camV: 3 }).camera, 'cockpit', 'an explicit cockpit pick is kept');
+  assert.strictEqual(X.sanitizeSettings({ camera: 'bogus', camV: 3 }).camera, 'auto');
   assert.strictEqual(X.sanitizeSettings({ opponent: 'practice' }).opponent, 'practice');
 });
 
@@ -269,4 +272,50 @@ test('HUD: reaction-time verdicts, split ticker, first-person minimal overlay', 
   assert.strictEqual(hud.ticker().length, 1); assert.strictEqual(hud.ticker()[0].label, '60 ft');
   snap.t = 3.2; snap.events = []; hud.draw(F.ctx, snap, { width: 844, height: 390, touch: true, cockpit: true });
   assert.strictEqual(hud.ticker().length, 1, 'ticker kept (not drawn on compact)');
+});
+
+/* ---- camera phase: chase while lining up, cockpit from the green, a manual pick sticks for the run only ---- */
+function camSnap(phase, o) {
+  o = o || {};
+  return { phase: phase, t: o.t != null ? o.t : 1, playerLane: 0, tree: { greenT: o.greenT || [null, null] }, lanes: [{ left: !!o.left, finished: !!o.finished }, {}] };
+}
+test('camera phase: staging gives the chase cam, the green gives the cockpit', function () {
+  ['burnout', 'staging', 'tree'].forEach(function (ph) { assert.strictEqual(X.stageCamera(camSnap(ph), 0, 'auto', null), 'chase', ph); });
+  assert.strictEqual(X.stageCamera(null, 0, 'auto', null), 'chase', 'before the first snapshot');
+  assert.strictEqual(X.stageCamera(camSnap('tree', { t: 5, greenT: [6, 6] }), 0, 'auto', null), 'chase', 'ambers: still chase');
+  assert.strictEqual(X.stageCamera(camSnap('tree', { t: 6.01, greenT: [6, 7] }), 0, 'auto', null), 'cockpit', 'my green (bracket: the other lane still waits)');
+  assert.strictEqual(X.stageCamera(camSnap('tree', { t: 6.01, greenT: [7, 6] }), 0, 'auto', null), 'chase', 'the other lane green is not mine');
+  assert.strictEqual(X.stageCamera(camSnap('tree', { t: 5, greenT: [6, 6], left: true }), 0, 'auto', null), 'cockpit', 'left early (red light): the run started');
+  ['run', 'shutdown', 'done'].forEach(function (ph) { assert.strictEqual(X.stageCamera(camSnap(ph), 0, 'auto', null), 'cockpit', ph + ': cockpit through the finish'); });
+  // a fixed setting is used as is
+  assert.strictEqual(X.stageCamera(camSnap('staging'), 0, 'side', null), 'side');
+  assert.strictEqual(X.stageCamera(camSnap('run'), 0, 'chase', null), 'chase');
+  assert.ok(X.CAM_BLEND >= 0.3 && X.CAM_BLEND <= 0.5, 'a short blend, not a cut');
+});
+test('camera phase: per-run state blends on the launch, a manual pick sticks for the run, the next run resets', function () {
+  var c = X.createCamState('auto');
+  assert.strictEqual(c.initial(), 'chase');
+  var s1 = c.step(camSnap('staging'), 0); assert.strictEqual(s1.mode, 'chase'); assert.strictEqual(s1.changed, false);
+  var s2 = c.step(camSnap('tree', { t: 6.2, greenT: [6, 6] }), 0);
+  assert.strictEqual(s2.mode, 'cockpit'); assert.strictEqual(s2.changed, true); assert.strictEqual(s2.blend, X.CAM_BLEND);
+  assert.strictEqual(c.step(camSnap('run'), 0).changed, false, 'one switch only');
+  // manual: picked during staging, kept through the green and the finish
+  var m = X.createCamState('auto'); m.initial(); m.step(camSnap('staging'), 0);
+  m.manual('side');
+  ['tree', 'run', 'shutdown', 'done'].forEach(function (ph) { var r = m.step(camSnap(ph, { t: 9, greenT: [6, 6] }), 0); assert.strictEqual(r.mode, 'side', ph); assert.strictEqual(r.changed, false, ph); });
+  // manual cockpit during staging (no blend later, no change)
+  var k = X.createCamState('auto'); k.initial(); k.manual('cockpit');
+  assert.strictEqual(k.step(camSnap('staging'), 0).mode, 'cockpit');
+  // manual back to chase after the launch sticks too
+  var b = X.createCamState('auto'); b.initial(); b.step(camSnap('run'), 0); b.manual('chase');
+  assert.strictEqual(b.step(camSnap('shutdown'), 0).mode, 'chase');
+  // the next run / heat: a new state stages in the chase cam again
+  var n = X.createCamState('auto'); assert.strictEqual(n.initial(), 'chase'); assert.strictEqual(n.step(camSnap('staging'), 0).mode, 'chase');
+  // fixed setting: never switches by itself
+  var f = X.createCamState('bumper'); assert.strictEqual(f.initial(), 'bumper');
+  assert.strictEqual(f.step(camSnap('run'), 0).changed, false);
+  // runPlay makes the state per run; the manual pick in auto is not persisted
+  var ui = src('js/drag/drag-ui.js');
+  assert.ok(/R\.cam = X\.createCamState\(S\.camera\)/.test(ui), 'per-run camera state');
+  assert.ok(/R\.cam\.manual\(m\)/.test(ui), 'the camera toggle records the override');
 });

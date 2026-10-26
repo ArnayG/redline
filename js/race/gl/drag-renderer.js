@@ -6,6 +6,7 @@
      create(canvas, opts {quality 'low'|'medium'|'high'|'ultra', camera, venue 'strip'|'street', night, distance (def | id | m),
                           autoQuality, seed})   (create(canvas, session, opts) is accepted too, derby style)
        -> { render(snap, alpha?), setCamera(m), cycleCamera(), getCamera(), cameraModes(), cameraLabel(), setFollow(lane|null),
+            setCamera(m, {blend: s}) eases from the current camera, prewarmCockpit(bool), isBlending(),
             getFollow(), shake(amount), resize(), setQuality(q), getQuality(), stats(), destroy(), reset(),
             worldToScreen(x, y, z) -> {x, y, visible, scale}, getCameraState(), is3D: true, kind: 'drag' }
      createPreview(canvas, {build, color}) -> { update(opts), destroy(), ok }   (setup-screen turntable)
@@ -106,6 +107,29 @@ CB.drag = CB.drag || {};
     var kt = tree ? k * clamp01((tree[0] - pose.pos[0] + 2) / 6) : 0;
     if (kt > 0) target = lerp3(target, tree, 0.42 * kt);
     return { eye: eye, target: target, up: [0, 1, 0] };
+  }
+  /** camera blend weight (pure): eased 0..1 over dur seconds (dur <= 0: done) */
+  function blendK(t, dur) {
+    if (!(num(dur, 0) > 0)) return 1;
+    var x = clamp01(num(t, 0) / dur);
+    return x * x * (3 - 2 * x);
+  }
+  /** blend two camera poses (pure): {eye, target, up, fov} at weight k (0 = a, 1 = b); via (optional): the eye follows a
+      quadratic curve through that control point (the launch: over the roof, then straight down into the seat) */
+  function blendPose(a, b, k, via) {
+    k = clamp01(num(k, 1));
+    var eye = lerp3(a.eye, b.eye, k);
+    if (via) { var u = 1 - k; eye = [u * u * a.eye[0] + 2 * u * k * via[0] + k * k * b.eye[0], u * u * a.eye[1] + 2 * u * k * via[1] + k * k * b.eye[1], u * u * a.eye[2] + 2 * u * k * via[2] + k * k * b.eye[2]]; }
+    var up = lerp3(a.up || [0, 1, 0], b.up || [0, 1, 0], k), ul = Math.hypot(up[0], up[1], up[2]) || 1;
+    return { eye: eye, target: lerp3(a.target, b.target, k), up: [up[0] / ul, up[1] / ul, up[2] / ul], fov: num(a.fov, 64) + (num(b.fov, 64) - num(a.fov, 64)) * k };
+  }
+  /** is a world point inside the car's body box (pure): M the car's rigid body matrix (car-local GL +X fwd, +Y up, +Z right,
+      origin on the ground at the car centre), dims {length, width, height}, margin m, maxY (optional): a lower ceiling */
+  function inCarBox(M, p, dims, margin, maxY) {
+    if (!M || !p) return false;
+    var d = dims || {}, mg = num(margin, 0.25), dx = p[0] - M[12], dy = p[1] - M[13], dz = p[2] - M[14];
+    var lx = M[0] * dx + M[1] * dy + M[2] * dz, ly = M[4] * dx + M[5] * dy + M[6] * dz, lz = M[8] * dx + M[9] * dy + M[10] * dz;
+    return Math.abs(lx) <= num(d.length, 4.4) / 2 + mg && ly >= -mg && ly <= num(maxY, num(d.height, 1.3) + mg) && Math.abs(lz) <= num(d.width, 1.9) / 2 + mg;
   }
   /** side TV camera (pure): car GL pos, outer side sign (+1: sim +y), opponent pos|null */
   function sideEye(st, pos, side, opp, dt, laneY) {
@@ -239,7 +263,7 @@ CB.drag = CB.drag || {};
     var R = {
       quality: QUALITY[opts.quality] ? opts.quality : 'high', mode: MODES.indexOf(opts.camera) >= 0 ? opts.camera : 'chase', follow: null,
       cars: {}, frame: 0, lastT: 0, time: 0, stats: { fps: 0, ms: 0, draws: 0, tris: 0 }, shake: 0, fov: 64, rig: {}, side: {},
-      ema: 16, slowT: 0, stageK: 1, flagA: 0.18, units: opts.units === 'kph' ? 'kph' : 'mph', worldKey: ''
+      ema: 16, slowT: 0, stageK: 1, blend: null, prewarm: !!opts.prewarmCockpit, sh: [0, 0, 0], flagA: 0.18, units: opts.units === 'kph' ? 'kph' : 'mph', worldKey: ''
     };
     var Q = QUALITY[R.quality];
     /* ---- DOM ---- */
@@ -703,7 +727,7 @@ CB.drag = CB.drag || {};
       c[0] += (v[0] - c[0]) * k; c[1] += (v[1] - c[1]) * k; c[2] += (v[2] - c[2]) * k;
       return c;
     }
-    function cameraFor(snap, lane, pose, e, opp, dt, aspect) {
+    function cameraTick(snap, lane, dt) {
       var speed = num(lane.speed, 0), phase = snap.phase;
       var staging = phase === 'burnout' || phase === 'staging' || phase === 'tree' || (phase === 'run' && speed < 3);
       R.stageK += ((staging ? 1 : 0) - R.stageK) * (1 - Math.exp(-dt * (staging ? 2 : 1.3)));
@@ -712,8 +736,13 @@ CB.drag = CB.drag || {};
       var fovT = 60 + clamp01((speed - 15) / 60) * 12 + num(R.fovKick, 0);
       R.fovKick = Math.max(0, num(R.fovKick, 0) - dt * 14);
       R.fov += (fovT - R.fov) * (1 - Math.exp(-dt * 3));
+      R.sh = sh;
+    }
+    /** camera pose for a mode (no state ticking: cameraTick runs once a frame) */
+    function cameraFor(snap, lane, pose, e, opp, dt, aspect, mode) {
+      var sh = R.sh || [0, 0, 0];
       var outer = num(lane.lane, 0) === 0 ? -1 : 1;   // GL right of the car = sim -y: the left lane's outer side is GL -right
-      var mode = R.mode;
+      mode = mode || R.mode;
       if (mode === 'chase' || mode === 'low') {
         var tree = world.dyn.tree && world.venue !== 'street' ? [world.dyn.tree.x, 2.2, 0] : world.dyn.flagger ? add(world.dyn.flagger.pos, [0, 1.4, 0]) : null;
         var chK = clamp01(num(lane.chute, 0)), burn = lane.burnout ? 1 : 0;
@@ -809,30 +838,55 @@ CB.drag = CB.drag || {};
       pe.model = pe.model || modelFor(pe, pv.lane, 'high');
       // cockpit interior for the player (lazy)
       var hide = null;
-      if (R.mode === 'cockpit' && CB.gl.cockpit && typeof CB.gl.cockpit.build === 'function' && !pe.cockpitFailed) {
+      // a blend into the cockpit (the launch): the exterior stays until the eye is nearly in the seat, then the interior
+      var BL = R.blend, bk = 1;
+      if (BL) { BL.t += dt; bk = blendK(BL.t, BL.dur); if (bk >= 1) R.blend = BL = null; }
+      if ((R.mode === 'cockpit' || R.prewarm) && CB.gl.cockpit && typeof CB.gl.cockpit.build === 'function' && !pe.cockpitFailed) {
         if (!pe.cockpit) { try { pe.cockpit = CB.gl.cockpit.build(ctx, pv.lane.build || defaultBuild(), { eye: pe.model.cockpitEye, dims: pe.model.dims, quality: R.quality, units: R.units }); } catch (err) { pe.cockpit = null; pe.cockpitFailed = true; } }
-        if (pe.cockpit) hide = pe.cockpit.hideKinds || null;
       }
       var aspect = size.cw / Math.max(1, size.ch);
-      // pose cars
+      // pose cars (the player's exterior is filtered below once the camera is known)
       main.length = 0; casters.length = 0;
       for (i = 0; i < laneViews.length; i++) {
         var lv = laneViews[i], ce = lv.e;
         ce.model = modelFor(ce, lv.lane, 'high');
-        var list = carLists[i] || (carLists[i] = []);
-        poseLane(ce, lv.lane, lv.pose, dt, list, lv === pv && R.mode === 'cockpit' && pe.cockpit ? hide : null);
-        if (!(lv === pv && R.mode === 'cockpit' && !pe.cockpit)) for (var q = 0; q < list.length; q++) { main.push(list[q]); if (list[q].castShadow) casters.push(list[q]); }
+        poseLane(ce, lv.lane, lv.pose, dt, carLists[i] || (carLists[i] = []), null);
       }
       if (pv.lane.gLong > 0.7) R.shake = Math.max(R.shake, clamp((pv.lane.gLong - 0.7) * 0.5, 0, 0.5));
-      cameraFor(snap, pv.lane, pv.pose, pe, ov, dt, aspect);
-      if (R.mode === 'cockpit' && pe.cockpit) {
+      cameraTick(snap, pv.lane, dt);
+      var inside = R.mode === 'cockpit';
+      if (BL) {
+        var c0 = cameraFor(snap, pv.lane, pv.pose, pe, ov, dt, aspect, BL.from);
+        var pa = { eye: c0.position.slice(), target: c0.target.slice(), up: c0.up.slice(), fov: c0.fovDeg }, n0 = c0.near;
+        var c1 = cameraFor(snap, pv.lane, pv.pose, pe, ov, dt, aspect, R.mode);
+        var pb = { eye: c1.position.slice(), target: c1.target.slice(), up: c1.up.slice(), fov: c1.fovDeg };
+        // into the cockpit: over the roof to above the driver's head, then straight down into the seat (never through the
+        // boot or the seat backs)
+        var via = BL.from !== 'cockpit' && R.mode === 'cockpit' ? madd(pb.eye, pv.pose.up, num(pe.model && pe.model.dims && pe.model.dims.height, 1.3) + 0.2) : null;
+        var bp = blendPose(pa, pb, bk, via);
+        // the exterior stays until the eye reaches the body, then the interior takes over; until the eye is in the seat the
+        // interior goes without its headliner / roof glass (a crane drop into the cabin, never a frame inside a shell)
+        inside = inside && (bk >= 0.98 || inCarBox(pe.CW, bp.eye, pe.model && pe.model.dims, 0.3));
+        R.openRoof = inside && bk < 0.98;
+        setCam(bp.eye, bp.target, bp.up, bp.fov, aspect, inside ? c1.near : n0);
+      } else { cameraFor(snap, pv.lane, pv.pose, pe, ov, dt, aspect); R.openRoof = false; }
+      hide = inside && pe.cockpit ? pe.cockpit.hideKinds || null : null;
+      for (i = 0; i < laneViews.length; i++) {
+        var own = laneViews[i] === pv, list = carLists[i];
+        if (own && inside && !pe.cockpit) continue;   // hood-cam fallback: no own car
+        for (var q = 0; q < list.length; q++) {
+          if (own && hide && hide.indexOf(list[q].kind) >= 0) continue;
+          main.push(list[q]); if (list[q].castShadow) casters.push(list[q]);
+        }
+      }
+      if (inside && pe.cockpit) {
         try {
           // drag: exaggerated head pitch-back on launch / forward on braking (the race head model is tuned for ~1 g corners)
           var csnap = { speed: num(pv.lane.speed, 0), rpm: num(pv.lane.rpm, 0), redline: pv.lane.redline, gear: pv.lane.gear, throttle: pv.lane.throttle, brake: pv.lane.brake, steerAngle: 0, longG: clamp(num(pv.lane.gLong, 0) * 2.4, -3, 3), latG: 0, headlights: R.night, maxGear: pv.lane.maxGear,
             drag: dragDash(pv.lane, snap, ov ? ov.lane : null) };
           if (pe.cockpit.update) pe.cockpit.update(csnap, dt, R.time, snap);
           var cki = pe.cockpit.drawItems ? pe.cockpit.drawItems(pe.CW) : [];
-          for (var c2 = 0; c2 < cki.length; c2++) main.push(cki[c2]);
+          for (var c2 = 0; c2 < cki.length; c2++) { if (R.openRoof && (cki[c2].kind === 'cockpit-liner' || cki[c2].name === 'glass-roof')) continue; main.push(cki[c2]); }
         } catch (err) { pe.cockpit = null; pe.cockpitFailed = true; }
       }
       // particles: smoke, nitrous, purge
@@ -885,7 +939,7 @@ CB.drag = CB.drag || {};
         try { if (shadow.render(casters, { center: pv.pose.pos, sunDir: Lt.sunDir, radius: 60 })) env.shadow = shadow; } catch (e2b) { shadow = null; }
       }
       R.stats.mirror = 'off'; R.stats.mirrorMs = 0;
-      if (R.mode === 'cockpit' && pe.cockpit) {
+      if (inside && pe.cockpit) {
         var mran = false;
         try { mran = mirrorPass(pe, pv, laneViews, env, tod, weather, Lt.fogColor); } catch (em) { MR.failed = true; }
         R.stats.mirror = MR.state; R.stats.mirrorMs = mran ? MR.ms : 0; R.stats.mirrorSize = MR.plan && MR.plan.live ? MR.plan.w + 'x' + MR.plan.h + '/' + MR.plan.every : '';
@@ -924,8 +978,19 @@ CB.drag = CB.drag || {};
       reset: function () { R.rig = {}; R.side = {}; R.stageK = 1; PS.length = 0; Object.keys(R.cars).forEach(function (k) { R.cars[k].prev = null; R.cars[k].wheelieSeen = false; }); },
       getCameraState: function () { return { eye: cam.position.slice(), target: (cam.target || cam.position).slice(), up: (cam.up || [0, 1, 0]).slice(), fov: cam.fovDeg || 64, fovDeg: cam.fovDeg || 64, mode: R.mode, aspect: cam.aspect }; },
       worldToScreen: function (x, y, z) { return toScreen([x, num(z, 0), -y]); },
-      setCamera: function (m) { if (m === 'chase-far' || m === 'far') m = 'chase'; if (m === 'hood') m = 'bumper'; if (m === 'tv') m = 'side'; if (MODES.indexOf(m) >= 0) { R.mode = m; R.rig = {}; R.side = {}; } return R.mode; },
-      cycleCamera: function () { R.mode = MODES[(MODES.indexOf(R.mode) + 1) % MODES.length]; R.rig = {}; R.side = {}; return R.mode; },
+      /** o.blend (s): ease from the current camera instead of a hard cut (the launch chase -> cockpit) */
+      setCamera: function (m, o) {
+        if (m === 'chase-far' || m === 'far') m = 'chase'; if (m === 'hood') m = 'bumper'; if (m === 'tv') m = 'side';
+        if (MODES.indexOf(m) < 0 || m === R.mode) return R.mode;
+        var dur = num(o && o.blend, 0);
+        if (dur > 0 && R.frame > 0) { R.blend = { from: R.mode, t: 0, dur: dur }; R.mode = m; R.side = {}; }
+        else { R.blend = null; R.mode = m; R.rig = {}; R.side = {}; }
+        return R.mode;
+      },
+      cycleCamera: function () { R.blend = null; R.mode = MODES[(MODES.indexOf(R.mode) + 1) % MODES.length]; R.rig = {}; R.side = {}; return R.mode; },
+      isBlending: function () { return !!R.blend; },
+      /** build the cockpit interior ahead of time (auto camera: ready before the launch blend) */
+      prewarmCockpit: function (b) { R.prewarm = b !== false; return R.prewarm; },
       getCamera: function () { return R.mode; },
       cameraLabel: function () { return LABELS[R.mode]; },
       cameraModes: function () { return MODES.slice(); },
@@ -1013,7 +1078,7 @@ CB.drag = CB.drag || {};
 
   CB.drag.renderer = {
     isSupported: isSupported, create: create, createPreview: createPreview, MODES: MODES, LABELS: LABELS, QUALITY: QUALITY,
-    _: { mirrorPlan: mirrorPlan, mirrorDue: mirrorDue, mirrorView: mirrorView, dragDash: dragDash, boardInfo: boardInfo, fmtET: fmtET, fmtMPH: fmtMPH, wheeliePitch: wheeliePitch, smokeRate: smokeRate, flagArm: flagArm, smokeAxles: smokeAxles, chaseEye: chaseEye, sideEye: sideEye, drawBoard: drawBoard }
+    _: { mirrorPlan: mirrorPlan, mirrorDue: mirrorDue, mirrorView: mirrorView, dragDash: dragDash, boardInfo: boardInfo, fmtET: fmtET, fmtMPH: fmtMPH, wheeliePitch: wheeliePitch, smokeRate: smokeRate, flagArm: flagArm, smokeAxles: smokeAxles, chaseEye: chaseEye, sideEye: sideEye, blendK: blendK, blendPose: blendPose, inCarBox: inCarBox, drawBoard: drawBoard }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.drag.renderer;
 })();

@@ -206,7 +206,11 @@ torque ceiling so its power peaks near 6,500 rpm instead of a fat mid-range (boo
   tree, surface, night; bracket + dial-in; class + N2O; assists (manual / auto shift, launch control when the build has it,
   TC as built / off / 1–3, auto-stage, deep stage, skip burnout); quick tune (final drive, gear spread — a drag-only copy via
   `CB.drag.launch.tuneBuild`, the Garage build is untouched); camera / units / graphics / sound / touch / fps.
-* **First person by default** (`camera: 'cockpit'`, older saves migrate once via `camV`): `CB.gl.cockpit` interior
+* **Camera `auto` by default** (`camera: 'auto'`, older saves migrate once via `camV`): a third-person chase cam while
+  lining up (burnout, pre-stage / stage beams, the tree), then a ~0.4 s blend (`setCamera(m, { blend })`) into the first-person
+  cockpit on the player's green (or when the car leaves: a red light), held through the finish (`CB.drag.ui._.stageCamera`,
+  `createCamState`). C during a run overrides it for that run only; every run / heat stages in the chase cam again. A fixed
+  camera setting is used as is. First person: `CB.gl.cockpit` interior
   (wheel + hands, A-pillars, mirrors, cluster with tach and gear), the tree in the windscreen, head pitch-back on launch /
   forward on braking (longG × 2.4 into the cockpit head model), shake on launch / shifts / bangs (renderer), FOV
   stretch with speed + launch kick. The HUD goes minimal: a dash-mounted shift-light bar, gear + rpm while staging, the

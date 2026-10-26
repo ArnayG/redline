@@ -32,7 +32,7 @@ CB.drag = CB.drag || {};
     distanceId: 'quarter', opponent: 'ladder', rivalId: null, aiModel: 'dodge-challenger-srt-hellcat', difficulty: 'amateur', tSize: 4, ghostCode: '',
     treeType: 'pro', venue: 'strip', night: false, surface: 'prepped', bracket: false, dial: null, cls: 'street', nitrous_hp: 100,
     autoShift: false, launchControl: true, tc: 'car', autoStage: false, deep: false, skipBurnout: false,
-    tuneFD: null, tuneSpread: 1, camera: 'cockpit', camV: 2, quality: 'auto', units: 'imperial', muted: false, touch: 'auto', showFps: false
+    tuneFD: null, tuneSpread: 1, camera: 'auto', camV: 3, quality: 'auto', units: 'imperial', muted: false, touch: 'auto', showFps: false
   };
   function sanitizeSettings(s) {
     s = s && typeof s === 'object' ? s : {};
@@ -61,9 +61,47 @@ CB.drag = CB.drag || {};
     if (s.touch === 'auto' || s.touch === 'on' || s.touch === 'off') o.touch = s.touch;
     ['night', 'bracket', 'autoShift', 'autoStage', 'deep', 'skipBurnout', 'muted', 'showFps'].forEach(function (key) { o[key] = !!s[key]; });
     o.launchControl = s.launchControl !== false;
-    // v2: first person is the default drag camera (older saves defaulted to the chase cam)
-    if (!(+s.camV >= 2)) o.camera = 'cockpit';
+    // v3: 'auto' is the default drag camera (chase while staging, cockpit from the green). Saves before v2 (chase default)
+    // and v2 saves still on that version's default ('cockpit') migrate; any other v2 pick is kept.
+    if (CAMS.indexOf(o.camera) < 0) o.camera = DEFAULTS.camera;
+    if (!(+s.camV >= 2) || (+s.camV < 3 && o.camera === 'cockpit')) o.camera = 'auto';
     return o;
+  }
+  /* ================================================================== camera phase (pure)
+     'auto': a third-person chase cam while lining up (burnout, pre-stage / stage beams, the tree) so the car and the beams are
+     easy to read, then the first-person cockpit from the player's green (or the moment the car leaves: a red light) through
+     the finish and the timeslip. A manual camera switch during a run overrides it for the rest of that run only (every run /
+     heat builds a fresh state); a fixed camera setting is used as is. */
+  var CAMS = ['auto', 'chase', 'low', 'side', 'bumper', 'cockpit'];
+  var CAM_BLEND = 0.4;   // s, chase -> cockpit blend on the launch
+  /** has the player's run started (the green for this lane, the car leaving the line, or the session past the tree) */
+  function launched(snap, pl) {
+    if (!snap) return false;
+    var ph = snap.phase;
+    if (ph === 'run' || ph === 'shutdown' || ph === 'done') return true;
+    var me = snap.lanes && snap.lanes[pl || 0];
+    if (me && (me.left || me.finished)) return true;
+    var g = snap.tree && snap.tree.greenT ? snap.tree.greenT[pl || 0] : null;
+    return ph === 'tree' && g != null && isFinite(+g) && num(snap.t, 0) >= +g;
+  }
+  /** the camera the run wants now: setting ('auto' | a fixed mode), override (the player's in-run pick | null) */
+  function stageCamera(snap, pl, setting, override) {
+    if (override) return override;
+    if (setting && setting !== 'auto' && CAMS.indexOf(setting) > 0) return setting;
+    return launched(snap, pl) ? 'cockpit' : 'chase';
+  }
+  /** per-run camera state: { setting, override, want } ; step(snap, pl) -> { mode, blend (s) | 0, changed } */
+  function createCamState(setting) {
+    var st = { setting: setting || 'auto', override: null, want: null };
+    st.initial = function () { return st.want = stageCamera(null, 0, st.setting, null); };
+    st.step = function (snap, pl) {
+      var m = stageCamera(snap, pl, st.setting, st.override), changed = m !== st.want, prev = st.want;
+      st.want = m;
+      return { mode: m, changed: changed, blend: changed && !st.override && prev === 'chase' && m === 'cockpit' ? CAM_BLEND : 0 };
+    };
+    /** the player cycled the camera: sticks for this run */
+    st.manual = function (mode) { if (typeof mode === 'string') { st.override = mode; st.want = mode; } return st.override; };
+    return st;
   }
   function storage() { return CB.device && CB.device.storage ? CB.device.storage : null; }
   function loadSettings() {
@@ -364,7 +402,7 @@ CB.drag = CB.drag || {};
   CB.drag.ui = CB.drag.ui || {};
   CB.drag.ui._ = { DEFAULTS: DEFAULTS, sanitizeSettings: sanitizeSettings, createInput: createInput, KEYS: KEYS, LS_KEY: LS_KEY, payout: payout, dialFor: dialFor,
     entryFor: entryFor, sessionConfig: sessionConfig, ghostTrace: ghostTrace, achievementEvent: achievementEvent, stockList: stockList, playerCar: playerCar, assistsOf: assistsOf, distId: distId,
-    isVs: isVs, COACH: COACH, coachStep: coachStep, coachNext: coachNext, tipsFor: tipsFor };
+    isVs: isVs, CAMS: CAMS, CAM_BLEND: CAM_BLEND, launched: launched, stageCamera: stageCamera, createCamState: createCamState, COACH: COACH, coachStep: coachStep, coachNext: coachNext, tipsFor: tipsFor };
   CB.drag.ui._parts = { clamp: clamp, num: num, esc: esc, hasDOM: hasDOM, loadSettings: loadSettings, saveSettings: saveSettings, stockBuild: stockBuild, stockName: stockName,
     presetList: presetList, presetBuild: presetBuild, savedBuilds: savedBuilds, currentBuild: currentBuild, buildName: buildName, paintOf: paintOf, hasLaunchControl: hasLaunchControl, DIFFS: DIFFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.drag.ui;
@@ -636,7 +674,7 @@ CB.drag = CB.drag || {};
   }
   function displaySection() {
     var S = U.S, s = sec(6, 'Display & sound'), rows = h('div', { class: 'dg-rows' });
-    row(rows, 'Camera', seg([{ v: 'chase', t: 'Chase' }, { v: 'low', t: 'Low chase' }, { v: 'side', t: 'Side track' }, { v: 'bumper', t: 'Bumper' }, { v: 'cockpit', t: 'Cockpit' }], S.camera, function (v) { S.camera = v; persist(); rerender(); }));
+    row(rows, 'Camera', seg([{ v: 'auto', t: 'Auto', title: 'Chase cam while you stage, cockpit from the green' }, { v: 'chase', t: 'Chase' }, { v: 'low', t: 'Low chase' }, { v: 'side', t: 'Side track' }, { v: 'bumper', t: 'Bumper' }, { v: 'cockpit', t: 'Cockpit' }], S.camera, function (v) { S.camera = v; persist(); rerender(); }));
     row(rows, 'Units', seg([{ v: 'imperial', t: 'mph / ft' }, { v: 'metric', t: 'km/h' }], S.units, function (v) { S.units = v; persist(); rerender(); }));
     row(rows, 'Graphics', seg([{ v: 'auto', t: 'Auto' }, { v: 'low', t: 'Low' }, { v: 'medium', t: 'Medium' }, { v: 'high', t: 'High' }], S.quality, function (v) { S.quality = v; persist(); rerender(); }));
     row(rows, 'Sound', seg([{ v: false, t: 'On' }, { v: true, t: 'Muted' }], S.muted, function (v) { S.muted = v; persist(); rerender(); }));
@@ -762,6 +800,7 @@ CB.drag = CB.drag || {};
     var R = U.R = { cfg: cfg, ctx: ctx, me: me, play: play, canvas: cv, c2d: null, session: null, renderer: null, hud: CB.drag.hud ? CB.drag.hud.create() : null, sfx: null, raf: 0, last: 0,
       paused: false, ended: false, frames: 0, fpsEma: 60, msEma: 16.7, lastSnap: null, offs: [], touch: false, tb: {}, samples: [], greenT: null, overT: null, fpsLog: [] };
     R.input = X.createInput({ onAction: onAction });
+    R.cam = X.createCamState(S.camera);   // fresh per run / heat: the staging default comes back, a manual pick is forgotten
     R.coach = ctx.tutorial ? { i: 0, shifts: 0, c: {}, shown: -1 } : null;
     R.slowT = 0;
     try { R.session = session || CB.drag.session.create(cfg); } catch (e) { load.querySelector('.dg-load-t').textContent = 'Could not start: ' + (e && e.message); console.error(e); return; }
@@ -773,7 +812,7 @@ CB.drag = CB.drag || {};
       if (U.R !== R) return;
       var DR = CB.drag.renderer;
       if (DR && typeof DR.create === 'function' && (!DR.isSupported || DR.isSupported()) && !o.force2d) {
-        R.renderer = safe(function () { return DR.create(cv, R.session, { quality: quality(), camera: S.camera, night: !!cfg.night, venue: cfg.venue, distance: cfg.distanceId, seed: cfg.seed }); });
+        R.renderer = safe(function () { return DR.create(cv, R.session, { quality: quality(), camera: R.cam.initial(), prewarmCockpit: S.camera === 'auto', night: !!cfg.night, venue: cfg.venue, distance: cfg.distanceId, seed: cfg.seed }); });
       }
       R.c2d = cv.getContext('2d');
       if (load.parentNode) load.parentNode.removeChild(load);
@@ -828,7 +867,13 @@ CB.drag = CB.drag || {};
   function onAction(a) {
     var R = U.R; if (!R) return;
     if (a === 'pause') { if (R.ended) return; if (R.paused) resume(); else pause(); }
-    else if (a === 'camera') { if (R.renderer && R.renderer.cycleCamera) { var m = R.renderer.cycleCamera(); if (typeof m === 'string') { U.S.camera = m; persist(); } } }
+    else if (a === 'camera') {
+      if (R.renderer && R.renderer.cycleCamera) {
+        var m = R.renderer.cycleCamera();
+        // auto: the pick holds for the rest of this run (the next run stages in the chase cam again); a fixed setting follows the pick
+        if (typeof m === 'string') { if (R.cam) R.cam.manual(m); if (U.S.camera !== 'auto') { U.S.camera = m; persist(); } }
+      }
+    }
     else if (a === 'mute') { U.S.muted = !U.S.muted; persist(); if (R.sfx) R.sfx.setMuted(U.S.muted); }
     else if (a === 'restart') { if (!R.ended && !R.net) startRun(R.ctx.tour ? { opp: R.cfg.lanes[1], tour: R.ctx.tour } : R.ctx.tutorial ? { tutorial: true } : {}); }
     else if (a === 'confirm') {
@@ -902,6 +947,10 @@ CB.drag = CB.drag || {};
     if (snap.playerLane != null) { pl = snap.playerLane; R.cfg.playerLane = pl; }
     R.lastSnap = snap;
     var me = snap.lanes[pl];
+    if (R.cam && R.renderer && R.renderer.setCamera) {
+      var cs = R.cam.step(snap, pl);
+      if (cs.changed) safe(function () { R.renderer.setCamera(cs.mode, { blend: cs.blend }); });
+    }
     if (R.net && !R.me.build && me && me.build) { R.me.build = me.build; R.me.name = me.carName || R.me.name; }
     // ghost trace samples (10 Hz from the green, for the share code)
     var gT = snap.tree && snap.tree.greenT ? snap.tree.greenT[pl] : null;
@@ -1318,6 +1367,7 @@ CB.drag = CB.drag || {};
       fps: R ? Math.round(R.fpsEma) : null, fpsLog: R ? R.fpsLog.slice(-20) : null, touch: !!(R && R.touch), touchLayout: R ? R.touchLayout || null : null,
       player: me ? { x: me.x, xFront: me.xFront, speed_mph: num(me.speed, 0) * MPH, rpm: me.rpm, gear: me.gear, staged: me.staged, preStaged: me.preStaged, red: me.red, rt: me.rt, et: me.et, burnout: me.burnout, tyreTemp: me.tyreTemp, launch: me.launch, shiftLight: me.shiftLight, lastShift: me.lastShift, finished: me.finished } : null,
       tree: sn ? sn.tree : null, winner: sn ? sn.winner : null,
+      camera: R && R.renderer && R.renderer.getCamera ? safe(function () { return R.renderer.getCamera(); }) : null, camOverride: R && R.cam ? R.cam.override : null, camBlending: !!(R && R.renderer && R.renderer.isBlending && R.renderer.isBlending()),
       results: U.screen === 'results' && lr ? { won: !!lr.lanes[0].won, et: lr.lanes[0].et, rt: lr.lanes[0].rt, trap: lr.lanes[0].trap, red: lr.lanes[0].red, payout: lr.payout ? lr.payout.total : 0, ghost: !!(U.lastRun && U.lastRun.ghostCode) } : null,
       tournament: U.tour ? { size: U.tour.t.size, done: U.tour.done, champion: CB.drag.ai.tournament.champion(U.tour.t) ? CB.drag.ai.tournament.champion(U.tour.t).name : null } : null
     };

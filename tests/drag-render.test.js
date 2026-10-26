@@ -176,6 +176,24 @@ test('sign geometry carries uvs inside the atlas cells; no DOM -> no atlas (Node
   for (var i = 0; i < g.uvs.length; i++) assert.ok(g.uvs[i] >= 0 && g.uvs[i] <= 1);
 });
 
+test('camera blend: eased weight and pose lerp (the launch chase -> cockpit)', function () {
+  var U = DR._;
+  assert.strictEqual(U.blendK(0, 0.4), 0); assert.strictEqual(U.blendK(0.4, 0.4), 1); assert.strictEqual(U.blendK(1, 0.4), 1);
+  assert.strictEqual(U.blendK(0.2, 0.4), 0.5); assert.ok(U.blendK(0.05, 0.4) < 0.1, 'eases in');
+  assert.strictEqual(U.blendK(0.1, 0), 1, 'no duration: a cut');
+  var a = { eye: [-7, 3, 0], target: [5, 1, 0], up: [0, 1, 0], fov: 60 }, b = { eye: [0, 1.1, 0.3], target: [10, 1.1, 0.3], up: [0, 1, 0], fov: 70 };
+  assert.deepStrictEqual(U.blendPose(a, b, 0).eye, a.eye); assert.deepStrictEqual(U.blendPose(a, b, 1).eye, b.eye);
+  // the exterior swaps for the interior only once the blended eye reaches the body box
+  var I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 2, 1], dims = { length: 4.8, width: 1.9, height: 1.35 };
+  assert.ok(U.inCarBox(I, [100, 1.1, 2], dims, 0.3), 'the seat'); assert.ok(!U.inCarBox(I, [93, 3, 2], dims, 0.3), 'the chase eye');
+  assert.ok(!U.inCarBox(I, [100, 2.2, 2], dims, 0.3), 'over the roof'); assert.ok(U.inCarBox(I, [97.7, 1.5, 2], dims, 0.3), 'at the boot lid');
+  assert.ok(!U.inCarBox(I, [100, 1.4, 2], dims, 0.05, 1.27), 'under the roof, above the headliner: not yet'); assert.ok(U.inCarBox(I, [100, 1.2, 2], dims, 0.05, 1.27), 'below the headliner');
+  var v = [0, 2.6, 0.3], c = U.blendPose(a, b, 0.8, v);
+  assert.ok(c.eye[1] > 1.6 && Math.abs(c.eye[0]) < 0.4, 'via: the eye comes down from above the seat, not from behind it');
+  assert.deepStrictEqual(U.blendPose(a, b, 1, v).eye, b.eye);
+  var m = U.blendPose(a, b, 0.5); assert.strictEqual(m.fov, 65); assert.ok(Math.abs(m.eye[0] + 3.5) < 1e-9); assert.ok(Math.abs(Math.hypot.apply(null, m.up) - 1) < 1e-9);
+});
+
 test('renderer API surface and the camera list', function () {
   assert.deepStrictEqual(DR.MODES, ['chase', 'low', 'side', 'bumper', 'cockpit']);
   ['isSupported', 'create', 'createPreview'].forEach(function (k) { assert.strictEqual(typeof DR[k], 'function'); });
