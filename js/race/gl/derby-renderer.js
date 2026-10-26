@@ -733,7 +733,7 @@ CB.derby = CB.derby || {};
     if (!ctx) throw new Error('derby renderer: WebGL unavailable');
     var gl = ctx.gl;
     var world = G.derbyArena.build(ctx, arena, { quality: R.quality });
-    var shadow = null, post = null, particles = null, fx = null;
+    var shadow = null, post = null, particles = null, fx = null, puffs = null, puffTex = null, fires = null, fireTex = null;
     function setupQuality() {
       Q = QUALITY[R.quality];
       if (shadow) { try { shadow.destroy(); } catch (e) { /* ignore */ } shadow = null; }
@@ -741,7 +741,11 @@ CB.derby = CB.derby || {};
       if (post) { try { post.destroy(); } catch (e) { /* ignore */ } post = null; }
       if (Q.post && typeof G.createPostFX === 'function') { try { post = G.createPostFX(ctx, { samples: 4, bloomScale: 0.25 }); } catch (e) { post = null; } }
       if (particles) { try { particles.destroy(); } catch (e) { /* ignore */ } }
-      particles = typeof G.createParticles === 'function' ? G.createParticles(ctx, Q.particles) : null;
+      if (puffs) { try { puffs.destroy(); } catch (e) { /* ignore */ } }
+      if (fires) { try { fires.destroy(); } catch (e) { /* ignore */ } }
+      var mkP = function (f) { return typeof G.createParticles === 'function' ? G.createParticles(ctx, Math.round(Q.particles * f)) : null; };
+      particles = mkP(0.5); fires = mkP(0.4); puffs = mkP(0.6);
+      if (typeof particleCaps === 'function') particleCaps();
     }
     setupQuality();
     var tod = arena.timeOfDay || 'day';
@@ -756,13 +760,13 @@ CB.derby = CB.derby || {};
       hood: G.createMesh(ctx, DP.debrisGeometry('hood')), door: G.createMesh(ctx, DP.debrisGeometry('door')), bumper: G.createMesh(ctx, DP.debrisGeometry('bumper')),
       disc: (function () { var g = new DP.Geo(); g.disc([0, 0, 0], 1, 20, [1, 1, 1, 1], 5); return G.createMesh(ctx, g.out()); })(),
       ring: (function () {
-        // flat annulus (shockwave): inner 0.82, outer 1.0
-        var g = new DP.Geo(), N = 40;
-        for (var k = 0; k < N; k++) {
-          var a0 = k / N * TAU, a1 = (k + 1) / N * TAU;
-          var o0 = [Math.cos(a0), 0, Math.sin(a0)], o1 = [Math.cos(a1), 0, Math.sin(a1)];
-          g.quad(mul(o0, 0.82), mul(o1, 0.82), o1, o0, [1, 1, 1, 1], [0, 1, 0]);
+        // flat soft annulus (blast heat ring): transparent inner edge 0.62, bright crest 0.9, transparent rim 1.0
+        var g = new DP.Geo(), N = 48, RR = [[0.62, 0], [0.9, 1], [1, 0]], base = [];
+        for (var k = 0; k <= N; k++) {
+          var a0 = k / N * TAU, ca = Math.cos(a0), sa = Math.sin(a0);
+          base.push(RR.map(function (r) { return g.v([ca * r[0], 0, sa * r[0]], [0, 1, 0], [r[1], r[1], r[1], r[1]]); }));
         }
+        for (k = 0; k < N; k++) for (var j = 0; j < 2; j++) { var A0 = base[k][j], A1 = base[k][j + 1], B0 = base[k + 1][j], B1 = base[k + 1][j + 1]; g.i.push(A0, B0, B1, A0, B1, A1); }
         return G.createMesh(ctx, g.out());
       })()
     };
@@ -910,8 +914,8 @@ CB.derby = CB.derby || {};
     }
     var SURF = arena.surface || {}, DIRT_RGB = hexRgb(SURF.color, [0.2, 0.15, 0.1]), DIRT_K = SURF.kind === 'dirt' || SURF.kind === 'sand' ? (arena.weather === 'wet' ? 1.6 : 1) : SURF.kind === 'ice' ? 0 : 0.3;
     if (SURF.kind === 'asphalt' || SURF.kind === 'concrete') DIRT_RGB = [0.09, 0.085, 0.08];
-    var DUSTY = SURF.kind === 'dirt' || SURF.kind === 'sand', SURF_RGB = hexRgb(SURF.color, [0.3, 0.25, 0.2]);
-    var DUST_COL = SURF.kind === 'ice' ? [0.85, 0.9, 0.95, 0.4] : DUSTY ? [Math.min(1, SURF_RGB[0] * 1.5 + 0.05), Math.min(1, SURF_RGB[1] * 1.5 + 0.05), Math.min(1, SURF_RGB[2] * 1.5 + 0.04), 0.42] : [0.5, 0.48, 0.46, 0.32];
+    var MUDDY = SURF.kind === 'dirt' && arena.weather === 'wet', DUSTY = (SURF.kind === 'dirt' || SURF.kind === 'sand') && !MUDDY, SURF_RGB = hexRgb(SURF.color, [0.3, 0.25, 0.2]);
+    var DUST_COL = SURF.kind === 'ice' ? [0.85, 0.9, 0.95, 0.4] : DUSTY ? [Math.min(1, SURF_RGB[0] * 1.5 + 0.05), Math.min(1, SURF_RGB[1] * 1.5 + 0.05), Math.min(1, SURF_RGB[2] * 1.5 + 0.04), 0.42] : MUDDY ? [SURF_RGB[0] * 1.25, SURF_RGB[1] * 1.25, SURF_RGB[2] * 1.25, 0.4] : [0.5, 0.48, 0.46, 0.32];
     /** per-frame material state: paint darkening, shader damage layer (crack / soot / char / mud) — no re-deform */
     function tintCar(e, c, dt, dst) {
       var hp = clamp01(num(c.health, 1)), burning = Math.max(num(c.onFire, 0), num(c.engine && c.engine.fire, 0));
@@ -1030,20 +1034,36 @@ CB.derby = CB.derby || {};
     function anchorWorld(e, local) { return xform(bodyW_for(e), local); }
     function bodyW_for(e) { var B = e.pst && e.pst.bodyMatrix ? e.pst.bodyMatrix : IDENT16; M4.multiply(tmpM2, e.M, B); return tmpM2; }
 
-    /* ---- particles (CPU) ---- */
-    var PS = [], PMAX = Q.particles;
+    /* ---- particles (CPU sim, three class pools, each with its own cap and GPU sprite buffer):
+       sparks (crisp additive specks + glass glitter), fire (flame-tongue sprites, upright, fire colour ramp) and puffs
+       (textured billows: smoke, dust, steam, hot flashes). A burst of sparks can no longer evict a smoke column. ---- */
+    var PSa = [], PSf = [], PSp = [], PCAP = { a: 1, f: 1, p: 1 }, PROT = { a: 0, f: 0, p: 0 };
+    function particleCaps() { if (!PCAP) return; var m = Q.particles; PCAP.a = Math.round(m * 0.5); PCAP.f = Math.round(m * 0.4); PCAP.p = Math.round(m * 0.6); }
+    particleCaps();
+    function particleCount() { return PSa.length + PSf.length + PSp.length; }
     var rnd = Math.random;
-    function spawn(p) { if (PS.length >= PMAX) PS.splice(0, Math.max(1, PS.length - PMAX + 1)); PS.push(p); }
+    function spawn(p) {
+      var cls = p.fire ? 'f' : (p.puff || !p.add) ? 'p' : 'a', L = cls === 'f' ? PSf : cls === 'p' ? PSp : PSa;
+      if (p.rot == null) { p.rot = cls === 'f' ? (rnd() - 0.5) * 0.5 : rnd() * TAU; p.spin = cls === 'f' ? (rnd() - 0.5) * 0.6 : (rnd() - 0.5) * (p.add ? 3 : 1.0); }
+      // full: of a few probed slots replace the one closest to dying (O(1)), so short-lived jets never evict a smoke column
+      if (L.length >= PCAP[cls]) {
+        var best = -1, bl = p.life;
+        for (var t = 0; t < 4; t++) { PROT[cls] = (PROT[cls] + 7) % L.length; var o = L[PROT[cls]], rl = o.life - o.age; if (rl < bl) { bl = rl; best = PROT[cls]; } }
+        if (best >= 0) L[best] = p;
+        return;
+      }
+      L.push(p);
+    }
     function sparks(pos, n, vel, col, speed) {
       var lowQ = R.quality === 'low';
       n = Math.min(n, lowQ ? 16 : R.quality === 'medium' ? 48 : 80);
       for (var i = 0; i < n; i++) {
         var a = rnd() * TAU, b = 0.3 + rnd() * 0.9, sp = num(speed, 7) * (0.6 + rnd() * 0.8);
         var v = add(mul(vel || [0, 0, 0], 0.45), [Math.cos(a) * sp * b, 1.2 + rnd() * sp * 0.7, Math.sin(a) * sp * b]);
-        var life = 0.25 + rnd() * 0.45, sz = 0.045 + rnd() * 0.045, c0 = col || (rnd() < 0.25 ? [5, 4.2, 2.4, 1] : [4.2, 2.0, 0.5, 1]);
+        var life = 0.25 + rnd() * 0.45, sz = 0.04 + rnd() * 0.04, c0 = col || (rnd() < 0.25 ? [5, 4.2, 2.4, 1] : [4.2, 2.0, 0.5, 1]);
         spawn({ p: pos.slice(), v: v, life: life, age: 0, size: sz, col: c0, add: true, g: 1 });
-        // streak: two trailing points riding the same velocity a few ms behind read as a hot line
-        if (!lowQ) for (var k = 1; k <= 2; k++) spawn({ p: madd(pos, v, -0.012 * k), v: v.slice(), life: life * (1 - k * 0.12), age: 0, size: sz * (1 - k * 0.25), col: [c0[0] * 0.7, c0[1] * 0.6, c0[2] * 0.5, 0.9], add: true, g: 1 });
+        // streak: trailing points riding the same velocity a few ms behind read as a hot line
+        if (!lowQ) for (var k = 1; k <= 3; k++) spawn({ p: madd(pos, v, -0.01 * k), v: v.slice(), life: life * (1 - k * 0.1), age: 0, size: sz * (1 - k * 0.2), col: [c0[0] * 0.75, c0[1] * 0.6, c0[2] * 0.45, 0.9], add: true, g: 1 });
       }
     }
     /** glass glitter: tumbling blue-white specks that bounce and settle */
@@ -1051,7 +1071,7 @@ CB.derby = CB.derby || {};
       if (R.quality === 'low') return;
       for (var i = 0; i < n; i++) {
         var a = rnd() * TAU, sp = 2 + rnd() * 5;
-        spawn({ p: madd(pos, [rnd() - 0.5, rnd() * 0.4, rnd() - 0.5], 0.8), v: add(mul(vel || [0, 0, 0], 0.5), [Math.cos(a) * sp, 1 + rnd() * 3.5, Math.sin(a) * sp]), life: 3 + rnd() * 4, age: 0,
+        spawn({ p: madd(pos, [rnd() - 0.5, rnd() * 0.4, rnd() - 0.5], 0.8), v: add(mul(vel || [0, 0, 0], 0.5), [Math.cos(a) * sp, 1 + rnd() * 3.5, Math.sin(a) * sp]), life: 2.5 + rnd() * 3, age: 0,
           size: 0.02 + rnd() * 0.025, col: rnd() < 0.35 ? [1.6, 1.8, 2.0, 1] : [0.55, 0.68, 0.78, 0.9], add: true, g: 1, glint: true });
       }
     }
@@ -1061,12 +1081,28 @@ CB.derby = CB.derby || {};
         spawn({ p: madd(pos, [Math.cos(a), 0, Math.sin(a)], rnd() * 0.5), v: [Math.cos(a) * 0.8, num(up, 1.6) * (0.6 + rnd() * 0.7), Math.sin(a) * 0.8], life: num(life, 1.6) * (0.7 + rnd() * 0.6), age: 0, size: size * (0.7 + rnd() * 0.6), grow: size * 1.4, col: col, add: false, g: -0.05, soft: 0.8 });
       }
     }
-    function flame(pos, vel, size, life, col) { spawn({ p: pos.slice(), v: vel, life: life, age: 0, size: size, grow: size * 1.6, col: col || [2.6, 1.0, 0.22, 0.85], add: true, g: -0.35 }); }
-    function stepParticles(dt) {
-      for (var i = PS.length - 1; i >= 0; i--) {
-        var p = PS[i];
+    /** flame tongue: warm colours run the fire ramp (white-hot -> yellow -> orange -> dull red), cool ones (nitro) stay */
+    function flame(pos, vel, size, life, col, jet) {
+      var c = col || [2.6, 1.0, 0.22, 0.85], ramp = c[0] > c[2] * 1.5;
+      // jets (flamethrower) are rolling billows that splash along the floor, not upright tongues
+      spawn({ p: pos.slice(), v: vel, life: life, age: 0, size: size, grow: size * (jet ? 2.6 : ramp ? 1.1 : 1.6), col: c, add: true, g: jet ? -0.1 : -0.35, fire: ramp && !jet, ramp: ramp, jet: !!jet, heat: ramp ? clamp01(c[1] / c[0] * 1.6) : 0, puff: true });
+    }
+    /** a camera-facing hot flash (impacts, hammer hits, explosions) instead of a solid glowing sphere */
+    function flashSprite(pos, size, dur, col) { spawn({ p: pos.slice(), v: [0, 0, 0], life: dur, age: 0, size: size, grow: size * 2.5 / Math.max(0.05, dur), col: col || [4, 3, 1.9, 0.9], add: true, puff: true, g: 0 }); }
+    /** fire ramp colour (linear HDR) for life fraction t and heat (0 dull .. 1 hot) */
+    function fireCol(t, heat, out) {
+      var k0 = [2.6, 1.9, 0.9], k1 = [2.3, 0.95, 0.2], k2 = [1.5, 0.36, 0.05], k3 = [0.45, 0.07, 0.015];
+      var tt = clamp01(t * (1.2 - heat * 0.4)), a, b, f;
+      if (tt < 0.16) { a = k0; b = k1; f = tt / 0.16; } else if (tt < 0.5) { a = k1; b = k2; f = (tt - 0.16) / 0.34; } else { a = k2; b = k3; f = Math.min(1, (tt - 0.5) / 0.4); }
+      out[0] = lerp(a[0], b[0], f); out[1] = lerp(a[1], b[1], f); out[2] = lerp(a[2], b[2], f);
+      return out;
+    }
+    function stepPool(L, dt) {
+      for (var i = L.length - 1; i >= 0; i--) {
+        var p = L[i];
         p.age += dt;
-        if (p.age >= p.life) { PS.splice(i, 1); continue; }
+        if (p.age >= p.life) { L[i] = L[L.length - 1]; L.pop(); continue; }
+        p.rot += p.spin * dt;
         p.v[1] -= 9.8 * p.g * dt;
         p.p[0] += p.v[0] * dt; p.p[1] += p.v[1] * dt; p.p[2] += p.v[2] * dt;
         if (p.add && p.g > 0 && p.p[1] < 0.02) {
@@ -1074,16 +1110,101 @@ CB.derby = CB.derby || {};
           // glass crumbs settle and keep glittering on the ground
           if (p.glint && Math.abs(p.v[1]) < 0.6) { p.v[0] = p.v[1] = p.v[2] = 0; p.g = 0; p.size *= 0.7; p.col = [p.col[0] * 0.6, p.col[1] * 0.6, p.col[2] * 0.6, p.col[3]]; }
         }
-        if (!p.add) { p.v[0] *= 1 - 0.8 * dt; p.v[2] *= 1 - 0.8 * dt; }
+        if (p.clod && p.p[1] < 0.03) { p.p[1] = 0.03; p.v[0] = p.v[1] = p.v[2] = 0; p.g = 0; }
+        if (p.jet && p.p[1] < 0.18) { p.p[1] = 0.18; p.v[1] = Math.abs(p.v[1]) * 0.25; p.v[0] *= 0.55; p.v[2] *= 0.55; }
+        if (!p.add || p.drag) { var dg = 1 - num(p.drag, 0.8) * dt; p.v[0] *= dg; p.v[2] *= dg; if (p.drag) p.v[1] *= dg; }
       }
+    }
+    var FC = [0, 0, 0], SRT = [], SRT_D = [];
+    /** back-to-front order of a pool (alpha-blended smoke over smoke only reads right when sorted) */
+    function sorted(L, cp) {
+      SRT.length = L.length;
+      for (var k = 0; k < L.length; k++) { var q = L[k].p, dx = q[0] - cp[0], dy = q[1] - cp[1], dz = q[2] - cp[2]; SRT_D[k] = dx * dx + dy * dy + dz * dz; SRT[k] = k; }
+      SRT_D.length = L.length;
+      SRT.sort(function (x, y) { return SRT_D[y] - SRT_D[x]; });
+      return SRT;
+    }
+    function stepParticles(dt) {
+      stepPool(PSa, dt); stepPool(PSf, dt); stepPool(PSp, dt);
       if (!particles) return;
-      var n = Math.min(PS.length, particles.max);
-      for (var k = 0; k < n; k++) {
-        var q = PS[k], t = q.age / q.life, a = q.col[3] * (q.glint ? (t < 0.7 ? 1 : (1 - t) / 0.3) : q.add ? (1 - t) : (t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85));
+      // lit (non-emissive) puffs take the scene light so smoke is not glowing white at night
+      var LPc = R.pLight || [1, 1, 1], cp = cam.position, n = 0, k, q, t, a;
+      for (k = 0; k < PSa.length && n < particles.max; k++) {
+        q = PSa[k]; t = q.age / q.life; a = q.col[3] * (q.glint ? (t < 0.7 ? 1 : (1 - t) / 0.3) : (1 - t));
         if (q.glint) a *= 0.45 + 0.55 * Math.abs(Math.sin(q.age * 31 + k));
-        particles.set(k, q.p[0], q.p[1], q.p[2], q.col[0] * a, q.col[1] * a, q.col[2] * a, a, Math.max(0.02, q.size + num(q.grow, 0) * q.age), 0, q.add ? 0.2 : num(q.soft, 0.7), q.add);
+        particles.set(n++, q.p[0], q.p[1], q.p[2], q.col[0] * a, q.col[1] * a, q.col[2] * a, a, Math.max(0.02, q.size + num(q.grow, 0) * q.age), 0, 0.25, true);
       }
       particles.upload(n);
+      if (fires) {
+        n = 0;
+        for (k = 0; k < PSf.length && n < fires.max; k++) {
+          // flame: quick flare-in, burn down through the ramp; tongues swell, then thin as they cool at the top
+          q = PSf[k]; t = q.age / q.life;
+          fireCol(t, q.heat, FC);
+          a = q.col[3] * (t < 0.1 ? t / 0.1 : Math.pow(1 - (t - 0.1) / 0.9, 1.2));
+          var sz = q.size + q.grow * Math.min(q.age, q.life * 0.5) - q.grow * Math.max(0, q.age - q.life * 0.5) * 0.6;
+          fires.set(n++, q.p[0], q.p[1], q.p[2], FC[0] * a, FC[1] * a, FC[2] * a, a, Math.max(0.03, sz), q.rot, 0.35, true);
+        }
+        fires.upload(n);
+      }
+      if (puffs) {
+        n = 0;
+        var ord = sorted(PSp, cp);
+        for (k = 0; k < ord.length && n < puffs.max; k++) {
+          var f = PSp[ord[k]], tf = f.age / f.life, af, r0, g0, b0, sz2;
+          if (f.add && f.ramp) { fireCol(tf, f.heat, FC); af = f.col[3] * (tf < 0.08 ? tf / 0.08 : Math.pow(1 - tf, 1.3)); r0 = FC[0]; g0 = FC[1]; b0 = FC[2]; sz2 = f.size + num(f.grow, 0) * f.age; }
+          else if (f.add) { af = f.col[3] * (1 - tf); r0 = f.col[0]; g0 = f.col[1]; b0 = f.col[2]; sz2 = f.size + num(f.grow, 0) * f.age; }
+          else {
+            af = f.col[3] * (tf < 0.12 ? tf / 0.12 : Math.pow(1 - (tf - 0.12) / 0.88, 1.4));
+            r0 = f.col[0] * LPc[0]; g0 = f.col[1] * LPc[1]; b0 = f.col[2] * LPc[2];
+            // billow: fast early growth that slows down
+            sz2 = f.size + num(f.grow, 0) * f.life * (1 - Math.pow(1 - tf, 1.8)) * 0.75;
+          }
+          puffs.set(n++, f.p[0], f.p[1], f.p[2], r0 * af, g0 * af, b0 * af, af, Math.max(0.03, sz2), f.rot, 0.5, f.add);
+        }
+        puffs.upload(n);
+      }
+    }
+    /** how much light non-emissive particles (smoke, dust, steam) receive: ambient + sun, a floodlit floor at night */
+    var plCache = {};
+    function particleLight(Lt) {
+      var key = R.tod; if (plCache[key]) return plCache[key];
+      var a = Lt.ambientSky, s = Lt.sunColor, sy = Math.max(0, Lt.sunDir[1]);
+      var o = [0, 0, 0];
+      for (var i = 0; i < 3; i++) o[i] = clamp(a[i] * 0.9 + s[i] * (0.25 + 0.45 * sy) + (R.tod === 'night' ? 0.12 : 0), 0.18, 1.15);
+      return (plCache[key] = o);
+    }
+    /** sprite textures (pure pixels, no canvas): flame = upright tongue (round hot base tapering to a ragged tip),
+        else a lumpy cauliflower billow made of a few overlapping lobes eroded by fbm */
+    function spriteTexture(flameShape) {
+      var N = 128, d = new Uint8Array(N * N * 4);
+      function vn(x, y, s) {
+        var xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+        function h(i, j) { return hash01(((i & 31) * 37 + (j & 31)) * 97 + s); }
+        return lerp(lerp(h(xi, yi), h(xi + 1, yi), u), lerp(h(xi, yi + 1), h(xi + 1, yi + 1), u), v);
+      }
+      var lobes = [[0, 0.08, 0.62], [-0.32, 0.18, 0.42], [0.3, 0.22, 0.44], [0.05, -0.28, 0.46], [-0.22, -0.12, 0.38], [0.26, -0.1, 0.36]];
+      for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
+        var px = (x + 0.5) / N * 2 - 1, py = (y + 0.5) / N * 2 - 1;   // py: -1 top row .. +1 bottom
+        var fx2 = (x / N) * 4, fy2 = (y / N) * 4;
+        var n = vn(fx2, fy2, 1) * 0.5 + vn(fx2 * 2, fy2 * 2, 2) * 0.3 + vn(fx2 * 4, fy2 * 4, 3) * 0.2, al, sh;
+        if (flameShape) {
+          // tongue: width shrinks toward the top, the tip flickers with noise; the base is the hottest (brightest)
+          var hgt = (1 - py) / 2, wdt = 0.62 * Math.pow(1 - hgt, 0.75) + 0.05, ex = Math.abs(px) / wdt + (n - 0.5) * 0.6;
+          al = (1 - smooth01(0.45, 1.0, ex)) * (1 - smooth01(0.7, 0.98, hgt + (n - 0.5) * 0.35)) * smooth01(-0.02, 0.16, 1 - hgt);
+          sh = 0.72 + 0.28 * (1 - hgt) * (1 - Math.min(1, Math.abs(px) / wdt));
+        } else {
+          var m = 0;
+          for (var l = 0; l < lobes.length; l++) { var L0 = lobes[l], dx = px - L0[0], dy = py - L0[1], rr = Math.sqrt(dx * dx + dy * dy) / L0[2]; m = Math.max(m, 1 - rr); }
+          var rad = Math.sqrt(px * px + py * py);
+          al = smooth01(0.0, 0.42, m + (n - 0.5) * 0.4) * (1 - smooth01(0.82, 1.0, rad));
+          al *= 0.6 + 0.4 * smooth01(0.2, 0.8, n);
+          sh = 0.74 + 0.2 * n - 0.1 * py;   // lighter on top, darker underneath
+        }
+        var o = (y * N + x) * 4;
+        d[o] = d[o + 1] = d[o + 2] = Math.round(clamp01(sh) * 255); d[o + 3] = Math.round(clamp01(al) * 255);
+      }
+      try { return G.createTexture(ctx, { width: N, height: N, data: d }, { wrap: 'clamp' }); } catch (e) { return null; }
     }
 
     /* ---- debris (cosmetic rigid bits that stay in the arena). Detached panels are the car's own crumpled triangles
@@ -1452,7 +1573,7 @@ CB.derby = CB.derby || {};
             puff(p, Math.round((DUSTY ? 3 : 2) + k * (DUSTY ? 4 : 2)), DUST_COL, DUSTY ? 1.0 : 0.75, 1.2, DUSTY ? 1.8 : 1.3);
             if (ev.big || k > 1.2) {
               // impact flash + a handful of torn bits (paint, black plastic, chrome) + glass glitter
-              if (!lowI) R.flashes.push({ p: p, t: 0, s: 0.55 + k * 0.25, dur: 0.09 });
+              if (!lowI) flashSprite(p, 0.5 + k * 0.3, 0.09);
               var nb = lowI ? 1 : R.quality === 'medium' ? 2 : 4;
               for (var b = 0; b < nb; b++) {
                 var r0 = rnd();
@@ -1492,21 +1613,37 @@ CB.derby = CB.derby || {};
             break;
           }
           case 'hammer':
-            if (!ev.miss) { var hp = e && e.hammerHead ? e.hammerHead : p; sparks(hp, 30, [0, 0, 0], [5, 3, 1, 1], 9); R.flashes.push({ p: hp, t: 0, s: 1.6 }); if (involved) { R.shakeA = Math.min(1.6, R.shakeA + 0.8); R.fovKick = 8; } }
+            if (!ev.miss) { var hp = e && e.hammerHead ? e.hammerHead : p; sparks(hp, 30, [0, 0, 0], [5, 3, 1, 1], 9); flashSprite(hp, 1.1, 0.12); if (involved) { R.shakeA = Math.min(1.6, R.shakeA + 0.8); R.fovKick = 8; } }
             break;
           case 'launch': puff(p, 10, [0.55, 0.5, 0.45, 0.5], 1.0, 2, 1.4); sparks(p, 16, vel, null, 6); if (involved) R.shakeA = Math.min(1.6, R.shakeA + 0.6); break;
           case 'land': puff(p, Math.round(clamp(en, 4, 12)), [0.55, 0.5, 0.45, 0.45], 0.9, 1, 1.2); if (involved) R.shakeA = Math.min(1.6, R.shakeA + 0.3); break;
           case 'explode': {
-            var lowX = R.quality === 'low';
-            for (var f = 0; f < (lowX ? 18 : 60); f++) flame(madd(p, [rnd() - 0.5, rnd() * 0.6, rnd() - 0.5], 1.4), [(rnd() - 0.5) * 11, 2 + rnd() * 9, (rnd() - 0.5) * 11], 0.8 + rnd() * 1.0, 0.5 + rnd() * 0.6, rnd() < 0.25 ? [3.2, 1.6, 0.45, 0.85] : rnd() < 0.5 ? [2.6, 0.8, 0.12, 0.85] : [1.6, 0.35, 0.05, 0.9]);
-            puff(p, lowX ? 8 : 22, [0.05, 0.045, 0.045, 0.9], 2.0, 3.4, 4.2);
+            var lowX = R.quality === 'low', gy0 = groundAt(p[0], p[2]);
+            // fireball: a dense white-hot core that rolls up and out through the fire ramp
+            for (var f = 0; f < (lowX ? 18 : 54); f++) {
+              var hot = f < 12;
+              flame(madd(p, [rnd() - 0.5, rnd() * 0.7, rnd() - 0.5], hot ? 0.8 : 1.6), [(rnd() - 0.5) * (hot ? 4 : 10), 1.5 + rnd() * (hot ? 4 : 8), (rnd() - 0.5) * (hot ? 4 : 10)],
+                (hot ? 1.0 : 0.55) + rnd() * 0.8, (hot ? 0.45 : 0.6) + rnd() * 0.6, [3.2, 1.2 + rnd() * 1.2, 0.3, 0.6]);
+            }
+            // thick black smoke rolling out of the fireball and lingering over the wreck
+            for (var sm = 0; sm < (lowX ? 6 : 18); sm++) {
+              var as = rnd() * TAU, rs0 = rnd();
+              spawn({ p: add(p, [Math.cos(as) * rs0, 0.6 + rnd() * 1.2, Math.sin(as) * rs0]), v: [Math.cos(as) * (1 + rnd() * 2.5), 2.2 + rnd() * 3, Math.sin(as) * (1 + rnd() * 2.5)],
+                life: 3.5 + rnd() * 2.5, age: 0, size: 1.1 + rnd() * 0.8, grow: 1.5, col: [0.06, 0.055, 0.05, 0.8], add: false, g: -0.04, soft: 0.6, drag: 0.9 });
+            }
+            // the blast shoves a low ring of dust / snow / grit out along the floor
+            if (!lowX) for (var dr = 0; dr < 20; dr++) {
+              var ad = dr / 20 * TAU + rnd() * 0.3, spd = 7 + rnd() * 5;
+              spawn({ p: [p[0] + Math.cos(ad) * 0.8, gy0 + 0.25 + rnd() * 0.3, p[2] + Math.sin(ad) * 0.8], v: [Math.cos(ad) * spd, 0.5 + rnd() * 1.2, Math.sin(ad) * spd],
+                life: 1.4 + rnd() * 1.2, age: 0, size: 0.7 + rnd() * 0.4, grow: 1.8, col: [DUST_COL[0], DUST_COL[1], DUST_COL[2], 0.5], add: false, g: -0.02, soft: 0.6, drag: 2.4 });
+            }
             sparks(p, 70, [0, 3, 0], null, 15);
             shards(p, 30, [0, 2, 0]);
             for (var d2 = 0; d2 < (lowX ? 3 : 8); d2++) debris('chunk', p, [(rnd() - 0.5) * 16, 6 + rnd() * 9, (rnd() - 0.5) * 16], e && rnd() < 0.5 ? carColorMat(e, c) : MAT.charred, 0.7 + rnd() * 0.9);
             if (c && e) { debris('hood', add(p, [0, 0.6, 0]), [(rnd() - 0.5) * 6, 9 + rnd() * 5, (rnd() - 0.5) * 6], MAT.charred, num(e.dims && e.dims.W, 1.9) / 1.9); }
-            R.flashes.push({ p: p, t: 0, s: 3.2 });
+            flashSprite(add(p, [0, 0.6, 0]), 2.6, 0.16, [4.5, 3.2, 1.8, 0.9]);
             addDecal(p[0], p[2], 2.4 + rnd(), [0.012, 0.011, 0.01, 0.8], 1.2);   // scorched ground
-            R.rings.push({ p: [p[0], groundAt(p[0], p[2]) + 0.08, p[2]], t: 0, dur: 0.75, r: 13, mat: { color: [3.2, 1.6, 0.5, 1], unlit: true, additive: true, transparent: true, depthWrite: false, castShadow: false, doubleSided: true } });
+            R.boom = { p: p.slice(), t: 0 };
             if (e) e.boomT = 0;
             var fd = byId[focus];
             if (involved || (c && fd && Math.hypot(c.x - fd.x, c.y - fd.y) < 28)) { R.shakeA = Math.min(2.2, R.shakeA + 1.5); R.fovKick = 12; if (fd && c) api.kick(fd.x - c.x, fd.y - c.y, 1.2); }
@@ -1655,13 +1792,20 @@ CB.derby = CB.derby || {};
       stepDebris(dt, main);
       decalItems(dt, main);
       for (i = 0; i < dynItems.length; i++) { main.push(dynItems[i]); if (dynItems[i].castShadow) casters.push(dynItems[i]); }
+      R.pLight = particleLight(Lt);
+      if (fx && fx.update) { try { fx.update(dt, null, cam); } catch (eU) { /* optional */ } }
       stepParticles(dt);
       var env = {
         sunDir: Lt.sunDir, sunColor: Lt.sunColor, ambientSky: Lt.ambientSky, ambientGround: Lt.ambientGround, fogColor: Lt.fogColor, fogDensity: Lt.fogDensity,
         envTop: Lt.envTop, envHorizon: Lt.envHorizon, envBottom: Lt.envBottom, exposure: Lt.exposure, time: R.time, timeOfDay: R.tod, weather: 'dry'
       };
+      // the blast lights up the arena for a moment (any time of day)
+      var boomL = null;
+      if (R.boom) { R.boom.t += dt; var bf = 1 - R.boom.t / 0.5; if (bf <= 0) R.boom = null; else boomL = { pos: add(R.boom.p, [0, 1.6, 0]), color: [12 * bf * bf, 5 * bf * bf, 1.4 * bf * bf], range: 20, type: 0 }; }
+      if (R.tod === 'day' && boomL) env.lights = [boomL];
       if (R.tod !== 'day') {
         var lights = arenaLights(ppos);
+        if (boomL) lights.unshift(boomL);
         // headlights of the nearest cars with working lights
         var near = snap.cars.filter(function (x) { return !x.out && !(x.parts && x.parts.lightFL && x.parts.lightFR); }).sort(function (A, B) { return Math.hypot(A.x - focus.x, A.y - focus.y) - Math.hypot(B.x - focus.x, B.y - focus.y); });
         for (i = 0; i < near.length && lights.length < 8; i++) {
@@ -1684,7 +1828,16 @@ CB.derby = CB.derby || {};
         else if (G.drawSky) G.drawSky(ctx, cam, env, { night: R.tod === 'night' ? 1 : 0 });
       } catch (e4) { /* sky optional */ }
       R.stats.draws = G.drawList(ctx, main, cam, env);
-      if (particles && PS.length) { try { particles.draw(cam, env, { viewportHeight: size.h }); } catch (e5) { /* optional */ } }
+      if (fx && fx.draw) { try { fx.draw(cam); } catch (eD) { /* optional */ } }
+      if (puffs && PSp.length) {
+        if (!puffTex) puffTex = spriteTexture(false) || false;
+        try { puffs.draw(cam, env, { viewportHeight: size.h, map: puffTex || null }); } catch (e8) { /* optional */ }
+      }
+      if (fires && PSf.length) {
+        if (!fireTex) fireTex = spriteTexture(true) || false;
+        try { fires.draw(cam, env, { viewportHeight: size.h, map: fireTex || null }); } catch (e9) { /* optional */ }
+      }
+      if (particles && PSa.length) { try { particles.draw(cam, env, { viewportHeight: size.h }); } catch (e5) { /* optional */ } }
       if (usePost) {
         try {
           post.end({ bloom: true, bloomStrength: R.tod === 'night' ? 0.5 : 0.55, threshold: env.linearOutput ? (R.tod === 'night' ? 1.35 : 1.1) : (R.tod === 'night' ? 0.9 : 0.82), vignette: 0.32,
@@ -1695,7 +1848,7 @@ CB.derby = CB.derby || {};
       var ms = now() - t0;
       R.ema += (dt * 1000 - R.ema) * 0.05;
       R.stats.deformMs = deformMs; R.stats.deforms = deformN; R.stats.maxMs = Math.max(ms, num(R.stats.maxMs, 0) * 0.995); R.stats.maxDeformMs = Math.max(deformMs, num(R.stats.maxDeformMs, 0) * 0.995);
-      R.stats.ms = ms; R.stats.fps = R.ema > 0 ? 1000 / R.ema : 0; R.stats.particles = PS.length; R.stats.tris = world.stats.triangles; R.stats.debris = DEB.length;
+      R.stats.ms = ms; R.stats.fps = R.ema > 0 ? 1000 / R.ema : 0; R.stats.particles = particleCount(); R.stats.pools = [PSa.length, PSf.length, PSp.length]; R.stats.tris = world.stats.triangles; R.stats.debris = DEB.length;
       if (opts.autoQuality !== false && R.frame > 150) {
         if (R.ema > 26) R.slowT += dt; else R.slowT = Math.max(0, R.slowT - dt);
         if (R.slowT > 3) { R.slowT = 0; var qi = ['low', 'medium', 'high', 'ultra'].indexOf(R.quality); if (qi > 0) api.setQuality(['low', 'medium', 'high', 'ultra'][qi - 1]); }
@@ -1712,12 +1865,14 @@ CB.derby = CB.derby || {};
       var rear = c.spec && (c.spec.enginePos === 'mid' || c.spec.enginePos === 'rear');
       var bay = xform(M, [rear ? -L * 0.3 : L * 0.3, H * 0.72, 0]);
       if (smoke > 0.05 && !far) {
-        e.smokeAcc += dt * (4 + smoke * (lowQ ? 6 : 14));
+        e.smokeAcc += dt * ((lowQ ? 5 : 12) + smoke * (lowQ ? 10 : 34));
         var bl = clamp01(num(eng.black, 0) + (c.out ? 0.6 : 0));
         while (e.smokeAcc > 1) {
           e.smokeAcc -= 1;
-          var g = lerp(0.85, 0.06, bl);
-          spawn({ p: madd(bay, [rnd() - 0.5, 0, rnd() - 0.5], 0.3), v: add(mul(vel, 0.25), [(rnd() - 0.5) * 0.6, 1.2 + smoke * 1.5 + rnd(), (rnd() - 0.5) * 0.6]), life: 1.4 + smoke * 1.6, age: 0, size: 0.35 + smoke * 0.4, grow: 0.9 + smoke, col: [g, g * 0.98, g * 0.96, 0.35 + 0.35 * smoke], add: false, g: -0.03, soft: 0.85 });
+          // a continuous plume from under the bonnet: thin pale wisps -> a thick grey column -> oily black smoke
+          var g = lerp(0.8, 0.05, bl) * (0.9 + rnd() * 0.15);
+          spawn({ p: madd(bay, [rnd() - 0.5, 0, rnd() - 0.5], 0.4), v: add(mul(vel, 0.35), [(rnd() - 0.5) * 0.7, 1.0 + smoke * 1.6 + rnd() * 0.8, (rnd() - 0.5) * 0.7]), life: 1.5 + smoke * 2.2 + rnd() * 0.6, age: 0,
+            size: 0.28 + smoke * 0.32, grow: 0.7 + smoke * 0.9 + bl * 0.3, col: [g, g * 0.98, g * 0.95, 0.22 + 0.4 * smoke], add: false, g: -0.03, soft: 0.85 });
         }
       }
       var Zc = c.zones || {}, ez = clamp01(num(rear ? Zc.rear : Zc.front, 0)), hspd = Math.abs(num(c.speed, 0));
@@ -1743,19 +1898,42 @@ CB.derby = CB.derby || {};
         }
         if (!pool) e.pooled = false;
       }
-      // tyre smoke on slides / spins (dust on dirt, snow spray on ice) + dust plumes behind fast cars on dirt
-      if (Q.fx && !c.out && !far && !c.airborne && dcam < 70) {
-        var hh = num(c.heading, 0), latV = Math.abs(-num(c.vx, 0) * Math.sin(hh) + num(c.vy, 0) * Math.cos(hh));
-        var slide = clamp01(Math.max((latV - 3) / 6, num(c.slip, 0) * 0.8)) * clamp01(hspd / 4);
-        var plume = DUSTY ? clamp01((hspd - 7) / 14) * 0.5 : 0, amt = Math.max(slide, plume);
+      // tyre tracks + tyre smoke / dust / snow / mud spray. Tracks are the shared effects skid ribbons: on dirt and sand
+      // every rolling wheel presses a rut, on hard floors only slides and spins leave rubber
+      var hh = num(c.heading, 0), latV = Math.abs(-num(c.vx, 0) * Math.sin(hh) + num(c.vy, 0) * Math.cos(hh));
+      var slide = clamp01(Math.max((latV - 3) / 6, num(c.slip, 0) * 0.8)) * clamp01(hspd / 4);
+      var onFloor = !c.out && !c.airborne && Math.abs(num(c.roll, 0)) < 0.9 && !c.flipped;
+      if (fx && fx.addSkid && Q.fx && dcam < 110) {
+        var dmS = e.dims || { fA: L * 0.3, rA: -L * 0.3, W: 1.9 }, lostW = c.wheelLost || [];
+        for (var wi = 0; wi < 4; wi++) {
+          var soft = SURF.kind !== 'asphalt' && SURF.kind !== 'concrete' && SURF.kind !== 'ice';
+          var it0 = !onFloor || lostW[wi] || hspd < 0.8 ? 0 : soft ? (MUDDY ? 0.5 : 0.32) + slide * 0.45 : SURF.kind === 'ice' ? 0 : (slide > 0.18 ? 0.25 + slide * 0.7 : 0);
+          var key = c.id;
+          if (it0 <= 0) { if (e.skidOn && e.skidOn[wi]) { fx.addSkid(key, wi, null); e.skidOn[wi] = false; } continue; }
+          var wl = [wi < 2 ? dmS.fA : dmS.rA, 0, (wi % 2 ? 1 : -1) * dmS.W * 0.41], wpS = xform(M, wl);
+          wpS[1] = groundAt(wpS[0], wpS[2]);
+          fx.addSkid(key, wi, wpS, clamp01(it0), soft ? 0.3 : 0.24);
+          (e.skidOn || (e.skidOn = []))[wi] = true;
+        }
+      }
+      if (Q.fx && onFloor && !far && dcam < 70) {
+        var plume = DUSTY ? clamp01((hspd - 7) / 14) * 0.5 : MUDDY ? clamp01((hspd - 6) / 12) * 0.6 : 0, amt = Math.max(slide, plume);
         if (amt > 0.05) {
           e.tyreAcc = num(e.tyreAcc, 0) + dt * amt * (Q.fx > 1 ? 16 : 7);
-          var tcol = SURF.kind === 'asphalt' || SURF.kind === 'concrete' ? (slide > plume ? [0.86, 0.86, 0.88, 0.3] : DUST_COL) : DUST_COL;
+          var hard = SURF.kind === 'asphalt' || SURF.kind === 'concrete';
           while (e.tyreAcc > 1) {
             e.tyreAcc -= 1;
             var wz = (rnd() < 0.5 ? -1 : 1) * num(c.spec && c.spec.width, 1.9) * 0.42, wp = xform(M, [-L * 0.3, 0.25, wz]);
-            spawn({ p: wp, v: add(mul(vel, 0.15), [(rnd() - 0.5) * 1.2, 0.5 + rnd() * 0.8, (rnd() - 0.5) * 1.2]), life: 1.1 + rnd() * 1.2, age: 0, size: 0.3 + rnd() * 0.25, grow: 1.4 + amt,
-              col: tcol, add: false, g: -0.02, soft: 0.9 });
+            if (fx && hard && slide > plume) fx.emitSmoke(wp, vel, slide, 1);
+            else if (fx && DUSTY) fx.emitDust(wp, vel, SURF.kind === 'sand' ? 'sand' : 'dirt', amt);
+            else if (MUDDY) {
+              // wet mud: heavy dark clods flung up off the tyres + a little spray, no dust cloud
+              spawn({ p: wp, v: add(mul(vel, 0.35), [(rnd() - 0.5) * 2, 1.5 + rnd() * 2.5, (rnd() - 0.5) * 2]), life: 0.7 + rnd() * 0.4, age: 0, size: 0.06 + rnd() * 0.06, grow: 0,
+                col: [DIRT_RGB[0] * 0.8, DIRT_RGB[1] * 0.8, DIRT_RGB[2] * 0.8, 1], add: false, g: 1, soft: 0.4, clod: true });
+              if (rnd() < 0.35) spawn({ p: wp, v: add(mul(vel, 0.2), [(rnd() - 0.5) * 1, 0.5 + rnd() * 0.6, (rnd() - 0.5) * 1]), life: 0.9 + rnd() * 0.6, age: 0, size: 0.3, grow: 1.0,
+                col: [SURF_RGB[0] * 1.3, SURF_RGB[1] * 1.3, SURF_RGB[2] * 1.3, 0.3], add: false, g: -0.01, soft: 0.9 });
+            } else spawn({ p: wp, v: add(mul(vel, 0.15), [(rnd() - 0.5) * 1.2, 0.5 + rnd() * 0.8, (rnd() - 0.5) * 1.2]), life: 1.1 + rnd() * 1.2, age: 0, size: 0.3 + rnd() * 0.25, grow: 1.4 + amt,
+              col: DUST_COL, add: false, g: -0.02, soft: 0.9 });
           }
         }
       }
@@ -1766,12 +1944,30 @@ CB.derby = CB.derby || {};
       if (c.out && smoke < 0.9) smoke = 0.9;
       var fire = Math.max(num(c.onFire, 0), num(eng.fire, 0), wreckFire);
       if (fire > 0.05 && !far) {
-        e.fireAcc += dt * (lowQ ? 12 : 40) * fire;
+        // flames lick up from a few fixed seats on the body (engine bay first, more as the fire spreads) and carry the
+        // car's velocity so the fire stays on the car; a sooty column rises off the tips
+        if (!e.fireSeats) {
+          var eb = rear ? -L * 0.3 : L * 0.3;
+          e.fireSeats = [[eb, H * 0.62, 0], [eb * 0.4 + (rnd() - 0.5) * L * 0.3, H * 0.75, (rnd() - 0.5) * 0.9], [-eb * 0.6, H * 0.55, (rnd() - 0.5) * 1.0], [(rnd() - 0.5) * L * 0.6, H * 0.85, (rnd() - 0.5) * 0.6]];
+        }
+        var engineFire = num(eng.fire, 0) > num(c.onFire, 0), nSeat = engineFire && !c.out ? 1 + (fire > 0.6 ? 1 : 0) : 2 + Math.round(fire * 2);
+        e.fireAcc += dt * (lowQ ? 24 : 130) * (0.35 + fire * 0.65);
         while (e.fireAcc > 1) {
           e.fireAcc -= 1;
-          var engineFire = num(eng.fire, 0) > num(c.onFire, 0);
-          var lp = engineFire ? [rear ? -L * 0.3 : L * 0.3, H * 0.6, (rnd() - 0.5) * 0.8] : [(rnd() - 0.5) * L * 0.8, H * (0.4 + rnd() * 0.5), (rnd() - 0.5) * 1.4];
-          flame(xform(M, lp), add(mul(vel, 0.6), [(rnd() - 0.5) * 0.8, 1.8 + rnd() * 2.4, (rnd() - 0.5) * 0.8]), 0.18 + fire * 0.2 + rnd() * 0.1, 0.3 + rnd() * 0.35, rnd() < 0.35 ? [2.4, 0.75, 0.15, 0.8] : [1.9, 0.9, 0.25, 0.7]);
+          var seat = e.fireSeats[Math.floor(rnd() * Math.min(nSeat, e.fireSeats.length))];
+          var lp = [seat[0] + (rnd() - 0.5) * 0.4, seat[1] + rnd() * 0.1, seat[2] + (rnd() - 0.5) * 0.4];
+          // on a moving car the slipstream bends the tongues back and tears them off short (no trail of loose flames)
+          var sw = 1 / (1 + hspd * 0.16);
+          flame(xform(M, lp), add(mul(vel, 0.82), [(rnd() - 0.5) * 0.5, (1.1 + rnd() * 1.6 + fire * 0.6) * (0.5 + 0.5 * sw), (rnd() - 0.5) * 0.5]), (0.2 + fire * 0.22 + rnd() * 0.12) * (0.75 + 0.25 * sw), (0.32 + rnd() * 0.3) * sw, rnd() < 0.3 ? [2.4, 1.2, 0.3, 0.75] : [2.2, 0.8, 0.2, 0.7]);
+        }
+        if (!lowQ) {
+          e.fsAcc = num(e.fsAcc, 0) + dt * 7 * fire;
+          while (e.fsAcc > 1) {
+            e.fsAcc -= 1;
+            var st0 = e.fireSeats[Math.floor(rnd() * Math.min(nSeat, e.fireSeats.length))];
+            spawn({ p: xform(M, [st0[0], st0[1] + 0.9 + fire * 0.5, st0[2]]), v: add(mul(vel, 0.5), [(rnd() - 0.5) * 0.5, 2 + rnd() * 1.2, (rnd() - 0.5) * 0.5]), life: 2.4 + rnd() * 1.4, age: 0,
+              size: 0.45 + fire * 0.3, grow: 1.1 + fire * 0.6, col: [0.07, 0.062, 0.055, 0.5 + fire * 0.2], add: false, g: -0.03, soft: 0.6 });
+          }
         }
       }
       if (c.acc && c.acc.length) {
@@ -1779,11 +1975,12 @@ CB.derby = CB.derby || {};
         c.acc.forEach(function (st) {
           if (st.id === 'flamethrower' && st.active && anc.flame && !far) {
             var tip = xform(BW, anc.flame), dir = norm(madd(fr.fwd, fr.up, -0.06));
-            var n = lowQ ? 3 : 6;
+            e.ftAcc = num(e.ftAcc, 0) + dt * (lowQ ? 120 : 300);
+            var n = Math.floor(e.ftAcc); e.ftAcc -= n;
             for (var k = 0; k < n; k++) {
               var sp = 15 + rnd() * 8, jx = (rnd() - 0.5) * 0.35, jy = (rnd() - 0.5) * 0.2;
               var d = norm(add(add(dir, mul(fr.right, jx)), mul(fr.up, jy)));
-              flame(madd(tip, d, rnd() * 0.4 + (R.mode === 'hood' && c.id === R.focusId ? 1.6 : 0)), add(mul(d, sp), mul(vel, 0.9)), 0.16 + rnd() * 0.12, 0.42 + rnd() * 0.18, rnd() < 0.3 ? [2.4, 1.3, 0.4, 0.8] : [2.0, 0.65, 0.12, 0.75]);
+              flame(madd(tip, d, rnd() * 0.4 + (R.mode === 'hood' && c.id === R.focusId ? 1.6 : 0)), add(mul(d, sp), mul(vel, 0.9)), 0.12 + rnd() * 0.1, 0.4 + rnd() * 0.2, rnd() < 0.3 ? [2.4, 1.3, 0.4, 0.55] : [2.0, 0.65, 0.12, 0.5], true);
             }
             if (!lowQ && rnd() < 0.4) spawn({ p: madd(tip, dir, 8), v: add(mul(dir, 4), [0, 1.5, 0]), life: 1.2, age: 0, size: 0.6, grow: 1.2, col: [0.12, 0.1, 0.09, 0.4], add: false, g: -0.05 });
           }
@@ -1800,7 +1997,9 @@ CB.derby = CB.derby || {};
           }
           if (st.id === 'nitro' && st.active && !far) {
             var tips = anc.nitro && anc.nitro.length ? anc.nitro : [[-L / 2, 0.35, -0.35], [-L / 2, 0.35, 0.35]];
-            tips.forEach(function (tp) { var w = xform(BW, tp); for (var q = 0; q < 2; q++) flame(w, add(mul(fr.fwd, -7 - rnd() * 3), mul(vel, 0.95)), 0.22, 0.09 + rnd() * 0.05, [0.7, 1.5, 4.5, 1]); });
+            e.nitroAcc = num(e.nitroAcc, 0) + dt * (lowQ ? 40 : 90);
+            var nn = Math.floor(e.nitroAcc); e.nitroAcc -= nn;
+            tips.forEach(function (tp) { var w = xform(BW, tp); for (var q = 0; q < nn; q++) flame(madd(w, fr.fwd, -rnd() * 0.3), add(mul(fr.fwd, -7 - rnd() * 3), mul(vel, 0.95)), 0.2, 0.09 + rnd() * 0.05, [0.7, 1.5, 4.5, 0.8]); });
           }
         });
       }
@@ -1808,13 +2007,14 @@ CB.derby = CB.derby || {};
       var ram = c.ram;
       if (ram && ram.active && !far) {
         var dmR = e.dims || { L: 4.4, W: 1.9, H: 1.3 };
+        e.ramAcc = num(e.ramAcc, 0) + dt * (lowQ ? 40 : 110);
+        var nr = Math.floor(e.ramAcc); e.ramAcc -= nr;
         [-0.35, 0.35].forEach(function (zz) {
           var ex = xform(M, [-dmR.L / 2 - 0.05, 0.42, zz]);
-          for (var q = 0; q < (lowQ ? 1 : 3); q++) flame(madd(ex, fr.fwd, -rnd() * 0.6), add(mul(fr.fwd, -10 - rnd() * 6), mul(vel, 0.94)), 0.12 + rnd() * 0.07, 0.07 + rnd() * 0.05, rnd() < 0.55 ? [0.45, 1.0, 3.2, 0.9] : [2.6, 1.0, 0.25, 0.9]);
+          for (var q = 0; q < nr; q++) flame(madd(ex, fr.fwd, -rnd() * 0.6), add(mul(fr.fwd, -10 - rnd() * 6), mul(vel, 0.94)), 0.12 + rnd() * 0.07, 0.07 + rnd() * 0.05, rnd() < 0.55 ? [0.45, 1.0, 3.2, 0.9] : [2.6, 1.0, 0.25, 0.9]);
         });
-        var gl0 = dyn(SH.bubble, MAT.ramGlow || (MAT.ramGlow = { color: [1.2, 0.55, 0.18, 0.22], unlit: true, transparent: true, additive: true, depthWrite: false, castShadow: false }));
-        var pr = 1 + Math.sin(R.time * 30) * 0.06;
-        setTRS(gl0.model, xform(M, [dmR.L * 0.48, dmR.H * 0.4, 0]), fr.fwd, fr.up, fr.right, 0.9 * pr, dmR.H * 0.45 * pr, dmR.W * 0.62 * pr);
+        // hot nose: a faint heat glow flickering on the bumper corners (no solid glowing shell)
+        if (!lowQ && rnd() < 0.6) { var nz = (rnd() - 0.5) * dmR.W * 0.8; spawn({ p: xform(M, [dmR.L * 0.5 + 0.05, dmR.H * 0.3, nz]), v: add(mul(vel, 0.9), [0, 0.4, 0]), life: 0.12, age: 0, size: 0.28, grow: 0.8, col: [1.4, 0.55, 0.16, 0.35], add: true, puff: true, g: 0 }); }
         if (!lowQ && rnd() < 0.5) sparks(xform(M, [dmR.L * 0.5, 0.3, (rnd() - 0.5) * dmR.W]), 2, vel, [1.5, 2.5, 5, 1], 3);
       } else if (ram && num(ram.charge, 0) > 0.98 && !far && !lowQ && rnd() < 0.15) {
         var dmC = e.dims || { L: 4.4 };
@@ -1828,7 +2028,6 @@ CB.derby = CB.derby || {};
         if (c.invuln && !(num(c.shield, 0) > 0)) it.material = MAT.shieldGhost || (MAT.shieldGhost = Object.assign({}, MAT.shield, { color: [0.6, 0.6, 0.6, 0.12] }));
       }
       // hammer impact window: a bright head flash
-      if (e.hammerHead && e.hammerSwing > 0.3 && e.hammerSwing < 0.42) { var hf = dyn(SH.cube, MAT.flash); setTRS(hf.model, e.hammerHead, [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.9, 0.9, 0.9); }
     }
 
     function worldDynamic(snap, byId, poses, dt) {
@@ -1875,7 +2074,7 @@ CB.derby = CB.derby || {};
         var rg = R.rings[r2]; rg.t += dt;
         if (rg.t > rg.dur) { R.rings.splice(r2, 1); continue; }
         var u = rg.t / rg.dur, rr = rg.r * (1 - Math.pow(1 - u, 2.4)), fa = (1 - u) * (1 - u);
-        rg.mat.color[0] = 3.2 * fa; rg.mat.color[1] = 1.6 * fa; rg.mat.color[2] = 0.5 * fa; rg.mat.color[3] = fa;
+        rg.mat.color[0] = 1.5 * fa; rg.mat.color[1] = 0.75 * fa; rg.mat.color[2] = 0.28 * fa; rg.mat.color[3] = fa;
         var ri = dyn(SH.ring, rg.mat);
         setTRS(ri.model, rg.p, [1, 0, 0], [0, 1, 0], [0, 0, 1], rr, 1, rr);
       }
@@ -1901,8 +2100,8 @@ CB.derby = CB.derby || {};
       is3D: true, kind: 'derby',
       render: render,
       reset: function () {
-        R.rig.init = false; PS.length = 0; R.flashes.length = 0;
-        R.rings.length = 0; R.cine = null; DEB.forEach(freeDebris); DEB.length = 0; DEC.length = 0; DEC.dirty = true;
+        R.rig.init = false; PSa.length = PSf.length = PSp.length = 0; R.flashes.length = 0;
+        R.rings.length = 0; R.cine = null; R.boom = null; if (fx && fx.reset) try { fx.reset(); } catch (eR) { /* ignore */ } DEB.forEach(freeDebris); DEB.length = 0; DEC.length = 0; DEC.dirty = true;
         Object.keys(R.cars).forEach(function (k) { var e = R.cars[k]; e.prev = null; if (e.model && e.model._deform && e.dkey) { deformModel(e.model, {}); } e.seq = -1; e.dkey = null; e._dark = null; e._tk = null; e.char = 0; e.dirt = 0; e.vparts = {}; e.roof = 0; e.soot = 0; e.glass = 0; e.scrapes = []; e.wasRolled = false; e.outT = 0; });
       },
       setCamera: function (m) { if (m === 'chase-far') m = 'far'; if (m === 'tv' || m === 'heli') m = 'overhead'; if (m === 'cockpit' || m === 'bumper') m = 'hood'; if (MODES.indexOf(m) >= 0) { R.mode = m; R.rig.init = false; } return R.mode; },
@@ -1927,7 +2126,7 @@ CB.derby = CB.derby || {};
       getQuality: function () { return R.quality; },
       setQuality: function (q) {
         if (!QUALITY[q] || q === R.quality) return R.quality;
-        R.quality = q; setupQuality(); PMAX = Q.particles;
+        R.quality = q; setupQuality(); if (fx && fx.setQuality) try { fx.setQuality(q); } catch (eQ) { /* ignore */ }
         try { world.destroy(); } catch (e) { /* ignore */ }
         world = G.derbyArena.build(ctx, arena, { quality: q });
         return q;
@@ -1945,12 +2144,15 @@ CB.derby = CB.derby || {};
         if (shadow) try { shadow.destroy(); } catch (e) { /* ignore */ }
         if (post) try { post.destroy(); } catch (e) { /* ignore */ }
         if (particles) try { particles.destroy(); } catch (e) { /* ignore */ }
+        if (puffs) try { puffs.destroy(); } catch (e) { /* ignore */ }
+        if (fires) try { fires.destroy(); } catch (e) { /* ignore */ }
+        [puffTex, fireTex].forEach(function (tx) { if (tx) try { gl.deleteTexture(tx); } catch (e) { /* ignore */ } });
         if (CB.gl.car && CB.gl.car.cache && CB.gl.car.cache.clear) try { CB.gl.car.cache.clear(ctx); } catch (e) { /* ignore */ }
         if (ctx && ctx.destroy) try { ctx.destroy(); } catch (e) { /* ignore */ }
         if (glc.parentNode) glc.parentNode.removeChild(glc);
         canvas.style.background = prevBg || '';
       },
-      _world: function () { return world; }, _ctx: function () { return ctx; }, _R: R
+      _world: function () { return world; }, _ctx: function () { return ctx; }, _R: R, _pools: function () { return { a: PSa, f: PSf, p: PSp }; }
     };
     return api;
   }
