@@ -149,3 +149,15 @@ test('career-rules: Hot Hatch Trophy AI field is front-wheel-drive hatchbacks in
     if (o.model) assert.ok(!/ae86|gr-yaris/.test(o.model), 'no RWD/AWD hatch models: ' + o.model);
   });
 });
+
+test('career-rules: the free entry car is named like the car, not with the Garage build\'s spec name', () => {
+  if (!CB.state || typeof CB.state.replace !== 'function') return;
+  const b = CB.state.normalize(build());
+  b.meta.name = 'Porsche 911 Carrera S';
+  CB.state.replace(b, { resetHistory: true });
+  const fresh = profile({ ownedCars: [], activeCarId: null, level: 1 });
+  const offer = C.entryCarOffer(fresh);
+  assert.ok(offer, 'offer for an empty garage');
+  assert.equal(offer.build.meta.name, offer.name);
+  assert.equal(CB.state.get().meta.name, 'Porsche 911 Carrera S', 'the Garage build itself is untouched');
+});

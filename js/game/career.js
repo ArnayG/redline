@@ -1611,7 +1611,11 @@ CB.game.career = (function () {
         else if (isObj(r) && isObj(r.body)) b = r;
       } catch (e) { /* keep the raw build */ }
     }
-    return { build: b, name: entryCarName(b), changes: changes };
+    var nm = entryCarName(b);
+    // the build's own name came from the Garage ("Porsche 911 Carrera S"); once it is clamped to the player's unlocks it is
+    // no longer that spec, so every screen (race setup "Your machine", My Cars) names it like the career car
+    if (isObj(b.meta)) { b = clone(b); b.meta.name = nm; }
+    return { build: b, name: nm, changes: changes };
   }
   /** registerAtelierBuild(): add the entry car to the live profile's garage. -> {ok, car?, reason?} */
   function registerAtelierBuild() {
