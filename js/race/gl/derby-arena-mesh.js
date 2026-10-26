@@ -33,6 +33,100 @@ CB.gl = CB.gl || {};
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
 
+  /* ------------------------------------------------------------------ ground detail textures (pure pixels)
+     groundPixels(kind, size, seed) -> { albedo, normal, orm, size, meanLin } RGBA8 buffers, tileable (one tile =
+     GROUND_TILE m). Albedo is a near-white luminance detail layer that MULTIPLIES the per-vertex floor colour
+     (meanLin lets the material compensate so the floor keeps its brightness); normal = tangent space from a height
+     field; orm = glTF (G roughness: wet ruts / puddles smoother on mud, polished ice, scratched lanes rougher). */
+  var GROUND_TILE = 5;
+  function groundPixels(kind, size, seed) {
+    var N = size, s0 = (seed >>> 0) || 1;
+    function ph(i, j, P, s) { i = ((i % P) + P) % P; j = ((j % P) + P) % P; var h = Math.imul(i * 374761393 + j * 668265263 + s * 2246822519, 1274126177) >>> 0; h = (h ^ (h >>> 13)) >>> 0; return (Math.imul(h, 1103515245) >>> 0) / 4294967296; }
+    // periodic value noise on a P x P lattice over the tile (u, v in 0..1)
+    function pn(u, v, P, s) {
+      var x = u * P, y = v * P, xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+      var a = ph(xi, yi, P, s), b = ph(xi + 1, yi, P, s), c = ph(xi, yi + 1, P, s), d = ph(xi + 1, yi + 1, P, s);
+      var uu = fx * fx * (3 - 2 * fx), vv = fy * fy * (3 - 2 * fy);
+      return a + (b - a) * uu + (c - a) * vv + (a - b - c + d) * uu * vv;
+    }
+    function fbm(u, v, P, oct, s) { var t = 0, amp = 0.5, sum = 0; for (var o = 0; o < oct; o++) { t += pn(u, v, P << o, s + o * 17) * amp; sum += amp; amp *= 0.5; } return t / sum; }
+    // periodic cellular bumps (clods / pebbles / aggregate): distance to the nearest jittered point of a P grid
+    function cell(u, v, P, s) {
+      var x = u * P, y = v * P, xi = Math.floor(x), yi = Math.floor(y), best = 9, id = 0;
+      for (var dj = -1; dj <= 1; dj++) for (var di = -1; di <= 1; di++) {
+        var ci = xi + di, cj = yi + dj, px = ci + ph(ci, cj, P, s), py = cj + ph(ci, cj, P, s + 5), dx = x - px, dy = y - py, d = dx * dx + dy * dy;
+        if (d < best) { best = d; id = ph(ci, cj, P, s + 9); }
+      }
+      return [Math.sqrt(best), id];
+    }
+    function sm(a, b, x) { var t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+    var H = new Float32Array(N * N), A = new Float32Array(N * N), Rg = new Float32Array(N * N);
+    // a couple of faint old tyre tracks baked in (wrap-aware), the live ones come from the effects skid ribbons
+    var tracks = [];
+    for (var tk = 0; tk < 3; tk++) tracks.push({ a: ph(tk, 3, 97, s0) * Math.PI, o: ph(tk, 7, 97, s0), w: 0.035 + ph(tk, 9, 97, s0) * 0.015 });
+    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
+      var u = x / N, v = y / N, k = y * N + x, h, al, rg;
+      var n1 = fbm(u, v, 4, 4, s0), n2 = fbm(u, v, 16, 3, s0 + 50);
+      if (kind === 'dirt' || kind === 'mud') {
+        var cl = cell(u, v, 22, s0 + 3), clod = sm(0.75, 0.15, cl[0]) * (0.4 + cl[1] * 0.6);
+        var st = cell(u, v, 40, s0 + 11), stone = st[1] > 0.86 ? sm(0.42, 0.18, st[0]) : 0;
+        h = n1 * 0.55 + clod * 0.3 + n2 * 0.15 + stone * 0.4;
+        var rut = 0;
+        tracks.forEach(function (t) {
+          var dd = (u - 0.5) * Math.sin(t.a) - (v - 0.5) * Math.cos(t.a) + t.o; dd = dd - Math.round(dd);
+          var along = (u * Math.cos(t.a) + v * Math.sin(t.a)) * 60;
+          var band = sm(t.w, t.w * 0.55, Math.abs(dd));
+          rut = Math.max(rut, band * (0.55 + 0.45 * Math.abs(Math.sin(along * Math.PI)) * sm(t.w * 0.5, 0, Math.abs(dd))));
+        });
+        h = h * (1 - rut * 0.6) - rut * 0.12;
+        var wet = sm(0.36, 0.26, n1 + rut * 0.2);             // low spots hold water
+        al = 0.8 + 0.2 * h - wet * 0.18 + stone * 0.14 - rut * 0.08;
+        rg = 0.95 - wet * 0.62 - rut * 0.2;
+      } else if (kind === 'sand') {
+        var ang = 0.6 + (n1 - 0.5) * 1.2, rip = Math.sin((u * Math.cos(ang) + v * Math.sin(ang)) * Math.PI * 2 * 14 + n1 * 6) * 0.5 + 0.5;
+        var gr = pn(u, v, 128, s0 + 21), pb = cell(u, v, 30, s0 + 13), peb = pb[1] > 0.8 ? sm(0.4, 0.15, pb[0]) : 0;
+        h = n1 * 0.35 + rip * 0.22 * (0.5 + n2 * 0.5) + gr * 0.2 + peb * 0.4;
+        al = 0.82 + 0.12 * (n2 - 0.5) + 0.1 * gr - 0.06 * (1 - rip) + peb * 0.1 * (pb[1] > 0.93 ? -2 : 1);
+        rg = 0.96;
+      } else if (kind === 'asphalt') {
+        var ag = cell(u, v, 90, s0 + 5), chip = sm(0.5, 0.2, ag[0]), sp = pn(u, v, 160, s0 + 9);
+        h = chip * 0.5 + n2 * 0.3 + sp * 0.2;
+        var crack = sm(0.012, 0.0, Math.abs(fbm(u, v, 6, 3, s0 + 77) - 0.5)) * sm(0.55, 0.7, n1);
+        al = 0.78 + (ag[1] - 0.5) * 0.22 * chip + (sp - 0.5) * 0.12 + (n1 - 0.5) * 0.12 - crack * 0.35;
+        h -= crack * 0.5; rg = 0.82 + (ag[1] - 0.5) * 0.1;
+      } else if (kind === 'concrete') {
+        var jx = Math.min(u, 1 - u), jy = Math.min(v, 1 - v), joint = Math.max(sm(0.006, 0.0, jx), sm(0.006, 0.0, jy));
+        var stain = sm(0.62, 0.78, fbm(u, v, 3, 3, s0 + 31)), tr = pn(u * 0.5, v * 4, 8, s0 + 41);
+        h = n2 * 0.35 + tr * 0.15 - joint * 0.8 + pn(u, v, 128, s0 + 3) * 0.2;
+        al = 0.84 + (n1 - 0.5) * 0.16 + (tr - 0.5) * 0.06 - stain * 0.16 - joint * 0.45;
+        rg = 0.86 - stain * 0.25;
+      } else {   // ice: frost mottling + skate / tyre scratches
+        var scr = 0;
+        for (var q = 0; q < 5; q++) {
+          var aq = ph(q, 1, 97, s0 + 3) * Math.PI, oq = ph(q, 2, 97, s0 + 3), dq = (u - 0.5) * Math.sin(aq) - (v - 0.5) * Math.cos(aq) + oq; dq = dq - Math.round(dq);
+          scr = Math.max(scr, sm(0.004, 0.0, Math.abs(dq + (pn(u, v, 8, s0 + q) - 0.5) * 0.03)) * (0.5 + 0.5 * pn(u, v, 6, s0 + q * 3)));
+        }
+        h = n1 * 0.25 + n2 * 0.1 - scr * 0.25;
+        al = 0.86 + (n1 - 0.5) * 0.16 + scr * 0.14;
+        rg = 0.18 + n2 * 0.18 + scr * 0.5;
+      }
+      H[k] = h; A[k] = clamp(al, 0.3, 1); Rg[k] = clamp(rg, 0.04, 1);
+    }
+    var albedo = new Uint8Array(N * N * 4), normal = new Uint8Array(N * N * 4), orm = new Uint8Array(N * N * 4), sumLin = 0;
+    var strength = kind === 'ice' ? 1.2 : kind === 'concrete' || kind === 'asphalt' ? 2.2 : 3.2;
+    for (y = 0; y < N; y++) for (x = 0; x < N; x++) {
+      k = y * N + x; var o4 = k * 4, a8 = Math.round(A[k] * 255);
+      albedo[o4] = a8; albedo[o4 + 1] = a8; albedo[o4 + 2] = a8; albedo[o4 + 3] = 255;
+      sumLin += Math.pow(A[k], 2.2);
+      var hl = H[y * N + (x + N - 1) % N], hr = H[y * N + (x + 1) % N], hu = H[((y + N - 1) % N) * N + x], hd = H[((y + 1) % N) * N + x];
+      var nx = (hl - hr) * strength, ny = (hu - hd) * strength, nl = Math.sqrt(nx * nx + ny * ny + 1);
+      normal[o4] = Math.round((nx / nl * 0.5 + 0.5) * 255); normal[o4 + 1] = Math.round((ny / nl * 0.5 + 0.5) * 255); normal[o4 + 2] = Math.round((1 / nl * 0.5 + 0.5) * 255); normal[o4 + 3] = 255;
+      orm[o4] = 255; orm[o4 + 1] = Math.round(Rg[k] * 255); orm[o4 + 2] = 0; orm[o4 + 3] = 255;
+    }
+    return { albedo: albedo, normal: normal, orm: orm, size: N, meanLin: sumLin / (N * N) };
+  }
+  function groundKind(def) { var k = (def.surface && def.surface.kind) || 'dirt'; return k === 'sand' || k === 'asphalt' || k === 'concrete' || k === 'ice' ? k : 'dirt'; }
+
   var THEME = {
     mud: { outer: '#4a5a2c', outer2: '#5a4a30', wall: '#b9b6ae', band: ['#c8261c', '#f2f2f2', '#1c4fc8', '#f2c200'], stands: '#6a4a2e', sky: 'dusk' },
     figure8: { outer: '#3f6a2a', outer2: '#4c7a32', wall: '#e8e8e8', band: ['#d01818', '#f2f2f2'], stands: '#5a5f68', sky: 'day' },
@@ -640,10 +734,29 @@ CB.gl = CB.gl || {};
       decal: { name: 'derby-decal', color: [1, 1, 1, 1], roughness: ice ? 0.2 : 0.7, castShadow: false, polygonOffset: [-1, -3] },
       glass: { name: 'derby-glass', color: [1, 1, 1, 1], unlit: true, transparent: true, depthWrite: false, castShadow: false, doubleSided: true }
     };
+    // floor detail: tileable albedo / normal / roughness maps on world-space UVs (1 tile = GROUND_TILE m)
+    var gq = opts.quality || 'high';
+    try {
+      var gp = groundPixels(groundKind(def), gq === 'low' ? 128 : gq === 'medium' ? 256 : 512, hashStr(def.id || 'g'));
+      var tex = function (data, srgbish) { var t = GL.createTexture(ctx, { width: gp.size, height: gp.size, data: data }, { wrap: 'repeat', aniso: 8 }); if (t) texs.push(t); void srgbish; return t; };
+      var texs = [];
+      MAT.ground.map = tex(gp.albedo);
+      if (gq !== 'low') { MAT.ground.normalMap = tex(gp.normal); MAT.ground.normalScale = 1; MAT.ground.roughnessMap = tex(gp.orm); }
+      var cmp = 1 / Math.max(0.3, gp.meanLin);
+      MAT.ground.color = [cmp, cmp, cmp, 1];
+      MAT.ground.uvScale = [1 / GROUND_TILE, 1 / GROUND_TILE];
+      MAT.ground._texs = texs;
+    } catch (eT) { /* untextured floor */ }
     Object.keys(res.groups).forEach(function (k) {
       var g = res.groups[k];
       if (!g.tris()) return;
-      items.push({ mesh: mk(g.out()), material: MAT[k], kind: 'derby-' + k, castShadow: k === 'walls' || k === 'obstacles' || k === 'deco', transparent: k === 'glass' });
+      var go = g.out();
+      if (k === 'ground' && MAT.ground.map) {
+        var P0 = go.positions, U = new Float32Array(P0.length / 3 * 2);
+        for (var vi = 0, ui = 0; vi < P0.length; vi += 3, ui += 2) { U[ui] = P0[vi]; U[ui + 1] = P0[vi + 2]; }
+        go.uvs = U;
+      }
+      items.push({ mesh: mk(go), material: MAT[k], kind: 'derby-' + k, castShadow: k === 'walls' || k === 'obstacles' || k === 'deco', transparent: k === 'glass' });
     });
     var Geo = P().Geo;
     var plate = new Geo();
@@ -657,7 +770,10 @@ CB.gl = CB.gl || {};
           the renderer appends them to its draw list each frame. snap = session snapshot (pickups from snap.entities,
           the ring from snap.suddenDeath), t = sim time (s), cam = camera (optional, for culling). */
       dynamicItems: DI.items,
-      destroy: function () { meshes.forEach(function (m) { try { m.destroy(); } catch (e) { /* ignore */ } }); meshes = []; }
+      destroy: function () {
+        meshes.forEach(function (m) { try { m.destroy(); } catch (e) { /* ignore */ } }); meshes = [];
+        (MAT.ground._texs || []).forEach(function (t) { try { ctx.gl.deleteTexture(t); } catch (e) { /* ignore */ } }); MAT.ground._texs = [];
+      }
     };
   }
 
@@ -845,6 +961,6 @@ CB.gl = CB.gl || {};
     return { items: items, meshes: meshes, MAT: MAT };
   }
 
-  CB.gl.derbyArena = { outline: outline, buildGeometry: buildGeometry, build: build, dynamicSpec: dynamicSpec, PICKUP_COL: PICKUP_COL, THEME: THEME, _: { segOut: segOut, vtxOut: vtxOut, noise2: noise2 } };
+  CB.gl.derbyArena = { groundPixels: groundPixels, GROUND_TILE: GROUND_TILE, outline: outline, buildGeometry: buildGeometry, build: build, dynamicSpec: dynamicSpec, PICKUP_COL: PICKUP_COL, THEME: THEME, _: { segOut: segOut, vtxOut: vtxOut, noise2: noise2 } };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.gl.derbyArena;
 })();
