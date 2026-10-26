@@ -986,8 +986,11 @@ CB.game.economy = (function () {
     }
     var credits = 0, xp = 0;
     breakdown.forEach(function (l) { credits += l.credits; xp += l.xp; });
+    var rawCredits = credits;
     credits = Math.max(0, round(credits, 10));
     xp = Math.max(0, Math.round(xp));
+    // the payout is rounded to 10 CR: fold that rounding into the base line so the shown lines add up to the total
+    if (credits > 0 && credits !== rawCredits && breakdown.length) breakdown[0].credits += credits - rawCredits;
     return {
       credits: credits, xp: xp, breakdown: breakdown,
       summary: { position: position, fieldSize: fieldSize, difficulty: diff, difficultyMult: dm, share: share, purse: Math.round(purse),

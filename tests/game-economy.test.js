@@ -395,3 +395,11 @@ test('economy: levelForXp uses the cumulative curve and agrees with the profile 
     }
   } finally { if (prev) CB.game.profile = prev; }
 });
+
+test('economy: the shown reward lines add up exactly to the paid total (10 CR rounding folded in)', () => {
+  for (let p = 1; p <= 7; p++) {
+    const r = E.raceRewards({ position: p, fieldSize: 7, difficulty: 'rookie', laps: 6, trackId: 'forge-ring', cleanRace: true, multiplier: 0.68, multiplierLabel: 'Club Cup purse' });
+    assert.equal(sum(r, 'credits'), r.credits, 'pos ' + p);
+    assert.equal(sum(r, 'xp'), r.xp, 'pos ' + p);
+  }
+});
