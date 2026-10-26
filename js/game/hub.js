@@ -3676,6 +3676,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       // the briefing text ends with the stakes, which get their own "Stakes:" line below: don't say it twice
       if (br.stakesText && br.stakes && typeof text === 'string' && text.slice(-br.stakesText.length) === br.stakesText) text = text.slice(0, -br.stakesText.length).trim();
       var rows = standingsFor(vm.id);
+      var roundDone = !vm.complete && idx < num(vm.roundsDone, 0);
       var condition = car ? conditionLabel(car.condition) : null;
       host.innerHTML = '<div class="gh-kicker" style="color:' + esc(vm.color || 'var(--gh-accent)') + '">' + esc(vm.name) + ' · Round ' + (idx + 1) + ' of ' + vm.rounds.length + (r.isFinal ? ' · Finale' : '') + '</div>' +
         '<h1 class="gh-h1">' + esc(first(br.title, r.name, 'Round ' + (idx + 1))) + '</h1><p class="gh-sub">' + esc(trackName(r.trackId)) + ' · ' + esc(eventTypeLabel(et)) + '</p>' +
@@ -3697,10 +3698,14 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         (condition ? '<span class="gh-chip ' + condition.kind + '">' + condition.label + ' ' + pct(car.condition) + '</span>' : '') + '</div></div></div>' + carEligibilityHTML(elig) +
         (car && num(car.condition, 1) < 0.6 ? '<ul class="gh-reasons" style="border-left-color:var(--gh-warn);color:color-mix(in srgb,var(--gh-warn) 60%,var(--gh-text));background:rgba(240,180,41,.06)"><li>Worn car: performance and reliability suffer. Consider a repair (' + esc(fmtCredits(repairQuote(car).credits)) + ').</li></ul>' : '') + '</div>' +
         '<div class="gh-panel" style="margin-top:14px;padding:8px 8px 2px"><div class="gh-kicker" style="padding:8px 8px 0">Championship standings</div>' + standingsTable(rows, { limit: 5 }) + '</div>' +
+        // a round already run this season (Back from the results lands here): no second go at it, point at the next one
+        (roundDone ? '<div class="gh-btns" style="margin-top:18px"><p class="gh-sub" style="flex-basis:100%;margin:0 0 6px">Round ' + (idx + 1) + ' is done this season.</p>' +
+          (vm.roundsDone < vm.rounds.length ? '<button class="gh-btn hot" data-nav data-act="nextRound" data-autofocus>' + icon('flag', 16) + ' Round ' + (vm.roundsDone + 1) + ' briefing</button>' : '') +
+          '<button class="gh-btn" data-nav data-act="champ">Championship</button></div></div></div>' :
         '<div class="gh-btns" style="margin-top:18px"><button class="gh-btn hot" data-nav data-act="go" data-autofocus' + (elig.ok ? '' : ' disabled') + '>' + icon('flag', 16) + ' Go racing</button>' +
         '<button class="gh-btn" data-nav data-act="sim"' + (elig.ok ? '' : ' disabled') + ' title="Let the stewards simulate this round from your car\'s performance">Simulate round</button>' +
         (car && num(car.condition, 1) < 0.95 ? '<button class="gh-btn ghost" data-nav data-act="repair">Repair</button>' : '') +
-        (!elig.ok ? '<button class="gh-btn" data-nav data-act="modify">Modify car</button>' : '') + '</div></div></div>';
+        (!elig.ok ? '<button class="gh-btn" data-nav data-act="modify">Modify car</button>' : '') + '</div></div></div>');
       var ctx = { kind: vm.tierIndex < 0 ? 'event' : 'career', champId: vm.id, roundIdx: idx, eventType: et, label: (vm.raw && vm.raw.short) || vm.name };
       var settings = {
         mode: 'race', trackId: first(cfg.trackId, r.trackId), laps: first(cfg.laps, r.laps), opponents: opp,
@@ -3729,7 +3734,9 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           });
         },
         repair: function () { repairFlow(car.id); },
-        modify: function () { modifyCarForChamp(vm); }
+        modify: function () { modifyCarForChamp(vm); },
+        nextRound: function () { show('briefing', { champId: vm.id, roundIdx: vm.roundsDone }); },
+        champ: function () { show('championship', { id: vm.id }); }
       });
     }
   });

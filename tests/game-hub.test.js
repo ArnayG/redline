@@ -76,3 +76,12 @@ T('home: the mode grid carries its tile count so 8 tiles never leave a lone orph
   assert.match(css, /\.gh-modes\[data-n="8"\]\{grid-template-columns:repeat\(8/);
   assert.match(css, /\(min-width:641px\) and \(max-width:1439px\)\{#game-hub \.gh-modes\[data-n="8"\]\{grid-template-columns:repeat\(4/);
 });
+
+T('briefing: a round already run this season offers the next round instead of Go racing / Simulate again', () => {
+  const src = require('fs').readFileSync(require('path').join(root, 'js/game/hub.js'), 'utf8');
+  const i = src.indexOf("screen('briefing'"), j = src.indexOf("screen('rewards'");
+  const body = src.slice(i, j);
+  assert.match(body, /var roundDone = !vm\.complete && idx < num\(vm\.roundsDone, 0\)/);
+  assert.ok(body.indexOf('(roundDone ?') >= 0 && body.indexOf('data-act="nextRound"') > body.indexOf('(roundDone ?'));
+  assert.ok(body.indexOf('data-act="go"') > body.indexOf('data-act="nextRound"'), 'Go racing only in the not-done branch');
+});
