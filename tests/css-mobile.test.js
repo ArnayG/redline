@@ -47,3 +47,9 @@ test('css: < 900 routed shell drops the build-title divider once the Atelier bra
   const br = rule(body, 'html.cb-routed #topbar .brand');
   assert.ok(br && px(br, 'display') === 'none', 'routed brand hidden < 900');
 });
+
+test('css: phone Share dialog stacks its hero so the four stat tiles sit in one even row', () => {
+  const G = fs.readFileSync(path.join(__dirname, '..', 'js', 'garage.js'), 'utf8');
+  assert.match(G, /@media \(max-width:560px\)\{\.gx-share-hero\{flex-direction:column/);
+  assert.match(G, /\.gx-stat-l\{[^}]*text-overflow:ellipsis/);
+});

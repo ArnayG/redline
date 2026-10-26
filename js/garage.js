@@ -2521,7 +2521,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     // value + unit never truncate ("314 km/h", "1,931 hp"): the unit wraps under the number when the tile is narrow
     '.gx-stat-v{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:3px;font:650 var(--fs-sm)/1.2 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:0}',
     '.gx-stat-v small{font-size:var(--fs-2xs);font-weight:500;color:var(--text-dim);white-space:nowrap}',
-    '.gx-stat-l{font-size:var(--fs-2xs);letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim)}',
+    '.gx-stat-l{font-size:var(--fs-2xs);letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.gx-skel{display:block;height:34px;border-radius:var(--radius-xs);background:linear-gradient(90deg,var(--bg-2),var(--panel-2),var(--bg-2));background-size:200% 100%;animation:gx-shimmer 1.2s linear infinite}',
     '@keyframes gx-shimmer{to{background-position:-200% 0}}',
     '.gx-empty,.gx-empty-inline{text-align:center;color:var(--text-dim)}',
@@ -2595,6 +2595,8 @@ if (typeof window !== 'undefined') window.CB = CB;
     '.gx-toggle input:focus-visible+.gx-toggle-track{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}',
     /* share / import */
     '.gx-share-hero{display:flex;gap:16px;align-items:center;margin-bottom:12px}.gx-share-hero>div:last-child{flex:1 1 auto;min-width:0}',
+    // phones: stack the thumbnail over the name + stats so the four stat tiles get the full width (one even row)
+    '@media (max-width:560px){.gx-share-hero{flex-direction:column;align-items:stretch;gap:10px}.gx-share-hero>.gx-thumb,.gx-share-hero>:first-child{align-self:center;max-width:100%}}',
     '.gx-share-sec{padding:12px 0;border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}',
     '.gx-share-sec h4{margin:0 0 8px;font-size:var(--fs-sm);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-dim)}',
     '.gx-copy-row{display:flex;gap:8px}.gx-copy-row .gx-text-input{flex:1 1 auto;min-width:0}',
