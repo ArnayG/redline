@@ -1236,7 +1236,7 @@ cursor:pointer;text-align:left;border-radius:var(--gh-r);transition:transform .2
 #game-hub .gh-round .res{position:absolute;top:12px;right:12px;font:800 var(--fs-md) var(--gh-mono)}
 #game-hub .gh-round .gh-track-svg{display:block;margin:8px 0 4px;color:var(--gh-dim)}
 #game-hub .gh-cal .gh-round{display:flex;flex-direction:column;min-width:0}
-#game-hub .gh-round .r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
+#game-hub .gh-round .r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.1em}#game-hub .gh-round:has(.res) .r{padding-right:30px}
 #game-hub .gh-round h4{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:26px}
 #game-hub .gh-round>small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #game-hub .gh-round-foot{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;color:var(--gh-dim);font-size:var(--fs-xs);margin-top:auto}
@@ -3673,6 +3673,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
       var et = first(getPath(cfg, 'extras.eventType'), r.eventType, vm.type);
       var lines = arr(first(br.paragraphs, br.lines, null));
       var text = first(br.text, br.intro, br.summary, r.desc, '');
+      // the briefing text ends with the stakes, which get their own "Stakes:" line below: don't say it twice
+      if (br.stakesText && br.stakes && typeof text === 'string' && text.slice(-br.stakesText.length) === br.stakesText) text = text.slice(0, -br.stakesText.length).trim();
       var rows = standingsFor(vm.id);
       var condition = car ? conditionLabel(car.condition) : null;
       host.innerHTML = '<div class="gh-kicker" style="color:' + esc(vm.color || 'var(--gh-accent)') + '">' + esc(vm.name) + ' · Round ' + (idx + 1) + ' of ' + vm.rounds.length + (r.isFinal ? ' · Finale' : '') + '</div>' +
