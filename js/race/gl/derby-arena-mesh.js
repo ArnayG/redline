@@ -3,7 +3,7 @@
    CB.gl.derbyArena : meshes for the Demolition Derby arenas (docs/DERBY-SPEC.md §2, §9).
 
      outline(def, step?) -> [{x, y, open}]          PURE closed CCW outline samples (open = the edge after it has no wall)
-     buildGeometry(def, {quality}) -> PURE { groups {ground, outer, walls, obstacles, deco, crowd, glow, decal, glass},
+     buildGeometry(def, {quality}) -> PURE { groups {ground, outer, walls, obstacles, deco, crowd0..2, glow, decal, glass},
                                              dynamic {fires[], lamps[], spots[], crushers[]}, stats {triangles, groups} }
      build(ctx, def, {quality}) -> { items, dyn, meshes {crusherPlate, flame}, stats, groundMaterial, destroy() }
    GL world = [x, z, -y] (sim x east, y north, z up). Uses CB.gl.derbyParts.Geo (load derby-parts.js first) and
@@ -125,6 +125,33 @@ CB.gl = CB.gl || {};
     }
     return { albedo: albedo, normal: normal, orm: orm, size: N, meanLin: sumLin / (N * N) };
   }
+  /** 8 generic derby slogans (no real brands) on bold boards, 1024 x 1024 canvas atlas, one 1024 x 128 row each */
+  var BANNERS = [
+    ['DEMOLITION DERBY', '#c8261c', '#ffffff', '#f2c200'], ['LAST CAR STANDING', '#141414', '#f2c200', '#c8261c'],
+    ['CRASH NIGHT', '#f2c200', '#141414', '#141414'], ['FULL CONTACT', '#1c4fc8', '#ffffff', '#f2f2f2'],
+    ['REDLINE ARENA', '#0c0c0e', '#f2ead8', '#e0412f'], ['WRECK IT  \u00b7  WIN IT', '#2a8a3a', '#ffffff', '#f2c200'],
+    ['NO BRAKES ZONE', '#e06a1a', '#141414', '#ffffff'], ['SCRAP METAL SATURDAY', '#f2f2f2', '#c8261c', '#141414']
+  ];
+  function bannerAtlas(ctx, def) {
+    var cv = document.createElement('canvas'); cv.width = 1024; cv.height = 1024;
+    var g = cv.getContext('2d'); if (!g) return null;
+    var R0 = P().rng(hashStr(def.id || 'b') + 3);
+    for (var r = 0; r < 8; r++) {
+      var B = BANNERS[r], y0 = r * 128;
+      g.fillStyle = B[1]; g.fillRect(0, y0, 1024, 128);
+      // trim stripes + a chequer flag block at both ends
+      g.fillStyle = B[3]; g.fillRect(0, y0 + 8, 1024, 6); g.fillRect(0, y0 + 114, 1024, 6);
+      for (var cx = 0; cx < 4; cx++) for (var cy = 0; cy < 4; cy++) if ((cx + cy) % 2 === 0) { g.fillStyle = B[2]; g.fillRect(18 + cx * 18, y0 + 28 + cy * 18, 18, 18); g.fillRect(1024 - 90 + cx * 18, y0 + 28 + cy * 18, 18, 18); }
+      g.fillStyle = B[2]; g.textAlign = 'center'; g.textBaseline = 'middle';
+      var txt = B[0], size = 78;
+      g.font = '900 ' + size + 'px "Arial Black", Impact, "Helvetica Neue", Arial, sans-serif';
+      while (g.measureText(txt).width > 780 && size > 30) { size -= 4; g.font = '900 ' + size + 'px "Arial Black", Impact, "Helvetica Neue", Arial, sans-serif'; }
+      g.fillText(txt, 512, y0 + 66);
+      // weathering: scuffs and mud splashes so the boards belong in a derby
+      for (var k = 0; k < 60; k++) { g.fillStyle = 'rgba(40,30,20,' + (0.05 + R0() * 0.18).toFixed(3) + ')'; var sx = R0() * 1024, sy = y0 + 70 + R0() * 58, rr = 2 + R0() * 9; g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill(); }
+    }
+    return CB.gl.createTexture(ctx, cv, { wrap: 'clamp', aniso: 8 });
+  }
   function groundKind(def) { var k = (def.surface && def.surface.kind) || 'dirt'; return k === 'sand' || k === 'asphalt' || k === 'concrete' || k === 'ice' ? k : 'dirt'; }
 
   var THEME = {
@@ -136,6 +163,17 @@ CB.gl = CB.gl || {};
     colosseum: { outer: '#8a7050', outer2: '#7a6044', wall: '#c8a87a', band: ['#a8885a', '#b8986a'], stands: '#b09068', sky: 'night' }
   };
   function themeOf(def) { return THEME[def.theme] || THEME.mud; }
+  /** spectator box: only the faces the arena can see (front toward the arena = -x local, both sides, top), sim centre
+      (x, y, h), yaw = outward normal heading; topCol (hair) tints the top face */
+  function pbox(g, x, y, h, yaw, sx, sy, sz, col, topCol) {
+    var c = Math.cos(yaw), s = Math.sin(yaw);
+    function P(lx, ly, lz) { return W(x + c * lx - s * lz, y + s * lx + c * lz, h + ly); }
+    var dk = scale(col, 0.82);
+    g.quad(P(-sx, -sy, sz), P(-sx, -sy, -sz), P(-sx, sy, -sz), P(-sx, sy, sz), col);            // front
+    g.quad(P(-sx, -sy, -sz), P(sx, -sy, -sz), P(sx, sy, -sz), P(-sx, sy, -sz), dk);            // side
+    g.quad(P(sx, -sy, sz), P(-sx, -sy, sz), P(-sx, sy, sz), P(sx, sy, sz), dk);                // side
+    g.quad(P(-sx, sy, sz), P(-sx, sy, -sz), P(sx, sy, -sz), P(sx, sy, sz), topCol || col);     // top
+  }
 
   /* ------------------------------------------------------------------ outline (pure) */
   function outline(def, step) {
@@ -178,7 +216,7 @@ CB.gl = CB.gl || {};
     var R = P().rng(hashStr(def.id) || 7);
     var th = themeOf(def), A = AR();
     var G = {
-      ground: new Geo(), outer: new Geo(), walls: new Geo(), obstacles: new Geo(), deco: new Geo(), crowd: new Geo(),
+      ground: new Geo(), outer: new Geo(), walls: new Geo(), obstacles: new Geo(), deco: new Geo(), crowd0: new Geo(), crowd1: new Geo(), crowd2: new Geo(),
       glow: new Geo(), decal: new Geo(), glass: new Geo()
     };
     var dyn = { fires: [], lamps: [], spots: [], crushers: [], torches: [], turntables: [], pushers: [], conveyors: [] };
@@ -272,7 +310,7 @@ CB.gl = CB.gl || {};
 
     /* ---- walls along the outline (none on open edges) */
     var bandCols = th.band.map(function (c) { return hex(c); });
-    var wc = hex(th.wall), wt = style === 'stone' ? 1.2 : style === 'scrap' ? 0.9 : 0.45;
+    var wc = hex(th.wall), wt = style === 'stone' ? 1.2 : style === 'scrap' ? 0.9 : 0.45, banners = [], banAlong = 0;
     for (var sI = 0; sI < o.length; sI++) {
       var A0 = o[sI], A1 = o[(sI + 1) % o.length];
       if (A0.open) continue;
@@ -289,6 +327,19 @@ CB.gl = CB.gl || {};
       var i0 = [A0.x, A0.y], i1 = [A1.x, A1.y], e0 = [A0.x + n0[0] * wt, A0.y + n0[1] * wt], e1 = [A1.x + n1[0] * wt, A1.y + n1[1] * wt];
       var WG = G.walls;
       WG.quad(W(i0[0], i0[1], 0), W(i1[0], i1[1], 0), W(i1[0], i1[1], h1), W(i0[0], i0[1], h0), colIn);
+      // advertising banners along the inner face (generic derby slogans; textured in build())
+      if (style !== 'scrap' && !low) {
+        var bLen = 7, bGap = 6, per = bLen + bGap, sa = banAlong, sb = banAlong + segLen;
+        var inset = style === 'glass' ? 0.035 : 0.03, zb = style === 'glass' ? 0.26 : 0.32, zt = Math.min(h0, h1) - (style === 'glass' ? 0.08 : 0.14);
+        var flipB = (A1.x - A0.x) * n0[1] - (A1.y - A0.y) * n0[0] < 0;
+        var atS = function (d) { var f = (d - sa) / Math.max(1e-6, segLen); return { p: [i0[0] + (i1[0] - i0[0]) * f - (n0[0] + (n1[0] - n0[0]) * f) * inset, i0[1] + (i1[1] - i0[1]) * f - (n0[1] + (n1[1] - n0[1]) * f) * inset] }; };
+        for (var kb = Math.floor(sa / per); kb * per < sb && zt - zb > 0.3; kb++) {
+          var ba = Math.max(sa, kb * per), bb = Math.min(sb, kb * per + bLen);
+          if (bb - ba < 0.02) continue;
+          banners.push({ a: atS(ba).p, b: atS(bb).p, u0: (ba - kb * per) / bLen, u1: (bb - kb * per) / bLen, z0: zb, z1: zt, cell: ((kb % 8) + 8) % 8, flip: flipB });
+        }
+      }
+      banAlong += segLen;
       WG.quad(W(i0[0], i0[1], h0), W(i1[0], i1[1], h1), W(e1[0], e1[1], h1), W(e0[0], e0[1], h0), colTop);
       WG.quad(W(e0[0], e0[1], h0), W(e1[0], e1[1], h1), W(e1[0], e1[1], 0), W(e0[0], e0[1], 0), scale(colIn, 0.8));
       if (style === 'concrete' && sI % 2 === 0) G.decal.quad(W(i0[0] - n0[0] * 0.01, i0[1] - n0[1] * 0.01, 0.15), W(i1[0] - n1[0] * 0.01, i1[1] - n1[1] * 0.01, 0.15), W(i1[0] - n1[0] * 0.01, i1[1] - n1[1] * 0.01, 0.3), W(i0[0] - n0[0] * 0.01, i0[1] - n0[1] * 0.01, 0.3), hex('#141414'));
@@ -325,6 +376,7 @@ CB.gl = CB.gl || {};
       var standC = hex(th.stands), crowd = num(dec.crowd, 0.7) * (low ? 0.3 : hi ? 1 : 0.6);
       var shirt = ['#d23a2a', '#2a6fd2', '#e0b21a', '#f2f2f2', '#2aa860', '#141414', '#e06a1a', '#8a3ad2', '#c0c0c0', '#5a8a2a'].map(function (c) { return hex(c); });
       var skin = [hex('#f0c8a0'), hex('#c89870'), hex('#8a5a3a'), hex('#5a3a2a')];
+      var jeans = [hex('#2a3a5a'), hex('#1c1c22'), hex('#4a4a50'), hex('#3a2e24'), hex('#5a6a80')], hair = [hex('#1a1410'), hex('#3a2a1a'), hex('#6a4a2a'), hex('#c8a060'), hex('#8a8a8a')];
       for (var sj = 0; sj < o.length; sj++) {
         var B0 = o[sj], B1 = o[(sj + 1) % o.length];
         if (B0.open) continue;
@@ -349,19 +401,20 @@ CB.gl = CB.gl || {};
           G.deco.quad(W(q0[0], q0[1], hT), W(q1[0], q1[1], hT), W(r1[0], r1[1], hT), W(r0[0], r0[1], hT), tc);
           G.deco.quad(W(q0[0], q0[1], hT - rise), W(q1[0], q1[1], hT - rise), W(q1[0], q1[1], hT), W(q0[0], q0[1], hT), scale(tc, 0.75));
           if (t === 0) G.deco.quad(W(q0[0], q0[1], 0), W(q1[0], q1[1], 0), W(q1[0], q1[1], hT - rise), W(q0[0], q0[1], hT - rise), scale(tc, 0.6));
-          // spectators
-          var len = Math.hypot(q1[0] - q0[0], q1[1] - q0[1]), np = Math.floor(len / 0.75);
+          // spectators: facing the arena, three bounce groups (the renderer bobs them, harder after big hits),
+          // seated / standing / cheering with arms up, jeans + shirt + head + hair
+          var len = Math.hypot(q1[0] - q0[0], q1[1] - q0[1]), np = Math.floor(len / 0.72), face = Math.atan2(sn[1], sn[0]);
           for (var pp = 0; pp < np; pp++) {
             if (R() > crowd) continue;
-            var f = (pp + 0.5) / np, px = q0[0] + (q1[0] - q0[0]) * f + m0[0] * depth * 0.45, py = q0[1] + (q1[1] - q0[1]) * f + m0[1] * depth * 0.45;
-            var sc = shirt[Math.floor(R() * shirt.length)], arms = R() < 0.25;
-            if (low) G.crowd.aabb(W(px, py, hT + 0.38), 0.17, 0.38, 0.15, sc, true);
-            else {
-              var sit = R() < 0.4, bh = sit ? 0.24 : 0.32;
-              G.crowd.aabb(W(px, py, hT + bh), 0.17, bh, 0.13, sc, true);
-              G.crowd.aabb(W(px, py, hT + bh * 2 + 0.1), 0.09, 0.1, 0.09, skin[Math.floor(R() * skin.length)], true);
-              if (arms) G.crowd.aabb(W(px, py, hT + bh * 2 + 0.22), 0.22, 0.04, 0.04, sc, true);
-            }
+            var f = (pp + 0.5) / np, jit = (R() - 0.5) * 0.18, px = q0[0] + (q1[0] - q0[0]) * f + m0[0] * depth * (0.45 + jit), py = q0[1] + (q1[1] - q0[1]) * f + m0[1] * depth * (0.45 + jit);
+            var sc = shirt[Math.floor(R() * shirt.length)], arms = R() < 0.22, CG = G['crowd' + Math.floor(R() * 3)];
+            if (low) { CG.aabb(W(px, py, hT + 0.38), 0.17, 0.38, 0.15, sc, true); continue; }
+            var sit = R() < 0.35, legH = sit ? 0 : 0.42, tH = 0.24, tz = hT + legH + tH, sk = skin[Math.floor(R() * skin.length)], hairC = hair[Math.floor(R() * hair.length)];
+            var yaw = face + (R() - 0.5) * 0.5;
+            if (!sit) pbox(CG, px, py, hT + legH / 2, yaw, 0.09, legH / 2, 0.13, jeans[Math.floor(R() * jeans.length)], false);
+            pbox(CG, px, py, tz, yaw, 0.11, tH, 0.19, sc, false);
+            pbox(CG, px, py, tz + tH + 0.12, yaw, 0.09, 0.105, 0.085, sk, hairC);
+            if (arms) { var ox = -Math.sin(yaw) * 0.2, oy = Math.cos(yaw) * 0.2; [-1, 1].forEach(function (sd) { pbox(CG, px + ox * sd, py + oy * sd, tz + tH + 0.2, yaw, 0.04, 0.2, 0.04, sc, false); }); }
           }
         }
         // back wall of the stands
@@ -714,7 +767,7 @@ CB.gl = CB.gl || {};
 
     var stats = { triangles: 0, groups: {} };
     Object.keys(G).forEach(function (k5) { var n5 = G[k5].tris(); stats.groups[k5] = n5; stats.triangles += n5; });
-    return { groups: G, dynamic: dyn, stats: stats, theme: th, outline: o };
+    return { groups: G, dynamic: dyn, stats: stats, theme: th, outline: o, banners: banners };
   }
 
   /* ------------------------------------------------------------------ GL wrap */
@@ -734,6 +787,7 @@ CB.gl = CB.gl || {};
       decal: { name: 'derby-decal', color: [1, 1, 1, 1], roughness: ice ? 0.2 : 0.7, castShadow: false, polygonOffset: [-1, -3] },
       glass: { name: 'derby-glass', color: [1, 1, 1, 1], unlit: true, transparent: true, depthWrite: false, castShadow: false, doubleSided: true }
     };
+    var crowdItems = [];
     // floor detail: tileable albedo / normal / roughness maps on world-space UVs (1 tile = GROUND_TILE m)
     var gq = opts.quality || 'high';
     try {
@@ -756,8 +810,33 @@ CB.gl = CB.gl || {};
         for (var vi = 0, ui = 0; vi < P0.length; vi += 3, ui += 2) { U[ui] = P0[vi]; U[ui + 1] = P0[vi + 2]; }
         go.uvs = U;
       }
-      items.push({ mesh: mk(go), material: MAT[k], kind: 'derby-' + k, castShadow: k === 'walls' || k === 'obstacles' || k === 'deco', transparent: k === 'glass' });
+      var crowdK = /^crowd/.test(k);
+      var it = { mesh: mk(go), material: crowdK ? MAT.crowd : MAT[k], kind: 'derby-' + (crowdK ? 'crowd' : k), castShadow: k === 'walls' || k === 'obstacles' || k === 'deco', transparent: k === 'glass' };
+      if (crowdK) { it.model = GL.mat4 ? GL.mat4.create() : new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); it.phase = crowdItems.length * 2.1; crowdItems.push(it); }
+      items.push(it);
     });
+    // banners: one canvas atlas of 8 generic slogans, quads with uvs (browser only; no canvas -> no banners)
+    var banTex = null;
+    if (res.banners && res.banners.length && typeof document !== 'undefined' && document.createElement) {
+      try {
+        banTex = bannerAtlas(ctx, def);
+        if (banTex) {
+          var bp = [], bn = [], bu = [], bc = [], bi = [];
+          res.banners.forEach(function (bq) {
+            var row = bq.cell / 8, rowB = (bq.cell + 1) / 8 - 1 / 1024, base = bp.length / 3;
+            var nx = -(bq.b[1] - bq.a[1]), ny = bq.b[0] - bq.a[0], nl = Math.hypot(nx, ny) || 1;
+            var N3 = [nx / nl, 0, -ny / nl];
+            var ua2 = bq.flip ? 1 - bq.u0 : bq.u0, ub2 = bq.flip ? 1 - bq.u1 : bq.u1;   // read left to right from inside the arena
+            [[bq.a, bq.z0, ua2, rowB], [bq.b, bq.z0, ub2, rowB], [bq.b, bq.z1, ub2, row + 1 / 1024], [bq.a, bq.z1, ua2, row + 1 / 1024]].forEach(function (vv) {
+              var w3 = W(vv[0][0], vv[0][1], vv[1]); bp.push(w3[0], w3[1], w3[2]); bn.push(N3[0], N3[1], N3[2]); bu.push(vv[2], vv[3]); bc.push(1, 1, 1, 1);
+            });
+            bi.push(base, base + 1, base + 2, base, base + 2, base + 3);
+          });
+          var bMesh = mk({ positions: new Float32Array(bp), normals: new Float32Array(bn), uvs: new Float32Array(bu), colors: new Float32Array(bc), colorSize: 4, indices: new Uint16Array(bi) });
+          items.push({ mesh: bMesh, material: { name: 'derby-banners', color: [1, 1, 1, 1], map: banTex, roughness: 0.55, clearcoat: 0.15, castShadow: false, doubleSided: true, polygonOffset: [-1, -2] }, kind: 'derby-banners', castShadow: false });
+        }
+      } catch (eB) { banTex = null; }
+    }
     var Geo = P().Geo;
     var plate = new Geo();
     plate.aabb([0, 0, 0], 1, 0.5, 1, hex('#5a5e66'));
@@ -770,9 +849,17 @@ CB.gl = CB.gl || {};
           the renderer appends them to its draw list each frame. snap = session snapshot (pickups from snap.entities,
           the ring from snap.suddenDeath), t = sim time (s), cam = camera (optional, for culling). */
       dynamicItems: DI.items,
+      /** the crowd is alive: three groups bob out of phase; excite (0..1, decays in the renderer) makes them jump */
+      animateCrowd: function (t, excite) {
+        var ex = clamp(num(excite, 0), 0, 1);
+        for (var ci = 0; ci < crowdItems.length; ci++) {
+          var ph = t * (2.2 + ci * 0.37) + crowdItems[ci].phase, y = Math.max(0, Math.sin(ph)) * (0.025 + ex * 0.16) + Math.max(0, Math.sin(ph * 2.3 + 1)) * ex * 0.06;
+          crowdItems[ci].model[13] = y;
+        }
+      },
       destroy: function () {
         meshes.forEach(function (m) { try { m.destroy(); } catch (e) { /* ignore */ } }); meshes = [];
-        (MAT.ground._texs || []).forEach(function (t) { try { ctx.gl.deleteTexture(t); } catch (e) { /* ignore */ } }); MAT.ground._texs = [];
+        (MAT.ground._texs || []).concat(banTex ? [banTex] : []).forEach(function (t) { try { ctx.gl.deleteTexture(t); } catch (e) { /* ignore */ } }); MAT.ground._texs = []; banTex = null;
       }
     };
   }
