@@ -3847,10 +3847,16 @@ html.cb-routed #btn-menu, html.cb-routed #btn-hub { display: none !important; }
   :root { --gnav-h: 98px; }
   @supports (padding-top: env(safe-area-inset-top)) { :root { --gnav-h: calc(98px + env(safe-area-inset-top, 0px)); } }
   html.cb-routed .gnav { flex-wrap: wrap; align-content: center; row-gap: 4px; }
-  html.cb-routed .gnav-links { order: 10; flex: 1 0 100%; justify-content: space-between; overflow: visible; }
-  html.cb-routed .gnav-links .gnav-link { flex: 1 1 0; min-width: 34px; padding: 0; height: 44px; }
+  html.cb-routed .gnav-links { order: 10; flex: 1 0 100%; justify-content: space-between; overflow: visible; gap: 0; }
+  html.cb-routed .gnav-links .gnav-link { flex: 1 1 0; min-width: 0; padding: 0; height: 44px; }
   html.cb-routed .gnav-link.is-active::after { bottom: -3px; }
-  html.cb-routed .gnav-link .gnav-s { font-size: 9.5px; max-width: 100%; overflow: hidden; text-overflow: clip; }
+  /* 10 links share ~360 px: 9 px labels with slightly tightened tracking so "Garage" / "Arcade" / "Career" fit whole */
+  html.cb-routed .gnav-link .gnav-s { font-size: calc(var(--fs-2xs) - 1.5px); letter-spacing: -.02em; max-width: 100%; overflow: hidden; text-overflow: clip; }
+}
+/* narrow Android phones (360 px and under): a little less side padding and 8.5 px labels so every label stays whole */
+@media (max-width: 380px) {
+  html.cb-routed .gnav { padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); }
+  html.cb-routed .gnav-link .gnav-s { font-size: calc(var(--fs-2xs) - 2px); letter-spacing: -.03em; }
 }
 /* phones in landscape: one slim nav row so the short viewport keeps its height for the screen */
 @media (max-height: 520px) and (max-width: 1024px) {
@@ -4193,6 +4199,13 @@ html.cb-routed #btn-menu, html.cb-routed #btn-hub { display: none !important; }
   /* six categories fit the bottom bar without scrolling */
   html[data-garage-mode="simple"] .bnav-item { flex: 1 1 0; min-width: 0; }
   .panel-head-nav { flex-wrap: wrap; justify-content: flex-end; }
+}
+/* narrow phones (≤ 380 px): the pinned Simple-mode readouts keep a whole price ("$169,676") — smaller digits and a
+   slightly wider last (price) column */
+@media (max-width: 380px) {
+  html[data-garage-mode="simple"] #perf-strip { grid-template-columns: minmax(0, .9fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, 1.3fr); }
+  html[data-garage-mode="simple"] #perf-strip .qs { padding: 7px 6px; }
+  html[data-garage-mode="simple"] #perf-strip .qs-value { font-size: var(--fs-md); letter-spacing: -.04em; }
 }
 
 /* ==========================================================================
