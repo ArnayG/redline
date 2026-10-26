@@ -53,3 +53,10 @@ test('css: phone Share dialog stacks its hero so the four stat tiles sit in one 
   assert.match(G, /@media \(max-width:560px\)\{\.gx-share-hero\{flex-direction:column/);
   assert.match(G, /\.gx-stat-l\{[^}]*text-overflow:ellipsis/);
 });
+
+test('css: Advanced stat-tile labels wrap to two lines instead of ellipsising ("ROLL GRADIE…")', () => {
+  const r = rule(CSS, '.cb-stat-label');
+  assert.ok(r, '.cb-stat-label rule');
+  assert.match(r, /-webkit-line-clamp:\s*2/);
+  assert.doesNotMatch(r, /white-space:\s*nowrap/);
+});
