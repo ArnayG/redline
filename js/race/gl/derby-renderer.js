@@ -1509,10 +1509,16 @@ CB.derby = CB.derby || {};
       rig.pos = lerp3(rig.pos, pos, 1 - Math.exp(-14 * dt));
       var cy = Math.cos(rig.yaw), sy = Math.sin(rig.yaw), fwd = [cy, 0, -sy];
       var spd = Math.abs(num(c.speed, 0));
-      var shk = Q.shake && R.shakeA > 0.001 ? R.shakeA : 0;
-      var sh = shk ? [Math.sin(R.time * 53) * shk * 0.22, Math.sin(R.time * 61 + 1) * shk * 0.16, Math.sin(R.time * 47 + 2) * shk * 0.22] : [0, 0, 0];
-      R.shakeA = Math.max(0, R.shakeA - dt * 2.2);
-      R.fovKick = Math.max(0, R.fovKick - dt * 18);
+      // trauma shake: amplitude ~ trauma^2 (taps barely register, big hits jolt), smooth multi-sine noise rather than a
+      // buzzing single frequency, a little camera roll; decays in well under a second
+      var tr = Q.shake ? Math.min(1, R.shakeA / 1.6) : 0, amp = tr * tr, sh = [0, 0, 0];
+      if (amp > 1e-4) {
+        var T = R.time;
+        sh = [(Math.sin(T * 21.3) + 0.6 * Math.sin(T * 34.9 + 1.7)) * 0.11 * amp, (Math.sin(T * 25.7 + 0.4) + 0.5 * Math.sin(T * 41.3 + 2.2)) * 0.08 * amp, (Math.sin(T * 19.1 + 2.9) + 0.6 * Math.sin(T * 37.1 + 0.8)) * 0.11 * amp];
+        R.shakeRoll = (Math.sin(T * 17.3 + 0.3) + 0.5 * Math.sin(T * 29.9)) * 0.022 * amp;
+      } else R.shakeRoll = 0;
+      R.shakeA = Math.max(0, R.shakeA - dt * 2.4);
+      R.fovKick = Math.max(0, R.fovKick - dt * 14);
       var fovT = 62 + clamp01((spd - 10) / 30) * 8 + (c.boosting ? 7 : 0);
       R.fov += (fovT - R.fov) * (1 - Math.exp(-dt * 4));
       var fov = R.fov + R.fovKick;
@@ -1531,6 +1537,7 @@ CB.derby = CB.derby || {};
         if (eye[1] < ey + 1.2) eye[1] = ey + 1.2;
         // directional jolt (kick) springs back
         eye = add(eye, R.ko); tgt = add(tgt, mul(R.ko, 0.35));
+        if (R.shakeRoll) { var fw0 = norm(sub(tgt, eye)); up = rotAxis(up, fw0, R.shakeRoll); }
         return setCam(add(eye, sh), tgt, up, fov, aspect);
       }
       if (R.mode === 'hood') {
@@ -1589,9 +1596,17 @@ CB.derby = CB.derby || {};
               if (ev.type === 'impact') addScrape(ex, cx, num(ev.x, cx.x), num(ev.y, cx.y), num(ev.z, cx.z + 0.6));
             });
             if (ev.type === 'wall' && c) addScrape(e, c, num(ev.x, c.x), num(ev.y, c.y), num(ev.z, c.z + 0.6));
+            if (ev.big) R.excite = Math.min(1, num(R.excite, 0) + 0.35);
             if (involved) {
+              // who hit whom: a quick ring on the floor at the contact, red when the followed car took the hit,
+              // warm white when it dealt it (same convention as the HUD flash)
+              if ((ev.big || k > 0.9) && ev.type === 'impact' && !lowI) {
+                var gyH = groundAt(p[0], p[2]), victim = ev.otherId === focus;
+                R.rings.push({ p: [p[0], gyH + 0.05, p[2]], t: 0, dur: 0.45, r: 1.6 + k * 0.6, col: victim ? [2.4, 0.22, 0.12] : [2.2, 1.6, 0.9],
+                  mat: { color: [1, 1, 1, 1], unlit: true, additive: true, transparent: true, depthWrite: false, castShadow: false, doubleSided: true, polygonOffset: [-2, -4] } });
+              }
               R.shakeA = Math.min(2, R.shakeA + clamp(en / 40000, 0.15, 1.5));
-              if (ev.big) R.fovKick = Math.min(12, R.fovKick + 7);
+              if (ev.big) R.fovKick = Math.min(6, R.fovKick + 4);
               // directional jolt: the victim is shoved along the hit normal, the attacker bounces back a little
               if (ev.nx != null) api.kick(focus === ev.otherId ? ev.nx : -ev.nx, focus === ev.otherId ? ev.ny : -ev.ny, clamp(en / 60000, 0.1, 1.2) * (focus === ev.otherId ? 1 : 0.5));
             }
@@ -1613,7 +1628,7 @@ CB.derby = CB.derby || {};
             break;
           }
           case 'hammer':
-            if (!ev.miss) { var hp = e && e.hammerHead ? e.hammerHead : p; sparks(hp, 30, [0, 0, 0], [5, 3, 1, 1], 9); flashSprite(hp, 1.1, 0.12); if (involved) { R.shakeA = Math.min(1.6, R.shakeA + 0.8); R.fovKick = 8; } }
+            if (!ev.miss) { var hp = e && e.hammerHead ? e.hammerHead : p; sparks(hp, 30, [0, 0, 0], [5, 3, 1, 1], 9); flashSprite(hp, 1.1, 0.12); if (involved) { R.shakeA = Math.min(1.6, R.shakeA + 0.8); R.fovKick = Math.max(R.fovKick, 5); } }
             break;
           case 'launch': puff(p, 10, [0.55, 0.5, 0.45, 0.5], 1.0, 2, 1.4); sparks(p, 16, vel, null, 6); if (involved) R.shakeA = Math.min(1.6, R.shakeA + 0.6); break;
           case 'land': puff(p, Math.round(clamp(en, 4, 12)), [0.55, 0.5, 0.45, 0.45], 0.9, 1, 1.2); if (involved) R.shakeA = Math.min(1.6, R.shakeA + 0.3); break;
@@ -1643,10 +1658,10 @@ CB.derby = CB.derby || {};
             if (c && e) { debris('hood', add(p, [0, 0.6, 0]), [(rnd() - 0.5) * 6, 9 + rnd() * 5, (rnd() - 0.5) * 6], MAT.charred, num(e.dims && e.dims.W, 1.9) / 1.9); }
             flashSprite(add(p, [0, 0.6, 0]), 2.6, 0.16, [4.5, 3.2, 1.8, 0.9]);
             addDecal(p[0], p[2], 2.4 + rnd(), [0.012, 0.011, 0.01, 0.8], 1.2);   // scorched ground
-            R.boom = { p: p.slice(), t: 0 };
+            R.boom = { p: p.slice(), t: 0 }; R.excite = 1;
             if (e) e.boomT = 0;
             var fd = byId[focus];
-            if (involved || (c && fd && Math.hypot(c.x - fd.x, c.y - fd.y) < 28)) { R.shakeA = Math.min(2.2, R.shakeA + 1.5); R.fovKick = 12; if (fd && c) api.kick(fd.x - c.x, fd.y - c.y, 1.2); }
+            if (involved || (c && fd && Math.hypot(c.x - fd.x, c.y - fd.y) < 28)) { R.shakeA = Math.min(2.2, R.shakeA + 1.5); R.fovKick = Math.max(R.fovKick, 6); if (fd && c) api.kick(fd.x - c.x, fd.y - c.y, 1.2); }
             break;
           }
           case 'part-off':
@@ -1781,7 +1796,9 @@ CB.derby = CB.derby || {};
         }
         carFx(cc, ce, fr, dt, dcam, byId, poses);
       }
-      // arena + dynamic world bits
+      // arena + dynamic world bits (the crowd bounces, harder for a while after crashes and explosions)
+      R.excite = Math.max(0, num(R.excite, 0) - dt * 0.35);
+      if (world.animateCrowd && R.quality !== 'low') world.animateCrowd(R.time, R.excite);
       for (i = 0; i < world.items.length; i++) { main.push(world.items[i]); if (world.items[i].castShadow) casters.push(world.items[i]); }
       worldDynamic(snap, byId, poses, dt);
       if (typeof world.dynamicItems === 'function') {
@@ -2074,7 +2091,7 @@ CB.derby = CB.derby || {};
         var rg = R.rings[r2]; rg.t += dt;
         if (rg.t > rg.dur) { R.rings.splice(r2, 1); continue; }
         var u = rg.t / rg.dur, rr = rg.r * (1 - Math.pow(1 - u, 2.4)), fa = (1 - u) * (1 - u);
-        rg.mat.color[0] = 1.5 * fa; rg.mat.color[1] = 0.75 * fa; rg.mat.color[2] = 0.28 * fa; rg.mat.color[3] = fa;
+        var rc = rg.col || [1.5, 0.75, 0.28]; rg.mat.color[0] = rc[0] * fa; rg.mat.color[1] = rc[1] * fa; rg.mat.color[2] = rc[2] * fa; rg.mat.color[3] = fa;
         var ri = dyn(SH.ring, rg.mat);
         setTRS(ri.model, rg.p, [1, 0, 0], [0, 1, 0], [0, 0, 1], rr, 1, rr);
       }
@@ -2116,7 +2133,7 @@ CB.derby = CB.derby || {};
       /** directional jolt in SIM ground coords (dirX, dirY) — the camera is shoved that way and springs back */
       kick: function (dx, dy, amt) {
         var l = Math.hypot(num(dx, 0), num(dy, 0)); if (!(l > 1e-6)) return;
-        var a = clamp(num(amt, 0.5), 0, 2) * (Q.shake ? 1 : 0.4) * 9;
+        var a = clamp(num(amt, 0.5), 0, 1.4) * (Q.shake ? 1 : 0.4) * 5;
         R.kv[0] += dx / l * a; R.kv[2] += -dy / l * a; R.kv[1] += a * 0.25;
       },
       /** replay camera: {targetId?, focus [x, y, z] sim?, orbit (default true), dur s?, dist, height, fov, angle}; null ends */
