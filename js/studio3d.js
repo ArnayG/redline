@@ -334,7 +334,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     isOrbiting: isOrbiting,
     VIEWS: VIEWS, VIEW_IDS: VIEW_IDS, viewAngles: viewAngles, shortestYaw: shortestYaw, fitDistance: fitDistance, geomSig: geomSig,
     buildKey: buildKey, parseCssColor: parseCssColor, xrPal: xrPal, xrayLayout: xrayLayout, featureEdges: featureEdges, wheelLocal: wheelLocal,
-    easeInOut: easeInOut, motorSplit: motorSplit
+    easeInOut: easeInOut, motorSplit: motorSplit, stageDpr: function (cw, ch, dev) { return stageDpr(cw, ch, dev); }
   };
 
   /* ======================================================================
@@ -344,6 +344,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   var FOV_FREE = 27 * DEG;           // vertical FOV of the free stage region (long lens = product-shot look)
   var AUTO_SPEED = 7;                // deg / s
   var IDLE_RESUME = 6000;            // ms of no interaction before the turntable resumes
+  var PX_BUDGET = 3.2e6;             // drawing-buffer pixels (2x of a 1265 x 632 stage)
   var SPIN_MAX = 15.7;               // rad / s (~2.5 rev/s, like the SVG viewer)
   var st = null;
   var supportCache = null;
@@ -391,13 +392,17 @@ var CB = (globalThis.CB = globalThis.CB || {});
   ].join('\n');
   var FLOOR_FS = [
     'varying vec3 vW;',
-    'uniform float uMode;',          // 0 = reflection erase, 1 = floor (pool + grid + contact shadow)
+    'uniform float uMode;',          // 0 = reflection erase (WebGL fallback path), 1 = floor (reflection + pool + grid + contact shadow)
     'uniform vec4 uFoot;',           // half length, half width, centre x, reflection strength
     'uniform vec4 uWheel[4];',       // x, z, radius x, radius z
     'uniform vec4 uShadow;',         // rgb, strength
     'uniform vec4 uGrid;',           // rgb (sRGB), alpha
     'uniform vec4 uPool;',           // rgb, alpha
     'uniform vec2 uGridOff;',
+    'uniform vec4 uEye;',            // camera position xyz, 1 = blurred reflection textures bound
+    'uniform vec2 uInvRes;',         // 1 / drawing buffer size
+    'uniform sampler2D uRefl;',      // mirrored car, half res
+    'uniform sampler2D uReflBlur;',  // same, blurred (quarter res)
     'float sdBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }',
     'void main() {',
     '  vec2 p = vW.xz - vec2(uFoot.z, 0.0);',
@@ -407,30 +412,59 @@ var CB = (globalThis.CB = globalThis.CB || {});
     '    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 - keep);',
     '    return;',
     '  }',
-    '  float s = 0.34 * (1.0 - smoothstep(-0.4, 1.5, d)) + 0.5 * (1.0 - smoothstep(-0.45, 0.22, d));',
+    // contact shadow: a wide soft penumbra, a tight occlusion core under the sills and a dark patch under every tyre
+    '  float s = 0.3 * (1.0 - smoothstep(-0.5, 1.7, d)) + 0.45 * (1.0 - smoothstep(-0.5, 0.16, d)) + 0.22 * (1.0 - smoothstep(-0.25, 0.02, d));',
     '  for (int i = 0; i < 4; i++) {',
     '    vec2 q = (vW.xz - uWheel[i].xy) / max(uWheel[i].zw, vec2(0.01));',
-    '    s += 0.5 * (1.0 - smoothstep(0.15, 1.0, length(q)));',
+    '    float l = length(q);',
+    '    s += 0.35 * (1.0 - smoothstep(0.2, 1.05, l)) + 0.55 * (1.0 - smoothstep(0.05, 0.42, length(q * vec2(1.35, 1.0))));',
     '  }',
-    '  s = clamp(s * uShadow.w, 0.0, 0.92);',
+    '  s = clamp(s * uShadow.w, 0.0, 0.94);',
     '  float r = length(vW.xz * vec2(0.62, 1.0));',
     '  float pool = uPool.a * (1.0 - smoothstep(0.0, 5.2, r));',
     '  vec2 g = vW.xz + uGridOff;',
     '  vec2 gd = abs(fract(g - 0.5) - 0.5);',
     '#ifdef HAS_DERIVATIVES',
     '  vec2 fw = max(fwidth(g), vec2(1e-4));',
-    '  vec2 lw = 1.0 - smoothstep(fw * 0.6, fw * 1.6, gd);',
-    '  float fade = 1.0 - smoothstep(0.08, 0.35, max(fw.x, fw.y));',
+    '  vec2 lw = 1.0 - smoothstep(fw * 0.5, fw * 1.5, gd);',
+    '  float fade = 1.0 - smoothstep(0.05, 0.22, max(fw.x, fw.y));',
     '#else',
     '  vec2 lw = 1.0 - smoothstep(0.006, 0.02, gd);',
     '  float fade = 1.0;',
     '#endif',
-    '  float grid = uGrid.a * max(lw.x, lw.y) * fade * (1.0 - smoothstep(1.6, 7.0, r));',
-    '  vec3 col = uPool.rgb * pool + uGrid.rgb * grid;',
-    '  float a = clamp(pool + grid, 0.0, 1.0);',
+    '  float grid = uGrid.a * max(lw.x, lw.y) * fade * (1.0 - smoothstep(1.4, 6.2, r));',
+    '  vec3 col = vec3(0.0); float a = 0.0;',
+    '  if (uEye.w > 0.5) {',
+    // glossy floor: depth of the reflected point below the floor ~ distance still to travel to the car footprint times the
+    // view ray's slope; reflections are crisp at the tyres and sills and blur + fade towards the mirrored roof
+    '    float hz = max(d, 0.0) * uEye.y / max(length(vW.xz - uEye.xz), 0.25);',
+    '    vec2 suv = gl_FragCoord.xy * uInvRes;',
+    '    vec4 rs = texture2D(uRefl, suv), rb = texture2D(uReflBlur, suv);',
+    '    vec4 rf = mix(rb, rs, (1.0 - smoothstep(0.02, 0.32, hz)) * 0.75);',
+    '    float rk = uFoot.w * (1.0 - smoothstep(0.0, 1.6, hz)) * (1.0 - smoothstep(4.0, 9.0, r));',
+    '    col = rf.rgb * rk; a = rf.a * rk;',
+    '  }',
+    '  col = col * (1.0 - pool) + uPool.rgb * pool; a = a * (1.0 - pool) + pool;',
+    '  col = col * (1.0 - grid) + uGrid.rgb * grid; a = a * (1.0 - grid) + grid;',
+    // the shadow darkens the floor; over the reflection it only half applies (the mirrored sills / tyres are already dark)
+    '  vec3 base = col; float ba = a;',
     '  col = col * (1.0 - s) + uShadow.rgb * s;',
     '  a = a * (1.0 - s) + s;',
+    '  col = mix(col, base * (1.0 - s * 0.5) + uShadow.rgb * s * 0.5 * (1.0 - ba), ba * 0.6);',
+    '  a = mix(a, ba * (1.0 - s * 0.5) + s * 0.5 * (1.0 - ba) + s * 0.5, ba * 0.6);',
     '  gl_FragColor = vec4(col, a);',
+    '}'
+  ].join('\n');
+  // 9-tap Gaussian in 5 bilinear fetches (separable: run once along x, once along y)
+  var BLUR_FS = [
+    'varying vec2 vUv;',
+    'uniform sampler2D uTex;',
+    'uniform vec2 uDir;',
+    'void main() {',
+    '  vec4 c = texture2D(uTex, vUv) * 0.2270270270;',
+    '  c += (texture2D(uTex, vUv + uDir * 1.3846153846) + texture2D(uTex, vUv - uDir * 1.3846153846)) * 0.3162162162;',
+    '  c += (texture2D(uTex, vUv + uDir * 3.2307692308) + texture2D(uTex, vUv - uDir * 3.2307692308)) * 0.0702702703;',
+    '  gl_FragColor = c;',
     '}'
   ].join('\n');
   var COPY_VS = [
@@ -456,10 +490,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var spot = v('--studio-spot', light ? 'rgba(255,255,255,.95)' : 'rgba(201,165,107,.13)');
     return {
       theme: theme, pal: xrPal(theme),
-      grid: [grid[0], grid[1], grid[2], Math.min(0.35, grid[3] * 1.3)],
+      grid: [grid[0], grid[1], grid[2], Math.min(0.24, grid[3] * 0.85)],
       pool: [spot[0], spot[1], spot[2], Math.min(0.6, spot[3] * (light ? 0.35 : 0.9))],
       shadow: light ? [0.2, 0.16, 0.08, 0.62] : [0, 0, 0, 0.95],
-      refl: light ? 0.12 : 0.18,
+      refl: light ? 0.26 : 0.42,
       env: light ? {
         ambientSky: [0.5, 0.52, 0.56], ambientGround: [0.24, 0.23, 0.2], envTop: [0.45, 0.5, 0.6], envHorizon: [0.72, 0.72, 0.7], envBottom: [0.3, 0.29, 0.26],
         sun: [1.35, 1.3, 1.18], rim: [1.4, 1.5, 1.7], fill: [0.35, 0.35, 0.37], exposure: 0.92,
@@ -536,6 +570,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var ctx = st.ctx;
     st.progFloor = G.createProgram(ctx, FLOOR_VS, FLOOR_FS, { name: 'studio-floor' });
     st.progCopy = G.createProgram(ctx, COPY_VS, COPY_FS, { name: 'studio-copy' });
+    try { st.progBlur = G.createProgram(ctx, COPY_VS, BLUR_FS, { name: 'studio-blur' }); } catch (e) { st.progBlur = null; }
+    st.rt = null; st.rtFailed = !st.progBlur || typeof G.createRenderTarget !== 'function';
     var S = 40;
     st.floorMesh = G.createMesh(ctx, { positions: new Float32Array([-S, 0, -S, S, 0, -S, S, 0, S, -S, 0, S]), indices: new Uint16Array([0, 2, 1, 0, 3, 2]) }, { computeNormals: false });
     st.triMesh = G.createMesh(ctx, { positions: new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]) }, { computeNormals: false });
@@ -551,6 +587,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
       try { if (st.floorMesh) st.floorMesh.destroy(); if (st.triMesh) st.triMesh.destroy(); } catch (e) { /* ignore */ }
       try { if (st.snapTex) st.gl.deleteTexture(st.snapTex); } catch (e2) { /* ignore */ }
     }
+    if (st.rt && !lost) { ['a', 'b', 'c'].forEach(function (k) { try { st.rt[k].destroy(); } catch (e5) { /* ignore */ } }); }
+    st.rt = null;
     if (st.probe && !lost) { try { st.probe.destroy(); } catch (e3) { /* ignore */ } }
     st.probe = null; st.probeKey = ''; st.probeFailed = false;
     st.floorMesh = st.triMesh = st.snapTex = null; st.fade = null;
@@ -1131,7 +1169,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
 
   /* ---------------- render */
   function useProg(prog) { st.gl.useProgram(prog.program); return prog.u; }
-  function drawFloor(cam, mode) {
+  function drawFloor(cam, mode, R) {
     var gl = st.gl, en = st.car, u = useProg(st.progFloor), d = en.r.dims, T = st.theme;
     gl.uniformMatrix4fv(u.uViewProj, false, cam.viewProj);
     gl.uniform1f(u.uMode, mode);
@@ -1145,18 +1183,75 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
     if (u.uWheel) gl.uniform4fv(u.uWheel, arr);
     else if (u['uWheel[0]']) gl.uniform4fv(u['uWheel[0]'], arr);
-    var xr = st.xray, sh = T.shadow;
+    var xr = st.xray, sh = T.shadow, photo = st.photo;
     gl.uniform4f(u.uShadow, sh[0], sh[1], sh[2], sh[3] * (xr ? 0.45 : 1));
-    gl.uniform4f(u.uGrid, T.grid[0], T.grid[1], T.grid[2], xr ? 0 : T.grid[3]);
+    gl.uniform4f(u.uGrid, T.grid[0], T.grid[1], T.grid[2], xr || (photo && !st.spin.on) ? 0 : T.grid[3]);
     gl.uniform4f(u.uPool, T.pool[0], T.pool[1], T.pool[2], xr ? T.pool[3] * 0.4 : T.pool[3]);
     gl.uniform2f(u.uGridOff, st.spin.travel, 0);
+    var ey = cam.position;
+    if (u.uEye) gl.uniform4f(u.uEye, ey[0], Math.max(0.05, ey[1]), ey[2], R && mode > 0.5 ? 1 : 0);
+    if (u.uInvRes) gl.uniform2f(u.uInvRes, 1 / gl.drawingBufferWidth, 1 / gl.drawingBufferHeight);
+    if (R && mode > 0.5) {
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, R.a.tex);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, R.c.tex);
+      if (u.uRefl) gl.uniform1i(u.uRefl, 1);
+      if (u.uReflBlur) gl.uniform1i(u.uReflBlur, 2);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.disable(gl.DEPTH_TEST); gl.depthMask(false); gl.disable(gl.CULL_FACE);
     gl.enable(gl.BLEND);
     if (mode < 0.5) gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
     else gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     st.floorMesh.bind(); st.floorMesh.drawRaw();
     unbind();
+    if (R && mode > 0.5) {
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+  }
+  /** half-res mirrored-car target + a quarter-res blur pair; null -> the WebGL1-safe path (mirrored car drawn straight
+      onto the canvas and erased with distance) */
+  function reflTargets(w, h) {
+    if (st.rtFailed) return null;
+    var hw = Math.max(2, Math.round(w / 2)), hh = Math.max(2, Math.round(h / 2)), qw = Math.max(2, Math.round(w / 4)), qh = Math.max(2, Math.round(h / 4));
+    try {
+      if (!st.rt) st.rt = { a: G.createRenderTarget(st.ctx, hw, hh, { depth: true }), b: G.createRenderTarget(st.ctx, qw, qh, { depth: false }), c: G.createRenderTarget(st.ctx, qw, qh, { depth: false }) };
+      st.rt.a.resize(hw, hh); st.rt.b.resize(qw, qh); st.rt.c.resize(qw, qh);
+      if (!st.rt.a.ok || !st.rt.b.ok || !st.rt.c.ok) throw new Error('reflection target incomplete');
+    } catch (e) {
+      st.rtFailed = true;
+      if (st.rt) ['a', 'b', 'c'].forEach(function (k) { try { if (st.rt[k]) st.rt[k].destroy(); } catch (e2) { /* ignore */ } });
+      st.rt = null;
+      return null;
+    }
+    return st.rt;
+  }
+  function blurPass(src, dst, dx, dy) {
+    var gl = st.gl, u = useProg(st.progBlur);
+    dst.bind();
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
+    gl.uniform1i(u.uTex, 0); gl.uniform2f(u.uDir, dx / src.w, dy / src.h);
+    gl.disable(gl.DEPTH_TEST); gl.depthMask(false); gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
+    st.triMesh.bind(); st.triMesh.drawRaw();
+    unbind();
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+  /** the mirrored car into the half-res target, then a two-level separable blur into the quarter-res pair */
+  function renderReflection(cam, w, h) {
+    var R = reflTargets(w, h);
+    if (!R) return null;
+    var gl = st.gl;
+    R.a.bind();
+    gl.clearColor(0, 0, 0, 0); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    G.drawList(st.ctx, st.car.refl, cam, envFor(true));
+    blurPass(R.a, R.b, 1, 0); blurPass(R.b, R.c, 0, 1);
+    blurPass(R.c, R.b, 2.2, 0); blurPass(R.b, R.c, 0, 2.2);
+    R.a.unbind();
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+    return R;
   }
   function unbind() { var ctx = st.ctx; if (ctx.ext && ctx.ext.vao && ctx.bindVAO) ctx.bindVAO(null); }
   function drawSnapshot(alpha) {
@@ -1172,10 +1267,16 @@ var CB = (globalThis.CB = globalThis.CB || {});
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
   }
+  /** drawing-buffer scale: at least 2x (supersampled on 1x screens: MSAA + a 2:1 downscale by the compositor kills
+      the stair-stepping on the faceted silhouettes), within a pixel budget so big viewports stay cheap */
+  function stageDpr(cw, ch, dev) {
+    var dpr = clamp(Math.max(2, num(dev, 1)), 1, 2), px = Math.max(1, cw * ch);
+    if (px * dpr * dpr > PX_BUDGET) dpr = Math.max(Math.min(1, num(dev, 1)), Math.sqrt(PX_BUDGET / px));
+    return dpr;
+  }
   function resize() {
-    var c = st.canvas, cw = c.clientWidth, ch = c.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (cw * ch * dpr * dpr > 2.6e6) dpr = Math.max(1, Math.sqrt(2.6e6 / (cw * ch)));
-    st.ctx.resize(cw, ch, dpr);
+    var c = st.canvas, cw = c.clientWidth, ch = c.clientHeight;
+    st.ctx.resize(cw, ch, stageDpr(cw, ch, window.devicePixelRatio || 1) * (st.photoScale || 1));
   }
   /** render one frame. snapOnly = the "before" frame of a cross-fade (no state changes). */
   function render(t, snapOnly) {
@@ -1191,12 +1292,16 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (en) {
       cam = cameraFor(w, h);
       poseEntry(en);
-      var xr = st.xray;
+      var xr = st.xray, R = null;
       if (!xr && st.theme.refl > 0) {
-        G.drawList(st.ctx, en.refl, cam, envFor(true));
-        drawFloor(cam, 0);
+        R = renderReflection(cam, w, h);
+        if (!R) {
+          gl.viewport(0, 0, w, h);
+          G.drawList(st.ctx, en.refl, cam, envFor(true));
+          drawFloor(cam, 0, null);
+        }
       }
-      drawFloor(cam, 1);
+      drawFloor(cam, 1, R);
       gl.clear(gl.DEPTH_BUFFER_BIT);
       var env = envFor(false);
       if (xr) {
@@ -1241,6 +1346,29 @@ var CB = (globalThis.CB = globalThis.CB || {});
       triangles: en ? en.tris : 0, model: en && en.r.model ? en.r.model.id : null, auto: autoActive(nowMs()), cam: { yaw: st.cam.yaw, pitch: st.cam.pitch, distK: st.cam.distK },
       orbit: !!st.orbit, resumeIn: Math.round(st.auto.resumeAt - nowMs()), autoOn: st.auto.on, fading: !!st.fade, webgl2: !!st.ctx.isWebGL2, dpr: st.ctx.dpr, reduceMotion: st.reduce
     };
+  }
+
+  /**
+   * Debug frame-time probe: renders n frames back to back (camera orbiting, wheels spinning) and waits for the GPU
+   * after each one (a 1-pixel readPixels), so the figures are CPU + GPU per frame. -> {frames, avgMs, p50, p95, w, h, dpr}
+   */
+  function bench(n) {
+    if (!st || !st.car) return null;
+    n = clamp(Math.round(num(n, 60)), 1, 600);
+    var gl = st.gl, px = new Uint8Array(4), times = [], t = nowMs(), yaw0 = st.cam.yaw, spin0 = st.spin.speed;
+    st.spin.speed = SPIN_MAX;
+    for (var i = 0; i < n; i++) {
+      var t0 = nowMs();
+      st.cam.yaw = yaw0 + i * 3;
+      st.spin.angle -= 0.2;
+      render(t + i * 16);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      times.push(nowMs() - t0);
+    }
+    st.cam.yaw = yaw0; st.spin.speed = spin0; st.dirty = true; wake();
+    var sorted = times.slice().sort(function (a, b) { return a - b; }), sum = 0;
+    times.forEach(function (v) { sum += v; });
+    return { frames: n, avgMs: +(sum / n).toFixed(2), p50: +sorted[n >> 1].toFixed(2), p95: +sorted[Math.min(n - 1, Math.floor(n * 0.95))].toFixed(2), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: st.ctx.dpr };
   }
 
   /**
@@ -1297,6 +1425,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     isMounted: function (container) { return !!(st && (!container || st.host === container) && st.host.contains(st.canvas)); },
     destroy: destroy,
     stats: stats,
+    bench: bench,
     _: _
   };
 })();
