@@ -1589,11 +1589,18 @@ var CB = (globalThis.CB = globalThis.CB || {});
           emitPart(B, p, P3, sz, f, dx, dy, mx, null, arches);
           return;
         }
-        if (lowOwn[p.mat]) return;
-        if ((p.t === 'poly3' || p.t === 'poly') && (p.mat === 'light' || p.mat === 'tail')) {
+        var lm = p.mat === 'drl' ? 'light' : p.mat;   // DRL graphics belong to the head lamp cluster (one low quad)
+        if (lowOwn[lm]) return;
+        if ((p.t === 'poly3' || p.t === 'poly') && (lm === 'light' || lm === 'tail')) {
           (p.t === 'poly' && p.mirror ? [1, -1] : [1]).forEach(function (sg) {
-            var key = p.mat + (p.pts[0][2] * sg >= 0 ? 'R' : 'L'), L = lowLamps[key] || (lowLamps[key] = { mat: p.mat, pts: [] });
-            p.pts.forEach(function (q) { L.pts.push(P3([q[0], q[1], q[2] * sg])); });
+            var pts = p.pts.map(function (q) { return P3([q[0], q[1], q[2] * sg]); }), nn = polyNormal(pts), l = len(nn);
+            if (!(l > 1e-9)) return;
+            nn = scl(nn, 1 / l);   // (facing test only)
+            var fx = lm === 'light' ? 1 : -1, want = p.n ? [p.n[0], p.n[1], p.n[2] * sg] : [fx, 0, 0];
+            if (dot(nn, want) < 0) nn = scl(nn, -1);
+            if (nn[0] * fx < -0.2) return;   // a lamp facing the other way (cargo / bed lamp): not this end's lamp
+            var L = lowLamps[lm] || (lowLamps[lm] = []);
+            L.push({ pts: pts, area: l / 2 });
           });
         }
         return;
@@ -1612,12 +1619,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
         lampAcc[p.mat].push(scl(c0, 1 / p.pts.length));
       }
     });
-    Object.keys(lowLamps).forEach(function (k) {   // low LOD: one flat quad per lamp, at the lamp's front-most point
-      var L = lowLamps[k], lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-      L.pts.forEach(function (q) { for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], q[c]); hi[c] = Math.max(hi[c], q[c]); } });
-      var fr = L.mat === 'light', x = fr ? hi[0] + 0.01 : lo[0] - 0.01, s = fr ? 1 : -1;
-      B.poly(L.mat, [[x, lo[1], lo[2]], [x, lo[1], hi[2]], [x, hi[1], hi[2]], [x, hi[1], lo[2]]], [s, 0, 0]);
-    });
+    // low LOD: one flat quad per lamp CLUSTER, draped onto the low nose / tail (lowLampQuads). One box over every
+    // lamp piece of a side made slabs: fog lamps + headlamp + a bonnet / roof marker became one tall plate standing
+    // proud of a raked nose (far cars, glowing at night).
+    Object.keys(lowLamps).forEach(function (mat) { lowLampQuads(B, mat, lowLamps[mat], Sh); });
     // ---- build-driven extras on the fitted shell
     if (MP) MP.stalks.forEach(function (bx) { [1, -1].forEach(function (sg) { emitBox(B, 'mirror', [bx.c[0], bx.c[1], bx.c[2] * sg], bx.s, 0); }); });
     if (!low) extras(B, S, Sh, f, model, dx, dy, mx, anchors, exhaustTips(def, f, sz, dy));
@@ -1733,8 +1738,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
       stays planar (x re-solved on its own plane) and the whole piece slides along x until it just clears the low
       surface everywhere (no lamp floating behind a raked tail or sunk inside it). Other decals: null (emit as is). */
   function fitLowDecal(pts, hint, Sh) {
-    var nn = polyNormal(pts);
-    if (!(Math.abs(nn[0]) > 0.5) || pts.length < 3) return null;
+    var nn = polyNormal(pts), nl = len(nn);
+    if (!(nl > 1e-12) || pts.length < 3) return null;
+    nn = scl(nn, 1 / nl);   // (Newell vector: its length is twice the area, so small decals failed the facing test)
+    if (!(Math.abs(nn[0]) > 0.5)) return null;
     var rear = hint ? hint[0] < 0 : nn[0] < 0, hitX = rear ? Sh.rearX : Sh.frontX, D = dot(nn, pts[0]);
     var out = pts.map(function (q) {
       var y = q[1], z = q[2], sg = z < 0 ? -1 : 1;
@@ -1755,6 +1762,81 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (worst === null) return out;
     var d = (worst + 0.006) * (rear ? -1 : 1);
     return out.map(function (q) { return [q[0] + d, q[1], q[2]]; });
+  }
+  /** low-LOD lamp quads from the high-LOD lamp pieces [{pts, area}] of one material (DRLs count as head lamps):
+      pieces whose boxes come within 3 cm in height (8 cm fore-aft, 20 cm across) merge into clusters (a row of
+      twin eyes is one lamp, fog lamps below are another). Each cluster's front / rear-view rectangle is draped onto
+      the low nose / tail corner by corner: pulled in past the silhouette, and down (up to 12 cm) where the coarser
+      low bonnet runs under a lamp on a raised wing top. Clusters under 15 % of the side's largest (markers,
+      repeaters) are dropped, at most 2 kept per side; a side whose lamp finds no surface keeps the plain plate. */
+  function lowLampQuads(B, mat, pieces, Sh) {
+    var fr = mat === 'light', E = [0.08, 0.03, 0.2];   // merge gaps x / y / z: a lamp row (twin eyes) is one cluster
+    pieces.forEach(function (q) {
+      var lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      q.pts.forEach(function (v) { for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], v[c]); hi[c] = Math.max(hi[c], v[c]); } });
+      q.lo = lo; q.hi = hi;
+    });
+    var par = pieces.map(function (q, i) { return i; });
+    function root(i) { while (par[i] !== i) i = par[i] = par[par[i]]; return i; }
+    for (var i = 0; i < pieces.length; i++) for (var j = i + 1; j < pieces.length; j++) {
+      var a = pieces[i], b = pieces[j], hit = true;
+      for (var c = 0; c < 3 && hit; c++) if (a.lo[c] > b.hi[c] + E[c] || b.lo[c] > a.hi[c] + E[c]) hit = false;
+      if (hit && (a.lo[2] + a.hi[2]) * (b.lo[2] + b.hi[2]) >= 0) par[root(i)] = root(j);   // never across the centre line
+    }
+    var cl = {};
+    pieces.forEach(function (q, k) { var r = root(k); (cl[r] = cl[r] || []).push(q); });
+    var hitX = fr ? Sh.frontX : Sh.rearX, sx = fr ? 1 : -1;
+    var quads = Object.keys(cl).map(function (r) {
+      var L = cl[r], A = 0, lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      L.forEach(function (q) { A += q.area; for (var c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], q.lo[c]); hi[c] = Math.max(hi[c], q.hi[c]); } });
+      if (!(hi[1] - lo[1] > 0.005 && hi[2] - lo[2] > 0.005)) return null;
+      return { lo: lo, hi: hi, area: A, side: lo[2] + hi[2] >= 0 ? 1 : -1 };
+    }).filter(Boolean);
+    // one corner of the front / rear-view rectangle onto the low nose / tail: pulled in to the silhouette edge, and
+    // down onto the surface where the coarser low bonnet / deck runs under a lamp on a raised wing top
+    function land(y, z, yMin, xRef) {
+      function okX(yy, zz) { var hx = hitX(yy, zz); return hx !== null && Math.abs(hx - xRef) <= 0.25 ? hx : null; }
+      function at(yy) {
+        var zz = z;
+        if (okX(yy, zz) === null && zz > 0.02) {   // past the (chamfered) silhouette corner: in to its edge
+          var a = 0, b = zz;
+          if (okX(yy, 0.01) === null) return null;
+          for (var k = 0; k < 12; k++) { var m = (a + b) / 2; if (okX(yy, m) !== null) a = m; else b = m; }
+          zz = a * 0.985;
+        }
+        var hx = okX(yy, zz);
+        return hx !== null ? [hx + sx * 0.006, yy, zz] : null;
+      }
+      var r = at(y);
+      if (r || y <= yMin) return r;
+      var lo2 = yMin, hi2 = y, best = at(yMin);
+      if (!best) return null;
+      for (var k = 0; k < 10; k++) { var m = (lo2 + hi2) / 2, t = at(m); if (t) { best = t; lo2 = m; } else hi2 = m; }
+      return best;
+    }
+    [1, -1].forEach(function (sd) {
+      var Q = quads.filter(function (q) { return q.side === sd; }).sort(function (a, b) { return b.area - a.area; });
+      if (!Q.length) return;
+      var top = Q[0].area, n = 0;
+      Q.forEach(function (q, k) {
+        if (n >= 2 || (k > 0 && q.area < top * 0.15)) return;
+        var zi = Math.min(Math.abs(q.lo[2]), Math.abs(q.hi[2])), zo = Math.max(Math.abs(q.lo[2]), Math.abs(q.hi[2]));
+        if (q.lo[2] < 0 && q.hi[2] > 0) zi = 0;   // a centre light bar
+        var xRef = fr ? q.hi[0] : q.lo[0], yMin = q.lo[1] - 0.12;   // may settle down onto a lower low bonnet
+        var C = [[q.lo[1], zi], [q.lo[1], zo], [q.hi[1], zo], [q.hi[1], zi]].map(function (c) { return land(c[0], c[1], yMin, xRef); });
+        var ok = C.filter(Boolean);
+        var pts;
+        if (ok.length >= 3) {
+          var xm = 0; ok.forEach(function (c) { xm += c[0]; }); xm /= ok.length;
+          pts = C.map(function (c, i) { return c || [xm, i < 2 ? q.lo[1] : q.hi[1], i === 1 || i === 2 ? zo : zi]; });
+        } else if (k === 0) {   // nothing to sit on: the plain lamp plate at the lamp's front-most point
+          pts = [[xRef + sx * 0.01, q.lo[1], zi], [xRef + sx * 0.01, q.lo[1], zo], [xRef + sx * 0.01, q.hi[1], zo], [xRef + sx * 0.01, q.hi[1], zi]];
+        } else return;
+        if (q.lo[2] + q.hi[2] < 0 || sd < 0) pts = pts.map(function (c) { return [c[0], c[1], -c[2]]; });
+        B.poly(mat, pts, [sx, 0, 0]);
+        n++;
+      });
+    });
   }
   /** low LOD stations: always the first and last, then greedily the station worst reproduced by interpolating
       between its kept neighbours, until n are kept and then up to `extra` more while a miss is over tolerance (5 cm,
