@@ -80,8 +80,9 @@ CB.gl = CB.gl || {};
   };
   /** flat ground rectangle (sim) at height z, facing up */
   Geo.prototype.flat = function (x0, x1, y0, y1, z, col, col2) {
-    var c2 = col2 || col;
-    var i0 = this.v(P(x0, y0, z), [0, 1, 0], col), i1 = this.v(P(x1, y0, z), [0, 1, 0], c2), i2 = this.v(P(x1, y1, z), [0, 1, 0], c2), i3 = this.v(P(x0, y1, z), [0, 1, 0], col);
+    var c2 = col2 || col, k = this.worldUV;   // worldUV (uv per metre): ground-grain map coordinates
+    function U(x, y) { return k ? [x * k, y * k] : null; }
+    var i0 = this.v(P(x0, y0, z), [0, 1, 0], col, U(x0, y0)), i1 = this.v(P(x1, y0, z), [0, 1, 0], c2, U(x1, y0)), i2 = this.v(P(x1, y1, z), [0, 1, 0], c2, U(x1, y1)), i3 = this.v(P(x0, y1, z), [0, 1, 0], col, U(x0, y1));
     this.i.push(i0, i1, i2, i0, i2, i3);
   };
   Geo.prototype.cyl = function (p0, p1, r0, r1, seg, col, caps) {
@@ -142,13 +143,13 @@ CB.gl = CB.gl || {};
   }
   /** Christmas tree bulb layout (pure). Rows top -> bottom; lane 0 = left (+y), lane 1 = right (-y). Facing -x. */
   var TREE_ROWS = [
-    { kind: 'preStage', z: 2.80, r: 0.055, pair: true },
-    { kind: 'stage', z: 2.64, r: 0.055, pair: true },
-    { kind: 'amber0', z: 2.40, r: 0.085 },
-    { kind: 'amber1', z: 2.18, r: 0.085 },
-    { kind: 'amber2', z: 1.96, r: 0.085 },
-    { kind: 'green', z: 1.72, r: 0.085 },
-    { kind: 'red', z: 1.48, r: 0.085 }
+    { kind: 'preStage', z: 2.80, r: 0.062, pair: true },
+    { kind: 'stage', z: 2.64, r: 0.062, pair: true },
+    { kind: 'amber0', z: 2.40, r: 0.096 },
+    { kind: 'amber1', z: 2.18, r: 0.096 },
+    { kind: 'amber2', z: 1.96, r: 0.096 },
+    { kind: 'green', z: 1.72, r: 0.096 },
+    { kind: 'red', z: 1.48, r: 0.096 }
   ];
   function treeLayout(treeX) {
     var x = num(treeX, 6) - 0.17, bulbs = [];
@@ -175,7 +176,7 @@ CB.gl = CB.gl || {};
 
   /* ---------------------------------------------------------------- palettes */
   var C = {
-    grass: hex('#5d8f3e'), grass2: hex('#6e9a45'), dirt: hex('#8a7556'), concrete: hex('#a7a59f'), concreteD: hex('#8e8c86'),
+    grass: hex('#5d8f3e'), grass2: hex('#6e9a45'), dirt: hex('#8a7556'), concrete: hex('#9d9b95'), concreteD: hex('#8e8c86'), pad: hex('#77756f'),
     asphalt: hex('#3b3c3f'), asphaltL: hex('#4a4b4e'), rubber: hex('#121212'), white: hex('#f2f2ee'), yellow: hex('#f3c613'),
     water: hex('#202428'), wall: hex('#d9d7d0'), wallStripe: hex('#d8262e'), steel: hex('#7c828a'), black: hex('#121315'),
     blue: hex('#1d4f9a'), red: hex('#c8202a'), sand: hex('#c9ad7c'), roof: hex('#b8bcc3'), seat: hex('#2a5fa8'), seat2: hex('#d6dadf'),
@@ -282,24 +283,42 @@ CB.gl = CB.gl || {};
     // apron around the start (paved) and the pits on the right
     groups.ground.flat(-90, 60, -60, WY + 0.4, -0.005, shade(C.asphalt, 1.15));
     groups.ground.flat(-90, 60, WY + 0.4, 10.2, -0.005, shade(C.concreteD, 0.9));
-    // surface: 10 m segments; staging lanes asphalt, launch pad concrete, then asphalt
+    // surface: 10 m segments; staging lanes asphalt, launch pad concrete (rubber-stained from the box on), then asphalt.
+    // A real prepped strip is dark at the line: the whole lane is grey-black with laid rubber and the two grooves are
+    // black, glossy with traction compound (VHT 'glue') for the first ~100 m, fading out by ~250 m.
     for (var x = X0; x < X1; x += 10) {
       var x2 = Math.min(X1, x + 10), mid = (x + x2) / 2;
-      var col = mid < -35 ? C.asphaltL : mid < 100 ? mix(C.concrete, C.concreteD, R() * 0.5) : mix(C.asphalt, C.asphaltL, R() * 0.4);
-      if (mid > 100 && mid < 130) col = mix(C.concreteD, C.asphalt, (mid - 100) / 30);
+      var col = mid < -35 ? C.asphaltL : mid < 100 ? mix(mid > -5 ? C.pad : C.concrete, C.concreteD, R() * 0.35) : mix(C.asphalt, C.asphaltL, R() * 0.4);
+      if (mid > 100 && mid < 130) col = mix(C.pad, C.asphalt, (mid - 100) / 30);
       sf.flat(x, x2, -WY, WY, 0, col);
     }
-    // rubber grooves: two tyre tracks per lane, darkest past the burnout box, fading out by ~250 m
+    var gl = groups.glue;
     for (var lane = 0; lane < 2; lane++) {
       var ly = lane === 0 ? LY : -LY;
+      // lane-wide rubber haze (between and around the grooves)
+      for (x = G.BURNOUT_X1 - 2; x < 230; x += 5) {
+        var xh = x + 2.5, hz = xh < 10 ? 0.55 : clamp(0.55 - (xh - 10) / 220 * 0.55, 0, 0.55);
+        if (hz > 0.02) dc.flat(x, x + 5, ly - 2.1, ly + 2.1, 0.003, mix(xh < 100 ? C.pad : C.asphalt, C.rubber, hz), mix(xh < 100 ? C.pad : C.asphalt, C.rubber, hz * 0.92));
+      }
+      // the grooves: glossy black, wider at the line where the tyres hook up
       for (var tk = -1; tk <= 1; tk += 2) {
-        var ty = ly + tk * 0.78;
+        var ty = ly + tk * 0.8;
         for (x = G.BURNOUT_X0; x < 260; x += 5) {
-          var xm = x + 2.5, base = xm < 100 ? C.concrete : C.asphalt;
-          var dark = xm < 0 ? 0.62 : xm < 30 ? 0.92 : clamp(0.92 - (xm - 30) / 230 * 0.8, 0.08, 0.92);
-          dc.flat(x, x + 5, ty - 0.3, ty + 0.3, 0.004, mix(base, C.rubber, dark));
+          var xm = x + 2.5, base = xm < 100 ? C.pad : C.asphalt;
+          var dark = xm < G.BURNOUT_X1 ? 0.55 : xm < 40 ? 0.96 : clamp(0.96 - (xm - 40) / 220 * 0.9, 0.06, 0.96);
+          var hw2 = xm < 60 ? 0.46 : 0.4;
+          (xm > G.BURNOUT_X1 - 1 && xm < 180 ? gl : dc).flat(x, x + 5, ty - hw2, ty + hw2, 0.005, mix(base, C.rubber, dark));
         }
       }
+    }
+    // saw-cut joints across the concrete pad (every ~4.6 m) + its edge seam
+    for (x = -10; x < 100; x += 4.6) dc.flat(x - 0.02, x + 0.02, -WY, WY, 0.0065, shade(C.concreteD, 0.62));
+    dc.flat(98.5, 100, -WY, WY, 0.0065, shade(C.concreteD, 0.75));
+    // staging lanes behind the box: painted lane dividers + a pair of cones at the box entry
+    for (x = X0; x < G.BURNOUT_X0 - 2; x += 6) dc.flat(x, x + 3, -0.06, 0.06, 0.006, C.white);
+    for (var sl = -1; sl <= 1; sl += 2) {
+      dc.flat(X0, G.BURNOUT_X0, sl * (LY + 3.05) - 0.06, sl * (LY + 3.05) + 0.06, 0.006, C.yellow);
+      for (var ci2 = 0; ci2 < 3; ci2++) groups.struct.cone(P(G.BURNOUT_X0 - 3 - ci2 * 6, sl * (LY + 2.6), 0), 0.17, 0.62, 8, hex('#ff5a12'));
     }
     // lines: centre (white), lane edges (yellow), start lines, staging guide marks, finish (checker), split marks
     dc.flat(X0, X1, -0.07, 0.07, 0.006, C.white);
@@ -344,22 +363,34 @@ CB.gl = CB.gl || {};
         groups.glow.sbox(-0.02, 0.02, by - bs * 0.065 - 0.01, by - bs * 0.065 + 0.01, 0.15, 0.19, hex('#ff2010', 3));
       }
     }
-    // the tree: pole, housing, visors; bulbs are dynamic
-    var TX = G.TREE_X;
-    groups.wall.sbox(TX - 0.5, TX + 0.5, -0.5, 0.5, 0, 0.35, C.wall);
-    groups.struct.cyl(P(TX, 0, 0.3), P(TX, 0, 1.36), 0.075, 0.075, 8, C.black);
-    groups.struct.sbox(TX - 0.13, TX + 0.13, -0.42, 0.42, 1.34, 2.95, C.black);
-    groups.struct.sbox(TX - 0.11, TX + 0.11, -0.07, 0.07, 2.95, 3.25, C.black);   // centre stem / top
-    var yf = hex('#f3c613');   // yellow border round the black face
-    groups.struct.sbox(TX - 0.145, TX - 0.125, -0.41, 0.41, 2.88, 2.93, yf);
-    groups.struct.sbox(TX - 0.145, TX - 0.125, -0.41, 0.41, 1.36, 1.41, yf);
-    groups.struct.sbox(TX - 0.145, TX - 0.125, 0.36, 0.41, 1.36, 2.93, yf);
-    groups.struct.sbox(TX - 0.145, TX - 0.125, -0.41, -0.36, 1.36, 2.93, yf);
-    groups.struct.sbox(TX - 0.145, TX - 0.125, -0.012, 0.012, 1.41, 2.88, yf);
+    // the tree: a padded base with the timing box, guard posts, a pole, then two bulb columns (one per lane) on a centre
+    // spine, each with a yellow-lined black face and a visor over every bulb; bulbs are dynamic
+    var TX = G.TREE_X, blk = C.black, yf = hex('#f3c613');
+    groups.wall.sbox(TX - 0.55, TX + 0.55, -0.55, 0.55, 0, 0.32, C.wall);
+    groups.struct.sbox(TX + 0.05, TX + 0.4, -0.22, 0.22, 0.32, 0.78, hex('#2b2e33'));          // timing box behind the pole
+    groups.struct.sbox(TX + 0.03, TX + 0.05, -0.12, 0.12, 0.52, 0.7, hex('#3f454c'));
+    [[-0.75, -0.75], [-0.75, 0.75], [0.75, -0.75], [0.75, 0.75]].forEach(function (q) {
+      groups.struct.cyl(P(TX + q[0], q[1], 0), P(TX + q[0], q[1], 0.9), 0.06, 0.06, 8, yf, true);
+    });
+    groups.struct.cyl(P(TX, 0, 0.3), P(TX, 0, 1.36), 0.09, 0.08, 10, blk);
+    groups.struct.sbox(TX - 0.1, TX + 0.12, -0.07, 0.07, 1.3, 3.2, blk);                       // centre spine
+    groups.struct.sbox(TX - 0.06, TX + 0.06, -0.035, 0.035, 3.2, 3.42, blk);                  // antenna stub
+    for (var col2 = 0; col2 < 2; col2++) {
+      var yc = col2 === 0 ? 0.2 : -0.2;
+      groups.struct.sbox(TX - 0.14, TX + 0.12, yc - 0.14, yc + 0.14, 1.34, 2.95, blk);
+      // yellow frame on the driver face
+      groups.struct.sbox(TX - 0.152, TX - 0.138, yc - 0.14, yc + 0.14, 2.92, 2.95, yf);
+      groups.struct.sbox(TX - 0.152, TX - 0.138, yc - 0.14, yc + 0.14, 1.34, 1.37, yf);
+      groups.struct.sbox(TX - 0.152, TX - 0.138, yc + 0.11, yc + 0.14, 1.34, 2.95, yf);
+      groups.struct.sbox(TX - 0.152, TX - 0.138, yc - 0.14, yc - 0.11, 1.34, 2.95, yf);
+      // divider under the stage bulbs (staging block / countdown block)
+      groups.struct.sbox(TX - 0.152, TX - 0.138, yc - 0.12, yc + 0.12, 2.53, 2.55, yf);
+    }
     var bl = treeLayout(TX);
     bl.forEach(function (b) {
-      // visor over each bulb (sticks out toward the drivers)
-      groups.struct.sbox(b.sim[0] - 0.12, b.sim[0] + 0.01, b.sim[1] - b.r * 1.25, b.sim[1] + b.r * 1.25, b.sim[2] + b.r * 1.05, b.sim[2] + b.r * 1.3, C.black);
+      // visor over each bulb (sticks out toward the drivers) + a dark socket ring
+      groups.struct.sbox(b.sim[0] - 0.14, b.sim[0] + 0.01, b.sim[1] - b.r * 1.25, b.sim[1] + b.r * 1.25, b.sim[2] + b.r * 1.02, b.sim[2] + b.r * 1.28, blk);
+      groups.struct.sbox(b.sim[0] + 0.005, b.sim[0] + 0.03, b.sim[1] - b.r * 1.18, b.sim[1] + b.r * 1.18, b.sim[2] - b.r * 1.18, b.sim[2] + b.r * 1.18, hex('#1e2024'));
     });
     dyn.tree = { x: TX, bulbs: bl };
     // finish: gantry + timing boards on both outer sides (facing the start), win lights
@@ -538,7 +569,7 @@ CB.gl = CB.gl || {};
   }
 
   /* ---------------------------------------------------------------- public: pure geometry */
-  var GROUPS = ['ground', 'surface', 'decal', 'water', 'wall', 'struct', 'crowd', 'glow', 'glass', 'net', 'scenery'];
+  var GROUPS = ['ground', 'surface', 'decal', 'glue', 'water', 'wall', 'struct', 'crowd', 'glow', 'glass', 'net', 'scenery'];
   function normOpts(opts) {
     opts = opts || {};
     var L = opts.length;
@@ -555,6 +586,7 @@ CB.gl = CB.gl || {};
     var o = normOpts(opts), G = GEO(), R = rng(o.seed * 2654435761 + (o.venue === 'street' ? 99 : 1));
     var groups = {};
     GROUPS.forEach(function (k) { groups[k] = new Geo(); });
+    groups.surface.worldUV = 0.5;   // ground grain: one 2 m tile
     var dyn = { tree: null, boards: [], winLights: [], lamps: [], flagger: null, signs: [], length: o.length, venue: o.venue, night: o.night };
     if (o.venue === 'street') buildStreet(G, groups, dyn, o, R); else buildStrip(G, groups, dyn, o, R);
     if (!dyn.tree) dyn.tree = { x: G.TREE_X, bulbs: o.venue === 'street' ? [] : treeLayout(G.TREE_X) };
@@ -648,6 +680,39 @@ CB.gl = CB.gl || {};
     return g.tris() ? g.out() : null;
   }
 
+  /** Ground grain (DOM): neutral aggregate speckle + soft mottling, mean ~0.9, tiles every 2 m (multiplies the
+      vertex colours, so the pad / asphalt tones stay as authored). */
+  function grainCanvas(doc) {
+    doc = doc || (typeof document !== 'undefined' ? document : null);
+    if (!doc || !doc.createElement) return null;
+    var N = 256, cv = doc.createElement('canvas'); cv.width = cv.height = N;
+    var g = cv.getContext && cv.getContext('2d'); if (!g) return null;
+    var img = g.createImageData(N, N), d = img.data, R = rng(4242), i, x, y;
+    var low = new Float32Array(16 * 16); for (i = 0; i < low.length; i++) low[i] = R();
+    function lowAt(u, v) {   // tileable bilinear value noise (16 x 16 cells)
+      var fu = u * 16, fv = v * 16, x0 = Math.floor(fu), y0 = Math.floor(fv), tx = fu - x0, ty = fv - y0;
+      function L(a, b) { return low[((b & 15) * 16) + (a & 15)]; }
+      var a = L(x0, y0) + (L(x0 + 1, y0) - L(x0, y0)) * tx, b = L(x0, y0 + 1) + (L(x0 + 1, y0 + 1) - L(x0, y0 + 1)) * tx;
+      return a + (b - a) * ty;
+    }
+    for (y = 0; y < N; y++) for (x = 0; x < N; x++) {
+      var r = R(), v = 0.86 + (lowAt(x / N, y / N) - 0.5) * 0.12 + (r - 0.5) * 0.1;
+      if (r > 0.985) v += 0.12; else if (r < 0.012) v -= 0.18;   // light aggregate / dark pits
+      v = clamp(v, 0, 1) * 255; i = (y * N + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return cv;
+  }
+  var grainCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function grainTexture(ctx) {
+    try {
+      if (grainCache && grainCache.has(ctx)) return grainCache.get(ctx);
+      var cv = grainCanvas(), t = cv && typeof CB.gl.createTexture === 'function' ? CB.gl.createTexture(ctx, cv, { wrap: 'repeat', mipmaps: true }) : null;
+      if (grainCache && t) grainCache.set(ctx, t);
+      return t;
+    } catch (e) { return null; }
+  }
+
   /* ---------------------------------------------------------------- GL build */
   function build(ctx, opts) {
     var G = CB.gl, res = buildGeometry(opts), items = [], meshes = [];
@@ -657,6 +722,8 @@ CB.gl = CB.gl || {};
       ground: { name: 'drag-ground', color: [1, 1, 1, 1], roughness: 0.95, castShadow: false },
       surface: { name: 'drag-surface', color: [1, 1, 1, 1], roughness: 0.82, castShadow: false },
       decal: { name: 'drag-decal', color: [1, 1, 1, 1], roughness: 0.7, castShadow: false, polygonOffset: [-1, -3] },
+      // traction compound in the grooves: near-black, tacky and glossy (the sun streaks down the lanes)
+      glue: { name: 'drag-glue', color: [1, 1, 1, 1], roughness: 0.32, clearcoat: 0.4, envIntensity: 0.55, castShadow: false, polygonOffset: [-1, -4] },
       water: { name: 'drag-water', color: [1, 1, 1, 1], roughness: 0.06, metallic: 0.1, clearcoat: 1, envIntensity: 1.2, castShadow: false, polygonOffset: [-2, -5] },
       wall: { name: 'drag-wall', color: [1, 1, 1, 1], roughness: 0.75 },
       struct: { name: 'drag-struct', color: [1, 1, 1, 1], roughness: 0.55, metallic: 0.15, clearcoat: 0.15 },
@@ -666,6 +733,8 @@ CB.gl = CB.gl || {};
       net: { name: 'drag-net', color: [1, 1, 1, 1], unlit: true, transparent: true, depthWrite: false, castShadow: false, doubleSided: true },
       scenery: { name: 'drag-scenery', color: [1, 1, 1, 1], roughness: 0.9, castShadow: false }
     };
+    var grain = grainTexture(ctx);
+    if (grain) { MAT.surface.map = grain; MAT.surface.color = [1.12, 1.12, 1.12, 1]; }
     Object.keys(res.groups).forEach(function (k) {
       var m = mk(res.groups[k]);
       if (!m) return;
