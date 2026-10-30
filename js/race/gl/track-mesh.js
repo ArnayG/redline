@@ -341,8 +341,45 @@ CB.gl.track = (function () {
       led: mat('led', { color: C.accent, emissive: mulC(C.accent, 3.2).slice(0, 3), roughness: 0.3 }),
       reflector: mat('reflector', { color: WHITE, emissive: [0.6, 0.45, 0.15], roughness: 0.3 }),
       embank: mat('embankment', { map: null, tint: mulC(C.grass, 0.86), roughness: 0.95, wetness: 0.15 }),
-      sidewalk: mat('sidewalk', { map: 'concrete', tint: mulC(mixC(C.wall, C.barrier, 0.6), 0.85), roughness: 0.88 })
+      sidewalk: mat('sidewalk', { map: 'concrete', tint: mulC(mixC(C.wall, C.barrier, 0.6), 0.85), roughness: 0.88 }),
+      // elevated expressway (style.street + style.elevated, e.g. Shuto): viaduct deck girders / piers, covered tunnels
+      deck: mat('deck', { map: 'concrete', tint: mulC(mixC(C.wall, C.barrier, 0.35), 0.78), roughness: 0.9 }),
+      tunnel: mat('tunnel', { map: 'concrete', tint: mulC(mixC(C.wall, C.barrier, 0.5), 0.66), roughness: 0.9 }),
+      tunnelLamp: mat('tunnel-lamp', { color: [1, 0.62, 0.28, 1], emissive: [4.2, 2.1, 0.62], roughness: 0.3 }),
+      railing: mat('railing', { color: mulC(C.barrier, 1.15), metallic: 0.6, roughness: 0.42 }),
+      noisePanel: mat('noise-panel', { color: [0.55, 0.66, 0.72, 0.38], metallic: 0.1, roughness: 0.15, transparent: true })
     };
+
+    /* ---- elevated expressway + covered tunnels (docs/RACE3D-SPEC.md: street tracks with style.elevated) ----
+       The sim road stays at y = 0; the city is lowered DROP metres below it (terrain, far skirt), the road / run-off /
+       sidewalk shoulders become a viaduct deck (girder faces, dark underside, T-piers), and the def.tunnels ranges
+       get a concrete box (walls, ceiling, sodium lamp rows, jet fans, portals). groundY() stays the real ground; the
+       GL build() also exposes a deck-level virtual ground for cameras within DECK_CAM_REACH of the walls. */
+    var highway = !!(style.street && style.elevated) && opts.flatHighway !== true;
+    var DROP = highway ? clamp(fin(trackDef.elevation_m, 14), 8, 18) : 0;
+    var GIRDER = 1.6, TUN_H = 6.3, TUN_ROOF = 0.7, TUN_OUT = 1.7;
+    var tun = new Uint8Array(N), tunRanges = [];
+    (trackDef.tunnels || []).forEach(function (t) {
+      var s0 = fin(t && t.s0, NaN), s1 = fin(t && t.s1, NaN);
+      if (!(s1 > s0) || s1 - s0 > L * 0.6) return;
+      var k0 = Math.round(s0 / ds), k1 = Math.round(s1 / ds);
+      if (k1 - k0 < 4) return;
+      for (var q = k0; q <= k1; q++) tun[mod(q, N)] = 1;
+      tunRanges.push([k0, k1, t.name || 'Tunnel']);
+    });
+    // 0..1 tunnel cover per sample, ramped over ~12 m at the portals (fake sky occlusion on the road surfaces)
+    var tunCover = new Float32Array(N);
+    if (tunRanges.length) {
+      var rampN = Math.max(1, Math.round(12 / ds));
+      for (i = 0; i < N; i++) {
+        if (!tun[i]) continue;
+        var dIn = rampN;
+        for (k = 1; k <= rampN; k++) { if (!tun[mod(i - k, N)] || !tun[mod(i + k, N)]) { dIn = k - 1; break; } }
+        tunCover[i] = smooth((dIn + 1) / (rampN + 1));
+      }
+    }
+    var TUN_DARK = opts.timeOfDay === 'night' ? 0.5 : 0.62;
+    function tunShade(r) { return 1 - TUN_DARK * tunCover[r]; }
 
     /* ---- natural grass colour field (vertex-colour multiplier over the tinted grass texture) ----
        Hue-preserving ratios relative to the theme grass colour, so desert / autumn / snow themes keep their
@@ -448,7 +485,7 @@ CB.gl.track = (function () {
     var RUB = [0, 0, 0.32, 0.85, 1, 0.85, 0.32, 0, 0];
     ribbon('road', M.road, 0, N, roadLats, function (r, jj) {
       var edge = jj === 0 || jj === 8 ? 1.06 : 1.0;    // dusty edges
-      var v = (0.94 - RUB[jj] * 0.3 * rubber[r]) * patch[r] * edge;
+      var v = (0.94 - RUB[jj] * 0.3 * rubber[r]) * patch[r] * edge * tunShade(r);
       return [v, v, v * 1.01, 1];
     }, function (lat, s) { return [lat * ROAD_U, s * ROAD_U]; });
 
@@ -456,7 +493,7 @@ CB.gl.track = (function () {
     [1, -1].forEach(function (side) {
       ribbon('line', M.line, 0, N, function (r) {
         return side > 0 ? [HW[r] - LINE_W, HW[r]] : [-HW[r], -HW[r] + LINE_W];
-      }, null, function (lat, s) { return [lat, s / 4]; });
+      }, tunRanges.length ? function (r) { var t = tunShade(r); return [t, t, t, 1]; } : null, function (lat, s) { return [lat, s / 4]; });
     });
 
     /* ================= 3. KERBS (raised, alternating colours) ================= */
@@ -574,7 +611,7 @@ CB.gl.track = (function () {
               var edge = jj === 0 ? (SW[r] > 0.02 ? 0.85 : 0.7) : jj === 1 ? 0.32 : jj === 2 ? 0.08 : 0;
               return grassCol(px, py, edge, (jj === 4 ? 1 : band) * (1 + 0.05 * noise.noise(key * ds / 13, jj)));
             }
-            var t = jj === 0 ? 0.96 : 1;
+            var t = (jj === 0 ? 0.96 : 1) * tunShade(r);
             return [t, t, t, 1];
           }, function (lat, s) {
             var sc = kindName === 'tarmac' ? ROAD_U : GRASS_U;
@@ -697,6 +734,15 @@ CB.gl.track = (function () {
       });
       void len;
     })();
+    // expressway lane lines: dashed white dividers (8 m paint / 12 m gap), off the start straight's grid
+    if (highway) (function () {
+      for (var s = 40; s < L - 40; s += 20) {
+        var f = frameAt(s + 4), inner = f.hw - LINE_W;
+        if (gridCount && mod(s, L) > L - 230) continue;
+        var lanes = clamp(Math.round(inner * 2 / 5), 2, 4), lw = inner * 2 / lanes;
+        for (var ln = 1; ln < lanes; ln++) paintRect(s + 4, -inner + ln * lw, 8, 0.15, mulC(WHITE_PAINT, 0.92 * tunShade(f.i), 1));
+      }
+    })();
 
     /* ================= 7. BARRIERS ================= */
     // outer side of the circuit (fences for ovals)
@@ -792,6 +838,43 @@ CB.gl.track = (function () {
       // top + middle cables
       wallRibbon('fence-post', M.fencePost, side, [[d - 0.33, baseY + height - 0.02], [d - 0.37, baseY + height + 0.04], [d - 0.41, baseY + height - 0.02]], null, 4);
     }
+    // key ranges outside the covered tunnels ([[k0, k1]], whole lap when there are none)
+    var openRanges = (function () {
+      if (!tunRanges.length) return [[0, N]];
+      var tr = tunRanges.slice().sort(function (a, b) { return a[0] - b[0]; }), out = [], at = 0;
+      tr.forEach(function (t) { if (t[0] - at > 2) out.push([at, t[0]]); at = Math.max(at, t[1]); });
+      if (N - at > 2) out.push([at, N]);
+      return out;
+    })();
+    function highwayRail(side) {
+      // expressway parapet top: steel hand rail on short posts, with translucent noise-barrier panels on some stretches
+      openRanges.forEach(function (rg) {
+        var o = { k0: rg[0], k1: rg[1] };
+        wallRibbon('railing', M.railing, side, [[0.3, 1.66], [0.3, 1.74], [0.44, 1.74], [0.44, 1.66]], null, 4, o);
+        wallRibbon('railing', M.railing, side, [[0.34, 1.38], [0.34, 1.43], [0.42, 1.43]], null, 4, o);
+        for (var s = rg[0] * ds + 1; s < rg[1] * ds - 0.5; s += 2.5) {
+          var w = wallPoint(side, s, 0.37);
+          boxGL(parts.get('railing', chunkOf(w.i), M.railing, 24), w.x, w.e + 1.4, -w.y, 0.035, 0.35, 0.035, w.yaw, WHITE, 1, true);
+        }
+        // noise barriers: whole stretches chosen by a slow noise along s (and never on both sides at once)
+        var run0 = -1;
+        for (var key = rg[0]; key <= rg[1]; key++) {
+          var on = key < rg[1] && side * noise.noise(key * ds / 240 + 3.1, 5.5) > 0.16;
+          if (on && run0 < 0) run0 = key;
+          if ((!on || key === rg[1]) && run0 >= 0) {
+            if (key - run0 > Math.round(40 / ds)) {
+              wallRibbon('noise-panel', M.noisePanel, side, [[0.46, 1.05], [0.46, 3.3], [0.1, 3.75]], null, 2, { k0: run0, k1: key });
+              for (var s2 = run0 * ds; s2 <= key * ds; s2 += 4) {
+                var w2 = wallPoint(side, s2, 0.5);
+                var pp = parts.get('railing', chunkOf(w2.i), M.railing, 24);
+                boxGL(pp, w2.x, w2.e + 2.4, -w2.y, 0.06, 1.35, 0.09, w2.yaw, [0.6, 0.62, 0.64, 1], 1, true);
+              }
+            }
+            run0 = -1;
+          }
+        }
+      });
+    }
     function wallFor(side) {
       var type = wallType;
       var street = !!style.street;
@@ -814,7 +897,8 @@ CB.gl.track = (function () {
           return b === 1 ? mixC(WHITE, C.accent, night ? 0.25 : 0.55) : WHITE;
         }, 3);
         if (night) wallRibbon('led', M.led, side, [[0.255, 0.98], [0.26, 1.02]], null, 2);
-        catchFence(side, 1.05, 0.37, street ? 3.4 : 2.8);
+        if (highway) highwayRail(side);
+        else catchFence(side, 1.05, 0.37, street ? 3.4 : 2.8);
       } else if (type === 'guardrail') {
         // single W-beam on posts, delineators
         posts('guardrail-post', M.steel, side, 4, 0.22, 0.8, 0.06, [0.85, 0.85, 0.85, 1]);
@@ -992,6 +1076,7 @@ CB.gl.track = (function () {
         var border = Math.min(xx * cellX, (gx - xx) * cellX, yy * cellY, (gy - yy) * cellY);
         var fade = smooth(border / Math.max(1, edgeFade));
         var n1 = 0.5 + 0.5 * noise.fbm(wx / 260, wy / 260, 4);
+        if (highway) { TH[vi2] = -DROP; continue; }
         var hgt2 = amp * mask * fade * n1;
         // secondary rolling detail (small hummocks) so the far grass is not one smooth blanket
         hgt2 += amp * 0.14 * mask * fade * (0.5 + 0.5 * noise.fbm(wx / 62 - 7, wy / 62 + 5, 2));
@@ -1002,7 +1087,7 @@ CB.gl.track = (function () {
     /* ---- 10b. STREET SIDEWALKS behind the barriers (street circuits only) ----
        Raised paving from the back of the jersey barrier outwards, width limited per sample so it never
        intrudes into a neighbouring section of the circuit (uses the signed wall-distance field). */
-    var sidewalkRings = 0;
+    var sidewalkRings = 0, swWidth = {};
     if (style.street && wallType === 'concrete' && opts.sidewalks !== false) {
       var eAt = function (sx, sy) {
         var fx = (sx - tminX) / cellX, fy = (sy - tminY) / cellY;
@@ -1030,6 +1115,7 @@ CB.gl.track = (function () {
           for (var o = -6; o <= 6; o++) m = Math.min(m, wid[mod(q + o, N)]);
           wmin[q] = E[q] > 0.05 ? 0 : m;
         }
+        swWidth[side] = wmin;
         runs(function (q2) { return wmin[q2] >= 1.6; }).forEach(function (run) {
           ribbon('sidewalk', M.sidewalk, run[0], run[1], function (r) {
             var a0 = Wd[r] + SW_IN, w = Math.max(wmin[r], 0.05), a1 = Wd[r] + SW_IN + w;
@@ -1046,6 +1132,90 @@ CB.gl.track = (function () {
         });
       });
     }
+
+    /* ---- 10c. ELEVATED EXPRESSWAY: viaduct deck edge girders, underside, T-piers; covered tunnels ---- */
+    var deckEdge = { 1: new Float64Array(N), '-1': new Float64Array(N) };
+    if (highway) {
+      [1, -1].forEach(function (side) {
+        var Wd = side > 0 ? WL : WR, sw = swWidth[side], de = deckEdge[side];
+        for (var q = 0; q < N; q++) de[q] = Wd[q] + (sw && sw[q] >= 1.6 ? 0.76 + sw[q] + 0.02 : 0.76);
+      });
+      // vertical faces: per-sample lateral, outward normal (side * n)
+      var vFace = function (kind, material, side, k0, k1, latFn, y0, y1, col) {
+        var prev = null, prevPart = null;
+        for (var key = k0; key <= k1; key++) {
+          var r = mod(key, N), lat = side * latFn(r), px = X[r] + NX[r] * lat, py = Y[r] + NY[r] * lat;
+          var part = parts.get(kind, chunkOf(key < k1 ? key : key - 1), material, 8);
+          var nx = side * NX[r], nz = -side * NY[r], u = key * ds / 3;
+          if (part !== prevPart && prev) {
+            var pr = mod(prev.key, N), plat = side * latFn(pr), ppx = X[pr] + NX[pr] * plat, ppy = Y[pr] + NY[pr] * plat;
+            prev = { key: prev.key, a: part.v(ppx, y0 + E[pr], -ppy, side * NX[pr], 0, -side * NY[pr], prev.key * ds / 3, 0, col), b: part.v(ppx, y1 + E[pr], -ppy, side * NX[pr], 0, -side * NY[pr], prev.key * ds / 3, (y1 - y0) / 3, col) };
+          }
+          prevPart = part;
+          var cur = { key: key, a: part.v(px, y0 + E[r], -py, nx, 0, nz, u, 0, col), b: part.v(px, y1 + E[r], -py, nx, 0, nz, u, (y1 - y0) / 3, col) };
+          if (prev) part.quad(prev.a, cur.a, cur.b, prev.b);
+          prev = cur;
+        }
+      };
+      [1, -1].forEach(function (side) {
+        var de = deckEdge[side];
+        // girder face below the shoulder edge + a darker drip lip
+        vFace('deck', M.deck, side, 0, N, function (r) { return de[r]; }, -GIRDER, -TERRAIN_SINK, WHITE);
+        vFace('deck', M.deck, side, 0, N, function (r) { return de[r] - 0.9; }, -GIRDER - 0.9, -GIRDER, [0.62, 0.62, 0.64, 1]);
+      });
+      // underside of the deck slab (dark: it only sees the city glow) and the box-girder soffit
+      ribbon('deck', M.deck, 0, N, function (r) { return [-deckEdge[-1][r], -deckEdge[-1][r] + 0.9, deckEdge[1][r] - 0.9, deckEdge[1][r]]; },
+        function () { return [0.42, 0.42, 0.44, 1]; }, function (lat, s) { return [lat / 3, s / 3]; },
+        function (r, jj) { return jj === 0 || jj === 3 ? -GIRDER : -GIRDER - 0.9; });
+      // T-piers every ~32 m: column under the road centre + cap beam across the deck
+      var pierStep = Math.max(2, Math.round(32 / ds));
+      for (var pq = 0; pq < N; pq += pierStep) {
+        var hl = deckEdge[1][pq], hr = deckEdge[-1][pq], mid = (hl - hr) / 2, half = (hl + hr) / 2;
+        var cx = X[pq] + NX[pq] * mid, cy = Y[pq] + NY[pq] * mid, yaw = Math.atan2(TY[pq], TX[pq]);
+        var top = -GIRDER - 0.9, part = parts.get('deck', chunkOf(pq), M.deck, 60);
+        boxGL(part, cx, (top - 1.6 + -DROP) / 2, -cy, 1.3, (top - 1.6 + DROP) / 2, 1.3, yaw, [0.8, 0.8, 0.82, 1], 0.5, true);
+        boxGL(part, cx, top - 0.8, -cy, 1.0, 0.8, Math.max(2, half - 1.2), yaw, [0.74, 0.74, 0.76, 1], 0.5, false);
+      }
+    }
+    var tunnelStats = { count: 0, length: 0 };
+    tunRanges.forEach(function (tr) {
+      var k0 = tr[0], k1 = tr[1], o = { k0: k0, k1: k1 };
+      tunnelStats.count++; tunnelStats.length += (k1 - k0) * ds;
+      [1, -1].forEach(function (side) {
+        // inner wall above the jersey barrier with a haunch into the ceiling, then the outer wall + roof edge
+        wallRibbon('tunnel', M.tunnel, side, [[0.6, 0.9], [0.6, TUN_H - 0.9], [-0.25, TUN_H]], function (r) { var v = 0.8 + 0.2 * (Math.floor(mod(r, N) * ds / 12) & 1); return [v, v, v, 1]; }, 3, o);
+        wallRibbon('tunnel', M.tunnel, side, [[TUN_OUT, TUN_H + TUN_ROOF], [TUN_OUT, highway ? -GIRDER : -TERRAIN_SINK]], null, 3, o);
+        // a pale tiled band at eye height (tunnel lining) and a sodium lamp every 4.5 m under the haunch
+        wallRibbon('tunnel', M.tunnel, side, [[0.598, 1.25], [0.598, 2.6]], function () { return [1.35, 1.33, 1.25, 1]; }, 2, o);
+        for (var s = k0 * ds + 2; s < k1 * ds - 1; s += 4.5) {
+          var w = wallPoint(side, s, 0.42);
+          boxGL(parts.get('tunnel-lamp', chunkOf(w.i), M.tunnelLamp, 24), w.x, w.e + TUN_H - 0.75, -w.y, 0.55, 0.07, 0.12, w.yaw, WHITE, 1, false);
+        }
+      });
+      // ceiling (inner) + roof top (outer)
+      ribbon('tunnel', M.tunnel, k0, k1, function (r) { return [-(WR[r] - 0.25), WL[r] - 0.25]; }, function () { return [0.55, 0.55, 0.57, 1]; },
+        function (lat, s) { return [lat / 3, s / 3]; }, function () { return TUN_H; });
+      ribbon('tunnel', M.tunnel, k0, k1, function (r) { return [-(WR[r] + TUN_OUT), WL[r] + TUN_OUT]; }, null,
+        function (lat, s) { return [lat / 3, s / 3]; }, function () { return TUN_H + TUN_ROOF; });
+      // jet fans hanging from the ceiling (pairs every ~90 m)
+      for (var sj = k0 * ds + 40; sj < k1 * ds - 30; sj += 90) {
+        var f = frameAt(sj), yawJ = Math.atan2(f.ty, f.tx), pj = parts.get('tunnel', chunkOf(f.i), M.steel, 80);
+        [-2.2, 2.2].forEach(function (lo) { boxGL(pj, f.x + f.nx * lo, f.e + TUN_H - 0.62, -(f.y + f.ny * lo), 1.6, 0.42, 0.42, yawJ, WHITE, 0.5, false); });
+      }
+      // portals: concrete headwall around the opening at both ends, wider than the tube, with a lit name band
+      [k0, k1].forEach(function (kp, end) {
+        var f = frameAt(kp * ds), wl = WL[f.i], wr = WR[f.i], fx = end ? f.tx : -f.tx, fy = end ? f.ty : -f.ty;
+        var part = parts.get('tunnel', chunkOf(f.i), M.tunnel, 32);
+        var base = highway ? -GIRDER : -TERRAIN_SINK, topY = TUN_H + 2.6, outL = wl + TUN_OUT + 4, outR = wr + TUN_OUT + 4;
+        function P(lat, y) { return part.v(f.x + f.nx * lat, y, -(f.y + f.ny * lat), fx, 0, -fy, lat / 3, y / 3, WHITE); }
+        part.quad(P(wl - 0.25, base), P(outL, base), P(outL, topY), P(wl - 0.25, topY));          // left pier
+        part.quad(P(-(wr - 0.25), base), P(-outR, base), P(-outR, topY), P(-(wr - 0.25), topY));  // right pier
+        part.quad(P(-(wr - 0.25), TUN_H), P(wl - 0.25, TUN_H), P(wl - 0.25, topY), P(-(wr - 0.25), topY));   // lintel
+        var band = parts.get('tunnel-lamp', chunkOf(f.i), M.tunnelLamp, 8), off = 0.05;
+        var Q = function (lat, y) { return band.v(f.x + f.nx * lat + fx * off, y, -(f.y + f.ny * lat + fy * off), fx, 0, -fy, 0, 0, [0.9, 0.9, 0.9, 1]); };
+        band.quad(Q(-(wr - 0.25), TUN_H + 0.35), Q(wl - 0.25, TUN_H + 0.35), Q(wl - 0.25, TUN_H + 0.5), Q(-(wr - 0.25), TUN_H + 0.5));
+      });
+    });
 
     // emit tiles
     var TILE = 96;
@@ -1121,7 +1291,7 @@ CB.gl.track = (function () {
       var cx = (tminX + tmaxX) / 2, cy = (tminY + tmaxY) / 2;
       var inner = [[tminX, tminY], [tmaxX, tminY], [tmaxX, tmaxY], [tminX, tmaxY]];
       var outer = [[cx - R, cy - R], [cx + R, cy - R], [cx + R, cy + R], [cx - R, cy + R]];
-      var y = -TERRAIN_SINK;
+      var y = highway ? -DROP : -TERRAIN_SINK;
       for (var q = 0; q < 4; q++) {
         var a = inner[q], b = inner[(q + 1) % 4], c = outer[(q + 1) % 4], d = outer[q];
         var ids = [a, b, c, d].map(function (p) { return part.v(p[0], y, -p[1], 0, 1, 0, p[0] / 8, p[1] / 8, [0.82, 0.82, 0.8, 1]); });
@@ -1129,7 +1299,25 @@ CB.gl.track = (function () {
       }
     })();
 
+    // real ground under a GL point; on an elevated expressway the deck shoulder (within ~2.3 m of the wall line, where
+    // lamps / signs / attenuators stand) counts as ground, everything further out is the street level DROP below
     function groundY(x, z) {
+      if (!highway) return terrainY(x, z);
+      return deckDist(x, -z) < 2.3 ? 0 : terrainY(x, z);
+    }
+    function deckDist(sx, sy) {
+      var fx = (sx - tminX) / cellX, fy = (sy - tminY) / cellY;
+      if (!(fx >= 0 && fy >= 0 && fx <= gx && fy <= gy)) return 1e9;
+      var ix = Math.min(gx - 1, Math.floor(fx)), iy = Math.min(gy - 1, Math.floor(fy)), u = fx - ix, v = fy - iy;
+      var a = eAll[iy * VX + ix], b = eAll[iy * VX + ix + 1], c = eAll[(iy + 1) * VX + ix], d = eAll[(iy + 1) * VX + ix + 1];
+      return lerp(lerp(a, b, u), lerp(c, d, u), v);
+    }
+    // deck-level ground for cameras (TV / chase / drift clamps) near an elevated road: they stay level with the deck
+    function cameraGroundY(x, z) {
+      if (!highway) return terrainY(x, z);
+      return deckDist(x, -z) < 40 ? Math.max(0, terrainY(x, z)) : terrainY(x, z);
+    }
+    function terrainY(x, z) {
       var sx = x, sy = -z;
       var fx = (sx - tminX) / cellX, fy = (sy - tminY) / cellY;
       if (!(fx >= 0 && fy >= 0 && fx <= gx && fy <= gy)) return -TERRAIN_SINK;
@@ -1177,7 +1365,7 @@ CB.gl.track = (function () {
       }
       if (p.kind !== 'terrain' || p.chunk !== 'far') for (var a2 = 0; a2 < 3; a2++) { gmin[a2] = Math.min(gmin[a2], mn[a2]); gmax[a2] = Math.max(gmax[a2], mx[a2]); }
       var m = p.material;
-      var castShadow = /wall|concrete|safer|armco|guardrail|tyres|fence|bridge|abutment|post|kerb|led/.test(p.kind) && p.kind !== 'kerb';
+      var castShadow = /wall|concrete|safer|armco|guardrail|tyres|fence|bridge|abutment|post|kerb|led|tunnel|deck|railing/.test(p.kind) && p.kind !== 'kerb' && p.kind !== 'tunnel-lamp';
       out.push({
         kind: p.kind, chunk: p.chunk, material: m, castShadow: castShadow, transparent: !!m.transparent, decal: !!m.decal,
         positions: pos, normals: new Float32Array(p.n), uvs: new Float32Array(p.t), colors: new Float32Array(p.c),
@@ -1203,7 +1391,8 @@ CB.gl.track = (function () {
       parts: out,
       bounds: { min: gmin, max: gmax },
       terrainBounds: { minX: tminX, maxX: tmaxX, minZ: -tmaxY, maxZ: -tminY, cell: [cellX, cellY] },
-      groundY: groundY, heightAt: heightAt, heightAtIndex: heightAtIndex, roadY: roadY,
+      groundY: groundY, cameraGroundY: cameraGroundY, heightAt: heightAt, heightAtIndex: heightAtIndex, roadY: roadY,
+      highway: highway ? { drop: DROP, girder: GIRDER, tunnels: tunnelStats } : null,
       elevation: new Float32Array(E), bridges: bridges, walls: wallsOut,
       outerSide: outerSide, wallType: wallType,
       stats: { triangles: tris, vertices: verts, parts: out.length, terrainDropped: dropped,
@@ -1319,7 +1508,10 @@ CB.gl.track = (function () {
     return {
       meshes: meshes, items: meshes,
       bounds: res.bounds, terrainBounds: res.terrainBounds,
-      groundY: res.groundY, heightAt: res.heightAt, heightAtIndex: res.heightAtIndex,
+      // groundY: what the renderer's cameras clamp against (deck level next to an elevated road); sceneryGroundY:
+      // the real ground the scenery is placed on (street level below a viaduct)
+      groundY: res.cameraGroundY, sceneryGroundY: res.groundY, heightAt: res.heightAt, heightAtIndex: res.heightAtIndex,
+      highway: res.highway,
       // road surface height under a world point (GL x, z); idx = nearest centerline sample hint.
       // Renderer3d calls roadY(x, z, idx). 0 everywhere except on a figure-8 bridge ramp/deck,
       // where the lower road (crossing underneath) is told apart by the hint/proximity.

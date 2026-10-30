@@ -1706,12 +1706,18 @@ CB.gl.scenery = (function () {
     var qn = normQ(opts.quality), Q = QUALITY[qn];
     var style = def.style || {}, theme = def.theme || geom.theme || {};
     var tod = opts.timeOfDay || def.timeOfDay || 'day';
+    // elevated expressway (Shuto): the track mesh lowers the city below a viaduct deck; trackside furniture authored
+    // next to the road stands on deck platforms, everything else on the street below
+    var elevatedRoad = !!(style.street && style.elevated);
+    var PLATFORM = { grandstand: 1, pits: 1, marshal: 1, tent: 1, billboard: 1, tyres: 1, cone: 1, barrier: 1, tower: 1 };
     var night = tod === 'night';
     var P = paletteFor(def, geom);
     var seedStr = (geom.id || def.id || 'track') + ':scenery3d';
     var rnd = rngFor(seedStr), seed = hashStr(seedStr);
     var S = geom.samples, N = S.length, L = geom.length || N * (geom.ds || 2), ds = geom.ds || L / N;
-    var gfn = typeof opts.groundY === 'function' ? opts.groundY : (opts.track && typeof opts.track.groundY === 'function' ? opts.track.groundY : null);
+    // the track's real ground (street level under an elevated expressway) wins over the camera ground the renderer passes
+    var gfn = opts.track && typeof opts.track.sceneryGroundY === 'function' ? opts.track.sceneryGroundY
+      : typeof opts.groundY === 'function' ? opts.groundY : (opts.track && typeof opts.track.groundY === 'function' ? opts.track.groundY : null);
     function gy(x, y) { if (!gfn) return 0; var v; try { v = gfn(x, -y); } catch (e) { v = 0; } return fin(v, 0); }
     function baseRect(x, y, rot, l, w) {
       var c = Math.cos(rot), s = Math.sin(rot), m = gy(x, y);
@@ -1776,12 +1782,17 @@ CB.gl.scenery = (function () {
       if (o.type === 'tree' && o.variant) variantsSeen[o.variant] = 1;
       var yawF = fin(o.rot, 0) + (o.side > 0 ? PI : 0);
       var shape = o.shape === 'circle' ? 0 : 1, base = shape ? baseRect(o.x, o.y, o.rot, o.l, o.w) : gy(o.x, o.y);
+      var plat = null;
+      if (elevatedRoad && base < -2) {
+        if (o.type === 'building' && o.variant === 'tunnel-portal') return;   // the track mesh builds the portals
+        if (PLATFORM[o.type] && clearance(o.x, o.y) < (o.type === 'tower' ? 12 : 40)) { plat = base; base = 0; }
+      }
       try {
         switch (o.type) {
           case 'tree': putTree(o.x, o.y, o.r || 3, o.variant || 'oak'); return;
           case 'bush': wr.at(o.x, o.y, rnd() * TAU, base); wr.use('foliage', 'detail'); treeNear(wr, 'shrub', o.r || 1.2, P, rnd); break;
           case 'rock': wr.at(o.x, o.y, rnd() * TAU, base - 0.2); rock(wr, o.r || 2, P, rnd); break;
-          case 'water': wr.at(o.x, o.y, 0, Math.max(-0.02, base) + 0.06); water(B, o); break;
+          case 'water': wr.at(o.x, o.y, 0, (base < -2 ? base : Math.max(-0.02, base)) + 0.06); water(B, o); break;
           case 'cone': wr.at(o.x, o.y, 0, base); cone(wr, 0, 0, 1); break;
           case 'lamp': wr.at(o.x, o.y, yawF, base); lampPost(B, o); break;
           case 'grandstand': wr.at(o.x, o.y, yawF, base); grandstand(B, o); break;
@@ -1807,10 +1818,22 @@ CB.gl.scenery = (function () {
           case 'f1-landmark': break;   // drawn by CB.gl.f1scenery.decorate (js/race/gl/f1-scenery.js)
           default: wr.at(o.x, o.y, yawF, base); wr.use('paint', 'all'); wr.boxY(0, -0.5, 0, o.l, o.h || 3, o.w, lin(o.color || '#b9b6ae')); break;
         }
+        if (plat != null) deckPlatform(o, yawF, plat);
         note(o.type, o.x, o.y, o.r || (isFinite(o.l) || isFinite(o.w) ? Math.max(fin(o.l, 0), fin(o.w, 0)) / 2 : 1), { authored: true, variant: o.variant, l: o.l, w: o.w, h: o.h, rot: fin(o.rot, yawF) });
       } catch (e) { if (typeof console !== 'undefined' && console.warn) console.warn('[scenery] item ' + o.type, e); }
     });
 
+    /** concrete deck slab on columns carrying an authored object level with an elevated road (base = street level) */
+    function deckPlatform(o, yawF, base) {
+      var l = Math.max(2, fin(o.l, 2 * fin(o.r, 1))) + 3, w = Math.max(2, fin(o.w, 2 * fin(o.r, 1))) + 3;
+      wr.at(o.x, o.y, yawF, 0); wr.use('paint', 'all');
+      wr.boxY(0, -1.3, 0, l, -0.03, w, mul(COL.concrete, 0.8));
+      var nx = Math.max(1, Math.round(l / 14)), nz = Math.max(1, Math.round(w / 14));
+      for (var a = 0; a <= nx; a++) for (var b = 0; b <= nz; b++) {
+        if (a > 0 && a < nx && b > 0 && b < nz) continue;
+        wr.boxY(-l / 2 + 0.8 + (l - 1.6) * a / nx, base, -w / 2 + 0.8 + (w - 1.6) * b / nz, 1.1, -1.3, 1.1, mul(COL.concrete, 0.72));
+      }
+    }
     function paddock(o, yawF) {
       // transporters + motorhomes parked behind the pit building
       var c = Math.cos(yawF), s = Math.sin(yawF), n = Math.min(8, Math.floor(o.l / 16));
@@ -1907,7 +1930,7 @@ CB.gl.scenery = (function () {
       }
       var radius = cn.minRadius || 1 / Math.max(1e-4, Math.abs(S[apex].curvature));
       // spectators along the fence on the outside of slow corners
-      if (radius < 90 && !style.kart) {
+      if (radius < 90 && !style.kart && !elevatedRoad) {
         var crowdN = Math.round((style.touge ? 14 : 10) * Q.fill);
         for (var p = 0; p < crowdN; p++) {
           var idx = mod(apex + Math.round(rnd.range(-25, 25) / ds), N), q = S[idx];
@@ -1979,7 +2002,7 @@ CB.gl.scenery = (function () {
       }
     }
 
-    if (style.street && (authoredTypes.tree || 0) < L / 200) {
+    if (style.street && !elevatedRoad && (authoredTypes.tree || 0) < L / 200) {
       var tStep = Math.round(48 / ds), tk = 0, sv = style.night ? ['palm'] : ['palm', 'cypress'];
       for (var ti = Math.round(20 / ds); ti < N; ti += tStep) {
         var tside = (tk++ % 2) ? 1 : -1, tp = besideTrack(ti, tside, 2, 2, 1.0);
@@ -2047,7 +2070,8 @@ CB.gl.scenery = (function () {
           var lat = o.lat + o.side * o.r * f[0], x = sm.x + sm.nx * lat, y = sm.y + sm.ny * lat, rr = o.r * f[1];
           if (clearance(x, y) < rr + 3 || occ.hitCircle(x, y, rr * 0.6, 1)) return;
           occ.markCircle(x, y, rr, 2);
-          wr.at(x, y, 0, Math.max(-0.02, gy(x, y)) + 0.06); water(B, { r: rr, variant: o.variant, x: x, y: y });
+          var wy0 = gy(x, y);
+          wr.at(x, y, 0, (wy0 < -2 ? wy0 : Math.max(-0.02, wy0)) + 0.06); water(B, { r: rr, variant: o.variant, x: x, y: y });
           note('water', x, y, rr);
         });
       });

@@ -133,7 +133,9 @@ T.list.forEach(function (def) {
       assert.ok(isFinite(r.heightAt(sm.s)) && isFinite(r.roadY(sm.x, -sm.y, i)));
       // well beyond the walls the terrain may undulate but stays bounded
       var far = r.groundY(sm.x + sm.nx * (sm.wallL + 150), -(sm.y + sm.ny * (sm.wallL + 150)));
-      assert.ok(isFinite(far) && far > -5 && far < 80, 'terrain height out of range: ' + far);
+      // (an elevated expressway, style.street + style.elevated, lowers the city DROP <= 18 m below the viaduct deck)
+      var lo = r.highway ? -r.highway.drop - 0.01 : -5;
+      assert.ok(isFinite(far) && far > lo && far < 80, 'terrain height out of range: ' + far);
     }
     assert.ok(isFinite(r.groundY(1e6, 1e6)));
   });
