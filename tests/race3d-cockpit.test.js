@@ -153,7 +153,8 @@ test('cockpit: hood humps over the car-mesh front tyres (exterior body is hidden
     var b = styleBuild(st), ci = carInfo(b);
     if (!ci.dims) return;
     var L = CK.layout(b, { eye: ci.eye, dims: ci.dims }), G = CK.buildGeometry(b, L, CK.palette(b, {}));
-    var paint = G.groups.paint, top = 2 * L.wheelR, zT = L.trackF / 2, worst = Infinity, seen = 0;
+    // the hood is its own smooth-shaded group since the polish pass (it read as crumpled cloth when flat-jittered)
+    var paint = G.groups.hood || G.groups.paint, top = 2 * L.wheelR, zT = L.trackF / 2, worst = Infinity, seen = 0;
     for (var i = 0; i < paint.P.length; i += 3) {
       var x = paint.P[i], y = paint.P[i + 1], z = Math.abs(paint.P[i + 2]);
       if (Math.abs(x - L.axleF) < 0.06 && Math.abs(z - zT) < L.tireW * 0.25) { worst = Math.min(worst, y); seen++; }

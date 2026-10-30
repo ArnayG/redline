@@ -542,7 +542,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var suit = hexRgb(opts.color || X.paint, '#b3121f');
     var cage = Wt.rollCage === 'full' ? [0.86, 0.86, 0.84] : [0.2, 0.205, 0.215];
     var mirrorCol = X.mirrors === 'black' ? [0.03, 0.03, 0.033] : X.mirrors === 'carbon' ? [1, 1, 1] : paint;
-    function L(c) { return gam ? lin(c) : c.slice(0, 3); }
+    function L0(c) { return gam ? lin(c) : c.slice(0, 3); }
+    // cabin albedo floor: '#1a1a1a' leather / '#0e0e0f' plastic are ~0.5 % linear reflectance -> pitch black under the
+    // roof's shade (the cabin only sees the sky through the glass). Real black trim reflects 3-5 %; lift every interior
+    // colour onto that floor so dashboards, seats and pillars read as shaded forms instead of a black hole.
+    function L(c) { var l = L0(c); if (!gam) return l; return [l[0] * 0.9 + 0.032, l[1] * 0.9 + 0.032, l[2] * 0.9 + 0.034]; }
     return {
       gamma: gam, L: L,
       primary: L(prim), primaryS: prim, accent: L(acc), accentS: acc, stitch: L(stitch), stitchS: stitch,
@@ -551,7 +555,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       liner: L(liner), linerRough: I.headliner === 'leather' ? 0.6 : I.headliner === 'cloth' ? 0.98 : 0.96,
       plastic: L([0.055, 0.056, 0.06]), plasticHi: L([0.11, 0.112, 0.118]), rubber: L([0.025, 0.025, 0.027]), carpet: L([0.05, 0.05, 0.052]),
       metal: L([0.72, 0.73, 0.75]), metalDark: L([0.3, 0.31, 0.33]), chrome: L([0.92, 0.92, 0.93]),
-      paint: L(paint), paintS: paint, mirror: L(mirrorCol), mirrorCarbon: X.mirrors === 'carbon',
+      paint: L0(paint), paintS: paint, mirror: L0(mirrorCol), mirrorCarbon: X.mirrors === 'carbon',
       suit: L(mix(suit, [0.05, 0.05, 0.06], 0.72)), glove: L([0.2, 0.2, 0.215]), gloveAccent: L(acc), gloveCuff: L(mix(acc, [0.9, 0.9, 0.9], 0.2)),
       cage: L(cage), pad: L([0.03, 0.03, 0.032]), harness: L(mix(acc, [0.7, 0.05, 0.05], 0.15)),
       upholstery: up, upholsteryId: UPHOLSTERY[I.upholstery] ? I.upholstery : 'leather', trim: trim, trimId: I.trim || 'aluminum', trimColor: L(hexRgb(trim.color)),
@@ -1221,11 +1225,12 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var path = [];
       for (var k = 0; k <= 8; k++) { var t = k / 8, p = wsPoint(t, s); path.push(add(p, [-0.03, -0.004, -s * 0.012])); }
       liner.sweep(path, {
-        shape: rectShape(0.065, 0.118, 0.028, 3), up: function (i) { return sub(eye, path[i]); },
-        scale: function (t) { return [1, lerp(1.15, 0.9, t)]; }, capStart: true, capEnd: true
+        // ~8-9 cm face toward the eye (a 12 cm face at arm's length blanked a wedge of the corner apex)
+        shape: rectShape(0.065, 0.088, 0.026, 3), up: function (i) { return sub(eye, path[i]); },
+        scale: function (t) { return [1, lerp(1.08, 0.88, t)]; }, capStart: true, capEnd: true
       });
       // wrapped-pillar seam (stitched) on the cabin face
-      var seamA = path.map(function (q) { return madd(q, norm(sub(eye, q)), 0.0345); });
+      var seamA = path.map(function (q) { return madd(q, norm(sub(eye, q)), 0.0345); });   // stays on the eye-facing face
       stitchLine(liner, seamA.slice(1, -1), P.stitch, 0.007, 0.005, 0.002);
       liner.setColor(P.liner);
       // grab handle-ish trim / tweeter on the pillar base
@@ -1344,7 +1349,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
       }
       hoodRings.push(ring2);
     }
-    G('paint').loft(hoodRings, { closed: false, inside: function (k) { var gp = G('paint').P; return [gp[k * 3], -5, gp[k * 3 + 2]]; } });
+    // own group, smooth shaded: a faceted + value-jittered hood read as crumpled cloth at the grazing angle it is seen at
+    G('hood').setColor([1, 1, 1]);
+    G('hood').loft(hoodRings, { closed: false, inside: function (k) { var gp = G('hood').P; return [gp[k * 3], -5, gp[k * 3 + 2]]; } });
     G('plastic').setColor(P.rubber);
     G('plastic').box(xb + 0.035, yb - 0.006, 0, 0.09, 0.012, (wsHalfBase + 0.02) * 2, 1);
     G('matte').setColor(P.rubber);
@@ -1394,11 +1401,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         fRows.push([add(pa, [-0.0045, 0, 0]), add(pb, [-0.0045, 0, 0])]);
       }
       fritC.loft(fRows, { closed: false, inside: [xb + 2, yb, 0] });
-      // dot-matrix fade under the patch
-      for (var di = 0; di < 3; di++) for (var dj = -4; dj <= 4; dj++) {
-        var tdd = tF0 - (di + 1) * 0.012 / Math.max(0.1, yR - yb), dzz = mzM + dj * fz * 0.62 / 4.5, dp = add(wsPoint(tdd, clamp(dzz / wsHalfM, -1, 1)), [-0.0045, 0, 0]);
-        fritC.obox(dp, gU, gN, [0, 0, 1], 0.0032 - di * 0.0008, 0.0006, 0.0032 - di * 0.0008, 1);
-      }
+      // (no dot-matrix fade: 3-6 mm dots alias into rows of dashes under the mirror at any cockpit resolution)
     }
     panel(panels.mirror, madd(M0.pos, mF.n, 0.0015), mF, M0.width, M0.height);
     M0.frame = mF;
@@ -2534,6 +2537,38 @@ var CB = (globalThis.CB = globalThis.CB || {});
   }
   function setMap(m, tex) { m.map = m.uMap = tex || null; m.useMap = m.uUseMap = tex ? 1 : 0; }
 
+  /** Windscreen grime (pure canvas painter): near-clear centre (~5.5 % alpha, the bare glass), dust collecting along the
+      bottom and the sides, the two wiper sweeps cleaner than the corners they miss, a sprinkle of dust / bug spots low
+      on the glass. Alpha carries the coverage; v = 1 is the top edge (FLIP_Y upload). */
+  function drawGrime(g, W, H, seed) {
+    var s = (seed >>> 0) || 77;
+    function rnd() { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = 'rgba(176,182,186,0.055)'; g.fillRect(0, 0, W, H);
+    var dust = g.createLinearGradient(0, H, 0, H * 0.55);
+    dust.addColorStop(0, 'rgba(150,136,116,0.34)'); dust.addColorStop(0.35, 'rgba(160,150,132,0.12)'); dust.addColorStop(1, 'rgba(170,170,170,0)');
+    g.fillStyle = dust; g.fillRect(0, 0, W, H);
+    [0, 1].forEach(function (sd) {
+      var gx = g.createLinearGradient(sd ? W : 0, 0, sd ? W * 0.88 : W * 0.12, 0);
+      gx.addColorStop(0, 'rgba(150,140,124,0.22)'); gx.addColorStop(1, 'rgba(160,150,135,0)');
+      g.fillStyle = gx; g.fillRect(0, 0, W, H);
+    });
+    // wiper sweeps: two fans pivoting under the bottom edge clear most of the dust they pass
+    g.save(); g.globalCompositeOperation = 'destination-out';
+    [[0.3, 0.62], [0.72, 0.56]].forEach(function (wp) {
+      var px = W * wp[0], py = H * 1.04, R = H * (wp[1] + 0.32), r0 = H * 0.16;
+      g.beginPath(); g.arc(px, py, R, PI * 1.08, PI * 1.94); g.arc(px, py, r0, PI * 1.94, PI * 1.08, true); g.closePath();
+      g.fillStyle = 'rgba(0,0,0,0.62)'; g.fill();
+    });
+    g.restore();
+    // re-lay the bare-glass tint where the sweeps cut through it
+    g.save(); g.globalCompositeOperation = 'destination-over'; g.fillStyle = 'rgba(176,182,186,0.05)'; g.fillRect(0, 0, W, H); g.restore();
+    for (var i = 0; i < 90; i++) {
+      var x = rnd() * W, y = H * (0.45 + 0.55 * Math.pow(rnd(), 0.6)), r = 0.6 + rnd() * 1.6;
+      g.fillStyle = 'rgba(' + (60 + Math.round(rnd() * 70)) + ',' + (55 + Math.round(rnd() * 60)) + ',50,' + (0.12 + rnd() * 0.22).toFixed(3) + ')';
+      g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    }
+  }
   function makeCanvas(w, h) {
     try {
       if (typeof document !== 'undefined' && document.createElement) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -2675,6 +2710,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
       tex[key] = t;
       return t;
     }
+    function grimeTexture() {
+      if (tex.grime !== undefined) return tex.grime;
+      var c = makeCanvas(256, 128), t = null;
+      if (c && c.getContext) { var g = c.getContext('2d'); if (g) { drawGrime(g, 256, 128, 913); t = texFromCanvas(gl, isGL2, c, false, aniso).tex; } }
+      tex.grime = t;
+      return t;
+    }
     function upholsteryTexture(kind) {
       var key = 'uph:' + kind;
       if (tex[key] !== undefined) return tex[key];
@@ -2717,6 +2759,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         seatDc: material({ color: carbonFlat, map: carbonTex, metallic: 0.2, roughness: 0.3, clearcoat: 0.9 }),
         metal: material({ metallic: 1, roughness: 0.27 }),
         paint: material({ color: Pal.paint.concat(1), metallic: pr.metallic * 0.5, roughness: Math.max(pr.rough, 0.42), clearcoat: pr.clear * 0.25, envIntensity: 0.45 }),
+        hood: material({ color: Pal.paint.concat(1), metallic: pr.metallic * 0.6, roughness: Math.max(pr.rough, 0.3), clearcoat: pr.clear * 0.6, clearcoatRoughness: 0.08, envIntensity: 0.7 }),
         cage: material({ metallic: 0.3, roughness: 0.4, clearcoat: 0.2 }),
         harness: material({ roughness: 0.85 }), harnessD: material({ roughness: 0.85 }),
         glove: material({ roughness: 0.82 }), sleeve: material({ roughness: 0.8 }),
@@ -2732,6 +2775,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
         wheelDisplay: material({ color: [1.1, 1.1, 1.1, 1], unlit: true, map: tex.wheel && tex.wheel.tex }),
         mirror: material({ color: [0.1, 0.12, 0.15, 1], unlit: true })
       };
+      // seen at a grazing angle the hood is all shadow-map acne (moire bands); nothing in the cockpit shades it anyway
+      mats.hood.receiveShadow = false;
       if (Pal.mirrorCarbon && mats.carbon) { /* housings use the carbon group */ }
       if (self.mirrorTexture) { setMap(mats.mirror, self.mirrorTexture); mats.mirror.baseColor[0] = mats.mirror.baseColor[1] = 0.86; mats.mirror.baseColor[2] = 0.88; }
       theme = { accent: rgbHex(hexRgb((buildObj && buildObj.interior && buildObj.interior.accentColor) || '#c8a24a')), ambient: rgbHex(Pal.ambient), hud: '#9dffd0' };
@@ -2786,6 +2831,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       ['soft', 'liner', 'plastic', 'matte', 'trim', 'carbon', 'metal', 'paint', 'cage', 'harness', 'seatD', 'seatDc', 'harnessD', 'glow', 'leds', 'stars'].forEach(function (k) {
         if (G[k]) addItem(k, mkMesh(G[k]), mats[k], IDENT, kindOf[k], k === 'seatD' || k === 'seatDc' || k === 'harnessD' ? { driverSeat: true } : null);
       });
+      if (G.hood) addItem('hood', mkMesh(G.hood, true), mats.hood || mats.paint, IDENT, 'cockpit-hood');
       var W = geo.wheel;
       if (W.rim) addItem('wheel-rim', mkMesh(W.rim), mats.soft, wheelM, 'cockpit-steering');
       if (W.hard) addItem('wheel-hard', mkMesh(W.hard), mats.plastic, wheelM, 'cockpit-steering');
@@ -2802,7 +2848,15 @@ var CB = (globalThis.CB = globalThis.CB || {});
       if (Pn.cluster) addItem('cluster', mkMesh(Pn.cluster, true), mats.cluster, IDENT, 'cockpit-gauges');
       if (Pn.screen) addItem('screen', mkMesh(Pn.screen, true), mats.screen, IDENT, 'cockpit-screen');
       self._mirrorItem = addItem('mirror', mkMesh(mirrorGeo(), true), mats.mirror, IDENT, 'cockpit-mirror');
-      if (G.glass) addItem('glass', mkMesh(G.glass, true), mats.glass, IDENT, 'cockpit-glass', { order: 60 });
+      if (G.glass) {
+        // windscreen uvs (loft metres) -> 0..1 over the pane, then a subtle grime map (alpha = coverage)
+        var gT = G.glass.T, u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity, ti;
+        for (ti = 0; ti < gT.length; ti += 2) { u0 = Math.min(u0, gT[ti]); u1 = Math.max(u1, gT[ti]); v0 = Math.min(v0, gT[ti + 1]); v1 = Math.max(v1, gT[ti + 1]); }
+        if (u1 > u0 && v1 > v0) for (ti = 0; ti < gT.length; ti += 2) { gT[ti] = (gT[ti] - u0) / (u1 - u0); gT[ti + 1] = (gT[ti + 1] - v0) / (v1 - v0); }
+        var gm = grimeTexture();
+        if (gm) { setMap(mats.glass, gm); mats.glass.baseColor[3] = mats.glass.opacity = 1; }
+        addItem('glass', mkMesh(G.glass, true), mats.glass, IDENT, 'cockpit-glass', { order: 60 });
+      }
       if (G.glassSide) addItem('glass-side', mkMesh(G.glassSide, true), mats.glassSide, IDENT, 'cockpit-glass', { order: 60 });
       if (G.glassRoof) addItem('glass-roof', mkMesh(G.glassRoof, true), mats.glassRoof, IDENT, 'cockpit-glass', { order: 60 });
       if (Pn.hud && tex.hud) addItem('hud', mkMesh(Pn.hud, true), mats.hud, IDENT, 'cockpit-hud', { order: 70 });
@@ -3121,7 +3175,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     build: build,
     layout: layout, palette: palette, buildGeometry: buildGeometry, Geo: Geo, M4: M4,
     headModel: headModel, viewBasis: viewBasis, steerWheelAngle: steerWheelAngle, rimPath: rimPath,
-    drawCluster: drawCluster, drawDragCluster: drawDragCluster, drawDragScreen: drawDragScreen, dragKey: dragKey, drawCenterScreen: drawCenterScreen, drawHud: drawHud, drawLeds: drawLeds, drawWheelDisplay: drawWheelDisplay, drawTrim: drawTrim,
+    drawCluster: drawCluster, drawDragCluster: drawDragCluster, drawDragScreen: drawDragScreen, dragKey: dragKey, drawCenterScreen: drawCenterScreen, drawHud: drawHud, drawLeds: drawLeds, drawWheelDisplay: drawWheelDisplay, drawTrim: drawTrim, drawGrime: drawGrime,
     minimapFrom: minimapFrom, fmtTime: fmtTime, gearLabel: gearLabel, upholsteryKind: upholsteryKind, drawUpholstery: drawUpholstery, HIDE_KINDS: HIDE_KINDS, lookBackHideKinds: lookBackHideKinds,
     wrapPi: wrapPi, f1CockpitBuild: f1CockpitBuild, f1Layout: f1Layout
   };
