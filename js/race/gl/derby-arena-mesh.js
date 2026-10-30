@@ -330,7 +330,7 @@ CB.gl = CB.gl || {};
       // advertising banners along the inner face (generic derby slogans; textured in build())
       if (style !== 'scrap' && !low) {
         var bLen = 7, bGap = 6, per = bLen + bGap, sa = banAlong, sb = banAlong + segLen;
-        var inset = style === 'glass' ? 0.035 : 0.03, zb = style === 'glass' ? 0.26 : 0.32, zt = Math.min(h0, h1) - (style === 'glass' ? 0.08 : 0.14);
+        var inset = style === 'glass' ? 0.035 : 0.03, zt = Math.min(h0, h1) - (style === 'glass' ? 0.08 : 0.14), zb = Math.max(style === 'glass' ? 0.26 : 0.32, zt - 0.95);   // ~8:1 boards
         var flipB = (A1.x - A0.x) * n0[1] - (A1.y - A0.y) * n0[0] < 0;
         var atS = function (d) { var f = (d - sa) / Math.max(1e-6, segLen); return { p: [i0[0] + (i1[0] - i0[0]) * f - (n0[0] + (n1[0] - n0[0]) * f) * inset, i0[1] + (i1[1] - i0[1]) * f - (n0[1] + (n1[1] - n0[1]) * f) * inset] }; };
         for (var kb = Math.floor(sa / per); kb * per < sb && zt - zb > 0.3; kb++) {
@@ -928,7 +928,7 @@ CB.gl = CB.gl || {};
         if (A0.open) continue;
         // flame tongues: bright base, transparent ragged top (vertex alpha), two layers offset for depth
         for (var fl = 0; fl < 2; fl++) {
-          var hA = 1.1 + noise2(A0.x * 0.7 + fl * 9, A0.y * 0.7) * 1.4, hB = 1.1 + noise2(B0.x * 0.7 + fl * 9, B0.y * 0.7) * 1.4;
+          var hA = 0.35 + noise2(A0.x * 0.7 + fl * 9, A0.y * 0.7) * 0.55, hB = 0.35 + noise2(B0.x * 0.7 + fl * 9, B0.y * 0.7) * 0.55;   // low glow skirt under the flame particles
           var nA = vtxOut(o, oi), nB = vtxOut(o, (oi + 1) % o.length), off = fl * 0.35;
           var ax = (A0.x - nA[0] * off) * sc, ay = (A0.y - nA[1] * off) * sc, bx = (B0.x - nB[0] * off) * sc, by = (B0.y - nB[1] * off) * sc;
           var za = lift ? hAt(ax, ay) : 0, zb = lift ? hAt(bx, by) : 0;
@@ -1035,7 +1035,7 @@ CB.gl = CB.gl || {};
           if (!low && far) trs(item(meshes.beam, MAT.beam[d.kind]).model, d.x, d.y, 0.05, 0, 1, 7, 1);
         } else if (d.type === 'ring') {
           var pf = d.pulse * (1 + 0.5 * clamp(d.level, 0, 3));
-          MAT.fire.color[0] = MAT.fire.color[1] = MAT.fire.color[2] = 2.4 * pf;
+          var pg = Math.min(1.6, pf) * 0.45; MAT.fire.color[0] = 1.5 * pg; MAT.fire.color[1] = 0.8 * pg; MAT.fire.color[2] = 0.6 * pg;   // a low orange glow sheet; the renderer adds real flame tongues
           MAT.lava.color[0] = MAT.lava.color[1] = MAT.lava.color[2] = 0.7 + 0.3 * d.pulse;
           var fm = fireMesh(d.s);
           if (fm && terrain) trs(item(fm, MAT.fire).model, 0, 0, 0, 0, 1, 1, 1);

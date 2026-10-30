@@ -1889,7 +1889,7 @@ CB.derby = CB.derby || {};
           // a continuous plume from under the bonnet: thin pale wisps -> a thick grey column -> oily black smoke
           var g = lerp(0.8, 0.05, bl) * (0.9 + rnd() * 0.15);
           spawn({ p: madd(bay, [rnd() - 0.5, 0, rnd() - 0.5], 0.4), v: add(mul(vel, 0.35), [(rnd() - 0.5) * 0.7, 1.0 + smoke * 1.6 + rnd() * 0.8, (rnd() - 0.5) * 0.7]), life: 1.5 + smoke * 2.2 + rnd() * 0.6, age: 0,
-            size: 0.28 + smoke * 0.32, grow: 0.7 + smoke * 0.9 + bl * 0.3, col: [g, g * 0.98, g * 0.95, 0.22 + 0.4 * smoke], add: false, g: -0.03, soft: 0.85 });
+            size: 0.28 + smoke * 0.32, grow: 0.7 + smoke * 0.9 + bl * 0.3, col: [g, g * 0.98, g * 0.95, 0.16 + 0.32 * smoke], add: false, g: -0.03, soft: 0.85 });
         }
       }
       var Zc = c.zones || {}, ez = clamp01(num(rear ? Zc.rear : Zc.front, 0)), hspd = Math.abs(num(c.speed, 0));
@@ -1968,14 +1968,14 @@ CB.derby = CB.derby || {};
           e.fireSeats = [[eb, H * 0.62, 0], [eb * 0.4 + (rnd() - 0.5) * L * 0.3, H * 0.75, (rnd() - 0.5) * 0.9], [-eb * 0.6, H * 0.55, (rnd() - 0.5) * 1.0], [(rnd() - 0.5) * L * 0.6, H * 0.85, (rnd() - 0.5) * 0.6]];
         }
         var engineFire = num(eng.fire, 0) > num(c.onFire, 0), nSeat = engineFire && !c.out ? 1 + (fire > 0.6 ? 1 : 0) : 2 + Math.round(fire * 2);
-        e.fireAcc += dt * (lowQ ? 24 : 130) * (0.35 + fire * 0.65);
+        e.fireAcc += dt * (lowQ ? 20 : 105) * (0.35 + fire * 0.65);
         while (e.fireAcc > 1) {
           e.fireAcc -= 1;
           var seat = e.fireSeats[Math.floor(rnd() * Math.min(nSeat, e.fireSeats.length))];
           var lp = [seat[0] + (rnd() - 0.5) * 0.4, seat[1] + rnd() * 0.1, seat[2] + (rnd() - 0.5) * 0.4];
           // on a moving car the slipstream bends the tongues back and tears them off short (no trail of loose flames)
           var sw = 1 / (1 + hspd * 0.16);
-          flame(xform(M, lp), add(mul(vel, 0.82), [(rnd() - 0.5) * 0.5, (1.1 + rnd() * 1.6 + fire * 0.6) * (0.5 + 0.5 * sw), (rnd() - 0.5) * 0.5]), (0.2 + fire * 0.22 + rnd() * 0.12) * (0.75 + 0.25 * sw), (0.32 + rnd() * 0.3) * sw, rnd() < 0.3 ? [2.4, 1.2, 0.3, 0.75] : [2.2, 0.8, 0.2, 0.7]);
+          flame(xform(M, lp), add(mul(vel, 0.82), [(rnd() - 0.5) * 0.5, (1.1 + rnd() * 1.6 + fire * 0.6) * (0.5 + 0.5 * sw), (rnd() - 0.5) * 0.5]), (0.27 + fire * 0.28 + rnd() * 0.16) * (0.75 + 0.25 * sw), (0.32 + rnd() * 0.3) * sw, rnd() < 0.3 ? [2.4, 1.2, 0.3, 0.75] : [2.2, 0.8, 0.2, 0.7]);
         }
         if (!lowQ) {
           e.fsAcc = num(e.fsAcc, 0) + dt * 7 * fire;
@@ -1997,7 +1997,7 @@ CB.derby = CB.derby || {};
             for (var k = 0; k < n; k++) {
               var sp = 15 + rnd() * 8, jx = (rnd() - 0.5) * 0.35, jy = (rnd() - 0.5) * 0.2;
               var d = norm(add(add(dir, mul(fr.right, jx)), mul(fr.up, jy)));
-              flame(madd(tip, d, rnd() * 0.4 + (R.mode === 'hood' && c.id === R.focusId ? 1.6 : 0)), add(mul(d, sp), mul(vel, 0.9)), 0.12 + rnd() * 0.1, 0.4 + rnd() * 0.2, rnd() < 0.3 ? [2.4, 1.3, 0.4, 0.55] : [2.0, 0.65, 0.12, 0.5], true);
+              flame(madd(tip, d, rnd() * 0.4 + (R.mode === 'hood' && c.id === R.focusId ? 1.6 : 0)), add(mul(d, sp), mul(vel, 0.9)), 0.12 + rnd() * 0.1, 0.4 + rnd() * 0.2, rnd() < 0.3 ? [2.4, 1.3, 0.4, 0.38] : [2.0, 0.65, 0.12, 0.34], true);
             }
             if (!lowQ && rnd() < 0.4) spawn({ p: madd(tip, dir, 8), v: add(mul(dir, 4), [0, 1.5, 0]), life: 1.2, age: 0, size: 0.6, grow: 1.2, col: [0.12, 0.1, 0.09, 0.4], add: false, g: -0.05 });
           }
@@ -2058,6 +2058,25 @@ CB.derby = CB.derby || {};
         setTRS(it.model, [cr.pos[0], y, cr.pos[2]], [c, 0, -s], [0, 1, 0], [s, 0, c], cr.hw, 1, cr.hh);
         if (cl > 0.95 && rnd() < 0.3) puff([cr.pos[0] + (rnd() - 0.5) * cr.hw * 2, 0.4, cr.pos[2] + (rnd() - 0.5) * cr.hh * 2], 1, [0.5, 0.45, 0.4, 0.4], 0.6, 1, 1);
       });
+      // sudden-death ring of fire: real flame tongues + smoke along the burning boundary near the camera
+      var sdz = snap.suddenDeath;
+      if (sdz && sdz.on && world.outline && world.outline.length && R.quality !== 'low') {
+        var ol = world.outline, scl = clamp(num(sdz.safeScale, 1), 0.2, 1), cpz = cam.position;
+        R.sdAcc = num(R.sdAcc, 0) + dt * (R.quality === 'medium' ? 120 : 260) * (1 + 0.3 * clamp(num(sdz.level, 0), 0, 3));
+        var tries = 0;
+        while (R.sdAcc > 1 && tries++ < 400) {
+          var oi = Math.floor(rnd() * ol.length), A0 = ol[oi], B0 = ol[(oi + 1) % ol.length];
+          if (A0.open) continue;
+          var ft = rnd(), sx0 = (A0.x + (B0.x - A0.x) * ft) * scl, sy0 = (A0.y + (B0.y - A0.y) * ft) * scl;
+          var gp = [sx0, 0, -sy0];
+          if (Math.hypot(gp[0] - cpz[0], gp[2] - cpz[2]) > 48) { R.sdAcc -= 0.25; continue; }
+          R.sdAcc -= 1;
+          gp[1] = groundAt(gp[0], gp[2]) + 0.1;
+          flame(gp, [(rnd() - 0.5) * 0.6, 1.8 + rnd() * 1.8, (rnd() - 0.5) * 0.6], 0.45 + rnd() * 0.45, 0.45 + rnd() * 0.35, rnd() < 0.3 ? [2.5, 1.3, 0.3, 0.7] : [2.2, 0.8, 0.2, 0.65]);
+          if (rnd() < 0.05) spawn({ p: add(gp, [0, 1.8, 0]), v: [(rnd() - 0.5) * 0.5, 2 + rnd(), (rnd() - 0.5) * 0.5], life: 2.5, age: 0, size: 0.8, grow: 1.2, col: [0.08, 0.07, 0.06, 0.4], add: false, g: -0.02, soft: 0.6 });
+        }
+        if (R.sdAcc > 1) R.sdAcc = 1;
+      }
       // braziers / torches
       var fN = R.quality === 'low' ? 1 : 3;
       D.fires.forEach(function (f) { for (var k = 0; k < fN; k++) flame(madd(f.pos, [rnd() - 0.5, 0, rnd() - 0.5], f.size * 0.4), [(rnd() - 0.5) * 0.4, 1.6 + rnd() * 1.6, (rnd() - 0.5) * 0.4], 0.3 * f.size + rnd() * 0.2, 0.4 + rnd() * 0.3, null); if (rnd() < 0.1) spawn({ p: add(f.pos, [0, 1.2, 0]), v: [0, 1.6, 0], life: 2, age: 0, size: 0.4, grow: 0.8, col: [0.1, 0.09, 0.08, 0.3], add: false, g: -0.02 }); });

@@ -354,10 +354,16 @@ CB.gl = CB.gl || {};
   /** caltrop patch (unit radius ~3.2 m): scattered tetra spikes */
   function caltropGeometry() {
     var g = new Geo(), R = rng(99);
-    for (var k = 0; k < 42; k++) {
-      var a = R() * TAU, r = Math.sqrt(R()) * 3.0, c = [Math.cos(a) * r, 0.06, Math.sin(a) * r];
-      var h = 0.12 + R() * 0.06;
-      g.cone(c, add(c, [(R() - 0.5) * 0.08, h, (R() - 0.5) * 0.08]), 0.07, 3, C.steel);
+    // real caltrops: four welded spikes in tetrahedral directions (one always points up), tumbled to random yaw;
+    // bright bare steel so they read on dark mud and on ice alike
+    var T4 = [[0, 1, 0], [0.943, -0.333, 0], [-0.471, -0.333, 0.816], [-0.471, -0.333, -0.816]], bright = hex('#b8bcc2');
+    for (var k = 0; k < 56; k++) {
+      var a = R() * TAU, r = Math.sqrt(R()) * 3.0, yaw = R() * TAU, cy = Math.cos(yaw), sy = Math.sin(yaw), L = 0.09 + R() * 0.04;
+      var c = [Math.cos(a) * r, L * 0.34, Math.sin(a) * r];
+      for (var q = 0; q < 4; q++) {
+        var d = T4[q], dir = [d[0] * cy - d[2] * sy, d[1], d[0] * sy + d[2] * cy];
+        g.cone(c, add(c, [dir[0] * L, dir[1] * L, dir[2] * L]), 0.018, 3, q === 0 ? bright : C.steel);
+      }
     }
     return g.out();
   }
