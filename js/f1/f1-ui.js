@@ -53,6 +53,11 @@ CB.f1 = CB.f1 || {};
     var pick = Array.isArray(chosen) && chosen.length >= 2 ? ids.filter(function (id) { return chosen.indexOf(id) >= 0; }) : ids.slice(0, rounds || 4);
     return pick;
   }
+  /** "Gained 3 places from P11" / "Lost 1 place from P11" / "Held P11" */
+  function gainedLine(g, grid) {
+    var n = Math.abs(g);
+    return g === 0 ? 'Held P' + grid : (g > 0 ? 'Gained ' : 'Lost ') + n + (n === 1 ? ' place' : ' places') + ' from P' + grid;
+  }
   function lapsLabel(S, def) {
     var M = mode();
     var laps = M ? M.raceLaps(def, { kind: S.lengthKind, laps: S.laps, pct: S.pct }) : S.laps;
@@ -322,13 +327,15 @@ CB.f1 = CB.f1 || {};
     var rootAll = root;
     root = main0;
     if (U.run) {
-      var r = U.run, def = M.circuit(r.kind === 'season' ? r.rounds[r.round] : r.circuitId);
-      var label = r.kind === 'season' ? 'Championship · round ' + (r.round + 1) + ' of ' + r.rounds.length : 'Race weekend';
+      // a finished weekend / season stays saved (its final classification) until cleared: say so, don't offer to "continue" it
+      var r = U.run, over = runOver(r);
+      var def = M.circuit(r.kind === 'season' ? r.rounds[Math.min(r.round, r.rounds.length - 1)] : r.circuitId);
+      var label = r.kind === 'season' ? (over ? 'Championship · final standings' : 'Championship · round ' + (r.round + 1) + ' of ' + r.rounds.length) : over ? 'Race weekend · complete' : 'Race weekend';
       root.appendChild(h('div', { class: 'f1-continue' },
         h('div', null, h('b', { text: label }), h('div', { class: 'f1-hint', text: (def ? def.name : '') + ' · ' + ((T.get(r.settings && r.settings.team) || {}).name || '') })),
         h('div', { class: 'f1-spacer' }),
-        h('button', { class: 'cb-btn primary', type: 'button', onclick: function () { U.screen = 'hub'; render(); } }, 'Continue'),
-        h('button', { class: 'cb-btn ghost', type: 'button', onclick: function () { if (!hasDOM || window.confirm('Abandon the ' + (r.kind === 'season' ? 'championship' : 'weekend') + ' in progress?')) { U.run = null; saveRun(); render(); } } }, 'Abandon')));
+        h('button', { class: 'cb-btn primary', type: 'button', onclick: function () { U.screen = 'hub'; render(); } }, over ? 'View results' : 'Continue'),
+        h('button', { class: 'cb-btn ghost', type: 'button', onclick: function () { if (over || !hasDOM || window.confirm('Abandon the ' + (r.kind === 'season' ? 'championship' : 'weekend') + ' in progress?')) { U.run = null; U.lastPanel = null; saveRun(); render(); } } }, over ? 'Clear' : 'Abandon')));
     }
     var grid = h('div', { class: 'f1-grid' });
     var left = h('div'), right = h('div');
@@ -426,7 +433,7 @@ CB.f1 = CB.f1 || {};
 
   function beginRun() {
     var S = U.settings, W = wk(), M = mode();
-    if (U.run && !(hasDOM && window.confirm('Start a new ' + (S.format === 'season' ? 'championship' : 'event') + '? The one in progress will be abandoned.'))) return;
+    if (U.run && !runOver(U.run) && !(hasDOM && window.confirm('Start a new ' + (S.format === 'season' ? 'championship' : 'event') + '? The one in progress will be abandoned.'))) return;
     if (S.format === 'season') {
       var rounds = calendar(M.circuits(), S.seasonCircuits, S.rounds);
       U.run = W.createSeason({ rounds: rounds, settings: clone(S), sessionFormat: S.seasonWeekend ? 'weekend' : 'quick' });
@@ -437,6 +444,8 @@ CB.f1 = CB.f1 || {};
   }
 
   /* ---------------------------------------------------------------- weekend / season hub */
+  /** a finished weekend / season (kept only for its final classification): replacing it needs no confirmation */
+  function runOver(r) { var W = wk(), w = weekendOf(r); return !!r && (r.kind === 'season' ? W.isSeasonOver(r) : !!(w && W.isComplete(w))); }
   function weekendOf(run) { return run ? (run.kind === 'season' ? run.weekend : run) : null; }
   function runSettings() { return U.run && U.run.settings && U.run.settings.team ? mode().sanitize(U.run.settings) : U.settings; }
   function renderHub(root) {
@@ -491,8 +500,10 @@ CB.f1 = CB.f1 || {};
   function sessionSummary(s) {
     var me = (s.results || []).filter(function (r) { return r.isPlayer; })[0];
     if (!me) return 'Done';
-    if (s.id === 'race') return 'Finished P' + me.position + (me.status === 'dnf' ? ' (DNF)' : '');
-    return 'P' + me.position + ' · ' + fmtLap(me.bestLap_s);
+    if (s.id === 'race') return me.status === 'dnf' ? 'DNF' : 'Finished P' + me.position;
+    if (!isNum(me.bestLap_s) || me.bestLap_s <= 0) return 'No time set';
+    var p = wk().gridFrom(s.results).indexOf('player') + 1;
+    return 'P' + (p || me.position) + ' · ' + fmtLap(me.bestLap_s);
   }
   function resultsTable(s) {
     var isRace = s.id === 'race', W = wk(), S = runSettings();
@@ -579,7 +590,7 @@ CB.f1 = CB.f1 || {};
       findTrack: function (id) { return M.circuit(id); },
       records: records(),
       hudOptions: CB.f1.hud ? { tower: false, timing: false, cluster: false, minimap: false } : null,
-      configure: function (cfg) {
+      configure: function (cfg, R) {
         // a fresh F1 hook set for every start (Race again / Restart): tyres, ERS and DRS state never carry over
         starts++;
         if (starts > 1 && CB.f1.hooks) {
@@ -589,6 +600,13 @@ CB.f1 = CB.f1 || {};
         }
         if (hooksNow) hooksNow.__f1 = true;
         cfg.maxOpponents = 21;
+        // practice / qualifying run in the engine's 'practice' mode, where race-ui builds a generic AI grid: put the real
+        // 21 F1 entrants back (their names, numbers and ids are what the timing tower shows and what qualifying's grid uses)
+        if (Array.isArray(launch.opponents) && launch.opponents.length && !(cfg.opponents && cfg.opponents[0] && cfg.opponents[0].f1)) {
+          cfg.opponents = launch.opponents.slice(0, 21);
+          cfg.opponentCount = cfg.opponents.length;
+          if (R) R.opponents = cfg.opponents;
+        }
         return cfg;
       },
       attach: function (session, R) {
@@ -612,6 +630,8 @@ CB.f1 = CB.f1 || {};
       plugin: plugin, oneShot: oneShot, autoStart: true,
       continueLabel: sessionId === 'race' ? (U.run.kind === 'season' ? 'Continue · standings' : 'Continue') : 'Continue weekend',
       backLabel: 'Back to Formula 1',
+      // always back to the plain F1 screen: returning to a #/f1?quick=1 deep link would start another race
+      returnTo: 'f1',
       onFinish: function (results) { finished = results; recordResult(sessionId, results, S); },
       onClose: function () {
         U.racing = false;
@@ -688,14 +708,15 @@ CB.f1 = CB.f1 || {};
       var sc = wk().score(raw, { fastestLapPoint: S.fastestLapPoint && U.run && U.run.format !== 'quick', playerTeam: S.team });
       var m2 = sc.filter(function (r) { return r.isPlayer; })[0] || {};
       var fl = raw.fastestLap && rows.filter(function (r) { return r.id === raw.fastestLap.carId; })[0];
-      box.appendChild(h('b', { text: (me.status === 'dnf' ? 'DNF' : 'P' + me.position) + ' · ' + (m2.points || 0) + ' points' }));
-      box.appendChild(h('div', { class: 'f1-hint', html: (isNum(m2.gained) ? (m2.gained > 0 ? '+' + m2.gained + ' places from P' + m2.gridPosition : m2.gained < 0 ? m2.gained + ' places from P' + m2.gridPosition : 'Held P' + m2.gridPosition) + ' · ' : '') +
+      box.appendChild(h('b', { text: (me.status === 'dnf' ? 'DNF' : 'P' + me.position) + ' · ' + (m2.points || 0) + (m2.points === 1 ? ' point' : ' points') }));
+      box.appendChild(h('div', { class: 'f1-hint', html: (isNum(m2.gained) ? gainedLine(m2.gained, m2.gridPosition) + ' · ' : '') +
         (me.pitStops || 0) + (me.pitStops === 1 ? ' stop' : ' stops') + (me.endurance && me.endurance.f1 ? ' · ' + (me.endurance.f1.compoundsUsed || []).map(tyreChip).join('') : '') +
         (fl ? '<br>Fastest lap: <span class="f1-fl">' + esc(fl.isPlayer ? 'You' : fl.name) + ' ' + fmtLap(raw.fastestLap.time) + '</span>' : '') }));
     } else {
       var g = wk().gridFrom(raw), p = g.indexOf('player') + 1;
+      var timed = isNum(me.bestLap_s) && me.bestLap_s > 0;
       box.appendChild(h('b', { text: (sessionId === 'qualifying' ? 'Qualified P' : 'Practice P') + p }));
-      box.appendChild(h('div', { class: 'f1-hint', text: 'Best lap ' + fmtLap(me.bestLap_s) }));
+      box.appendChild(h('div', { class: 'f1-hint', text: timed ? 'Best lap ' + fmtLap(me.bestLap_s) : 'No timed lap' + (sessionId === 'qualifying' ? ' — you start from the back' : '') }));
     }
     return box;
   }
@@ -707,7 +728,7 @@ CB.f1 = CB.f1 || {};
     if (U.run.kind === 'weekend' && U.run.format === 'quick') { U.run = null; saveRun(); U.screen = 'setup'; render(); return; }
     if (results && sessionId === 'race' && U.lastScored) {
       var me = U.lastScored.filter(function (r) { return r.isPlayer; })[0];
-      if (me && hasDOM) U.lastPanel = h('div', { class: 'f1-res' }, h('b', { text: (me.status === 'dnf' ? 'DNF' : 'P' + me.position) + ' · +' + me.points + ' points' }),
+      if (me && hasDOM) U.lastPanel = h('div', { class: 'f1-res' }, h('b', { text: (me.status === 'dnf' ? 'DNF' : 'P' + me.position) + ' · ' + (me.points ? '+' + me.points + (me.points === 1 ? ' point' : ' points') : 'no points') }),
         h('div', { class: 'f1-hint', text: U.run.kind === 'season' ? championshipLine() : 'Weekend complete.' }));
     }
     if (U.run.kind === 'weekend' && w && W.isComplete(w)) { /* stay on the hub with the final classification */ }
@@ -723,7 +744,7 @@ CB.f1 = CB.f1 || {};
   var api = {
     open: open, close: close, startSession: startSession,
     state: function () { return U ? { screen: U.screen, settings: clone(U.settings), run: clone(U.run), racing: !!U.racing } : null; },
-    _: { simGrid: simGrid, calendar: calendar, engineOf: engineOf, CSS: CSS }
+    _: { simGrid: simGrid, calendar: calendar, gainedLine: gainedLine, sessionSummary: sessionSummary, engineOf: engineOf, CSS: CSS }
   };
   CB.f1.ui = api;
 

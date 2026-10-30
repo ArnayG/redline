@@ -86,3 +86,19 @@ test('achievements: F1 category and events', function () {
   assert.ok(defs.length >= 10, defs.length + ' F1 achievements');
   assert.ok(defs.every(function (d) { return /^f1-[a-z0-9-]+$/.test(d.id); }));
 });
+
+test('ui: result wording ("Gained 3 places", "Lost 1 place", "Held P5"), no-time practice / DNF summaries', function () {
+  assert.strictEqual(UX.gainedLine(3, 11), 'Gained 3 places from P11');
+  assert.strictEqual(UX.gainedLine(-1, 11), 'Lost 1 place from P11');
+  assert.strictEqual(UX.gainedLine(0, 5), 'Held P5');
+  require(path.join(root, 'js/f1/f1-weekend.js'));
+  assert.strictEqual(UX.sessionSummary({ id: 'practice', results: [{ isPlayer: true, position: 22, bestLap_s: null }] }), 'No time set');
+  assert.strictEqual(UX.sessionSummary({ id: 'race', results: [{ isPlayer: true, position: 12, status: 'dnf' }] }), 'DNF');
+  assert.strictEqual(UX.sessionSummary({ id: 'qualifying', results: [{ id: 'a', position: 1, bestLap_s: 90 }, { isPlayer: true, position: 2, bestLap_s: 89 }] }), 'P1 · 1:29.000');
+});
+
+test('ui: sessions return to plain #/f1 (a ?quick=1 deep link must not restart), practice / quali get the real F1 field', function () {
+  var src = read('js/f1/f1-ui.js');
+  assert.ok(/returnTo: 'f1'/.test(src), 'race-ui launch carries returnTo f1');
+  assert.ok(/configure: function \(cfg, R\)[\s\S]{0,2500}cfg\.opponents = launch\.opponents\.slice\(0, 21\)/.test(src), 'configure restores the 21 F1 entrants');
+});
