@@ -84,9 +84,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
   };
   var BADGE_DARK = [0.012, 0.012, 0.014];
   var FINISH = {
-    solid: { m: 0.0, r: 0.32, cc: 0.7 }, metallic: { m: 0.45, r: 0.34, cc: 0.9 }, pearl: { m: 0.3, r: 0.3, cc: 0.9 },
-    matte: { m: 0.1, r: 0.8, cc: 0.0 }, satin: { m: 0.25, r: 0.55, cc: 0.25 }, chrome: { m: 1.0, r: 0.08, cc: 0.4 },
-    candy: { m: 0.4, r: 0.22, cc: 1.0 }, chameleon: { m: 0.5, r: 0.24, cc: 1.0 }
+    // fl: metallic flake under the clear coat (gl-core object-space glints), hue: view-angle hue shift (pearl / candy
+    // tint, chameleon flip) — the detailed mesh's values; the low-poly body used to drop both, so metallic, pearl
+    // and chameleon paints all rendered as one plain gloss
+    solid: { m: 0.0, r: 0.32, cc: 0.7, fl: 0, hue: 0 }, metallic: { m: 0.45, r: 0.34, cc: 0.9, fl: 0.22, hue: 0 },
+    pearl: { m: 0.3, r: 0.3, cc: 0.9, fl: 0.16, hue: 0.03 }, matte: { m: 0.1, r: 0.8, cc: 0.0, fl: 0, hue: 0 },
+    satin: { m: 0.25, r: 0.55, cc: 0.25, fl: 0.1, hue: 0 }, chrome: { m: 1.0, r: 0.08, cc: 0.4, fl: 0, hue: 0 },
+    candy: { m: 0.4, r: 0.22, cc: 1.0, fl: 0.14, hue: 0.02 }, chameleon: { m: 0.5, r: 0.24, cc: 1.0, fl: 0.2, hue: 0.45 }
   };
 
   /* ================================================================ materials (gl-core descriptors) */
@@ -95,13 +99,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (c.length === 3) c = [c[0], c[1], c[2], 1];
     var m = {
       baseColor: c, color: c, metallic: num(o.metallic, 0), roughness: num(o.roughness, 0.7), clearcoat: num(o.clearcoat, 0),
-      flake: 0, hueShift: 0, emissive: o.emissive || [0, 0, 0], transparent: false, opacity: c[3], unlit: false,
+      flake: num(o.flake, 0), hueShift: num(o.hueShift, 0), emissive: o.emissive || [0, 0, 0], transparent: false, opacity: c[3], unlit: false,
       doubleSided: false, name: o.name || '', lowpoly: true
     };
     if (o.clearcoatRoughness != null) m.clearcoatRoughness = o.clearcoatRoughness;
     if (o.polygonOffset) m.polygonOffset = o.polygonOffset;
     m.uBaseColor = m.baseColor; m.uMetallic = m.metallic; m.uRoughness = m.roughness; m.uClearcoat = m.clearcoat;
-    m.uEmissive = m.emissive; m.uFlake = 0; m.uHueShift = 0; m.useMap = 0; m.uUseMap = 0;
+    m.uEmissive = m.emissive; m.uFlake = m.flake; m.uHueShift = m.hueShift; m.useMap = 0; m.uUseMap = 0;
     return m;
   }
   function DARK_ENV(k) { return { envIntensity: k, uEnvIntensity: k }; }
@@ -111,10 +115,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var wm = S.wheelMaterial === 'carbon' ? { m: 0.2, r: 0.3 } : S.wheelMaterial === 'steel' ? { m: 0.6, r: 0.45 } : { m: 0.75, r: 0.32 };
     var lampOff = [-1, -2];
     return {
-      body: material({ name: 'paint', metallic: F.m, roughness: F.r, clearcoat: F.cc, clearcoatRoughness: 0.08 }),
+      body: material({ name: 'paint', metallic: F.m, roughness: F.r, clearcoat: F.cc, clearcoatRoughness: 0.08, flake: F.fl, hueShift: F.hue }),
       // a gloss-black roof is paint-finished but must read black: half the sky reflection (a body-colour / contrast
       // roof keeps the paint's)
-      roof: Object.assign(material({ name: 'roof', metallic: F.m * 0.6, roughness: Math.max(0.2, F.r), clearcoat: F.cc, clearcoatRoughness: 0.08 }), S.roof === 'black' ? DARK_ENV(0.5) : {}),
+      roof: Object.assign(material({ name: 'roof', metallic: F.m * 0.6, roughness: Math.max(0.2, F.r), clearcoat: F.cc, clearcoatRoughness: 0.08, flake: S.roof === 'black' ? 0 : F.fl * 0.6, hueShift: S.roof === 'black' ? 0 : F.hue }), S.roof === 'black' ? DARK_ENV(0.5) : {}),
       trim: material({ name: 'trim', roughness: 0.62, metallic: 0, clearcoat: 0.08 }),
       // gloss black (pillars, window surrounds, mirror caps): full clear coat but half the sky reflection, or the
       // Fresnel term turns it white at grazing angles (rear quarters, A-pillars) and the greenhouse stops reading dark
@@ -140,7 +144,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       tyre: material({ name: 'tyre', roughness: 0.88, metallic: 0 }),
       rim: material({ name: 'rim', metallic: wm.m, roughness: wm.r, clearcoat: 0.3 }),
       caliper: material({ name: 'caliper', roughness: 0.35, metallic: 0.1, clearcoat: 0.9, clearcoatRoughness: 0.08 }),
-      low: material({ name: 'paint', metallic: F.m * 0.7, roughness: Math.max(0.3, F.r), clearcoat: F.cc * 0.7 }),
+      low: material({ name: 'paint', metallic: F.m * 0.7, roughness: Math.max(0.3, F.r), clearcoat: F.cc * 0.7, hueShift: F.hue }),
       wheelsLow: material({ name: 'wheels', roughness: 0.65, metallic: 0.25 })
     };
   }
@@ -1350,6 +1354,13 @@ var CB = (globalThis.CB = globalThis.CB || {});
     });
   }
 
+  /** a plausible registration per model (letters from the model id, digits from its hash): text, no artwork */
+  function plateText(id) {
+    var h = 0, s = String(id);
+    for (var i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
+    var L = s.replace(/[^a-z]/g, '').toUpperCase(), a = L.charAt(0) || 'R', b = L.charAt(Math.max(1, (h >>> 3) % Math.max(1, L.length))) || 'L';
+    return a + b + ' ' + String(100 + (h % 900));
+  }
   /* ================================================================ compile (ref coords, once per def) */
   function compile(id, def) {
     var key = id + (def.auto ? ':auto' : '');
@@ -1408,6 +1419,18 @@ var CB = (globalThis.CB = globalThis.CB || {});
             }
           });
         });
+        // number plates carry a registration (text only, dark stroke font, stacked on the plate): a blank white
+        // card read as a placeholder from the chase cam, where the rear plate is the most visible rear detail
+        if (p.mat === 'plate' && !p.mirror && (p.view === 'rear' || p.view === 'front') && p.pts.length >= 3) {
+          var plo = [Infinity, Infinity], phi = [-Infinity, -Infinity];
+          p.pts.forEach(function (q) { for (var c = 0; c < 2; c++) { plo[c] = Math.min(plo[c], +q[c]); phi[c] = Math.max(phi[c], +q[c]); } });
+          var pw = phi[0] - plo[0], ph = phi[1] - plo[1];
+          if (pw > 0.2 && ph > 0.06) {
+            var reg = plateText(id), th = Math.min(ph * 0.52, pw * 0.8 / reg.length);
+            textDecal(all, { t: 'text', view: p.view, str: reg, at: [(plo[0] + phi[0]) / 2, (plo[1] + phi[1]) / 2], h: th, mat: 'black', weight: 0.16, width: 0.85, spacing: 1.1, offset: 0.002, maxTilt: 80 }, placed)
+              .forEach(function (q) { parts.push(q); });
+          }
+        }
       } else if (p.t === 'text') {
         textDecal(surfFor(p), p, placed).forEach(function (q) { parts.push(q); });
       } else parts.push(p);
