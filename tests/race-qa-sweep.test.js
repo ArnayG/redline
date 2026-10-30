@@ -77,3 +77,16 @@ test('race-ui: the "Rotate your phone" card hides once the race is running (and 
   assert.ok(/R\.rotateHidden = false/.test(src));
   assert.ok(/rot\.classList\.remove\('is-dismissed'\)/.test(src));
 });
+
+test('audio: Settings > Audio sliders map onto every mode (race / derby / arcade read CB.race.audio.mix)', function () {
+  var A = require(path.join(JS, 'race', 'audio.js'));
+  assert.equal(typeof A.mix, 'function');
+  var d = A.mix({ audio: { master: 0.8, engine: 0.9, sfx: 0.8 } });
+  assert.equal(d.master, 0.8); assert.ok(Math.abs(d.engine - 1) < 1e-9); assert.ok(Math.abs(d.sfx - 1) < 1e-9);
+  var q = A.mix({ audio: { master: 0.3, engine: 0, sfx: 0.4 } });
+  assert.equal(q.master, 0.3); assert.equal(q.engine, 0); assert.ok(Math.abs(q.sfx - 0.5) < 1e-9);
+  assert.equal(A.mix({}).master, 0.8, 'missing keys fall back to the defaults');
+  var src = fs.readFileSync(path.join(JS, 'derby', 'derby-sfx.js'), 'utf8');
+  assert.ok(/CB\.race\.audio\.mix\(\)/.test(src) && /S\.engBus/.test(src) && !/connect\(S\.master\)/.test(src));
+  assert.ok(/CB\.race\.audio\.mix\(\)/.test(fs.readFileSync(path.join(JS, 'arcade', 'arcade-sfx.js'), 'utf8')));
+});

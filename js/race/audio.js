@@ -238,6 +238,28 @@ CB.race.audio = (function () {
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
   }
 
+  /**
+   * The player's Settings > Audio sliders (CB.game.profile settings.audio: master / engine / sfx, 0..1) as gains.
+   * Returns { master, engine, sfx } where engine / sfx are relative to their defaults (0.9 / 0.8 -> 1, so the stock
+   * mix is unchanged), or null when no profile is loaded. Every mode's audio (race, drift, arcade, derby, drag) reads it.
+   */
+  var MIX_DEFAULTS = { master: 0.8, engine: 0.9, sfx: 0.8 };
+  function profileMix(settingsObj) {
+    var a = null;
+    try {
+      if (settingsObj) a = settingsObj.audio || settingsObj;
+      else {
+        var P = CB.game && CB.game.profile;
+        var prof = P ? (typeof P.peek === 'function' ? P.peek() : typeof P.get === 'function' ? P.get() : null) : null;
+        a = prof && prof.settings && prof.settings.audio;
+      }
+    } catch (e) { a = null; }
+    if (!a || typeof a !== 'object') return null;
+    var lv = function (k) { return clamp01(num(a[k], MIX_DEFAULTS[k])); };
+    return { master: lv('master'), engine: clamp(lv('engine') / MIX_DEFAULTS.engine, 0, 1.15), sfx: clamp(lv('sfx') / MIX_DEFAULTS.sfx, 0, 1.25),
+      muted: a.muted === true };
+  }
+
   function getAudioContextCtor() {
     try {
       var g = typeof window !== 'undefined' ? window : globalThis;
@@ -257,6 +279,16 @@ CB.race.audio = (function () {
       levels: { engine: 1, tires: 1, ambience: 1, sfx: 1, ai: 1, ui: 1 }
     };
     if (saved.levels) for (var lk in settings.levels) if (typeof saved.levels[lk] === 'number') settings.levels[lk] = clamp01(saved.levels[lk]);
+    // Settings > Audio: Master is the output volume, Engine scales the engine / tyre / AI voices, Effects the one-shots,
+    // ambience and UI beeps (an explicit opts.volume / opts.mix still wins)
+    // (applied on top of the saved channel levels, never written back into them)
+    var mixK = { engine: 1, sfx: 1 };
+    function chanK(name) { return name === 'engine' || name === 'tires' || name === 'ai' ? mixK.engine : mixK.sfx; }
+    var pm = opts.mix || profileMix();
+    if (pm) {
+      if (typeof opts.volume !== 'number' && typeof pm.master === 'number') settings.volume = clamp01(pm.master);
+      mixK.engine = num(pm.engine, 1); mixK.sfx = num(pm.sfx, 1);
+    }
 
     var Ctor = getAudioContextCtor();
     var ctx = null, destroyed = false, started = false, failed = !Ctor;
@@ -409,12 +441,12 @@ CB.race.audio = (function () {
       var tone = filter('lowshelf', 120, null, comp); tone.gain.value = 2.5;
       var mix = gain(0.9, tone);
       var live = gain(1, mix);
-      var sfx = gain(settings.levels.sfx, mix);
-      var ui = gain(0.55 * settings.levels.ui, mix);
-      var engineBus = gain(settings.levels.engine, live);
-      var tireBus = gain(settings.levels.tires, live);
-      var ambBus = gain(settings.levels.ambience, live);
-      var aiBus = gain(settings.levels.ai, live);
+      var sfx = gain(settings.levels.sfx * chanK('sfx'), mix);
+      var ui = gain(0.55 * settings.levels.ui * chanK('ui'), mix);
+      var engineBus = gain(settings.levels.engine * chanK('engine'), live);
+      var tireBus = gain(settings.levels.tires * chanK('tires'), live);
+      var ambBus = gain(settings.levels.ambience * chanK('ambience'), live);
+      var aiBus = gain(settings.levels.ai * chanK('ai'), live);
       nodes = { master: master, comp: comp, mix: mix, live: live, sfx: sfx, ui: ui, engine: engineBus, tires: tireBus, amb: ambBus, ai: aiBus };
       tires = buildTires();
       amb = buildAmbience();
@@ -1176,7 +1208,7 @@ CB.race.audio = (function () {
       saveSettings(settings);
       if (!nodes) return;
       var map = { engine: nodes.engine, tires: nodes.tires, ambience: nodes.amb, sfx: nodes.sfx, ai: nodes.ai, ui: nodes.ui };
-      setP(map[name].gain, settings.levels[name] * (name === 'ui' ? 0.55 : 1), 0.05);
+      setP(map[name].gain, settings.levels[name] * chanK(name) * (name === 'ui' ? 0.55 : 1), 0.05);
     }
     function suspend() { try { if (ctx && ctx.state === 'running') ctx.suspend(); } catch (e) { /* ignore */ } }
     function resume() { try { if (ctx && ctx.state === 'suspended') { var pr = ctx.resume(); if (pr && pr.catch) pr.catch(function () {}); } } catch (e) { /* ignore */ } }
@@ -1224,6 +1256,7 @@ CB.race.audio = (function () {
 
   return {
     create: create,
+    mix: profileMix,
     profileFromBuild: profileFromBuild,
     harmonicTable: harmonicTable,
     firingFrequency: firingFrequency,

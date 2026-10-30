@@ -20,7 +20,11 @@ CB.derby = CB.derby || {};
 
   function create(opts) {
     opts = opts || {};
-    var S = { muted: !!opts.muted, vol: num(opts.volume, 0.8), ctx: null, master: null, noise: null, eng: null, flame: null, crowd: null, scrape: null, squeal: null, jet: null,
+    // Settings > Audio (CB.race.audio.mix): Master sets the output, Engine the engine voice, Effects everything else
+    var mx = null;
+    try { mx = CB.race && CB.race.audio && typeof CB.race.audio.mix === 'function' ? CB.race.audio.mix() : null; } catch (eM) { mx = null; }
+    var engK = mx ? num(mx.engine, 1) : 1, fxK = mx ? num(mx.sfx, 1) : 1;
+    var S = { muted: !!opts.muted, vol: num(opts.volume, mx ? num(mx.master, 0.8) : 0.8), ctx: null, master: null, noise: null, eng: null, flame: null, crowd: null, scrape: null, squeal: null, jet: null,
       lastCrash: 0, voices: 0, maxVoices: opts.mobile != null ? (opts.mobile ? 10 : 24) : (isMobile() ? 10 : 24), dropped: 0, played: 0, scrapeLvl: 0, wasBoost: false, curve: null, rnd: 98765 };
     function rnd() { S.rnd = (S.rnd * 1103515245 + 12345) & 0x7fffffff; return S.rnd / 0x7fffffff; }
     function AC() { return typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null; }
@@ -32,6 +36,10 @@ CB.derby = CB.derby || {};
       var comp = c.createDynamicsCompressor();
       try { comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.18; } catch (e2) { /* ignore */ }
       S.master = c.createGain(); S.master.gain.value = S.muted ? 0 : S.vol; S.master.connect(comp); comp.connect(c.destination);
+      // two sub-buses under the master: the engine voice, and the effects bus every other sound plays into
+      S.out = S.master;
+      S.engBus = c.createGain(); S.engBus.gain.value = engK; S.engBus.connect(S.out);
+      S.fx = c.createGain(); S.fx.gain.value = fxK; S.fx.connect(S.out);
       var len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0), seed = 12345;
       for (var i = 0; i < len; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; d[i] = seed / 0x3fffffff - 1; }
       S.noise = buf;
@@ -44,10 +52,10 @@ CB.derby = CB.derby || {};
       o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 50; o2.frequency.value = 25.5;
       lp.type = 'lowpass'; lp.frequency.value = 600; lp.Q.value = 2;
       var g2 = c.createGain(); g2.gain.value = 0.35;
-      o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g); g.gain.value = 0; g.connect(S.master);
+      o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g); g.gain.value = 0; g.connect(S.engBus);
       var rn = loopNoise(), rbp = c.createBiquadFilter(), rg = c.createGain();
       rbp.type = 'bandpass'; rbp.frequency.value = 900; rbp.Q.value = 1.2; rg.gain.value = 0;
-      rn.connect(rbp); rbp.connect(rg); rg.connect(S.master);
+      rn.connect(rbp); rbp.connect(rg); rg.connect(S.engBus);
       o1.start(); o2.start();
       S.eng = { o1: o1, o2: o2, lp: lp, g: g, rattle: rg };
       S.flame = loopBand(1400, 0.7, 'lowpass');
@@ -61,7 +69,7 @@ CB.derby = CB.derby || {};
     function loopBand(freq, q, type) {
       var src = loopNoise(), f = S.ctx.createBiquadFilter(), g = S.ctx.createGain();
       f.type = type; f.frequency.value = freq; f.Q.value = q; g.gain.value = 0;
-      src.connect(f); f.connect(g); g.connect(S.master);
+      src.connect(f); f.connect(g); g.connect(S.fx);
       return { g: g, f: f };
     }
     function voice(dur) {
@@ -81,7 +89,7 @@ CB.derby = CB.derby || {};
       var node = f;
       src.connect(f);
       if (shaped && S.curve) { var ws = c.createWaveShaper(); ws.curve = S.curve; f.connect(ws); node = ws; }
-      node.connect(g); g.connect(S.master);
+      node.connect(g); g.connect(S.fx);
       src.start(t, rnd() * 1.5); src.stop(t + dur + 0.05);
     }
     function tone(freq, dur, gain, type, slide, delay) {
@@ -89,7 +97,7 @@ CB.derby = CB.derby || {};
       var c = S.ctx, t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
       o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.001, gain), t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g); g.connect(S.master); o.start(t); o.stop(t + dur + 0.05);
+      o.connect(g); g.connect(S.fx); o.start(t); o.stop(t + dur + 0.05);
     }
     function chord(freqs, dur, gain, type, delay) { freqs.forEach(function (f, i) { tone(f, dur, gain / Math.sqrt(freqs.length), type, null, (delay || 0) + i * 0.004); }); }
     function cheer(k) { if (S.crowd) S.crowd.swell = Math.min(1, S.crowd.swell + k); }

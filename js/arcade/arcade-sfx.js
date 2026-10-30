@@ -27,7 +27,11 @@ CB.arcade = CB.arcade || {};
 
   function create(opts) {
     opts = opts || {};
-    var A = { ctx: null, master: null, noise: null, muted: !!opts.muted, vol: opts.volume == null ? 0.55 : opts.volume, loops: {}, lastTick: -1, lastTier: 0 };
+    // Settings > Audio (CB.race.audio.mix): arcade cues are effects, so Master x Effects (0.55 at the default sliders)
+    var mx = null;
+    try { mx = CB.race && CB.race.audio && typeof CB.race.audio.mix === 'function' ? CB.race.audio.mix() : null; } catch (eM) { mx = null; }
+    var defVol = mx ? Math.max(0, Math.min(1, 0.55 * (mx.master / 0.8) * mx.sfx)) : 0.55;
+    var A = { ctx: null, master: null, noise: null, muted: !!opts.muted, vol: opts.volume == null ? defVol : opts.volume, loops: {}, lastTick: -1, lastTier: 0 };
     var AC = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
 
     function unlock() {
