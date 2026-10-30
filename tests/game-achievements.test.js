@@ -601,3 +601,13 @@ test('UI: toast + gallery HTML render, escape, conceal hidden, filter', () => {
   assert.equal(A.toast(A.get('first-win')), null, 'toast is a no-op without a DOM');
   assert.equal(A.openGallery(), null, 'gallery is a no-op without a DOM');
 });
+
+test('achievements: race contacts use the debounced session count (matches the results screen), not raw per-car hits', () => {
+  const r = A._internal.normalizeRace({ results: { cars: [{ id: 1, isPlayer: true, position: 1, collisions: 9 }, { id: 2, position: 2 }] }, stats: { collisions: 0 } });
+  assert.equal(r.collisions, 0);
+});
+
+test('achievements: unlock toasts move off the results head (bottom-right while a race / arcade results screen is up)', () => {
+  const css = typeof A._internal.CSS === 'function' ? A._internal.CSS() : String(A._internal.CSS);
+  assert.match(css, /html:has\(#race-root \.rx-results\) #game-ach-toasts\{top:auto;bottom:/);
+});

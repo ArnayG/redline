@@ -588,7 +588,8 @@ CB.game = CB.game || {};
       if (!e || (player.id !== undefined && e.carId !== player.id && e.otherId !== player.id)) return;
       if (e.type === 'collision') evCollisions++; else if (e.type === 'wall') evWall++;
     });
-    var collisions = firstNum(num(player.collisions), num(st.collisions), evts.length ? evCollisions : NaN);
+    // the session summary's count is debounced (one scrape = one contact) and is what the results screen shows as Contacts
+    var collisions = firstNum(num(st.collisions), num(player.collisions), evts.length ? evCollisions : NaN);
     var wallHits = firstNum(num(player.wallHits), num(st.wallHits), evts.length ? evWall : NaN);
     var penalties = firstNum(num(player.penalties_s), num(st.penalties_s), 0);
     var trackLimits = firstNum(num(player.trackLimits), num(st.trackLimits), 0);
@@ -1472,6 +1473,9 @@ CB.game = CB.game || {};
     'transform-origin:100% 50%;animation:gach-in .62s cubic-bezier(.2,1.3,.35,1) both}',
     '.gach-toast.is-leaving{animation:gach-out .42s cubic-bezier(.6,0,.8,.3) both}',
     'html.cb-driving #game-ach-toasts{display:none}',
+    // Race / Drift / Arcade results: the head (position, title, time) runs across the top, so unlocks stack bottom-right
+    // above the docked action bar instead of covering it
+    'html:has(#race-root .rx-results) #game-ach-toasts{top:auto;bottom:calc(92px + env(safe-area-inset-bottom))}',
     '@media (max-width:640px),(max-height:520px){#game-ach-toasts{top:auto;bottom:calc(88px + env(safe-area-inset-bottom));left:12px;right:12px;max-width:none;align-items:stretch}.gach-toast{grid-template-columns:44px 1fr;gap:12px;padding:10px 12px 12px}.gach-toast-icon,.gach-toast-icon svg{width:44px;height:44px}.gach-name{font-size:var(--fs-md)}.gach-desc{display:none}.gach-rewards{margin-top:6px}}',
     '.gach-toast.tier-bronze{--tc:var(--gach-bronze)}.gach-toast.tier-silver{--tc:var(--gach-silver)}.gach-toast.tier-gold{--tc:var(--gach-gold)}.gach-toast.tier-platinum{--tc:var(--gach-platinum)}',
     '.gach-toast::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 0% 50%,color-mix(in srgb,var(--tc) 22%,transparent),transparent 60%);pointer-events:none}',
