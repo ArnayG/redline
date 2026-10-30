@@ -229,3 +229,50 @@ test('studio3d: orbit state — turntable / drag off the preset view is not labe
   assert.strictEqual(typeof S3.isOrbiting, 'function');
   assert.strictEqual(S3.isOrbiting(), false, 'false without a mount');
 });
+
+test('studio3d: x-ray label declutter never overlaps, keeps every label it can and stays on the stage', function () {
+  var boxes = [{ x: 200, y: 100, w: 120, h: 16 }, { x: 210, y: 104, w: 90, h: 16 }, { x: 205, y: 98, w: 60, h: 16 }, null, { x: 600, y: 100, w: 80, h: 16 }, { x: -50, y: 5, w: 80, h: 16 }];
+  var out = _.declutter(boxes, 640, 300);
+  assert.strictEqual(out.length, boxes.length);
+  assert.strictEqual(out[3], null);
+  var placed = out.filter(Boolean);
+  assert.ok(placed.length >= 5, 'crowded labels are nudged, not dropped');
+  for (var i = 0; i < placed.length; i++) {
+    var a = placed[i];
+    assert.ok(a.x - a.w / 2 >= 0 && a.x + a.w / 2 <= 640 && a.y - a.h >= 0 && a.y <= 300, 'inside the stage');
+    for (var j = i + 1; j < placed.length; j++) {
+      var b = placed[j];
+      var ox = Math.abs(a.x - b.x) * 2 < a.w + b.w, oy = Math.abs((a.y - a.h / 2) - (b.y - b.h / 2)) * 2 < a.h + b.h;
+      assert.ok(!(ox && oy), 'labels ' + i + ' / ' + j + ' overlap');
+    }
+  }
+  assert.deepStrictEqual(_.declutter(null, 1, 1), []);
+});
+
+test('studio3d: the stage supersamples 1x screens to 2x and caps big viewports by a pixel budget', function () {
+  assert.strictEqual(_.stageDpr(800, 330, 1), 2, '1x desktop renders at 2x');
+  assert.strictEqual(_.stageDpr(390, 280, 3), 2, '3x phone capped at 2x');
+  var big = _.stageDpr(2400, 1300, 1);
+  assert.ok(big >= 1 && big < 2 && 2400 * 1300 * big * big <= 3.21e6, 'big stage within the budget');
+  assert.ok(isFinite(_.stageDpr(0, 0, NaN)));
+});
+
+test('studio3d: the Garage car is the race car, vertex for vertex (CB.lowpoly.build == CB.gl.car.buildGeometry)', function () {
+  var CM;
+  try { CM = require(path.join(ROOT, 'js', 'race', 'gl', 'car-mesh.js')); } catch (e) { CM = null; }
+  if (!CM || typeof CM.buildGeometry !== 'function') return;
+  ['porsche-911-992', 'bmw-m4-g82', 'ford-f150-raptor-gen3'].forEach(function (id) {
+    var b = buildFor(id, { exterior: { paint: '#c8102e' } });
+    var r = LP.build(b, { lod: 'high' }), d = CM.buildGeometry(b, { lod: 'high', isPlayer: true });
+    assert.ok(r && d, id + ' builds in both paths');
+    if (!d.lowpoly) return;   // another suite switched CB.gl.car to the detailed loft (graphics.carStyle) in this process
+    assert.strictEqual(r.parts.length, d.parts.length, id + ' part count');
+    r.parts.forEach(function (p, i) {
+      var q = d.parts[i].geo.p;
+      assert.strictEqual(p.positions.length, q.length, id + ' part ' + i + ' vertex count');
+      var md = 0;
+      for (var k = 0; k < q.length; k++) md = Math.max(md, Math.abs(p.positions[k] - q[k]));
+      assert.ok(md < 1e-6, id + ' part ' + i + ' (' + p.kind + ') same shape, max diff ' + md);
+    });
+  });
+});

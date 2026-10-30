@@ -330,7 +330,37 @@ var CB = (globalThis.CB = globalThis.CB || {});
     return Math.abs(shortestYaw(num(cam.yaw, a.yaw), a.yaw)) > 3 || Math.abs(num(cam.pitch, a.pitch) - a.pitch) > 3;
   }
 
+  /**
+   * Keep x-ray labels from piling up: boxes {x, y (anchor = bottom centre), w, h} in screen px, earlier = higher
+   * priority. Each box that overlaps one already placed is nudged up (then down) in label-height steps; one that
+   * cannot be placed within 4 steps is dropped (null). Positions are clamped inside the w x h stage.
+   */
+  function declutter(boxes, W, H) {
+    var placed = [], out = [];
+    function hit(x, y, b) {
+      for (var i = 0; i < placed.length; i++) {
+        var q = placed[i];
+        if (Math.abs(x - q.x) * 2 < (b.w + q.w) + 4 && Math.abs((y - b.h / 2) - (q.y - q.h / 2)) * 2 < (b.h + q.h) + 2) return true;
+      }
+      return false;
+    }
+    (boxes || []).forEach(function (b) {
+      if (!b || !isFinite(b.x) || !isFinite(b.y)) { out.push(null); return; }
+      var w = num(b.w, 60), h = num(b.h, 14), x = clamp(b.x, w / 2 + 2, Math.max(w / 2 + 2, num(W, 1e4) - w / 2 - 2)), y0 = clamp(b.y, h + 2, Math.max(h + 2, num(H, 1e4) - 2));
+      var bb = { w: w, h: h }, steps = [0, -1, 1, -2, 2, -3, 3, -4], res = null;
+      for (var k = 0; k < steps.length && !res; k++) {
+        var y = y0 + steps[k] * (h + 3);
+        if (y < h + 2 || y > num(H, 1e4) - 2) continue;
+        if (!hit(x, y, bb)) res = { x: x, y: y, w: w, h: h };
+      }
+      if (res) placed.push(res);
+      out.push(res);
+    });
+    return out;
+  }
+
   var _ = {
+    declutter: declutter,
     isOrbiting: isOrbiting,
     VIEWS: VIEWS, VIEW_IDS: VIEW_IDS, viewAngles: viewAngles, shortestYaw: shortestYaw, fitDistance: fitDistance, geomSig: geomSig,
     buildKey: buildKey, parseCssColor: parseCssColor, xrPal: xrPal, xrayLayout: xrayLayout, featureEdges: featureEdges, wheelLocal: wheelLocal,
@@ -345,7 +375,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
   var AUTO_SPEED = 7;                // deg / s
   var IDLE_RESUME = 6000;            // ms of no interaction before the turntable resumes
   var PX_BUDGET = 3.2e6;             // drawing-buffer pixels (2x of a 1265 x 632 stage)
-  var SPIN_MAX = 15.7;               // rad / s (~2.5 rev/s, like the SVG viewer)
+  var SPIN_MAX = 15.7;
+  var ZOOM_MIN = 0.55, ZOOM_MAX = 2.2;
+  var CABIN_FOV = 64 * DEG;          // vertical FOV in the driver's seat               // rad / s (~2.5 rev/s, like the SVG viewer)
   var st = null;
   var supportCache = null;
 
@@ -372,8 +404,25 @@ var CB = (globalThis.CB = globalThis.CB || {});
     '.cb-s3d-hint.is-on{opacity:.75}',
     '@media (hover:none){.cb-s3d-hint .k-mouse{display:none}}',
     '@media (hover:hover){.cb-s3d-hint .k-touch{display:none}}',
-    '@media (prefers-reduced-motion:reduce){.cb-s3d-labels,.cb-s3d-hint,.cb-s3d-canvas{transition:none}}',
-    '@media print{.cb-s3d-hint{display:none}}'
+    // camera shots + photo mode (buttons injected into the #viewer toolbar)
+    '.cb-s3d-sep{flex:none;align-self:center;width:1px;height:16px;margin:0 2px;background:var(--line,rgba(127,127,127,.3))}',
+    '#viewer.cb-s3d[data-shot="wheel"]::before{content:"Studio \\00B7  Wheel"}',
+    '#viewer.cb-s3d[data-shot="cabin"]::before{content:"Studio \\00B7  Cabin"}',
+    '#viewer.cb-s3d.cb-s3d-photo{position:fixed !important;left:0 !important;top:0 !important;right:0 !important;bottom:0 !important;width:auto !important;height:auto !important;max-height:none !important;margin:0 !important;z-index:2147480000;border:0 !important;border-radius:0 !important}',
+    '#viewer.cb-s3d-photo .viewer-controls,#viewer.cb-s3d-photo::before{display:none !important}',
+    'html.cb-s3d-photo-open,html.cb-s3d-photo-open body{overflow:hidden !important}',
+    // the global nav / mobile section bar live in higher stacking contexts than the stage: step them aside
+    'html.cb-s3d-photo-open #gnav,html.cb-s3d-photo-open #bottomnav,html.cb-s3d-photo-open .cb-toasts{visibility:hidden !important}',
+    '.cb-s3d-photobar{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:8px;padding:6px;border-radius:999px;' +
+      'background:color-mix(in srgb,var(--surface,#16171c) 78%,transparent);border:1px solid var(--line,rgba(127,127,127,.25));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.25)}',
+    '.cb-s3d-photo .cb-s3d-photobar{display:flex}',
+    '.cb-s3d-photobar .cb-btn{min-height:38px;padding:0 16px;border-radius:999px}',
+    '.cb-s3d-photobar .cb-s3d-tip{font:600 10px/1 var(--mono,ui-monospace,Menlo,monospace);letter-spacing:.16em;text-transform:uppercase;color:var(--text-faint,#888);padding:0 8px 0 12px;white-space:nowrap}',
+    '@media (max-width:520px){.cb-s3d-photobar .cb-s3d-tip{display:none}}',
+    '.cb-s3d-flash{position:absolute;inset:0;z-index:5;pointer-events:none;background:#fff;opacity:0;transition:opacity .45s ease}',
+    '.cb-s3d-flash.is-on{opacity:.55;transition:none}',
+    '@media (prefers-reduced-motion:reduce){.cb-s3d-labels,.cb-s3d-hint,.cb-s3d-canvas,.cb-s3d-flash{transition:none}}',
+    '@media print{.cb-s3d-hint,.cb-s3d-photobar{display:none}}'
   ].join('\n');
   function injectCss() {
     if (document.getElementById('cb-s3d-style')) return;
@@ -535,7 +584,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
       xray: !!opts.xray, xr: null, xrKey: '', spin: { on: !!opts.spin, speed: 0, angle: 0, travel: 0 },
       fade: null, snapTex: null, raf: 0, last: 0, lastDraw: 0, dirty: true, visible: true, shownCache: true,
       frames: 0, builds: 0, theme: readTheme(), pad: { t: 30, b: 58 }, timers: [], listeners: [], ro: null, io: null, mo: null,
-      lostAt: 0, hintShown: false
+      lostAt: 0, hintShown: false,
+      // camera shots (wheel close-up / cabin) blend over the orbit by shotK; zoomTo = eased wheel-zoom target
+      shot: null, shotBlend: null, lastPose: null, look: { yaw: 0, pitch: -6 }, zoomTo: null, inertiaP: 0, cabin: null,
+      photo: false, photoScale: 1, preview: null, ui: null
     };
     injectCss();
     container.classList.add('cb-s3d-host');
@@ -561,6 +613,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (CB.state && typeof CB.state.get === 'function') {
       try { var b = CB.state.get(); if (b) st.pendingBuild = b; } catch (e5) { /* ignore */ }
     }
+    buildControls();
     st.hintTimer = setTimeout(function () { if (st && st.hintEl && !st.hintShown) { st.hintEl.classList.add('is-on'); st.hintTimer = setTimeout(function () { if (st && st.hintEl) st.hintEl.classList.remove('is-on'); }, 5200); } }, 1400);
     wake();
     return canvas;
@@ -587,6 +640,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       try { if (st.floorMesh) st.floorMesh.destroy(); if (st.triMesh) st.triMesh.destroy(); } catch (e) { /* ignore */ }
       try { if (st.snapTex) st.gl.deleteTexture(st.snapTex); } catch (e2) { /* ignore */ }
     }
+    destroyCabin(lost);
     if (st.rt && !lost) { ['a', 'b', 'c'].forEach(function (k) { try { st.rt[k].destroy(); } catch (e5) { /* ignore */ } }); }
     st.rt = null;
     if (st.probe && !lost) { try { st.probe.destroy(); } catch (e3) { /* ignore */ } }
@@ -601,7 +655,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     s.dead = true;
     if (s.raf) { try { window.cancelAnimationFrame(s.raf); } catch (e) { /* ignore */ } }
     s.raf = 0;
-    clearTimeout(s.hintTimer); clearTimeout(s.resumeTimer); clearTimeout(s.lostTimer);
+    clearTimeout(s.hintTimer); clearTimeout(s.resumeTimer); clearTimeout(s.lostTimer); clearTimeout(s.previewTimer);
+    try { dropControls(); } catch (eC) { /* ignore */ }
     s.listeners.forEach(function (l) { try { l[0].removeEventListener(l[1], l[2], l[3]); } catch (e) { /* ignore */ } });
     s.listeners = [];
     try { if (s.ro) s.ro.disconnect(); } catch (e1) { /* ignore */ }
@@ -637,13 +692,14 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var ids = Object.keys(st.pointers);
       try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
       var t = nowMs();
-      st.tween = null; st.inertia = 0;
+      
+      st.tween = null; st.inertia = 0; st.inertiaP = 0; st.zoomTo = null;
       if (ids.length >= 2) {
         var a = st.pointers[ids[0]], b = st.pointers[ids[1]];
         st.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k: st.cam.distK };
         st.drag = null;
       } else {
-        st.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, t: t, vx: 0, type: e.pointerType };
+        st.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, t: t, vx: 0, vy: 0, type: e.pointerType };
         cv.classList.add('is-drag');
       }
       st.auto.resumeAt = Infinity; st.auto.speed = 0;
@@ -658,7 +714,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
         var ids = Object.keys(st.pointers);
         if (ids.length >= 2) {
           var a = st.pointers[ids[0]], b = st.pointers[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-          st.cam.distK = clamp(st.pinch.k * st.pinch.d / d, 0.55, 2.2);
+          st.cam.distK = clamp(st.pinch.k * st.pinch.d / d, ZOOM_MIN, ZOOM_MAX);
           st.dirty = true; wake();
         }
         return;
@@ -666,9 +722,17 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var dr = st.drag;
       if (!dr || dr.id !== e.pointerId) return;
       var t = nowMs(), dx = e.clientX - dr.x, dy = e.clientY - dr.y, dts = Math.max(1, t - dr.t);
-      st.cam.yaw += dx * 0.36;
-      st.cam.pitch = clamp(st.cam.pitch + dy * 0.28, 2, 88);
-      dr.vx = lerp(dr.vx, dx * 0.36 / dts * 1000, 0.5);
+      if (inCabin()) {
+        // first person: grab-to-look around the driver's seat
+        st.look.yaw = clamp(st.look.yaw - dx * 0.22, -160, 160);
+        st.look.pitch = clamp(st.look.pitch + dy * 0.18, -45, 35);
+        dr.vx = 0; dr.vy = 0;
+      } else {
+        st.cam.yaw += dx * 0.36;
+        st.cam.pitch = clamp(st.cam.pitch + dy * 0.28, 2, 88);
+        dr.vx = lerp(dr.vx, dx * 0.36 / dts * 1000, 0.5);
+        dr.vy = lerp(dr.vy, dy * 0.28 / dts * 1000, 0.5);
+      }
       dr.x = e.clientX; dr.y = e.clientY; dr.t = t;
       st.dirty = true; wake();
     });
@@ -678,7 +742,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       try { cv.releasePointerCapture(e.pointerId); } catch (er) { /* ignore */ }
       var t = nowMs();
       if (st.drag && st.drag.id === e.pointerId) {
-        if (t - st.drag.t < 90 && !st.reduce) st.inertia = clamp(st.drag.vx, -400, 400);
+        if (t - st.drag.t < 90 && !st.reduce) { st.inertia = clamp(st.drag.vx, -400, 400); st.inertiaP = clamp(st.drag.vy, -160, 160); }
         st.drag = null;
       }
       if (Object.keys(st.pointers).length < 2) st.pinch = null;
@@ -691,13 +755,18 @@ var CB = (globalThis.CB = globalThis.CB || {});
     on(cv, 'wheel', function (e) {
       e.preventDefault();
       var dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
-      st.cam.distK = clamp(st.cam.distK * Math.exp(clamp(dy, -200, 200) * 0.0016), 0.55, 2.2);
-      if (st.tween) st.tween.to.distK = st.cam.distK;
+      // eased zoom: the wheel moves a target, step() glides the camera there (trackpads stay smooth, notched wheels stop jumping)
+      var base = st.zoomTo != null ? st.zoomTo : st.cam.distK;
+      var z = clamp(base * Math.exp(clamp(dy, -200, 200) * 0.0018), ZOOM_MIN, ZOOM_MAX);
+      if (st.tween) st.tween.to.distK = z;
+      if (st.reduce) { st.cam.distK = z; st.zoomTo = null; } else st.zoomTo = z;
       interacted(nowMs());
       st.dirty = true; wake();
     }, { passive: false });
     on(cv, 'dblclick', function (e) { e.preventDefault(); resetCamera(); });
     on(cv, 'contextmenu', function (e) { if (st.drag) e.preventDefault(); });
+    on(document, 'keydown', function (e) { if (st.photo && (e.key === 'Escape' || e.key === 'Esc')) { e.preventDefault(); e.stopPropagation(); setPhoto(false); } }, true);
+    bindPreview();
     try {
       var mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
       if (mq && mq.addEventListener) on(mq, 'change', function () { st.reduce = !!mq.matches; st.auto.on = !st.reduce; st.auto.speed = 0; if (st.reduce) { st.tween = null; st.fade = null; st.inertia = 0; } st.dirty = true; wake(); });
@@ -780,6 +849,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (VIEW_IDS.indexOf(v) < 0) v = 'side';
     if (!st) return v;
     st.view = v;
+    if (st.shot) setShot(null);
     var a = viewAngles(v), c = st.cam;
     var ang = Math.abs(shortestYaw(c.yaw, a.yaw)) + Math.abs(a.pitch - c.pitch);
     tweenTo(a.yaw, a.pitch, 1, clamp(420 + ang * 3.2, 450, 1100));
@@ -792,6 +862,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
   }
   function resetCamera() {
     if (!st) return;
+    if (st.shot) setShot(null);
     var a = viewAngles(st.view);
     tweenTo(a.yaw, a.pitch, 1, 700);
     st.inertia = 0;
@@ -806,12 +877,303 @@ var CB = (globalThis.CB = globalThis.CB || {});
     st.tween = null; st.inertia = 0;
     if (isFinite(o.yaw)) c.yaw = +o.yaw;
     if (isFinite(o.pitch)) c.pitch = clamp(+o.pitch, 2, 88);
-    if (isFinite(o.distK)) c.distK = clamp(+o.distK, 0.55, 2.2);
+    if (isFinite(o.distK)) c.distK = clamp(+o.distK, ZOOM_MIN, ZOOM_MAX);
+    st.zoomTo = null;
     interacted(nowMs());
     st.auto.resumeAt = nowMs() + (isFinite(o.hold) ? +o.hold : IDLE_RESUME); scheduleResume();
     st.dirty = true; wake();
     return { yaw: c.yaw, pitch: c.pitch, distK: c.distK };
   }
+  /* ---------------- camera shots: 'wheel' (front wheel close-up, orbits the wheel) / 'cabin' (driver's seat, look
+     around) / null (back to the orbit). Every change blends from the pose on screen, cabin moves crane over the roof. */
+  var SHOT_IDS = ['wheel', 'cabin'];
+  function shotDef(id) {
+    var en = st.car;
+    if (!en) return null;
+    if (id === 'wheel') {
+      var W = wheelsOf(en.r), c = st.cam, side = Math.sin(c.yaw * DEG) > 0 ? 1 : -1, w = null;
+      W.forEach(function (q) { var z = q.z; if ((z < 0 ? -1 : 1) === side && (!w || q.x > w.x)) w = q; });
+      w = w || W[0];
+      if (!w) return null;
+      var zz = w.z - (w.side || (w.z < 0 ? -1 : 1)) * (w.inset || 0);
+      return { id: 'wheel', focus: [w.x, w.r * 0.92, zz], R: w.r * 5.6, yaw: side > 0 ? 58 : -58, pitch: 4, side: side };
+    }
+    if (id === 'cabin') {
+      var ck = ensureCabin();
+      if (!ck) return null;
+      return { id: 'cabin', eye: ck.eye.slice(0, 3) };
+    }
+    return null;
+  }
+  function setShot(id) {
+    if (!st) return null;
+    if (SHOT_IDS.indexOf(id) < 0) id = null;
+    var cur = st.shot ? st.shot.id : null;
+    if (id === cur) return cur;
+    var def = id ? shotDef(id) : null;
+    if (id && !def) return cur;
+    var cabin = id === 'cabin' || cur === 'cabin';
+    if (st.lastPose && !st.reduce) st.shotBlend = { from: st.lastPose, t0: nowMs(), dur: cabin ? 1150 : 780, lift: cabin, fromCabin: cur === 'cabin', toCabin: id === 'cabin' };
+    else st.shotBlend = null;
+    st.shot = def;
+    st.inertia = 0; st.inertiaP = 0; st.zoomTo = null;
+    if (def && def.id === 'wheel') tweenTo(def.yaw, def.pitch, 1, st.reduce ? 0 : 780);
+    if (def && def.id === 'cabin') { st.look.yaw = 0; st.look.pitch = -6; st.tween = null; }
+    interacted(nowMs());
+    syncShotUi();
+    syncOrbit(isOrbiting(st.cam, st.view, !!st.tween) || !!def);
+    st.dirty = true; wake();
+    return id;
+  }
+  function blendK(t) {
+    var b = st.shotBlend;
+    if (!b) return 1;
+    return clamp((num(t, nowMs()) - b.t0) / b.dur, 0, 1);
+  }
+  function inCabin() { return !!(st.shot && st.shot.id === 'cabin'); }
+  /** the eye is inside the car (draw the interior, not the body) */
+  function eyeInside(t) {
+    var b = st.shotBlend, k = blendK(t);
+    if (inCabin()) return !b || k >= 0.86;
+    return !!(b && b.fromCabin && k < 0.14);
+  }
+  /** lazily built first-person interior (CB.gl.cockpit, the race game's own cockpit) for the current build */
+  function ensureCabin() {
+    if (!CB.gl || !CB.gl.cockpit || typeof CB.gl.cockpit.build !== 'function' || !CB.gl.car || typeof CB.gl.car.buildGeometry !== 'function') return null;
+    var b = st.lastBuild || (CB.state && CB.state.get && CB.state.get());
+    if (!b) return null;
+    if (st.cabin && st.cabin.key === st.key) return st.cabin;
+    destroyCabin();
+    try {
+      var desc = CB.gl.car.buildGeometry(b, { lod: 'high', isPlayer: true });
+      var eye = desc && desc.cockpitEye && desc.cockpitEye.length >= 3 ? desc.cockpitEye : null;
+      if (!eye) return null;
+      var ck = CB.gl.cockpit.build(st.ctx, b, { eye: eye, dims: desc.dims, quality: 'high', units: 'kph' });
+      if (!ck) return null;
+      try { ck.update({ speed: 0, rpm: num(b.engine && b.engine.idle_rpm, 850), gear: 0, throttle: 0, brake: 0, steerAngle: 0 }, 1 / 60, nowMs() / 1000); } catch (e) { /* gauges stay blank */ }
+      var ident = M4.create();
+      st.cabin = { key: st.key, ck: ck, eye: (ck.eye || eye).slice(0, 3), ident: ident, items: [], drawn: [] };
+    } catch (e2) {
+      try { console.warn('[studio3d] cabin build failed', e2); } catch (e3) { /* ignore */ }
+      st.cabin = null;
+    }
+    return st.cabin;
+  }
+  function destroyCabin(lost) {
+    if (!st || !st.cabin) return;
+    if (!lost) { try { st.cabin.ck.destroy(); } catch (e) { /* ignore */ } }
+    st.cabin = null;
+  }
+  function cabinItems() {
+    var C = st.cabin;
+    if (!C) return [];
+    var src = null;
+    try { src = typeof C.ck.drawItems === 'function' ? C.ck.drawItems(C.ident, C.drawn) : (C.ck.items || []); } catch (e) { src = []; }
+    var out = C.items;
+    out.length = 0;
+    for (var i = 0; i < src.length; i++) {
+      var it = src[i];
+      if (!it || !it.mesh || it.visible === false) continue;
+      var w = it._s3d || (it._s3d = { model: M4.create() });
+      for (var k in it) if (k !== 'model' && k !== '_s3d' && Object.prototype.hasOwnProperty.call(it, k)) w[k] = it[k];
+      M4.copy(w.model, it.model || it.local || C.ident);
+      w.castShadow = false; w.noCull = true;
+      out.push(w);
+    }
+    return out;
+  }
+
+  /* ---------------- injected toolbar buttons (Wheel / Cabin shots, Photo mode) — only on the Garage #viewer */
+  function buildControls() {
+    st.ui = null;
+    var v = st.viewerEl;
+    if (!v || v.id !== 'viewer' || !v.querySelector) return;
+    var vb = v.querySelector('.view-buttons'), vt = v.querySelector('.view-toggles');
+    if (!vb || !vt) return;
+    var ui = st.ui = { els: [] };
+    function btn(parent, cls, label, title, fn) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'cb-btn ghost ' + cls; b.textContent = label; b.title = title;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', function (e) { e.preventDefault(); if (st) fn(); });
+      parent.appendChild(b); ui.els.push(b);
+      return b;
+    }
+    var sep = document.createElement('span');
+    sep.className = 'cb-s3d-sep'; sep.setAttribute('aria-hidden', 'true');
+    vb.appendChild(sep); ui.els.push(sep);
+    ui.wheel = btn(vb, 'cb-s3d-shot', 'Wheel', 'Wheel close-up (drag to orbit the wheel)', function () { setShot(st.shot && st.shot.id === 'wheel' ? null : 'wheel'); });
+    if (CB.gl.cockpit && CB.gl.car && typeof CB.gl.car.buildGeometry === 'function') {
+      ui.cabin = btn(vb, 'cb-s3d-shot', 'Cabin', "Driver's seat (drag to look around)", function () { setShot(st.shot && st.shot.id === 'cabin' ? null : 'cabin'); });
+    }
+    ui.photo = btn(vt, 'cb-s3d-photo-btn', 'Photo', 'Photo mode: full-screen clean frame, save a PNG', function () { setPhoto(!st.photo); });
+    var bar = document.createElement('div');
+    bar.className = 'cb-s3d-photobar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Photo mode');
+    var tip = document.createElement('span');
+    tip.className = 'cb-s3d-tip'; tip.textContent = 'Drag to frame · Scroll to zoom';
+    bar.appendChild(tip);
+    ui.save = btn(bar, 'primary cb-s3d-save', 'Save photo', 'Save a high-resolution PNG of this frame', function () { capture({ download: true }); });
+    ui.save.classList.remove('ghost');
+    ui.done = btn(bar, 'cb-s3d-done', 'Done', 'Leave photo mode (Esc)', function () { setPhoto(false); });
+    v.appendChild(bar); ui.els.push(bar);
+    ui.flash = document.createElement('div');
+    ui.flash.className = 'cb-s3d-flash'; ui.flash.setAttribute('aria-hidden', 'true');
+    v.appendChild(ui.flash); ui.els.push(ui.flash);
+    syncShotUi();
+  }
+  function syncShotUi() {
+    var ui = st && st.ui, id = st && st.shot ? st.shot.id : '';
+    if (st && st.viewerEl && st.viewerEl.id === 'viewer') {
+      if (id) st.viewerEl.setAttribute('data-shot', id); else st.viewerEl.removeAttribute('data-shot');
+    }
+    if (!ui) return;
+    [['wheel', ui.wheel], ['cabin', ui.cabin]].forEach(function (q) {
+      if (!q[1]) return;
+      var on = id === q[0];
+      q[1].classList.toggle('is-active', on); q[1].setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (ui.photo) { ui.photo.classList.toggle('is-active', !!st.photo); ui.photo.setAttribute('aria-pressed', st.photo ? 'true' : 'false'); }
+  }
+  function dropControls() {
+    if (!st) return;
+    if (st.ui) st.ui.els.forEach(function (el) { if (el && el.parentNode) el.parentNode.removeChild(el); });
+    st.ui = null;
+    try { if (st.viewerEl) { st.viewerEl.removeAttribute('data-shot'); st.viewerEl.classList.remove('cb-s3d-photo'); } document.documentElement.classList.remove('cb-s3d-photo-open'); } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- photo mode: full-screen clean frame (no toolbar, no grid, no turntable) + PNG capture */
+  function setPhoto(onf) {
+    if (!st) return false;
+    var v = typeof onf === 'boolean' ? onf : !st.photo;
+    if (v === st.photo) return v;
+    st.photo = v;
+    if (st.viewerEl) st.viewerEl.classList.toggle('cb-s3d-photo', v);
+    try { document.documentElement.classList.toggle('cb-s3d-photo-open', v); } catch (e) { /* ignore */ }
+    if (v) {
+      if (st.hintEl) st.hintEl.classList.remove('is-on');
+      st.auto.speed = 0;
+      if (st.ui && st.ui.save) { try { st.ui.save.focus({ preventScroll: true }); } catch (e2) { /* ignore */ } }
+    } else {
+      interacted(nowMs());
+      if (st.ui && st.ui.photo) { try { st.ui.photo.focus({ preventScroll: true }); } catch (e3) { /* ignore */ } }
+    }
+    syncShotUi();
+    measure(); st.dirty = true; wake();
+    return v;
+  }
+  /** paint the #viewer studio backdrop (same tokens as css/styles.css) under a copy of the WebGL frame */
+  function paintBackdrop(g, W, H) {
+    var cs = null;
+    try { cs = window.getComputedStyle(st.viewerEl || document.documentElement); } catch (e) { cs = null; }
+    function v(n, fb) { var x = cs ? String(cs.getPropertyValue(n) || '').trim() : ''; return x || fb; }
+    var light = st.theme.theme === 'light';
+    function stop(gr, o, c) { try { gr.addColorStop(o, c); } catch (e) { gr.addColorStop(o, 'rgba(0,0,0,0)'); } }
+    var lg = g.createLinearGradient(0, 0, 0, H);
+    stop(lg, 0, v('--studio-top', light ? '#f3f1ec' : '#16171c')); stop(lg, 0.58, v('--studio-mid', light ? '#e9e6df' : '#0f1013')); stop(lg, 1, v('--studio-floor', light ? '#dcd8cf' : '#0a0a0c'));
+    g.fillStyle = lg; g.fillRect(0, 0, W, H);
+    function ell(cx, cy, rx, ry, col, end) {
+      g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
+      var rg = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+      stop(rg, 0, col); stop(rg, end, 'rgba(0,0,0,0)'); stop(rg, 1, 'rgba(0,0,0,0)');
+      g.fillStyle = rg; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.restore();
+    }
+    ell(W * 0.5, H * 0.32, W * 0.6, H * 0.75, v('--studio-spot', light ? 'rgba(255,255,255,.95)' : 'rgba(201,165,107,.13)'), 0.7);
+    ell(W * 0.85, H * 0.1, W * 0.4, H * 0.6, v('--studio-spot-2', 'rgba(106,166,216,.07)'), 0.7);
+  }
+  function paintVignette(g, W, H) {
+    var light = st.theme.theme === 'light';
+    g.save(); g.translate(W * 0.5, H * 0.45); g.scale(1, (H * 0.9) / (W * 1.2));
+    var rg = g.createRadialGradient(0, 0, 0, 0, 0, W * 1.2);
+    rg.addColorStop(light ? 0.6 : 0.55, 'rgba(0,0,0,0)'); rg.addColorStop(1, light ? 'rgba(60,48,24,.1)' : 'rgba(0,0,0,.35)');
+    g.fillStyle = rg; g.fillRect(-W * 1.2, -W * 1.2, W * 2.4, W * 2.4); g.restore();
+  }
+  /**
+   * Render the current frame at up to ~3600 px wide over the studio backdrop and return a PNG data URL
+   * (opts.download: also save it as "Redline-<make>-<model>.png"). null when nothing is mounted.
+   */
+  function capture(opts) {
+    if (!st || !st.car) return null;
+    opts = opts || {};
+    var prev = st.photoScale, url = null, cw = st.canvas.clientWidth || 1, ch = st.canvas.clientHeight || 1;
+    var base = stageDpr(cw, ch, window.devicePixelRatio || 1);
+    st.photoScale = clamp(num(opts.width, 3600) / (cw * base), 1, 2.4);
+    try {
+      var t = nowMs();
+      render(t);
+      var W = st.canvas.width, H = st.canvas.height, c2 = document.createElement('canvas');
+      c2.width = W; c2.height = H;
+      var g = c2.getContext('2d');
+      paintBackdrop(g, W, H);
+      g.drawImage(st.canvas, 0, 0);
+      paintVignette(g, W, H);
+      var mdl = st.car.r.model || {}, dd = st.car.r.dims || {}, name = ((mdl.make || dd.make || '') + ' ' + (mdl.name || dd.modelName || '')).trim();
+      var fs = Math.max(12, Math.round(Math.min(W, H) * 0.024));
+      g.font = '600 ' + fs + 'px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+      g.fillStyle = st.theme.theme === 'light' ? 'rgba(30,24,12,.45)' : 'rgba(255,255,255,.42)';
+      g.textBaseline = 'alphabetic';
+      var label = 'REDLINE' + (name ? '  \u00B7  ' + name.toUpperCase() : '');
+      try { g.letterSpacing = Math.round(fs * 0.22) + 'px'; } catch (e0) { /* older canvas */ }
+      g.fillText(label, Math.round(fs * 1.6), H - Math.round(fs * 1.6));
+      url = c2.toDataURL('image/png');
+      if (opts.download) {
+        var a = document.createElement('a');
+        a.href = url; a.download = 'Redline-' + (name || 'car').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        if (st.ui && st.ui.flash && !st.reduce) {
+          var f = st.ui.flash; f.classList.add('is-on');
+          setTimeout(function () { f.classList.remove('is-on'); }, 40);
+        }
+      }
+    } catch (e) {
+      try { console.warn('[studio3d] capture failed', e); } catch (e2) { /* ignore */ }
+      url = null;
+    }
+    st.photoScale = prev;
+    st.dirty = true; wake();
+    return url;
+  }
+
+  /* ---------------- live paint preview: hovering a colour swatch (mouse) shows it on the car before you click */
+  var PREVIEW_PATH = /^exterior\.(paint|roofColor|stripeColor|caliperColor|accentColor|mirrorColor)$/;
+  function bindPreview() {
+    on(document, 'pointerover', function (e) {
+      if (!st || (e.pointerType && e.pointerType !== 'mouse')) return;
+      var b = e.target && e.target.closest ? e.target.closest('.cb-swatch') : null;
+      if (!b) { if (st.preview) schedulePreview(null); return; }
+      var hex = String(b._hex || '').toLowerCase(), host = b.closest('[data-cb-path]'), path = host && host.getAttribute('data-cb-path');
+      if (!/^#[0-9a-f]{6}$/.test(hex) || !path || !PREVIEW_PATH.test(path)) return;
+      schedulePreview({ path: path, hex: hex }, 0);
+    });
+    on(document, 'click', function (e) { if (st && st.preview && e.target && e.target.closest && e.target.closest('.cb-swatch')) { clearTimeout(st.previewTimer); st.preview = null; } }, true);
+  }
+  function schedulePreview(p, ms) {
+    clearTimeout(st.previewTimer);
+    st.previewTimer = setTimeout(function () { if (st) setPreview(p); }, ms == null ? 120 : ms);
+  }
+  function setPreview(p) {
+    var cur = st.preview;
+    if (!p && !cur) return;
+    if (p && cur && p.path === cur.path && p.hex === cur.hex) return;
+    if (p && st.lastBuild) {
+      var parts = p.path.split('.'), now = st.lastBuild[parts[0]] && st.lastBuild[parts[0]][parts[1]];
+      if (String(now || '').toLowerCase() === p.hex) p = null;
+      if (!p && !cur) return;
+    }
+    st.preview = p;
+    if (st.lastBuild) { st.pendingBuild = st.lastBuild; st.pendingMetrics = st.lastMetrics; st.pendingSpec = st.spec; st.previewFlip = true; wake(); }
+  }
+  function withPreview(b) {
+    var p = st.preview;
+    if (!p || !b) return b;
+    var parts = p.path.split('.'), o = {}, k;
+    for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k];
+    var sec = {}, src = b[parts[0]] || {};
+    for (k in src) if (Object.prototype.hasOwnProperty.call(src, k)) sec[k] = src[k];
+    sec[parts[1]] = p.hex;
+    o[parts[0]] = sec;
+    return o;
+  }
+
   function setXray(onf) {
     var v = typeof onf === 'boolean' ? onf : !(st && st.xray);
     if (!st) return v;
@@ -833,9 +1195,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
     if (st.ctx.isLost && st.ctx.isLost()) return;
     st.raf = window.requestAnimationFrame(frame);
   }
-  function autoActive(t) { return st.auto.on && !st.drag && !st.pinch && !st.tween && t >= st.auto.resumeAt && Math.abs(st.inertia) < 1; }
+  function autoActive(t) { return st.auto.on && !st.shot && !st.photo && !st.drag && !st.pinch && !st.tween && t >= st.auto.resumeAt && Math.abs(st.inertia) < 1; }
   function busy(t) {
-    return !!(st.drag || st.pinch || st.tween || Math.abs(st.inertia) > 0.5 || st.fade || st.dimsTo || st.spin.on || st.spin.speed > 0 || st.pendingBuild || st.xrayFlip);
+    return !!(st.drag || st.pinch || st.tween || st.shotBlend || st.zoomTo != null || Math.abs(st.inertia) > 0.5 || Math.abs(st.inertiaP) > 0.5 || st.fade || st.dimsTo || st.spin.on || st.spin.speed > 0 || st.pendingBuild || st.xrayFlip);
   }
   function frame(t) {
     st.raf = 0;
@@ -871,6 +1233,12 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
     // drag inertia
     if (Math.abs(st.inertia) > 0.5 && !st.drag) { c.yaw += st.inertia * dt; st.inertia *= Math.exp(-dt * 4.5); if (Math.abs(st.inertia) <= 0.5) { st.inertia = 0; interacted(t); } }
+    if (Math.abs(st.inertiaP) > 0.5 && !st.drag) { c.pitch = clamp(c.pitch + st.inertiaP * dt, 2, 88); st.inertiaP *= Math.exp(-dt * 6); if (Math.abs(st.inertiaP) <= 0.5 || c.pitch <= 2 || c.pitch >= 88) st.inertiaP = 0; }
+    if (st.zoomTo != null && !st.pinch) {
+      c.distK += (st.zoomTo - c.distK) * (1 - Math.exp(-dt * 11));
+      if (Math.abs(st.zoomTo - c.distK) < 0.002) { c.distK = st.zoomTo; st.zoomTo = null; }
+    }
+    if (st.shotBlend && blendK(t) >= 1) st.shotBlend = null;
     // turntable
     if (autoActive(t)) { st.auto.speed = Math.min(AUTO_SPEED, st.auto.speed + AUTO_SPEED * dt / 1.6); c.yaw += st.auto.speed * dt; }
     else st.auto.speed = 0;
@@ -891,7 +1259,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       if (kd >= 1) { st.dimsShown = B; st.dimsTo = null; }
     }
     if (st.fade && t - st.fade.t0 >= st.fade.dur) st.fade = null;
-    syncOrbit(isOrbiting(c, st.view, !!st.tween));
+    syncOrbit(isOrbiting(c, st.view, !!st.tween) || !!st.shot);
   }
   /** Tell the page when the camera leaves / returns to the preset view so the "Side" etc. label is honest. */
   function syncOrbit(orbit) {
@@ -1043,7 +1411,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
       el.style.color = pal[l.tone] || pal.text;
       el.style.background = pal.bg;
       host.appendChild(el);
-      return { el: el, p: l.p, w: 0, h: 0 };
+      return { el: el, p: l.p, w: 0, h: 0, tone: l.tone };
     });
     st.xr = x; st.xrKey = key;
     return x;
@@ -1059,11 +1427,11 @@ var CB = (globalThis.CB = globalThis.CB || {});
       st.lastBuild = b; st.lastMetrics = m;
       if (!sp && CB.render && typeof CB.render.resolve === 'function') { try { sp = CB.render.resolve(b, m); } catch (e) { sp = null; } }
       st.spec = sp || st.spec;
-      var key = buildKey(b);
+      var bv = withPreview(b), key = buildKey(bv);
       if (key !== st.key || !st.car) {
         st.key = key;
         var r = null;
-        try { r = CB.lowpoly.build(b, { lod: 'high' }); } catch (e2) { r = null; try { console.warn('[studio3d] lowpoly.build failed', e2); } catch (e3) { /* ignore */ } }
+        try { r = CB.lowpoly.build(bv, { lod: 'high' }); } catch (e2) { r = null; try { console.warn('[studio3d] lowpoly.build failed', e2); } catch (e3) { /* ignore */ } }
         st.builds++;
         if (r && r.parts && r.parts.length) {
           var sig = geomSig(r);
@@ -1092,7 +1460,9 @@ var CB = (globalThis.CB = globalThis.CB || {});
       var mdl = newEntry.r.model || {}, dd = newEntry.r.dims || {};
       st.canvas.setAttribute('aria-label', '3D studio view: ' + ((mdl.make || dd.make || '') + ' ' + (mdl.name || dd.modelName || '')).trim() + ' (drag to orbit)');
     }
-    if (canFade) st.fade = { t0: t, dur: swapModel ? 560 : flip ? 420 : 300 };
+    var pv = !!st.previewFlip;
+    st.previewFlip = false;
+    if (canFade) st.fade = { t0: t, dur: swapModel ? 560 : flip ? 420 : pv ? 200 : 320 };
     return true;
   }
   function snapshot() {
@@ -1111,25 +1481,47 @@ var CB = (globalThis.CB = globalThis.CB || {});
   }
 
   /* ---------------- camera + lights */
-  function cameraFor(w, h) {
+  function lerp3(a, b, k) { return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)]; }
+  /** target camera pose for the current orbit / shot: {eye, tgt, fov (full vertical, rad), shift (ndc y), near} */
+  function targetPose(w, h) {
     var c = st.cam, dpr = st.ctx.dpr || 1;
     var padT = st.pad.t * dpr, padB = st.pad.b * dpr;
+    if (st.photo) { padT = h * 0.03; padB = h * 0.05; }
     if (h - padT - padB < h * 0.45) { var k = (h * 0.55) / Math.max(1, padT + padB); padT *= k; padB *= k; }
     var hf = Math.max(1, h - padT - padB), aspF = w / hf;
     var dims = st.dimsShown || { length: 4.5, width: 1.9, height: 1.4 };
-    var R = fitDistance(dims, aspF, FOV_FREE, c.pitch) * c.distK;
-    var tanFull = Math.tan(FOV_FREE / 2) * h / hf;
+    var shift = 1 - 2 * (padT + hf / 2) / h;
+    var fov = 2 * Math.atan(Math.tan(FOV_FREE / 2) * h / hf);
+    var S = st.shot;
+    if (S && S.id === 'cabin') {
+      var ly = st.look.yaw * DEG, lp = st.look.pitch * DEG, E = S.eye;
+      var dir = [Math.cos(lp) * Math.cos(ly), Math.sin(lp), Math.cos(lp) * Math.sin(ly)];
+      return { eye: E.slice(), tgt: [E[0] + dir[0] * 3, E[1] + dir[1] * 3, E[2] + dir[2] * 3], fov: CABIN_FOV, shift: 0, near: 0.02 };
+    }
+    var R, tgt;
+    if (S && S.id === 'wheel') { R = S.R * c.distK; tgt = S.focus.slice(); }
+    else { R = fitDistance(dims, aspF, FOV_FREE, c.pitch) * c.distK; tgt = [0, dims.height * (c.pitch > 60 ? 0.3 : 0.44), 0]; }
     var y = c.yaw * DEG, p = c.pitch * DEG;
-    var tgt = [0, dims.height * (c.pitch > 60 ? 0.3 : 0.44), 0];
     var eye = [tgt[0] + Math.cos(y) * Math.cos(p) * R, tgt[1] + Math.sin(p) * R, tgt[2] + Math.sin(y) * Math.cos(p) * R];
     if (eye[1] < 0.15) eye[1] = 0.15;
+    return { eye: eye, tgt: tgt, fov: fov, shift: shift, near: Math.max(0.05, R * 0.05), R: R };
+  }
+  function cameraFor(w, h, t) {
+    var P = targetPose(w, h), b = st.shotBlend;
+    if (b && b.from) {
+      var k = easeInOut(blendK(t)), F = b.from, H = (st.dimsShown && st.dimsShown.height) || 1.35;
+      var eye = lerp3(F.eye, P.eye, k);
+      if (b.lift) eye[1] += Math.sin(PI * k) * H * 0.6;   // crane over the roof, never through the doors
+      P = { eye: eye, tgt: lerp3(F.tgt, P.tgt, k), fov: lerp(F.fov, P.fov, k), shift: lerp(F.shift, P.shift, k), near: Math.min(F.near, P.near), R: P.R };
+    }
+    st.lastPose = P;
     var view = M4.create(), proj = M4.create(), vp = M4.create();
-    M4.lookAt(view, eye, tgt, [0, 1, 0]);
-    M4.perspective(proj, 2 * Math.atan(tanFull), w / h, Math.max(0.05, R * 0.05), R * 6 + 40);
-    var cyTop = padT + hf / 2, ndcY = 1 - 2 * cyTop / h;
-    proj[9] = -ndcY;
+    M4.lookAt(view, P.eye, P.tgt, [0, 1, 0]);
+    var R = num(P.R, 6);
+    M4.perspective(proj, P.fov, w / h, P.near, R * 6 + 40);
+    proj[9] = -P.shift;
     M4.multiply(vp, proj, view);
-    return { view: view, proj: proj, viewProj: vp, position: eye, R: R };
+    return { view: view, proj: proj, viewProj: vp, position: P.eye, R: R };
   }
   function envFor(mirror) {
     var T = st.theme.env, y = st.cam.yaw * DEG;
@@ -1290,10 +1682,16 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var en = st.car;
     var cam = null;
     if (en) {
-      cam = cameraFor(w, h);
+      var inside = eyeInside(t), C = null;
+      if (inside) {
+        C = ensureCabin();
+        if (C && inCabin() && st.shot.eye !== C.eye) st.shot.eye = C.eye;
+        if (!C) inside = false;
+      }
+      cam = cameraFor(w, h, t);
       poseEntry(en);
-      var xr = st.xray, R = null;
-      if (!xr && st.theme.refl > 0) {
+      var xr = st.xray && !inside, R = null;
+      if (!xr && !inside && st.theme.refl > 0) {
         R = renderReflection(cam, w, h);
         if (!R) {
           gl.viewport(0, 0, w, h);
@@ -1313,7 +1711,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
           list.push(gi);
         }
         G.drawList(st.ctx, list, cam, env);
-      } else G.drawList(st.ctx, en.items, cam, env);
+      } else if (inside) G.drawList(st.ctx, cabinItems(), cam, env);
+      else G.drawList(st.ctx, en.items, cam, env);
     }
     if (st.fade && !snapOnly) {
       var k = clamp((t - st.fade.t0) / st.fade.dur, 0, 1);
@@ -1323,18 +1722,28 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
     if (!snapOnly) placeLabels(cam, w, h);
   }
+  function labRank(l) { var t = l.tone; return t === 'text' ? 0 : t === 'eng' || t === 'bat' ? 1 : t === 'mot' || t === 'fuel' ? 2 : 3; }
   function placeLabels(cam, w, h) {
     var el = st.labelsEl, on = !!(st.xray && st.xr && cam);
     if (el.classList.contains('is-on') !== on) el.classList.toggle('is-on', on);
     if (!on) return;
     var vp = cam.viewProj, cw = st.canvas.clientWidth, ch = st.canvas.clientHeight;
-    st.xr.labels.forEach(function (l) {
+    var pts = st.xr.labels.map(function (l) {
       var p = l.p, x = vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12], y = vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13];
       var ww = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
-      if (!(ww > 0.01)) { l.el.style.display = 'none'; return; }
-      var sx = (x / ww * 0.5 + 0.5) * cw, sy = (1 - (y / ww * 0.5 + 0.5)) * ch;
+      if (!(ww > 0.01)) return null;
+      if (!l.w) { l.w = l.el.offsetWidth || 80; l.h = l.el.offsetHeight || 16; }
+      return { sx: (x / ww * 0.5 + 0.5) * cw, sy: (1 - (y / ww * 0.5 + 0.5)) * ch };
+    });
+    // weight split + CG first, then engine / battery, then the rest (those give way when crowded)
+    var order = st.xr.labels.map(function (l, i) { return i; }).sort(function (a, b) { return labRank(st.xr.labels[a]) - labRank(st.xr.labels[b]) || a - b; });
+    var placed = _.declutter(order.map(function (i) { var l = st.xr.labels[i]; return pts[i] ? { x: pts[i].sx, y: pts[i].sy, w: l.w, h: l.h } : null; }), cw, Math.max(ch * 0.5, ch - st.pad.b + 6)), res = [];
+    order.forEach(function (i, k) { res[i] = placed[k]; });
+    res.forEach(function (r, i) {
+      var l = st.xr.labels[i];
+      if (!r) { l.el.style.display = 'none'; return; }
       l.el.style.display = '';
-      l.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-100%)';
+      l.el.style.transform = 'translate(' + r.x.toFixed(1) + 'px,' + r.y.toFixed(1) + 'px) translate(-50%,-100%)';
     });
   }
 
@@ -1344,7 +1753,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     return {
       mounted: true, frames: st.frames, builds: st.builds, running: !!st.raf, visible: isShown(), view: st.view, xray: st.xray, spin: st.spin.on,
       triangles: en ? en.tris : 0, model: en && en.r.model ? en.r.model.id : null, auto: autoActive(nowMs()), cam: { yaw: st.cam.yaw, pitch: st.cam.pitch, distK: st.cam.distK },
-      orbit: !!st.orbit, resumeIn: Math.round(st.auto.resumeAt - nowMs()), autoOn: st.auto.on, fading: !!st.fade, webgl2: !!st.ctx.isWebGL2, dpr: st.ctx.dpr, reduceMotion: st.reduce
+      orbit: !!st.orbit, resumeIn: Math.round(st.auto.resumeAt - nowMs()), autoOn: st.auto.on, fading: !!st.fade, webgl2: !!st.ctx.isWebGL2, dpr: st.ctx.dpr, reduceMotion: st.reduce,
+      shot: st.shot ? st.shot.id : null, inside: eyeInside(nowMs()), photo: !!st.photo, preview: st.preview ? st.preview.hex : null, reflection: !!st.rt && !st.rtFailed
     };
   }
 
@@ -1422,6 +1832,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
     setXray: setXray, toggleXray: setXray, isXray: function () { return !!(st && st.xray); },
     setSpin: setSpin, toggleSpin: setSpin, isSpinning: function () { return !!(st && st.spin.on); },
     resetCamera: resetCamera, setCamera: setCamera,
+    /** 'wheel' | 'cabin' | null: camera shots on top of the orbit (null = back to the current view) */
+    setShot: function (id) { return setShot(id); }, getShot: function () { return st && st.shot ? st.shot.id : null; },
+    setPhoto: function (v) { return setPhoto(v); }, isPhoto: function () { return !!(st && st.photo); },
+    capture: function (opts) { return capture(opts); },
     isMounted: function (container) { return !!(st && (!container || st.host === container) && st.host.contains(st.canvas)); },
     destroy: destroy,
     stats: stats,
