@@ -114,12 +114,21 @@ CB.drag = CB.drag || {};
     var x = clamp01(num(t, 0) / dur);
     return x * x * (3 - 2 * x);
   }
-  /** blend two camera poses (pure): {eye, target, up, fov} at weight k (0 = a, 1 = b); via (optional): the eye follows a
-      quadratic curve through that control point (the launch: over the roof, then straight down into the seat) */
+  /** blend two camera poses (pure): {eye, target, up, fov} at weight k (0 = a, 1 = b); via (optional): a point straight
+      above the destination (the launch: over the roof, then straight down into the seat). With via the eye travels
+      across at (or above) the via height until it is over the destination (k <= VIA_K), then drops vertically — so the
+      path never dips through the boot or the rear glass on the way and enters the body exactly once, above the seat. */
+  var VIA_K = 0.68;
+  function sstep(x) { x = clamp01(x); return x * x * (3 - 2 * x); }
   function blendPose(a, b, k, via) {
     k = clamp01(num(k, 1));
     var eye = lerp3(a.eye, b.eye, k);
-    if (via) { var u = 1 - k; eye = [u * u * a.eye[0] + 2 * u * k * via[0] + k * k * b.eye[0], u * u * a.eye[1] + 2 * u * k * via[1] + k * k * b.eye[1], u * u * a.eye[2] + 2 * u * k * via[2] + k * k * b.eye[2]]; }
+    if (via) {
+      var kh = sstep(k / VIA_K), kd = sstep((k - VIA_K) / (1 - VIA_K)), top = Math.max(via[1], Math.min(a.eye[1], via[1] + 1.2));
+      // across: horizontal ease to the via column; height eases from the chase eye to the cruise height
+      eye = [a.eye[0] + (via[0] - a.eye[0]) * kh, a.eye[1] + (top - a.eye[1]) * kh, a.eye[2] + (via[2] - a.eye[2]) * kh];
+      if (k > VIA_K) { var v1 = [via[0], top, via[2]]; eye = k >= 1 ? b.eye.slice() : lerp3(v1, b.eye, kd); }
+    }
     var up = lerp3(a.up || [0, 1, 0], b.up || [0, 1, 0], k), ul = Math.hypot(up[0], up[1], up[2]) || 1;
     return { eye: eye, target: lerp3(a.target, b.target, k), up: [up[0] / ul, up[1] / ul, up[2] / ul], fov: num(a.fov, 64) + (num(b.fov, 64) - num(a.fov, 64)) * k };
   }
@@ -862,11 +871,15 @@ CB.drag = CB.drag || {};
         var pb = { eye: c1.position.slice(), target: c1.target.slice(), up: c1.up.slice(), fov: c1.fovDeg };
         // into the cockpit: over the roof to above the driver's head, then straight down into the seat (never through the
         // boot or the seat backs)
-        var via = BL.from !== 'cockpit' && R.mode === 'cockpit' ? madd(pb.eye, pv.pose.up, num(pe.model && pe.model.dims && pe.model.dims.height, 1.3) + 0.2) : null;
+        // the column over the driver's head, ~0.45 m clear of the roof (car-local up from the seat eye)
+        var dimsP = (pe.model && pe.model.dims) || {}, eyeL = (pe.cockpit && pe.cockpit.camera && pe.cockpit.camera.eye) || (pe.model && pe.model.cockpitEye) || [0, 1.1, 0];
+        var via = BL.from !== 'cockpit' && R.mode === 'cockpit' ? madd(pb.eye, pv.pose.up, Math.max(0.5, num(dimsP.height, 1.3) - num(eyeL[1], 1.1) + 0.45)) : null;
         var bp = blendPose(pa, pb, bk, via);
-        // the exterior stays until the eye reaches the body, then the interior takes over; until the eye is in the seat the
-        // interior goes without its headliner / roof glass (a crane drop into the cabin, never a frame inside a shell)
-        inside = inside && (bk >= 0.98 || inCarBox(pe.CW, bp.eye, pe.model && pe.model.dims, 0.3));
+        // the exterior stays until the eye drops through the roof over the seat, then the interior takes over for good
+        // (latched: one swap per blend, never back and forth); until the eye is in the seat the interior goes without its
+        // headliner / roof glass (a crane drop into the cabin, never a frame inside a shell)
+        if (inside && !BL.inside && (bk >= 0.98 || inCarBox(pe.CW, bp.eye, dimsP, 0.02, num(dimsP.height, 1.3) - 0.02))) BL.inside = true;
+        inside = inside && !!BL.inside;
         R.openRoof = inside && bk < 0.98;
         setCam(bp.eye, bp.target, bp.up, bp.fov, aspect, inside ? c1.near : n0);
       } else { cameraFor(snap, pv.lane, pv.pose, pe, ov, dt, aspect); R.openRoof = false; }
