@@ -441,8 +441,13 @@ CB.drag = CB.drag || {};
           launch: { rpm: L.launchRpm, lo: L.band ? L.band.lo : null, hi: L.band ? L.band.hi : null, lc: !!L.lc, ev: !!(L.baseP && L.baseP.isEV), bog: !!L.bogged, spin: !!L.spun },
           nitrous_hp: L.pN2O ? num(L.entry.nitrous_hp, 0) : 0 });
       });
-      // margin in feet at the finish (winner's trap speed × time margin)
-      if (d.margin_s != null && d.winner != null && out.lanes[d.winner] && out.lanes[d.winner].trap) out.marginFt = d.margin_s * out.lanes[d.winner].trap / 0.3048;
+      // margin in feet at the finish: how far the loser still had to go when the winner crossed — the loser's own speed
+      // over the last margin_s seconds (its trap) × the time margin, never more than the whole strip (the winner's
+      // trap overstated it: 7.7 s × 130 mph read 1,463 ft on a 1,320 ft quarter)
+      if (d.margin_s != null && d.winner != null && out.lanes[d.winner]) {
+        var lo = out.lanes[1 - d.winner], vL = lo && lo.trap ? lo.trap : out.lanes[d.winner].trap;
+        if (vL) out.marginFt = Math.min(d.margin_s * vL, finishX) / 0.3048;
+      }
       return out;
     }
 

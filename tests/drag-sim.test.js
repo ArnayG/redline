@@ -269,3 +269,11 @@ test('roll race 60–200 km/h and dig 0–200 km/h finish with speed splits', fu
     r.lanes.forEach(function (l) { assert.ok(l.et > 4 && l.et < 25, id + ' ET ' + l.et); assert.ok(l.splits.every(function (s) { return s.t > 0; })); });
   });
 });
+test('margin of victory in feet is the loser\'s distance to go, never longer than the strip', function () {
+  // a hypercar vs a diesel van: a huge time margin (the old winner-trap x margin read longer than the quarter mile)
+  var r = D.session.simulate({ seed: 3, distanceId: 'quarter', skipBurnout: true, lanes: [{ kind: 'ai', name: 'A', build: stock('koenigsegg-jesko'), difficulty: 'pro' }, { kind: 'ai', name: 'B', build: stock('mazda-mx5-nd'), difficulty: 'rookie' }] });
+  assert.ok(r.margin_s > 1 && r.marginFt > 0, JSON.stringify({ m: r.margin_s, ft: r.marginFt }));
+  assert.ok(r.marginFt <= 1320.1, 'margin ' + r.marginFt + ' ft on a 1320 ft strip');
+  var loser = r.lanes[1 - r.winner];
+  near(r.marginFt, r.margin_s * loser.trap / 0.3048, 1, 'loser trap x margin');
+});
