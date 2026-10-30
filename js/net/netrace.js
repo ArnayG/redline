@@ -611,7 +611,10 @@ CB.net = CB.net || {};
     if (c.finished && ref.finished) return Math.max(0, c.finishT - ref.finishT);
     if (c.h0 === null || ref.h0 === null) return 0;
     var tr = this.timeAt(ref, c.hd);
-    return tr === null ? 0 : Math.max(0, c.ht - tr);
+    // measured to c's NEWEST sample, not the moment it first reached hd: a car that stopped (or is idling on the grid)
+    // keeps falling behind, so its interval must keep growing (else a parked car shows a smaller gap than one ahead)
+    var tc = isNum(c.distT) && c.distT > c.ht ? c.distT : c.ht;
+    return tr === null ? 0 : Math.max(0, tc - tr);
   };
   /** goT: race time of lights out (null before); now: race time. Returns the standings message body. */
   RaceControl.prototype.tick = function (now, goT, phase) {
@@ -651,7 +654,7 @@ CB.net = CB.net || {};
       if (ra === 0) return (b.finishLaps - a.finishLaps) || ((a.finishT + a.pen) - (b.finishT + b.pen)) || a.gridIdx - b.gridIdx;
       return (b.lap - a.lap) || (num(b.dist, -1e9) - num(a.dist, -1e9)) || a.gridIdx - b.gridIdx;
     });
-    var win = act[0];
+    var win = act[0], prevGap = 0;
     var rows = act.map(function (c, i) {
       var st = status(c), total = c.finished ? c.finishT + c.pen : null, gap = null, gapText = '';
       if (race) {
@@ -661,13 +664,15 @@ CB.net = CB.net || {};
         else {
           var down = win.finished ? Math.max(0, win.finishLaps - (c.finished ? c.finishLaps : c.lap) - (c.finished ? 0 : 1)) : 0;
           if (!c.finished && win.finished && isNum(c.dist)) down = Math.max(0, Math.floor((win.finishLaps * self.L - c.dist) / self.L));
+          else if (!c.finished && !win.finished && isNum(c.dist) && isNum(win.dist) && self.L > 0) down = Math.max(0, Math.floor((win.dist - c.dist) / self.L));
           if (down > 0) gapText = '+' + down + (down === 1 ? ' Lap' : ' Laps');
-          else { gap = self.gap(c, win); gapText = '+' + fmtTime(gap); }
+          else { gap = Math.max(self.gap(c, win), prevGap); gapText = '+' + fmtTime(gap); }
         }
       } else {
         gap = c.bestLap !== null && win.bestLap !== null ? c.bestLap - win.bestLap : null;
         gapText = c.bestLap === null ? 'No time' : i === 0 ? fmtTime(c.bestLap) : '+' + fmtTime(gap);
       }
+      if (race && isNum(gap)) prevGap = gap;
       return { position: i + 1, id: c.id, name: c.name, kind: c.kind, status: st, laps: c.finished ? c.finishLaps : c.lap,
                raceTime_s: c.finished ? c.finishT : null, totalTime_s: total, penalties_s: c.pen, gap_s: gap, gapText: gapText,
                bestLap_s: c.bestLap, lastLap_s: c.lastLap, lapTimes: c.lapTimes.slice(), laps_detail: c.detail.slice(),

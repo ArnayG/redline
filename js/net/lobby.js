@@ -926,7 +926,7 @@ CB.net = CB.net || {};
     '.nl-main,.nl-side{display:flex;flex-direction:column;gap:20px;min-width:0}',
     '.nl-side{position:sticky;top:0}',
     '.nl-roombar{display:flex;align-items:center;gap:18px;flex-wrap:wrap}',
-    '.nl-code{font:800 calc(var(--fs-2xl) * 1.43)/1 var(--mono);letter-spacing:.24em;background:var(--accent-grad);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;padding-left:.24em}',
+    '.nl-code{font:800 calc(var(--fs-2xl) * 1.43)/1 var(--mono);letter-spacing:.24em;background:var(--accent-grad);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;padding-left:.24em;margin-top:6px}',
     '.nl-roombar .nl-linkbox{flex:1;min-width:240px;display:flex;gap:8px}',
     '.nl-roombar .nl-linkbox .nl-input{font:var(--fs-sm) var(--mono);color:var(--text-dim)}',
     '.nl-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}',
@@ -1925,6 +1925,21 @@ CB.net = CB.net || {};
       var f = q('[data-k="m-' + A.method + '"]'); if (f) f.focus();
     }
   }
+  /** Esc = the screen's back action (same shortcut as the race / drift / derby / drag setups): home -> main menu;
+   *  connecting / error / closed / invite-code steps -> back to the lobby home. Never inside a room (leaving is
+   *  destructive: use "Leave room"), never while a dialog or a text field has it, never while racing. */
+  function onDocKey(e) {
+    if (e.key !== 'Escape' || e.defaultPrevented || !isOpen() || A.raceOpen) return;
+    var t = document.activeElement, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (document.querySelector('.cb-modal.is-open, [role="dialog"][aria-modal="true"]')) return;
+    var view = A.view === 'room' && !A.core ? 'home' : A.view;
+    if (view === 'room') return;
+    e.preventDefault();
+    if (view === 'home') { var rt = CB.router; if (rt && typeof rt.go === 'function') rt.go('menu'); else hide(); return; }
+    if (A.core) leaveRoom(); else { teardownNet(); A.busy = false; A.view = 'home'; A.manual = null; A.error = null; setUrl(''); render(); }
+  }
+  if (hasDOM) document.addEventListener('keydown', onDocKey);
   function onSubmit(form) {
     var f = form.getAttribute('data-form');
     if (f === 'join') { saveName(); joinRoom(A.code, chosenMethod()); }
