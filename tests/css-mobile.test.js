@@ -60,3 +60,11 @@ test('css: Advanced stat-tile labels wrap to two lines instead of ellipsising ("
   assert.match(r, /-webkit-line-clamp:\s*2/);
   assert.doesNotMatch(r, /white-space:\s*nowrap/);
 });
+
+test('css: phone viewer toolbar is one sideways-scrolling row, not two stacked rows over the stage', () => {
+  const body = mediaBodies('(max-width: 640px)').join('\n');
+  const r = rule(body, '.viewer-controls');
+  assert.ok(r, '.viewer-controls phone rule');
+  assert.doesNotMatch(r, /flex-direction:\s*column/);
+  assert.match(r, /overflow-x:\s*auto/);
+});

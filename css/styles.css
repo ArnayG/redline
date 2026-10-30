@@ -3360,11 +3360,19 @@ html[data-atelier-mode="career-buy"] .qs-price .qs-value, html[data-atelier-mode
   .build-title { border-left: 0; padding-left: 0; margin-left: 0; }
   .panel-head-nav { display: none; }
   .panel-title { font-size: var(--fs-xl); }
-  .viewer-controls { flex-direction: column; align-items: stretch; gap: 6px; }
-  .view-buttons, .view-toggles { justify-content: space-between; }
-  .view-buttons .cb-btn, .view-toggles .cb-btn { flex: 1; }
+  /* phones: the camera shots and the overlay toggles share ONE row that scrolls sideways (two stacked rows covered
+     ~40% of the stage once Wheel / Cabin / Photo joined Side / Front / Rear / Top) */
+  .viewer-controls {
+    left: 0; right: 0; bottom: 8px; padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    justify-content: flex-start; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; pointer-events: auto;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 10px, black calc(100% - 18px), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, black 10px, black calc(100% - 18px), transparent);
+  }
+  .viewer-controls::-webkit-scrollbar { display: none; }
+  .view-buttons, .view-toggles { flex: none; }
+  .view-buttons .cb-btn, .view-toggles .cb-btn { flex: none; white-space: nowrap; }
   #viewer { height: clamp(250px, 72vw, 340px); }
-  .car-mount { padding-bottom: 92px; }
+  .car-mount { padding-bottom: 56px; }
   .cb-cards-list { grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); }
   .cb-card-specs { grid-template-columns: minmax(0, 1fr); }
   .cb-card-top { flex-wrap: wrap; }
