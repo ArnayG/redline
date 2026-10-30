@@ -1016,7 +1016,8 @@ CB.race.audio = (function () {
       var pid = listener.id;
       for (var i = 0; i < evs.length && i < 48; i++) {
         var e = evs[i]; if (!e) continue;
-        var mine = e.carId != null && e.carId === pid;
+        // a car-to-car contact is emitted once, for the lower-index car: the other car (otherId) is in it too
+        var mine = (e.carId != null && e.carId === pid) || (e.type === 'collision' && e.otherId != null && e.otherId === pid);
         var sp = (typeof e.x === 'number' && typeof e.y === 'number') ? spatialize(listener, e) : { gain: mine ? 1 : 0.5, pan: 0, distance: 0 };
         var att = mine ? 1 : Math.min(1, sp.gain * 1.3);
         var pan = mine ? 0 : sp.pan;

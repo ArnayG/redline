@@ -799,6 +799,24 @@ CB.race = CB.race || {};
   function sumTurn(hd) { var s = 0; for (var i = 0; i < hd.length; i++) s += wrapAngle(hd[(i + 1) % hd.length] - hd[i]); return s; }
 
   var TRACK_STATS_CACHE = {};
+  /** The number of drift zones a run on this track really has (the scorer's generated zones plus the track's
+      hints — the HUD's "0/43"), not just the hint count; 'Auto' when the scorer isn't loaded. */
+  var DRIFT_ZONES_CACHE = {};
+  function driftZoneCount(def) {
+    if (!def) return 'Auto';
+    var key = (def.id || '') + ':' + ((def.points && def.points.length) || 0);
+    if (has(DRIFT_ZONES_CACHE, key)) return DRIFT_ZONES_CACHE[key];
+    var n = Array.isArray(def.driftZones) ? def.driftZones.length : 'Auto';
+    try {
+      var T = CB.race && CB.race.tracks, SC = CB.race && CB.race.drift && CB.race.drift.scoring;
+      if (T && typeof T.build === 'function' && SC && typeof SC.generateZones === 'function') {
+        var z = SC.generateZones(T.build(def), def, {});
+        if (Array.isArray(z)) n = z.length;
+      }
+    } catch (e) { /* keep the hint count */ }
+    DRIFT_ZONES_CACHE[key] = n;
+    return n;
+  }
   function trackStats(def) {
     if (!def) return null;
     var key = (def.id || '') + ':' + ((def.points && def.points.length) || 0);
@@ -1197,7 +1215,7 @@ CB.race = CB.race || {};
       var lapsDown = isNum(leader.lap) && isNum(r.lap) ? leader.lap - r.lap : 0;
       if (!r.finished && r.status === 'running' && typeof r.gapText === 'string' && r.gapText) {
         // the engine classifies running cars by distance (a car on its final lap is not "+1 Lap")
-        if (!/lap/i.test(r.gapText)) r.gapText = (isNum(r.gapLeader_s) ? fmtGap(r.gapLeader_s) : r.gapText) + '*';
+        if (!/lap/i.test(r.gapText)) r.gapText = isNum(r.gapLeader_s) ? fmtGap(r.gapLeader_s) + '*' : /\d/.test(r.gapText) ? r.gapText + '*' : '—';   // no gap yet (ended on the grid): not "+—*"
         return;
       } else if (!r.finished && lapsDown >= 1 && isNum(r.raceDist) && isNum(leader.raceDist) && isNum(opts.lapLength) && opts.lapLength > 0) {
         lapsDown = Math.max(0, Math.floor((leader.raceDist - r.raceDist) / opts.lapLength));
@@ -1442,7 +1460,7 @@ CB.race = CB.race || {};
     STEP: STEP, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     clamp: clamp, fmtTime: fmtTime, fmtGap: fmtGap, ordinal: ordinal, fmtLength: fmtLength, fmtSpeed: fmtSpeed,
     buildHash: buildHash, stableStringify: stableStringify,
-    createRecords: createRecords, memoryStorage: memoryStorage, drawLapChart: drawLapChart,
+    createRecords: createRecords, memoryStorage: memoryStorage, drawLapChart: drawLapChart, chartColor: chartColor, driftZoneCount: driftZoneCount,
     sanitizeSettings: sanitizeSettings, resolveBuild: resolveBuild, fallbackBuild: fallbackBuild,
     loadSettings: loadSettings, migrateAssist: migrateAssist, syncAssist: syncAssist, setAssist: setAssist, assistKey: assistKey, DEFAULT_ASSIST: DEFAULT_ASSIST,
     estimateMetrics: estimateMetrics, computeMetrics: computeMetrics,
@@ -1730,7 +1748,7 @@ CB.race = CB.race || {};
     '#race-root .rx-progress .is-error i{background:var(--rx-bad)}',
     '#race-root .rx-loadbar{height:3px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;max-width:420px}',
     '#race-root .rx-loadbar i{display:block;height:100%;width:0;background:var(--rx-accent);transition:width .25s}',
-    '#race-root .rx-grid-panel{display:flex;flex-direction:column;min-height:0;padding:18px}',
+    '#race-root .rx-grid-panel{display:flex;flex-direction:column;min-height:0;max-height:100%;align-self:start;padding:18px}',   // fits its grid (no tall empty panel under a short field)
     '#race-root .rx-grid-list{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:12px;padding-bottom:12px}',
     '#race-root .rx-grid-slot{position:relative;display:flex;align-items:center;gap:9px;padding:8px 10px 8px 0;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid var(--rx-line);overflow:hidden;animation:rx-slide .4s both}',
     '#race-root .rx-grid-slot:nth-child(even){margin-top:22px;margin-bottom:-22px}',
@@ -3166,7 +3184,7 @@ CB.race = CB.race || {};
         statCell('Width', isNum(def.width_m) ? def.width_m.toFixed(0) : '—', 'm'),
         statCell('Surface grip', grip != null ? Math.round(grip * 100) : '—', grip != null ? '%' : ''),
         S.discipline === 'drift'
-          ? statCell('Drift zones', Array.isArray(def.driftZones) ? def.driftZones.length : 'Auto', null, isDriftTrack(def) ? 'rx-accent' : 'rx-dim')
+          ? statCell('Drift zones', driftZoneCount(def), null, isDriftTrack(def) ? 'rx-accent' : 'rx-dim')
           : statCell('Laps × distance', S.mode === 'practice' ? '∞' : fmtLength(st.length_m * S.laps, S.units)),
         statCell(driftRec ? 'Your best score' : 'Your track record', rec ? recText(rec) : 'Unset', null, rec ? '' : 'rx-dim'),
         statCell('Your best (this build)', pb ? recText(pb) : '—'))));
@@ -3205,7 +3223,7 @@ CB.race = CB.race || {};
           h('span', { class: 'rx-chip', text: nameOf('tireCompounds', b.tires && b.tires.compound) + ' tyres' }),
           h('span', { class: 'rx-chip', text: nameOf('transmissions', b.transmission && b.transmission.type) + (b.transmission && b.transmission.gears > 1 ? ' · ' + b.transmission.gears + '-spd' : '') }),
           b.aero && b.aero.wing && b.aero.wing !== 'none' ? h('span', { class: 'rx-chip', text: nameOf('aero.wings', b.aero.wing) }) : null,
-          isNum(m.lapTime_s) ? h('span', { class: 'rx-chip', title: 'Physics estimate for the Redline Ring', text: 'Sim lap ' + fmtTime(m.lapTime_s) }) : null)));
+          isNum(m.lapTime_s) ? h('span', { class: 'rx-chip', title: 'Physics lap estimate for the Redline Ring (a reference lap, not this circuit)', text: 'Ring sim lap ' + fmtTime(m.lapTime_s) }) : null)));
     return card;
   }
 
@@ -3479,7 +3497,7 @@ CB.race = CB.race || {};
       tracker: createLapTracker(), feed: [], events: { collisions: 0, lastCollision: -9 },
       recordFlags: { buildBest: false, trackRecord: false, prevBuild: null, prevTrack: null, lapTime: null },
       playerFinishedAt: null, sessionFinishedAt: null, ended: false, ready: false, lastSnap: null,
-      fallbackRenderer: false, fallbackHud: false, lightsState: '', goShown: false, hintsTimer: null,
+      fallbackRenderer: false, fallbackHud: false, lightsState: '', goShown: false, rotateHidden: false, hintsTimer: null,
       cameraIdx: Math.max(0, ids(CAMERAS).indexOf(S.camera)), playerSpeed: 0, is3d: false, aq: null, lookBack: false
     };
     R.immediate = immediate; R.testCfg = immediate && start && isPlain(start.cfg) ? start.cfg : null;
@@ -3761,7 +3779,7 @@ CB.race = CB.race || {};
     }
     if (R.dcam && typeof R.dcam.kick === 'function') {
       (snap.events || []).forEach(function (e) {
-        if (e && (e.type === 'wall' || e.type === 'collision') && e.carId === 'player') { try { R.dcam.kick(0.25 + 0.6 * Math.min(1, +e.intensity || 0)); } catch (eK) { /* ignore */ } }
+        if (e && (e.type === 'wall' || e.type === 'collision') && (e.carId === 'player' || (e.type === 'collision' && e.otherId === 'player'))) { try { R.dcam.kick(0.25 + 0.6 * Math.min(1, +e.intensity || 0)); } catch (eK) { /* ignore */ } }
       });
     }
   }
@@ -4044,6 +4062,12 @@ CB.race = CB.race || {};
     }
   }
 
+  /** Intro kicker: "ITALY · SUNDAY CLUB CUP R1 · …" for a career / event / challenge launch (its label), else the
+      circuit's country and the chosen session ("USA · GRAND PRIX"). */
+  function loadingKicker(def, S) {
+    var lbl = U && U.opts && U.opts.context && U.opts.context.kind !== 'quick' && U.opts.context.label;
+    return ((def && def.country) || 'Circuit') + ' · ' + (lbl ? String(lbl) : sessionLabel(S));
+  }
   function showLoading(def) {
     setScreen('loading');
     clear(U.host);
@@ -4062,7 +4086,7 @@ CB.race = CB.race || {};
     var last = nameParts.length > 1 ? nameParts.pop() : '';
     var screen = h('div', { class: 'rx-loading cb-dark' },
       h('div', { class: 'rx-load-left' },
-        h('div', { class: 'rx-eyebrow accent mx-kicker', text: (def.country || 'Circuit') + ' · ' + sessionLabel(S) }),
+        h('div', { class: 'rx-eyebrow accent mx-kicker', text: loadingKicker(def, S) }),
         h('div', { class: 'rx-load-title rx-display' }, nameParts.join(' ') + (last ? ' ' : ''), last ? h('span', { text: last }) : null),
         h('div', { class: 'rx-summary' },
           h('span', { class: 'rx-chip', text: fmtLength(st.length_m, S.units) }),
@@ -4090,7 +4114,7 @@ CB.race = CB.race || {};
   /** Drift loading panel: what the run is scored on, instead of a one-car starting grid. */
   function driftBrief(list, S, def) {
     var m = pick(DRIFT_MODES, S.driftMode);
-    var zones = def && Array.isArray(def.driftZones) ? plural(def.driftZones.length, 'clipping zone') : 'Clipping zones generated from the corners';
+    var zc = driftZoneCount(def), zones = isNum(zc) ? plural(zc, 'drift zone') : 'Drift zones generated from the corners';
     var row = function (label, value) {
       return h('div', { class: 'rx-grid-slot is-player' }, h('span', { class: 'rx-livery', style: { background: 'linear-gradient(180deg,var(--mode-drift),var(--warn))' } }),
         h('span', { class: 'rx-grid-who' }, h('b', { text: label }), h('small', { text: value })));
@@ -4369,7 +4393,8 @@ CB.race = CB.race || {};
     evs.forEach(function (ev) {
       if (!ev || !ev.type) return;
       var car = carById(snap, ev.carId), who = car ? (car.isPlayer ? 'You' : car.name || 'Car ' + ev.carId) : '';
-      var mine = ev.carId === myId;
+      // car-to-car contact is emitted once (for the lower-index car); the player may be the other car
+      var mine = ev.carId === myId || (ev.type === 'collision' && ev.otherId != null && ev.otherId === myId);
       switch (ev.type) {
         case 'penalty':
           if (mine && R.hudDrawsBanners) { /* HUD banner */ }
@@ -4446,6 +4471,12 @@ CB.race = CB.race || {};
   function updateRaceDom(snap, me) {
     var R = U.race, d = R.dom;
     if (!d) return;
+    // the "rotate your phone" card is a grid-time hint: once the race is running it would only cover the road
+    if (!R.rotateHidden && (snap.phase === 'racing' || snap.phase === 'finished')) {
+      R.rotateHidden = true;
+      var rot = d.layer && d.layer.querySelector && d.layer.querySelector('.rx-rotate');
+      if (rot) rot.classList.add('is-dismissed');
+    }
     // start lights
     if (!R.hudDrawsCountdown) {
       var cd = snap.countdown || {}, ph = snap.phase;
@@ -4672,13 +4703,14 @@ CB.race = CB.race || {};
     if (R.dsfx && typeof R.dsfx.reset === 'function') { try { R.dsfx.reset(); } catch (eDs) { /* ignore */ } }
     R.driftGoAt = null;
     R.playerFinishedAt = null; R.sessionFinishedAt = null; R._finWall = 0; R.ended = false;
-    R.lightsState = ''; R.goShown = false; R.simTime = 0; R.events.collisions = 0;
+    R.lightsState = ''; R.goShown = false; R.rotateHidden = false; R.simTime = 0; R.events.collisions = 0;
     R.recordFlags = { buildBest: false, trackRecord: false, prevBuild: null, prevTrack: null, lapTime: null };
     R.driftRecord = null;
     R.challengeEval = null; R.challengeDoneAt = null;
     if (R.challenge && typeof R.challenge.reset === 'function') { try { R.challenge.reset(); } catch (eR) { /* ignore */ } }
     if (R.dom && R.dom.finish) { R.dom.finish.parentNode && R.dom.finish.parentNode.removeChild(R.dom.finish); R.dom.finish = null; }
     if (R.dom) { var go = R.dom.layer.querySelector('.rx-go'); if (go) go.parentNode.removeChild(go); clear(R.dom.feed); }
+    if (R.dom) { var rot = R.dom.layer.querySelector('.rx-rotate'), keep = false; try { keep = window.sessionStorage.getItem(ROTATE_KEY) === '1'; } catch (eK) { keep = false; } if (rot && !keep) rot.classList.remove('is-dismissed'); }
     R.paused = true; // so resume does bookkeeping
     resumeRace();
     toast(icon('restart', 14), 'Session restarted');
@@ -5150,6 +5182,8 @@ CB.race = CB.race || {};
     if (rep && rep.meta) {
       if (!rep.meta.trackName && R.def) rep.meta.trackName = R.def.name;
       if (!rep.meta.buildName && U.build && U.build.meta) rep.meta.buildName = U.build.meta.name;
+      // drift / arcade runs ride on an engine practice / race session: label the replay with what the player chose
+      if (!rep.meta.modeLabel && R.settings) { try { rep.meta.modeLabel = R.isArcade ? 'Arcade' : sessionLabel(R.settings); } catch (eL) { /* ignore */ } }
     }
     R.replay = rep || null;
     return R.replay;
@@ -5266,7 +5300,7 @@ CB.race = CB.race || {};
     if (myRow && myRow.isFastest && mode === 'race' && total > 1) badge('Fastest lap', 'purple', 'timer');
     if (mode === 'race' && myRow && myRow.position === 1 && total > 1) badge('Race winner', '', 'trophy');
     if (gained != null && gained >= 3) badge('+' + gained + ' places', 'good', 'flag');
-    if (myRow && !myRow.penalties_s && mode === 'race' && R.events.collisions === 0 && !myRow.dnf) badge('Clean race', 'good', 'star');
+    if (myRow && !myRow.penalties_s && mode === 'race' && R.events.collisions === 0 && !myRow.dnf && (myRow.finished || myRow.status === 'finished')) badge('Clean race', 'good', 'star');   // only a finished race can be clean
 
     var posText = mode === 'race' ? (myRow && !myRow.dnf ? String(myRow.position) : 'DNF') : (myRow && isNum(myRow.bestLap_s) ? fmtTime(myRow.bestLap_s) : '—');
     var head = h('header', { class: 'rx-res-head' },
@@ -5482,7 +5516,22 @@ CB.race = CB.race || {};
     else if (rows.length > 1) cand = rows[1];
     if (cand && cand.isPlayer) cand = null;
     if (cand && (!R.tracker.cars[cand.id] || !R.tracker.cars[cand.id].laps.length)) return null;
+    if (cand) cand = Object.assign({}, cand, { color: chartColor(cand.color, cand.accent) });
     return cand;
+  }
+  /** A livery colour readable as a chart line / legend swatch on the dark results panel: a near-black (or invalid)
+      team colour falls back to its accent, else a neutral grey (a black series was invisible). */
+  function chartColor(color, accent) {
+    function lum(c) {
+      var m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(String(c || '').trim());
+      if (!m) return -1;
+      var x = m[1].length === 3 ? m[1].replace(/./g, '$&$&') : m[1];
+      var r = parseInt(x.slice(0, 2), 16), g = parseInt(x.slice(2, 4), 16), b = parseInt(x.slice(4, 6), 16);
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    }
+    if (lum(color) >= 0.18) return color;
+    if (lum(accent) >= 0.18) return accent;
+    return '#8a8f98';
   }
 
   function drawLapChart(canvas, laps, rival, rivalColor, pbTime) {

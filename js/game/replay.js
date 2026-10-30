@@ -1092,7 +1092,7 @@ CB.game.replay = (function () {
     else if (n) rep.cars.forEach(function (c) { if (c.ch.pos[n - 1] === 1) winner = { name: c.info.name, id: c.info.id, color: c.info.color }; });
     return {
       id: M.id, name: M.name || ((M.trackName || M.trackId || 'Race') + ' — ' + new Date(M.createdAt || Date.now()).toLocaleString()),
-      trackId: M.trackId, trackName: M.trackName || M.trackId || 'Unknown circuit', mode: M.mode, laps: M.laps,
+      trackId: M.trackId, trackName: M.trackName || M.trackId || 'Unknown circuit', mode: M.mode, modeLabel: M.modeLabel || null, laps: M.laps,
       duration: num(M.duration, 0), cars: rep.cars.length, hz: M.hz, createdAt: M.createdAt, weather: M.weather, timeOfDay: M.timeOfDay,
       playerName: player ? player.info.name : null, playerColor: player ? player.info.color : null,
       playerFinish: player && n ? player.ch.pos[n - 1] : null, winner: winner ? winner.name : null, degraded: M.degraded || [],
@@ -2202,7 +2202,7 @@ CB.game.replay = (function () {
     var closeBtn = h('button', { class: 'grp-btn icon', html: ICONS.close, title: 'Close replay (Esc)' });
     var top = h('div', { class: 'grp-top' },
       h('div', { class: 'grp-title' }, h('b', { text: 'Replay · ' + inf.trackName }),
-        h('span', { text: [cap(inf.mode || 'race'), inf.laps ? inf.laps + ' laps' : null, inf.cars + ' cars', inf.weather, inf.timeOfDay,
+        h('span', { text: [modeText(inf), inf.laps ? inf.laps + ' laps' : null, carsText(inf.cars), inf.weather, inf.timeOfDay,
           new Date(inf.createdAt || Date.now()).toLocaleString()].filter(Boolean).join(' · ') + (inf.degraded.length ? ' · reduced quality' : '') })),
       h('div', { class: 'grp-sp' }), hlBtn, saveBtn, exportBtn, photoBtn, closeBtn);
     root.appendChild(top);
@@ -2470,6 +2470,9 @@ CB.game.replay = (function () {
   }
   function prevSpeed(cur, dir) { var L = [0.25, 0.5, 1, 2, 4], i = L.indexOf(cur); if (i < 0) i = 2; return L[clamp(i + dir, 0, L.length - 1)]; }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  /** "Drift · Score attack" / "Grand prix": the launcher's label when it gave one, else the engine mode. */
+  function modeText(inf) { return inf && inf.modeLabel ? String(inf.modeLabel) : cap((inf && inf.mode) || 'race'); }
+  function carsText(n) { n = n || 0; return n + (n === 1 ? ' car' : ' cars'); }
 
   /* ================================================================ photo mode */
   /* Pipeline (all canvas compositing, no deps):
@@ -3302,7 +3305,7 @@ CB.game.replay = (function () {
         var li = info(lastRep), cv = h('canvas');
         var row = h('div', { class: 'grp-item', style: { borderColor: '#c9a56b66' } }, cv,
           h('div', {}, h('b', { text: 'Last race' }), h('span', { class: 'grp-badge', text: 'unsaved' }),
-            h('div', { class: 'meta', text: [li.trackName, cap(li.mode || 'race'), fmtClock(li.duration), li.cars + ' cars', li.playerFinish ? 'You: P' + li.playerFinish : null].filter(Boolean).join(' · ') })),
+            h('div', { class: 'meta', text: [li.trackName, modeText(li), fmtClock(li.duration), carsText(li.cars), li.playerFinish ? 'You: P' + li.playerFinish : null].filter(Boolean).join(' · ') })),
           h('div', { class: 'acts' },
             h('button', { class: 'grp-btn gold', type: 'button', html: ICONS.play + '<span>Watch</span>', onclick: function () { watch(lastRep); } }),
             h('button', { class: 'grp-btn', type: 'button', html: ICONS.save + '<span>Save</span>', onclick: function () { var r = store.save(lastRep); if (r.ok) { lastRep.meta.id = r.id; notifyAchievement({ type: 'replay', action: 'saved' }); toast('Saved'); } else toast('Too large to store'); render(); } })));
@@ -3314,7 +3317,7 @@ CB.game.replay = (function () {
       }
       items.forEach(function (it) {
         var I = it.info || {}, cv = h('canvas'), nameEl = h('b', { text: it.name || I.name || 'Replay' });
-        var metaTxt = [I.trackName, cap(I.mode || 'race'), I.laps ? I.laps + ' laps' : null, fmtClock(I.duration), (I.cars || 0) + ' cars',
+        var metaTxt = [I.trackName, modeText(I), I.laps ? I.laps + ' laps' : null, fmtClock(I.duration), carsText(I.cars),
           I.playerFinish ? 'P' + I.playerFinish : null, I.playerBest_s ? 'best ' + fmtTime(I.playerBest_s) : null,
           I.overtakes ? I.overtakes + ' overtakes' : null, fmtBytes(it.chars || 0), new Date(it.savedAt || it.createdAt || Date.now()).toLocaleString()].filter(Boolean).join(' · ');
         var confirmDel = false;
