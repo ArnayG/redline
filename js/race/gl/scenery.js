@@ -1118,7 +1118,7 @@ CB.gl.scenery = (function () {
     var txt = o.text || B.brand(rnd);
     for (var s = 0; s < segs; s++) {
       var a0 = -L / 2 + s * L / segs, a1 = a0 + L / segs;
-      wr.signF(a0, a1, y0, y0 + ph2, 0.02, txt, WHITE, 'brand', o.color ? normHex(o.color) : '');
+      wr.signF(a0, a1, y0, y0 + ph2, 0.02, txt, WHITE, v === 'road-sign' ? 'road-sign' : 'brand', o.color ? normHex(o.color) : '');
     }
     if (lit) {
       wr.use('glow', 'all');
@@ -1169,7 +1169,13 @@ CB.gl.scenery = (function () {
         var lx = -fw / 2 + (ix + 0.5) * fw / nx, ly = H - 0.6 + (iy + 0.5) * 1.2 / ny;
         wr.face([[lx - 0.4, ly - 0.25, -0.39], [lx + 0.4, ly - 0.25, -0.39], [lx + 0.4, ly + 0.25, -0.39], [lx - 0.4, ly + 0.25, -0.39]], head, null, [lx, ly, 1]);
       }
-      addLight(B, 0, H, -1, [0, -0.85, -1], v === 'stadium' ? mul(lightC, 1.7).slice(0, 3) : lightC, v === 'stadium' ? 95 : 60, 30, 65);
+      // aim the head at the track centreline when the placement knows how far it is (floods set well back behind wide
+      // run-off used to light the sand at their own feet and leave the racing surface black)
+      var aim = isFinite(o.aimDist) && o.aimDist > 2 ? clamp(o.aimDist, 4, 70) : H * 1.18;
+      var reach = Math.hypot(H, aim);
+      // (1 - d / range)^2 falloff: a far-back flood gets a stronger head so the track sees about what a near one gives
+      var kFar = clamp(reach / 11, 1, 4) * (v === 'stadium' ? 1.7 : 1);
+      addLight(B, 0, H, -1, [0, -H, -aim], mul(lightC, kFar).slice(0, 3), Math.max(v === 'stadium' ? 95 : 60, reach * 1.9), 30, 65);
       return;
     }
     // street / road lamp: tapered pole + curved arm towards the track
@@ -1749,6 +1755,13 @@ CB.gl.scenery = (function () {
       }
       return true;
     }
+    /** horizontal distance from a trackside point to the centreline of the nearest track section (NaN if unknown) */
+    function aimTo(x, y) {
+      if (!projectFn) return NaN;
+      var p = null;
+      try { p = projectFn(x, y); } catch (e) { p = null; }
+      return p && isFinite(p.lateral) ? Math.abs(p.lateral) : NaN;
+    }
     function rectOK(x, y, rot, l, w, pad) {
       var c = Math.cos(rot), s = Math.sin(rot), hl = l / 2, hw = w / 2;
       for (var a = -1; a <= 1.001; a += 0.5) for (var b = -1; b <= 1.001; b += 0.5) {
@@ -1794,7 +1807,7 @@ CB.gl.scenery = (function () {
           case 'rock': wr.at(o.x, o.y, rnd() * TAU, base - 0.2); rock(wr, o.r || 2, P, rnd); break;
           case 'water': wr.at(o.x, o.y, 0, (base < -2 ? base : Math.max(-0.02, base)) + 0.06); water(B, o); break;
           case 'cone': wr.at(o.x, o.y, 0, base); cone(wr, 0, 0, 1); break;
-          case 'lamp': wr.at(o.x, o.y, yawF, base); lampPost(B, o); break;
+          case 'lamp': wr.at(o.x, o.y, yawF, base); lampPost(B, Object.assign({ aimDist: aimTo(o.x, o.y) }, o)); break;
           case 'grandstand': wr.at(o.x, o.y, yawF, base); grandstand(B, o); break;
           case 'pits': wr.at(o.x, o.y, yawF, base); pitBuilding(B, o); paddock(o, yawF); break;
           case 'tower': wr.at(o.x, o.y, yawF, base); tower(B, o); break;
@@ -1990,6 +2003,42 @@ CB.gl.scenery = (function () {
         note('billboard', bb.x, bb.y, 8, { l: 16, w: 1.2, h: 5, rot: bb.rot });
       }
     }
+    /* ---------- 6b. elevated expressway: overhead direction-sign gantries (green panels, generic place names) ---------- */
+    if (elevatedRoad && style.highway) (function () {
+      var cn = (geom.corners || []).filter(function (c) { return c && c.name && !/^Turn \d/.test(c.name); });
+      var tunnels = def.tunnels || [];
+      function covered(s) { return tunnels.some(function (t) { return s > t.s0 - 60 && s < t.s1 + 30; }); }
+      var nG = 0, lastS = -1e9, routes = ['C1', 'C1', 'C1', '1', '3', '4'];
+      for (var gi = Math.round(N * 0.12); gi < N * 0.96; gi += Math.max(1, Math.round(20 / ds))) {
+        var gs = S[gi], sNow = gi * ds;
+        if (sNow - lastS < 420 || covered(sNow) || gs.layer) continue;
+        var okStraight = true;
+        for (var q = -Math.round(30 / ds); q <= Math.round(30 / ds); q++) if (Math.abs(S[mod(gi + q, N)].curvature) > 0.004) { okStraight = false; break; }
+        if (!okStraight) continue;
+        var pl = [gs.x + gs.nx * (gs.wallL + 1.3), gs.y + gs.ny * (gs.wallL + 1.3)], pr = [gs.x - gs.nx * (gs.wallR + 1.3), gs.y - gs.ny * (gs.wallR + 1.3)];
+        if (clearance(pl[0], pl[1]) < 0.6 || clearance(pr[0], pr[1]) < 0.6 || occ.hitCircle(pl[0], pl[1], 1) || occ.hitCircle(pr[0], pr[1], 1)) continue;
+        lastS = sNow; nG++;
+        occ.markCircle(pl[0], pl[1], 1.2); occ.markCircle(pr[0], pr[1], 1.2);
+        // next two named places ahead
+        var ahead = cn.filter(function (c) { return c.start * ds > sNow; }).concat(cn).slice(0, 2);
+        var zl = -(gs.wallL + 1.3), zr = gs.wallR + 1.3, H = 6.2, PH = 2.7;
+        wr.at(gs.x, gs.y, gs.heading, 0, chunkOf(gs.x, gs.y));
+        // frame: local X along the track, Z across (+Z = right of travel); signs face oncoming traffic (-X)
+        wr.use('metal', 'all');
+        [zl, zr].forEach(function (z) { wr.boxY(0, -0.2, z, 0.45, H + PH + 0.3, 0.45, COL.steel); });
+        wr.beam([0, H + PH + 0.15, zl], [0, H + PH + 0.15, zr], 0.22, 0.22, COL.steel);
+        wr.beam([0, H - 0.1, zl], [0, H - 0.1, zr], 0.18, 0.18, COL.steel);
+        var span = zr - zl, pw = Math.min(PH * 3.6, span / 2 - 0.6);
+        wr.use(night ? 'signsLit' : 'signs', 'all');
+        ahead.forEach(function (c, k) {
+          var zc = k === 0 ? zl + span * 0.27 : zl + span * 0.73, label = routes[(nG + k) % routes.length] + '|' + String(c.name).toUpperCase();
+          wr.signX(zc - pw / 2, zc + pw / 2, H, H + PH, -0.25, -1, label, WHITE, 'road-sign');
+        });
+        note('sign-gantry', gs.x, gs.y, 0, { spans: true, s: sNow });
+      }
+      stats.signGantries = nG;
+    })();
+
     var lightsWanted = night || tod === 'dusk' || style.street;
     if (lightsWanted && (authoredTypes.lamp || 0) < L / 90) {
       var lampStep = Math.round((style.street ? 36 : 60) / ds), lampK = 0;
@@ -1997,7 +2046,7 @@ CB.gl.scenery = (function () {
         var sl = (lampK++ % 2) ? 1 : -1, lp = besideTrack(li, sl, 0.6, 0.6, style.street ? 0.5 : 1.0);
         if (clearance(lp.x, lp.y) < 0.5 || occ.hitCircle(lp.x, lp.y, 0.6)) continue;
         occ.markCircle(lp.x, lp.y, 0.7);
-        wr.at(lp.x, lp.y, lp.rot + (sl > 0 ? PI : 0), gy(lp.x, lp.y)); lampPost(B, { variant: style.night ? 'flood' : style.touge ? 'road' : 'street', h: style.night ? 14 : style.touge ? 7 : 9.5, color: style.night ? '#fff4d6' : null });
+        wr.at(lp.x, lp.y, lp.rot + (sl > 0 ? PI : 0), gy(lp.x, lp.y)); lampPost(B, { variant: style.night ? 'flood' : style.touge ? 'road' : 'street', h: style.night ? 14 : style.touge ? 7 : 9.5, color: style.night ? '#fff4d6' : null, aimDist: aimTo(lp.x, lp.y) });
         note('lamp', lp.x, lp.y, 0.5, { l: 0.6, w: 0.6, h: style.night ? 14 : style.touge ? 7 : 9.5, rot: lp.rot });
       }
     }
@@ -2334,6 +2383,24 @@ CB.gl.scenery = (function () {
       var fs = fitFont(g, text, w * 0.84, h * 0.7);
       g.fillStyle = '#111'; g.fillText(text, w / 2, h * 0.53);
       void fs;
+    } else if (v === 'road-sign') {
+      // expressway direction sign: green panel, white inset border, optional route shield ('C1|GINZA')
+      var parts2 = String(text).split('|'), route = parts2.length > 1 ? parts2[0] : '', dest = parts2.length > 1 ? parts2.slice(1).join(' ') : parts2[0];
+      g.fillStyle = t.color || '#17773a'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#f4f6f2'; g.lineWidth = Math.max(2, h * 0.045);
+      g.strokeRect(h * 0.07, h * 0.07, w - h * 0.14, h - h * 0.14);
+      var tx = w / 2, tw = w * 0.86;
+      if (route) {
+        var sw = h * 0.95, sx = h * 0.18, sy = h * 0.2, sh = h * 0.6;
+        g.fillStyle = '#f4f6f2'; g.fillRect(sx, sy, sw, sh);
+        g.fillStyle = t.color || '#17773a';
+        fitFont(g, route, sw * 0.82, sh * 0.78);
+        g.fillText(route, sx + sw / 2, sy + sh * 0.54);
+        tx = (sx + sw + w) / 2; tw = w - sx - sw - h * 0.3;
+      }
+      g.fillStyle = '#f4f6f2';
+      fitFont(g, dest, tw, h * 0.5, '700');
+      g.fillText(dest, tx, h * 0.53);
     } else if (v === 'chevron') {
       g.fillStyle = '#c8202a'; g.fillRect(0, 0, w, h);
       g.fillStyle = '#ffffff';
