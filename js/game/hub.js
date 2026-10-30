@@ -1403,11 +1403,15 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
 #game-hub .gh-diff{display:inline-flex;gap:2px}
 #game-hub .gh-diff i{width:6px;height:10px;border-radius:2px;background:var(--gh-line2)}
 #game-hub .gh-diff i.on{background:var(--gh-accent)}
-@media (max-width:1100px){#game-hub .gh-menu,#game-hub .gh-brief,#game-hub .gh-rewards,#game-hub .gh-ws,#game-hub .gh-setup{grid-template-columns:1fr}
+@media (max-width:1100px){#game-hub .gh-menu,#game-hub .gh-brief,#game-hub .gh-rewards,#game-hub .gh-ws,#game-hub .gh-setup{grid-template-columns:minmax(0,1fr)}
 #game-hub .gh-menu-hero{border-left:0;padding-left:0}#game-hub .gh-tiermap{grid-template-columns:repeat(2,1fr)}#game-hub .gh-tiles{grid-template-columns:repeat(3,1fr)}
 #game-hub .gh-grid.c3,#game-hub .gh-grid.c4{grid-template-columns:repeat(2,1fr)}#game-hub .gh-news{grid-template-columns:1fr}}
 @media (max-width:640px){#game-hub .gh-screen{padding:18px 16px 50px}#game-hub .gh-h1{font-size:var(--fs-2xl)}#game-hub .gh-grid.c2,#game-hub .gh-grid.c3,#game-hub .gh-grid.c4{grid-template-columns:1fr}
-#game-hub .gh-tiles{grid-template-columns:repeat(2,1fr)}#game-hub .gh-driver-txt,#game-hub .gh-crumbs{display:none}#game-hub .gh-foot{display:none}}
+#game-hub .gh-tiles{grid-template-columns:repeat(2,1fr)}#game-hub .gh-driver-txt,#game-hub .gh-crumbs{display:none}#game-hub .gh-foot{display:none}
+/* routed phones: brand, crumbs and wallet are all hidden, so the hub's own top bar would be an empty 44 px strip */
+#game-hub.is-routed .gh-top{display:none}#game-hub .gh-brief-map{min-height:200px}
+/* the profile ledger: Date and Category columns drop on phones so Description / Amount / Balance fit (no sideways page) */
+#game-hub .gh-ledger{overflow-x:auto}#game-hub .gh-ledger th:nth-child(1),#game-hub .gh-ledger td:nth-child(1),#game-hub .gh-ledger th:nth-child(3),#game-hub .gh-ledger td:nth-child(3){display:none}#game-hub .gh-ledger td.n{white-space:nowrap}}
 #game-hub.reduced *,#game-hub.reduced *::before,#game-hub.reduced *::after{animation-duration:.001s!important;animation-delay:0s!important;transition-duration:.001s!important}
 @media (prefers-reduced-motion:reduce){#game-hub *{animation-duration:.001s!important;animation-delay:0s!important}}
 `;
@@ -4646,7 +4650,7 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
         chartCard('balance', 'Credit balance', 'From the transaction ledger', 230, true) +
         chartCard('tracks', 'Circuits', 'Races per circuit', 230) +
         chartCard('earn', 'Earnings by source', 'Credits earned per category', 230) + '</div>' +
-        '<h2 class="gh-h2">Recent transactions</h2><div class="gh-panel" style="padding:6px">' + (arr(ledger).length ? '<table class="gh-table"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="n">Amount</th><th class="n">Balance</th></tr></thead><tbody>' +
+        '<h2 class="gh-h2">Recent transactions</h2><div class="gh-panel gh-ledger" style="padding:6px">' + (arr(ledger).length ? '<table class="gh-table"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="n">Amount</th><th class="n">Balance</th></tr></thead><tbody>' +
           arr(ledger).slice(-12).reverse().map(function (e) { return '<tr><td style="color:var(--gh-dim)">' + fmtDate(e.t) + '</td><td>' + esc(e.reason) + '</td><td style="color:var(--gh-dim)">' + esc(titleCase(e.category || '')) + '</td><td class="n" style="color:' + (e.amount >= 0 ? 'var(--gh-good)' : 'var(--gh-bad)') + '">' + (e.amount >= 0 ? '+' : '−') + esc(fmtCredits(Math.abs(e.amount))) + '</td><td class="n">' + (isNum(e.balance) ? esc(fmtCredits(e.balance)) : '—') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="gh-empty"><b>No transactions yet</b></div>') + '</div>';
       // charts
       var form = formSeries(hist, 20);
