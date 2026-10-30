@@ -1100,7 +1100,7 @@ CB.derby = CB.derby || {};
   var COIN_MULT = { rookie: 0.6, amateur: 1, pro: 1.4, alien: 1.9 };
   function scoreResults(R, res) {
     var me = res.player || {}, st = me.stats || {}, J = R.juice ? R.juice.state : null;
-    var simScore = num(st.score, 0);
+    var simScore = num(me.score, num(st.score, 0));   // the session's authoritative score sits on the row (stats has none)
     res.score = Math.round(simScore > 0 ? simScore : J ? J.score : 0);
     res.breakdown = st.scoreBy || st.breakdown || (J ? J.breakdown : {}) || {};
     res.bestHit_kph = Math.max(num(st.maxImpact_kph, 0), J ? Math.round(J.bestHit * 3.6) : 0);

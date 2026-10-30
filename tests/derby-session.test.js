@@ -293,3 +293,15 @@ test('pickups ride along: entities in the snapshot, AI / players collect them, g
   B.setState(mid); steps(B, 120 * 10);
   assert.strictEqual(hash(JSON.stringify(B.getState())), hash(JSON.stringify(A.getState())));
 });
+
+test('weapon damage (flamethrower, saws, ...) scores points like contact hits do', function () {
+  var S = SS.create(cfg({ playerAutopilot: false }));
+  var W = S.world, cars = S._cars, me = cars[0], foe = cars[1];
+  while (W.phase !== 'fight') S.step(IDLE);
+  var before = me.stats.score;
+  foe.invulnT = 0; me.invulnT = 0;
+  for (var i = 0; i < 80 && !foe.out; i++) W.hurt(foe, 'front', 0.02, me, 'flame', { healthMult: 1 });
+  assert.ok(me.stats.score > before, 'flame damage scored: ' + before + ' -> ' + me.stats.score);
+  // the environment (no attacker) and plain contact kinds score nothing here
+  var s2 = foe.stats.score; W.hurt(me, 'front', 0.2, null, 'fire'); assert.equal(foe.stats.score, s2);
+});

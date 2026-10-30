@@ -203,3 +203,13 @@ test('juice: impacts -> hit-stop 60-90 ms, shake, kick, flash, rumble; score eve
 test('touch layout: RAM BOOST button is a big round target', function () {
   PHONES.forEach(function (ph) { var L = HUD.touchLayout(ph[0], ph[1], ph[2]); assert.ok(L.boost && L.boost.w >= 64 && L.boost.w === L.boost.h, 'boost at ' + ph[0]); });
 });
+
+test('results: the shown score is the session\'s own (row.score), not the HUD tally', function () {
+  // session results carry the authoritative score on the classification row; stats has no score field
+  var S = CB.derby.session.create({ arenaId: 'mud-bowl', seed: 3, opponents: 3, difficulty: 'amateur', playerAutopilot: true, player: { presetId: 'muscle', accessories: ['ram', 'armour', 'nitro'] } });
+  for (var i = 0; i < 600; i++) S.step();
+  var r = S.results().player;
+  assert.ok(typeof r.score === 'number' && !('score' in r.stats), 'row.score present, stats.score absent');
+  var src = fs.readFileSync(path.join(root, 'js', 'derby', 'derby-ui.js'), 'utf8');
+  assert.ok(/var simScore = num\(me\.score,/.test(src), 'scoreResults reads row.score first');
+});

@@ -102,6 +102,7 @@ CB.derby = CB.derby || {};
       car.spec = specFor(build, (ent.presetId || 'b' + i) + '|' + (ent.build ? i : ''), car.accIds);
       resetCar(car, i);
       car.lives = Math.max(1, Math.round(num(cfg.rules.lives, 1)));
+      car.wpnAcc = 0;
       car.stats = { dealt: 0, taken: 0, hits: 0, bigHits: 0, kills: 0, tbones: 0, rams: 0, wallHits: 0, flameDmg: 0, maxImpact: 0, airTime: 0, survived_s: 0, launches: 0, score: 0, sandwiches: 0, revenge: 0, boostHits: 0, bestCombo: 0, pickups: 0 };
       return car;
     }
@@ -173,6 +174,7 @@ CB.derby = CB.derby || {};
     var F = null;
 
     /** damage from accessories / hazards: returns health lost. byCar credited. */
+    var WEAPON_LABEL = { flame: 'FLAMED', hammer: 'HAMMER BLOW', ball: 'WRECKING BALL', spikes: 'SPIKED', saws: 'SAW CUT', caltrops: 'CALTROPS' }, WEAPON_STEP = 0.08;
     function hurt(target, zone, amount, byCar, kind, opts) {
       if (!target || target.out || !(amount > 0)) return 0;
       if (target.invulnT > 0 || world.phase !== 'fight') return 0;
@@ -185,6 +187,11 @@ CB.derby = CB.derby || {};
       var lost = DM().addZone(target, zone, amount * m, opts);
       target.stats.taken += lost;
       if (byCar && byCar !== target) { byCar.stats.dealt += lost; target.lastHitBy = byCar.id; target.lastHitT = world.t; if (lost > 0.01) { byCar.lastActT = world.t; target.lastActT = world.t; world.lastSigT = world.t; } }
+      // weapon damage scores too (it never goes through the contact labels): 100 points per 8 % dealt
+      if (byCar && byCar !== target && lost > 0 && WEAPON_LABEL[kind]) {
+        byCar.wpnAcc = num(byCar.wpnAcc, 0) + lost;
+        while (byCar.wpnAcc >= WEAPON_STEP) { byCar.wpnAcc -= WEAPON_STEP; award(byCar, target, WEAPON_LABEL[kind], 100, true); }
+      }
       return lost;
     }
 
