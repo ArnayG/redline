@@ -230,3 +230,16 @@ test('orient: wheel page + tilt layer route pointer maths and safe areas through
   assert.ok(!/getBoundingClientRect\(\); var v = clamp/.test(wp), 'pedals no longer read the rotated bounding box');
   assert.ok(/o\.begin\(rr, 'tilt'\)/.test(iu) && /o\.end\('tilt'\)/.test(iu), 'in-game tilt session begins / ends with driving');
 });
+
+test('orient.canonAngle: a landscape-natural device (tablet / laptop, angle 0 = landscape) is not rotated 90 deg', function () {
+  var O2 = require('../js/input/orient.js');
+  assert.strictEqual(O2.canonAngle('landscape-primary', 0), 90, 'tablet landscape reads as landscape');
+  assert.strictEqual(O2.canonAngle('landscape-secondary', 180), 270);
+  assert.strictEqual(O2.canonAngle('portrait-primary', 270), 0, 'tablet turned to portrait');
+  assert.strictEqual(O2.canonAngle('landscape-primary', 90), 90, 'phone: raw angle kept');
+  assert.strictEqual(O2.canonAngle('landscape-secondary', 270), 270);
+  assert.strictEqual(O2.canonAngle('portrait-primary', 0), 0);
+  assert.strictEqual(O2.canonAngle(undefined, 90), 90, 'no type: raw angle');
+  var st = O2.createState();
+  assert.strictEqual(st.begin({ screenAngle: O2.canonAngle('landscape-primary', 0) }).rot, 0, 'no counter-rotation on a landscape tablet');
+});

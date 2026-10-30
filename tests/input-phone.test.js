@@ -313,3 +313,21 @@ test('drift (heavy, arcade drift lock): analog wheel magnitude scales the steer,
   assert.ok(lo > 0 && hi > lo * 1.8, 'proportional low-speed steer: ' + [lo, hi]);
   assert.ok(neg < 0 && Math.abs(neg + hi) < 0.25 * hi + 0.02, 'symmetric: ' + [neg, hi]);
 });
+
+test('phone wheel: a bare #/wheel (or #/wheel/) opens the code-entry screen instead of the main menu', function () {
+  var W2 = globalThis.CB.input.wheel;
+  ['#/wheel', '#/wheel/', 'wheel'].forEach(function (h) {
+    var r = W2.parseRoute(h);
+    assert.ok(r, h + ' is claimed');
+    assert.equal(r.code, null);
+    assert.equal(r.via, 'online');
+  });
+  assert.equal(W2.parseRoute('#/wheel?via=local').via, 'local');
+  assert.equal(W2.parseRoute('#/wheels'), null);
+});
+
+test('phone wheel page: a code that is not found twice asks for the code again instead of retrying forever', function () {
+  var src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'input', 'wheel-page.js'), 'utf8');
+  assert.ok(/st\.notFound >= 2[^\n]*askCode\(\)/.test(src));
+  assert.ok(/function askCode\(\)[\s\S]*?clearTimeout\(retryT\)[\s\S]*?connect\(\)/.test(src));
+});

@@ -238,7 +238,7 @@ CB.input = CB.input || {};
   /* ================================================================ routes / URLs */
   function parseRoute(hash) {
     var h = String(hash || '').replace(/^#/, '');
-    var m = /^\/?wheel\/([^?&]*)(?:[?&](.*))?$/i.exec(h);
+    var m = /^\/?wheel(?:\/([^?&]*))?\/?(?:[?&](.*))?$/i.exec(h);   // bare #/wheel -> code entry screen
     if (!m) return null;
     var seg = decodeURIComponent(m[1] || ''), q = {};
     String(m[2] || '').split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });

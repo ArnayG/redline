@@ -193,7 +193,7 @@ CB.input = CB.input || {};
     left.appendChild(qr); left.appendChild(code); left.appendChild(url); left.appendChild(copy);
     var x = el('button', 'pw-btn cb-btn ghost pw-x', ICON.close); x.type = 'button'; x.setAttribute('aria-label', 'Close');
     right.innerHTML = '<div><div class="pw-eyebrow">Phone as wheel</div><h2 class="pw-h">Steer with your phone</h2></div>' +
-      '<ol class="pw-steps"><li>Scan the QR code with your phone camera, or open the link / type the code at <b>#/wheel/CODE</b>.</li>' +
+      '<ol class="pw-steps"><li>Scan the QR code with your phone camera, or open the link on your phone (or open <b>#/wheel</b> on this site and type the code).</li>' +
       '<li>Tap <b>Start</b> on the phone and allow motion access. Hold it in landscape like a steering wheel.</li>' +
       '<li>Gas is on the right of the screen, brake on the left. Tilt to steer. <b>Centre</b> resets straight-ahead.</li></ol>';
     var seg = el('div', 'pw-seg');
@@ -566,4 +566,150 @@ CB.input = CB.input || {};
     openPairing: openPairing, closePairing: closePairing, menuItems: menuItems, setupRow: setupRow, settingsHTML: settingsHTML,
     mountTouch: mountTouch, enableTilt: enableTilt, disableTilt: disableTilt, toast: toast, _statusText: statusText
   };
+})();
+
+/* ==========================================================================
+   CB.input.padNav : gamepad menu navigation for every screen the hub (js/game/hub.js) does not drive itself:
+   the Race / Drift / Arcade / Derby / Drag / F1 setups, results, the multiplayer lobby, the Garage and any dialog.
+   D-pad / left stick = move focus spatially, A = activate (click), B = back (Esc, so each screen's own Esc handler
+   runs), d-pad left/right on a slider steps it. Idle while a car is driven (html.cb-driving: the modes poll the pad
+   themselves), while the hub's own screens are showing, and on the phone-wheel page.
+     padNav.pick(fromRect|null, rects[], dir) -> index | -1      (pure: the nearest candidate in that direction)
+   ========================================================================== */
+(function () {
+  'use strict';
+  var api = CB.input.padNav = CB.input.padNav || {};
+
+  /** rects: [{left, top, width, height}]; dir: 'up'|'down'|'left'|'right'. Nearest candidate whose centre lies in the
+   *  direction (primary distance + 2 x sideways offset, with overlap on the cross axis preferred). */
+  function pick(from, rects, dir) {
+    if (!rects || !rects.length) return -1;
+    if (!from) return 0;
+    var fx = from.left + from.width / 2, fy = from.top + from.height / 2, best = -1, bestS = Infinity;
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i], cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      var dx = cx - fx, dy = cy - fy, main, side, overlap;
+      if (dir === 'up' || dir === 'down') {
+        main = dir === 'down' ? dy : -dy;
+        if (dir === 'down' ? r.top < from.top + from.height * 0.5 : r.top + r.height > from.top + from.height * 0.5) continue;
+        overlap = r.left < from.left + from.width && r.left + r.width > from.left;
+        side = overlap ? 0 : Math.abs(dx);
+      } else {
+        main = dir === 'right' ? dx : -dx;
+        if (dir === 'right' ? r.left < from.left + from.width * 0.5 : r.left + r.width > from.left + from.width * 0.5) continue;
+        overlap = r.top < from.top + from.height && r.top + r.height > from.top;
+        side = overlap ? 0 : Math.abs(dy);
+      }
+      if (main <= 0) continue;
+      var s = main + side * 2;
+      if (s < bestS) { bestS = s; best = i; }
+    }
+    return best;
+  }
+  api.pick = pick;
+  if (typeof document === 'undefined' || typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
+  var FOCUSABLE = 'button:not([disabled]),a[href],input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[role=button],[role=tab],[tabindex]:not([tabindex="-1"])';
+  var REPEAT_DELAY = 380, REPEAT_RATE = 110;
+  var st = { prev: {}, rep: {}, raf: 0, used: false };
+
+  function visible(el) {
+    if (!el || !el.getClientRects || !el.getClientRects().length) return false;
+    if (el.closest('[hidden],[inert],[aria-hidden="true"]')) return false;
+    var cs = getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity !== 0;
+  }
+  function shown(id) { var e = document.getElementById(id); return !!(e && e.getClientRects().length && !e.closest('[hidden]')); }
+  function topModal() {
+    var list = document.querySelectorAll('[aria-modal="true"], .cw-ov, .gach-overlay'), out = null;
+    for (var i = 0; i < list.length; i++) if (visible(list[i])) out = list[i];
+    return out;
+  }
+  /** true when this module should drive the focus now */
+  function wanted() {
+    var html = document.documentElement;
+    if (html.classList.contains('cb-driving')) return false;
+    var wp = CB.input.wheelPage; if (wp && typeof wp.claimsPage === 'function' && wp.claimsPage()) return false;
+    var modal = topModal(), hub = document.getElementById('game-hub');
+    if (modal && hub && hub.contains(modal)) return false;           // the hub's own dialogs: the hub navigates them
+    if (!modal && shown('game-hub') && !shown('race-root')) return false;   // a hub screen: hub.js padLoop owns the pad
+    return true;
+  }
+  function candidates() {
+    var scope = topModal() || document;
+    return Array.prototype.filter.call(scope.querySelectorAll(FOCUSABLE), visible);
+  }
+  function rectOf(el) { var r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }
+  function focusEl(el) {
+    if (!el) return;
+    st.used = true; document.documentElement.classList.add('cb-padnav');
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) { /* ignore */ }
+  }
+  function move(dir) {
+    var list = candidates(); if (!list.length) return;
+    var cur = document.activeElement, i0 = list.indexOf(cur);
+    if (i0 < 0) {
+      // nothing focused yet: start on the screen's primary action, else its first control outside the nav bar
+      var prim = list.filter(function (e) { return /\bprimary\b/.test(e.className) && !e.closest('#gnav'); })[0];
+      focusEl(prim || list.filter(function (e) { return !e.closest('#gnav'); })[0] || list[0]);
+      return;
+    }
+    if (cur.tagName === 'INPUT' && cur.type === 'range' && (dir === 'left' || dir === 'right')) {
+      var step = +cur.step || 1, v = +cur.value + (dir === 'left' ? -step : step);
+      cur.value = String(Math.max(+cur.min || 0, Math.min(cur.max === '' ? 100 : +cur.max, v)));
+      cur.dispatchEvent(new Event('input', { bubbles: true })); cur.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    var others = list.filter(function (e) { return e !== cur; });
+    var j = pick(rectOf(cur), others.map(rectOf), dir);
+    if (j >= 0) focusEl(others[j]);
+  }
+  function activate() {
+    var a = document.activeElement;
+    if (!a || a === document.body || !visible(a)) { move('down'); return; }
+    if (a.tagName === 'INPUT' && /^(text|search|email|number|password|)$/.test(a.type || '')) { a.select && a.select(); return; }
+    if (a.tagName === 'SELECT') { var n = a.options.length; if (n) { a.selectedIndex = (a.selectedIndex + 1) % n; a.dispatchEvent(new Event('change', { bubbles: true })); } return; }
+    a.click();
+  }
+  function back() {
+    var a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) a.blur();
+    var t = document.activeElement && document.activeElement !== document.body ? document.activeElement : document;
+    t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true }));
+  }
+  function frame(ts) {
+    st.raf = requestAnimationFrame(frame);
+    var pads; try { pads = navigator.getGamepads ? navigator.getGamepads() : null; } catch (e) { pads = null; }
+    var gp = null;
+    if (pads) for (var i = 0; i < pads.length; i++) if (pads[i] && pads[i].connected !== false) { gp = pads[i]; break; }
+    if (!gp) { st.prev = {}; return; }
+    function b(n) { var x = gp.buttons && gp.buttons[n]; return !!(x && (typeof x === 'object' ? (x.pressed || x.value > 0.5) : x)); }
+    var ax = gp.axes || [], dz = 0.5;
+    var s = { up: b(12) || (ax[1] || 0) < -dz, down: b(13) || (ax[1] || 0) > dz, left: b(14) || (ax[0] || 0) < -dz, right: b(15) || (ax[0] || 0) > dz, a: b(0), b: b(1) };
+    var p = st.prev;
+    st.prev = s;
+    if (!wanted()) { st.rep = {}; return; }
+    ['up', 'down', 'left', 'right'].forEach(function (d) {
+      if (s[d] && !p[d]) { st.rep[d] = ts + REPEAT_DELAY; move(d); }
+      else if (s[d] && ts >= (st.rep[d] || Infinity)) { st.rep[d] = ts + REPEAT_RATE; move(d); }
+    });
+    if (s.a && !p.a) activate();
+    if (s.b && !p.b) back();
+  }
+  function start() { if (!st.raf) st.raf = requestAnimationFrame(frame); }
+  window.addEventListener('gamepadconnected', start);
+  // a pad already connected before this page loaded shows up on its first button press, which fires gamepadconnected
+  try { var ps = navigator.getGamepads && navigator.getGamepads(); if (ps) for (var k = 0; k < ps.length; k++) if (ps[k]) { start(); break; } } catch (e) { /* ignore */ }
+  window.addEventListener('gamepaddisconnected', function () {
+    var ps2; try { ps2 = navigator.getGamepads(); } catch (e) { ps2 = null; }
+    if (!ps2 || !Array.prototype.some.call(ps2, function (x) { return x; })) { cancelAnimationFrame(st.raf); st.raf = 0; }
+  });
+  // a visible focus ring while the pad drives the focus (cleared by the mouse)
+  window.addEventListener('mousemove', function () { if (st.used) { st.used = false; document.documentElement.classList.remove('cb-padnav'); } }, { passive: true });
+  var css = document.createElement('style');
+  css.id = 'cb-padnav-style';
+  css.textContent = 'html.cb-padnav :focus{outline:2px solid var(--accent,#e0b36a);outline-offset:2px}';
+  (document.head || document.documentElement).appendChild(css);
+  api.wanted = wanted; api.move = move; api.activate = activate; api.back = back;
 })();

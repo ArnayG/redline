@@ -249,7 +249,24 @@ CB.input = CB.input || {};
     }, function (e) {
       if (sig !== mySig) return;
       setConn('bad', joinError(e));
+      var nf = e && (e.code === 'not-found' || e.code === 'room-closed' || /not.?found|no room/i.test(e.message || ''));
+      st.notFound = nf ? (st.notFound || 0) + 1 : 0;
+      // a mistyped / expired code never starts working by itself: after a second miss, ask for the code again
+      if (nf && st.notFound >= 2 && st.via !== 'manual') { askCode(); return; }
       if (st.via !== 'manual') retryT = setTimeout(connect, e && (e.code === 'blocked' || e.code === 'no-backend') ? 8000 : 3000);
+    });
+  }
+  /** the code was not found: show the code entry again (the drive screen stays underneath) */
+  function askCode() {
+    clearTimeout(retryT);
+    var o = overlay('<h1>Code not found</h1><p>No computer is pairing with <b>' + esc(st.code || '') + '</b>. Check the 5-letter code on the computer\'s pairing screen.</p><input class="pwp-in" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE"><button class="pwp-go" type="button">Connect</button>');
+    var inp = o.querySelector('input');
+    o.querySelector('button').addEventListener('click', function () {
+      var c = (inp.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/.test(c)) { inp.style.borderColor = '#e5484d'; return; }
+      st.code = c; st.notFound = 0;
+      try { history.replaceState(null, '', '#/wheel/' + c + (st.via === 'local' ? '?via=local' : '')); } catch (e) { /* ignore */ }
+      closeOverlay(); connect();
     });
   }
   /** a join failure -> a specific, visible reason (never a silent hang) */

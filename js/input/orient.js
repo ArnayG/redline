@@ -131,9 +131,21 @@ CB.input = CB.input || {};
     };
   }
 
+  /** Screen angle in the PHONE (portrait-natural) frame: 0 portrait, 90 / 270 landscape. The raw orientation.angle is
+   *  relative to the device's natural orientation, which is landscape on tablets / laptops (angle 0 = landscape there):
+   *  read the orientation type first so such a device is not counter-rotated by 90 deg. */
+  var TYPE_ANGLE = { 'portrait-primary': 0, 'landscape-primary': 90, 'portrait-secondary': 180, 'landscape-secondary': 270 };
+  function canonAngle(type, angle) {
+    if (Object.prototype.hasOwnProperty.call(TYPE_ANGLE, type)) {
+      var t = TYPE_ANGLE[type], a = snap90(num(angle, t));
+      // portrait-natural device: the raw angle is already this frame (keeps the exact side the OS reports)
+      return isLand(a) === isLand(t) ? a : t;
+    }
+    return snap90(num(angle, 0));
+  }
   var api = {
     deviceRoll: deviceRoll, rollFromGravity: rollFromGravity, sideFromRoll: sideFromRoll, rotationFor: rotationFor,
-    insetMap: insetMap, toLocal: toLocal, createState: createState, snap90: snap90
+    insetMap: insetMap, toLocal: toLocal, createState: createState, snap90: snap90, canonAngle: canonAngle
   };
   CB.input.orient = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -158,7 +170,7 @@ CB.input = CB.input || {};
   }
 
   function screenAngle() {
-    try { if (window.screen && window.screen.orientation && isFinite(window.screen.orientation.angle)) return snap90(window.screen.orientation.angle); } catch (e) { /* ignore */ }
+    try { var so = window.screen && window.screen.orientation; if (so && (so.type || isFinite(so.angle))) return canonAngle(so.type, so.angle); } catch (e) { /* ignore */ }
     if (isFinite(window.orientation)) return snap90(window.orientation);
     // last resort: viewport shape (portrait = 0, landscape = 90)
     return window.innerWidth > window.innerHeight ? 90 : 0;
