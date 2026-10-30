@@ -404,6 +404,39 @@ CB.gl.track = (function () {
       return out;
     }
 
+    /* ---- countryside patchwork beyond the circuit grounds ----
+       Rural green circuits otherwise sit in one endless lawn (the "flat green void" seen from the TV / heli cameras
+       and above the barriers). Past ~90 m from the walls the terrain fades into farmland: a rotated, domain-warped
+       grid of 60..150 m fields (pasture, hay, ripe wheat, ploughed soil, dark crops, the odd rapeseed) with darker
+       hedgerows on the boundaries. Hue-relative to the theme grass like grassCol; off for street / touge circuits,
+       non-green (desert / dusk) themes, themes with their own ground colour, or theme.fields === false. */
+    var fieldsOn = !style.street && !style.touge && theme.fields !== false && (!theme.ground || String(theme.ground).toLowerCase() === String(theme.grass || '').toLowerCase()) && opts.fields !== false &&
+      C.grass[1] > C.grass[0] * 1.5 && C.grass[1] > C.grass[2] * 1.1;
+    var FIELD = (function () {
+      var r2 = rngFor(seed + ':fields'), a = r2() * PI, w = 70 + r2() * 50, h = 95 + r2() * 55;
+      // crop multipliers relative to the theme grass, with weights
+      // crop colours (sRGB), turned into multipliers of the tinted theme grass (the terrain vertex colour domain)
+      var crops = [[null, 0.28], ['#8f9c48', 0.18], ['#c3a457', 0.15], ['#7d5d40', 0.13], ['#2f5726', 0.14], ['#d2c63e', 0.05], ['#b09f74', 0.07]]
+        .map(function (cw) {
+          if (!cw[0]) return [[1, 1, 1], cw[1]];
+          var t = hexLin(cw[0]);
+          return [[0, 1, 2].map(function (q) { return clamp(t[q] / Math.max(0.01, C.grass[q] * 0.86), 0.3, 6); }), cw[1]];
+        });
+      return { c: Math.cos(a), s: Math.sin(a), w: w, h: h, crops: crops };
+    })();
+    function fieldMul(wx, wy) {
+      var F = FIELD, wxp = wx + 38 * noise.noise(wx / 210 + 5, wy / 210), wyp = wy + 38 * noise.noise(wx / 210, wy / 210 + 9);
+      var u = (wxp * F.c + wyp * F.s) / F.w, v = (-wxp * F.s + wyp * F.c) / F.h, iu = Math.floor(u);
+      // alternate rows are offset so the grid does not read as a chessboard
+      var vv = v + (iu & 1) * 0.43, iv = Math.floor(vv);
+      var hsh = (Math.imul(iu * 73856093 ^ iv * 19349663, 2654435761) >>> 0) / 4294967296, acc = 0, crop = F.crops[0][0];
+      for (var q = 0; q < F.crops.length; q++) { acc += F.crops[q][1]; if (hsh <= acc) { crop = F.crops[q][0]; break; } }
+      var du = Math.min(u - iu, 1 - (u - iu)) * F.w, dv = Math.min(vv - iv, 1 - (vv - iv)) * F.h;
+      var hedge = 1 - smooth((Math.min(du, dv) - 1.5) / 3.5);
+      var k = 0.94 + 0.12 * noise.noise(wx / 23 + 2, wy / 23);      // in-field variation (wet spots, tramlines)
+      return [lerp(crop[0] * k, 0.45, hedge), lerp(crop[1] * k, 0.62, hedge), lerp(crop[2] * k, 0.45, hedge)];
+    }
+
     /* ---- ribbon helper (rings over unwrapped sample keys) ---- */
     // key in [0, 2N): ring at sample key % N; s = key*ds keeps UVs continuous over the wrap.
     // latsFn(r) -> array of laterals (+left, sim meters); colFn(r, j, key) -> RGBA; uvFn(lat, s) -> [u, v]
@@ -585,7 +618,7 @@ CB.gl.track = (function () {
         }, function (r, jj) {
           var v = 1 + 0.05 * noise.noise(r * 0.37, jj * 3.1);
           return [v, v, v, 1];
-        }, function (lat, s) { return [lat / 5, s / 5]; }, function (r, jj) {
+        }, function (lat, s) { return [lat / 1.7, s / 1.7]; }, function (r, jj) {
           return jj === 1 ? -0.015 : 0;     // gravel beds sit a touch low in the middle
         });
       });
@@ -1247,6 +1280,10 @@ CB.gl.track = (function () {
               // hollows a touch darker / lusher, crests lighter (cheap fake of moisture + sky occlusion)
               var crest = clamp((TH[vi3] + TERRAIN_SINK) / Math.max(1, amp), 0, 1);
               col = grassCol(wx2, wy2, edgeT, 0.93 + 0.12 * crest);
+              if (fieldsOn && ew > 45) {
+                var fk = smooth((ew - 45) / 70) * 0.8, fm = fieldMul(wx2, wy2);
+                col = [col[0] * lerp(1, fm[0], fk), col[1] * lerp(1, fm[1], fk), col[2] * lerp(1, fm[2], fk), 1];
+              }
             }
             if (!style.street && slope > 0.12) {
               var rk = smooth((slope - 0.12) / 0.25);
