@@ -483,10 +483,21 @@ CB.drag = CB.drag || {};
       }
       if (!particles) return;
       var n = Math.min(PS.length, particles.max);
+      // keep the car readable through a burnout cloud: smoke sitting on the camera -> car sight line is thinned (it
+      // stays dramatic around and beside the rear wheels), and puffs reaching the lens fade out instead of whiting it
+      var E = cam.position, T = cam.target, ld = T ? [T[0] - E[0], T[1] - E[1], T[2] - E[2]] : null, ll = ld ? Math.hypot(ld[0], ld[1], ld[2]) : 0;
+      if (ll > 0.5) { ld[0] /= ll; ld[1] /= ll; ld[2] /= ll; } else ld = null;
       for (var q = 0; q < n; q++) {
         var s = PS[q], t = s.age / s.life, a = s.col[3] * (s.add ? 1 - t : (1 - t) * (1 - t) * Math.min(1, s.age * 6));
         var size = Math.max(0.02, s.size + num(s.grow, 0) * s.age);
         if (s.maxSize) size = Math.min(size, s.maxSize);
+        if (!s.add && ld) {
+          var rx = s.p[0] - E[0], ry = s.p[1] - E[1], rz = s.p[2] - E[2], al = rx * ld[0] + ry * ld[1] + rz * ld[2];
+          var px = rx - ld[0] * al, py = ry - ld[1] * al, pz = rz - ld[2] * al, pd = Math.sqrt(px * px + py * py + pz * pz);
+          var dist = Math.sqrt(rx * rx + ry * ry + rz * rz), r0 = size * 0.5;
+          a *= clamp((dist - r0 * 0.6) / (r0 * 1.2 + 1.2), 0, 1);
+          if (al > 0 && al < ll + r0 * 0.3) a *= 1 - 0.9 * clamp(1 - (pd - 0.6) / (r0 + 2.0), 0, 1) * clamp(al / (ll * 0.5 + 0.01), 0, 1);
+        }
         particles.set(q, s.p[0], s.p[1], s.p[2], s.col[0] * a, s.col[1] * a, s.col[2] * a, a, size, s.age * 0.6, s.add ? 0.2 : 0.75, s.add);
       }
       particles.upload(n);
