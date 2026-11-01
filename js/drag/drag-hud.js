@@ -174,16 +174,18 @@ CB.drag = CB.drag || {};
         if (T >= 70) return { text: 'TYRES IN THE WINDOW', sub: 'Release and roll to the line', kind: 'good' };
         return { text: 'BURNOUT!', sub: 'Keep holding to heat the tyres', kind: 'info' };
       }
-      if (me.x < num(o.burnoutEnd, -14)) return { text: 'Hold ' + k.brk + ' + ' + k.thr + ' for a burnout', sub: 'Hot tyres bite harder · or tap ' + k.thr + ' to roll to the line', kind: 'info' };
+      if (me.x < num(o.burnoutEnd, -14)) return { text: 'Hold ' + k.brk + ' + ' + k.thr + ' for a burnout', sub: 'Hot tyres bite harder · or ' + (o.auto ? 'ease onto ' : 'tap ') + k.thr + ' to roll to the line', kind: 'info' };
     }
     if (ph === 'burnout' || ph === 'staging') {
-      if (street) return me.staged ? { text: 'ON THE LINE', sub: 'Hold ' + k.brk + ', rev it up, go on the flag drop', kind: 'info' } : { text: 'Roll up to the line', sub: 'Tap ' + k.thr + ' to creep', kind: 'info' };
+      // automatics / CVT / EVs creep on a light, steady throttle; manuals on taps
+      var au = !!o.auto, creep = au ? 'Ease onto ' + k.thr + ' to creep' : 'Tap ' + k.thr + ' to creep';
+      if (street) return me.staged ? { text: 'ON THE LINE', sub: 'Hold ' + k.brk + ', rev it up, go on the flag drop', kind: 'info' } : { text: 'Roll up to the line', sub: creep, kind: 'info' };
       if (me.staged) {
         var oth = (snap.lanes || []).filter(function (l) { return l && l !== me && l.kind !== 'none'; })[0];
         return { text: me.deep ? 'DEEP STAGED' : 'STAGED', sub: 'Hold ' + k.brk + ' + rev · release on green' + (oth && !oth.staged ? ' · waiting for the other lane' : ''), kind: 'good' };
       }
-      if (me.preStaged) return { text: 'PRE-STAGED', sub: 'Tiny taps of ' + k.thr + ' to stage', kind: 'info' };
-      return { text: 'Creep in: tap ' + k.thr, sub: 'Stop when the stage bulbs light (' + k.brk + ' brakes)', kind: 'info' };
+      if (me.preStaged) return { text: 'PRE-STAGED', sub: (au ? 'Barely touch ' : 'Tiny taps of ') + k.thr + ' to stage', kind: 'info' };
+      return { text: au ? 'Creep in: ease onto ' + k.thr : 'Creep in: tap ' + k.thr, sub: 'Stop when the stage bulbs light (' + k.brk + ' brakes)', kind: 'info' };
     }
     if (ph === 'tree') {
       if (me.launch && me.launch.held) {
@@ -240,12 +242,14 @@ CB.drag = CB.drag || {};
     ctx.strokeStyle = me.limiter ? HUD.bad : '#ffb13a'; ctx.lineWidth = Math.max(2.5, R * 0.03); ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
     ctx.beginPath(); ctx.arc(cx, cy, R * 0.06, 0, Math.PI * 2); ctx.fillStyle = '#ffb13a'; ctx.fill();
     var g = me.gear == null ? '—' : me.gear < 0 ? 'R' : me.gear === 0 ? 'N' : String(me.gear);
-    text(ctx, g, cx, cy + R * 0.12, R * 0.42, me.limiter ? HUD.bad : '#ffffff', 'center', 900);
+    // layout (no overlaps at any size): gear digit above the needle hub and clear of the top numbers, the RPM / AUTO
+    // label between the hub and the speed, speed + unit in the open bottom of the dial; small dials drop "RPM ×1000"
+    text(ctx, g, cx, cy - R * 0.24, R * 0.34, me.limiter ? HUD.bad : '#ffffff', 'center', 900);
     var sp = num(me.speed, Math.abs(num(me.vx, 0)));
     text(ctx, String(Math.round(units === 'metric' ? sp * KPH : sp * MPH)), cx, cy + R * 0.5, R * 0.2, HUD.ink, 'center', 800, MONO);
     text(ctx, units === 'metric' ? 'KM/H' : 'MPH', cx, cy + R * 0.68, Math.max(8, R * 0.08), HUD.dim, 'center', 700);
-    if (me.autoShift) text(ctx, 'AUTO', cx, cy - R * 0.32, Math.max(8, R * 0.09), HUD.dim, 'center', 800);
-    else text(ctx, 'RPM ×1000', cx, cy - R * 0.32, Math.max(8, R * 0.075), HUD.faint, 'center', 700);
+    if (me.autoShift) text(ctx, 'AUTO', cx, cy + R * 0.24, Math.max(8, R * 0.08), HUD.dim, 'center', 800);
+    else if (R >= 55) text(ctx, 'RPM ×1000', cx, cy + R * 0.24, Math.max(8, R * 0.07), HUD.faint, 'center', 700);
   }
   /* 12-LED shift-light bar: green → amber → red, all flash blue-white in the window */
   function drawLights(ctx, r, me, t) {
@@ -482,7 +486,7 @@ CB.drag = CB.drag || {};
       }
       var bannerOn = H.banner && (snap.phase === 'shutdown' || snap.phase === 'done' || me.finished);
       if (!bannerOn && !view.noPrompt) {
-        var pr = prompt(snap, me, { keys: view.keys, burnoutEnd: -14 });
+        var pr = prompt(snap, me, { keys: view.keys, auto: !!view.auto, burnoutEnd: -14 });
         var PR = pr && snap.phase === 'run' ? { x: Lo.prompt.x, y: cy + (compact ? 26 : 40), w: Lo.prompt.w, h: Lo.prompt.h } : Lo.prompt;
         drawPrompt(ctx, PR, pr, t, compact);
       }
@@ -533,6 +537,6 @@ CB.drag = CB.drag || {};
     return { draw: draw, reset: reset, popups: function () { return H.pops.slice(); }, ticker: function () { return H.ticker.slice(); }, _H: H };
   }
 
-  CB.drag.hud = { rtGrade: rtGrade, shortName: shortName, layout: layout, fpGauges: fpGauges, touchLayout: touchLayout, prompt: prompt, fmtSpeed: fmtSpeed, gradeColor: gradeColor, create: create, roundRect: rr, laneFrac: laneFrac };
+  CB.drag.hud = { rtGrade: rtGrade, shortName: shortName, layout: layout, fpGauges: fpGauges, touchLayout: touchLayout, prompt: prompt, fmtSpeed: fmtSpeed, gradeColor: gradeColor, create: create, roundRect: rr, laneFrac: laneFrac, drawTach: drawTach };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.drag.hud;
 })();

@@ -121,6 +121,56 @@ CB.drag = CB.drag || {};
     edge: { KeyE: 'up', Space: 'up', ArrowRight: 'up', KeyQ: 'down', ArrowLeft: 'down' },
     action: { KeyC: 'camera', Escape: 'pause', KeyP: 'pause', KeyM: 'mute', KeyR: 'restart', Enter: 'confirm' }
   };
+
+  /* Settings > Controls key bindings (CB.game.profile settings.controls.bindings, {action: [codes]}) layered onto this
+     mode's default keys: a rebound action drops its default keys and takes the player's; a code the player bound
+     elsewhere stops doing this mode's default thing. No bindings -> the defaults exactly. */
+  function profileBindings() {
+    try {
+      var P = CB.game && CB.game.profile;
+      var p = P ? (typeof P.peek === 'function' ? P.peek() : typeof P.get === 'function' ? P.get() : null) : null;
+      var b = p && p.settings && p.settings.controls && p.settings.controls.bindings;
+      return b && typeof b === 'object' ? b : null;
+    } catch (e) { return null; }
+  }
+  function bindKeys(defaults, map, bindings) {
+    var out = {};
+    Object.keys(defaults).forEach(function (g) { out[g] = Object.assign({}, defaults[g]); });
+    if (!bindings || typeof bindings !== 'object') return out;
+    var dflt = null;
+    try { var PM = CB.game && CB.game.profile; dflt = PM && typeof PM.defaultBindings === 'function' ? PM.defaultBindings() : null; } catch (eD) { dflt = null; }
+    Object.keys(map).forEach(function (action) {
+      var codes = Array.isArray(bindings[action]) ? bindings[action] : typeof bindings[action] === 'string' ? [bindings[action]] : null;
+      if (!codes) return;
+      // an action the player never rebound (still the profile default) keeps this mode's own default keys
+      if (dflt && Array.isArray(dflt[action]) && dflt[action].join('|') === codes.join('|')) return;
+      var g = map[action][0], v = map[action][1];
+      Object.keys(out[g]).forEach(function (c) { if (out[g][c] === v && !(v === 'pause' && c === 'Escape')) delete out[g][c]; });
+      codes.forEach(function (c) {
+        if (typeof c !== 'string' || !c) return;
+        Object.keys(out).forEach(function (gg) { delete out[gg][c]; });
+        out[g][c] = v;
+      });
+    });
+    return out;
+  }
+  /** "KeyW" -> "W", "ArrowUp" -> "↑", "Space" -> "Space" (prompt / help labels) */
+  function keyLabel(code) {
+    code = String(code || '');
+    var A = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space', Escape: 'Esc', Enter: 'Enter', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Ctrl', ControlRight: 'Ctrl', Tab: 'Tab' };
+    if (A[code]) return A[code];
+    var m = /^(?:Key|Digit|Numpad)(.+)$/.exec(code);
+    return m ? m[1] : code;
+  }
+  /** label of the first key bound to a mode action value in a key map ('thr' -> 'W'), or the fallback */
+  function keyFor(keys, v, fb) {
+    var first = null;
+    Object.keys(keys).some(function (g) { return Object.keys(keys[g]).some(function (c) { if (keys[g][c] === v) { first = c; return true; } return false; }); });
+    return first ? keyLabel(first) : fb;
+  }
+  var BIND_MAP = { throttle: ['held', 'thr'], brake: ['held', 'brk'], shiftUp: ['edge', 'up'], shiftDown: ['edge', 'down'],
+    camera: ['action', 'camera'], pause: ['action', 'pause'], reset: ['action', 'restart'] };
+  function dragKeys(bindings) { return bindKeys(KEYS, BIND_MAP, bindings === undefined ? profileBindings() : bindings); }
   /** One input manager: digital keys pass 0/1 (the session revs a held engine while the key is down: feather it),
    *  gamepad / touch / hub are analog. Shift edges are latched until the next sample(). Hub sources (phone wheel,
    *  webcam fist, mouse, tilt) get a line-lock assist: staged, the brake is held for you and the revs sit in the band;
@@ -130,15 +180,16 @@ CB.drag = CB.drag || {};
     var I = {
       held: {}, up: 0, down: 0, touch: { active: false, throttle: 0, brake: 0, n2o: false, up: 0, down: 0 },
       gp: { active: false, throttle: 0, brake: 0, n2o: false, prev: [] }, hub: { active: false, throttle: 0, brake: 0, prevThr: 0, armed: false, released: false },
-      phone: { n2o: false }, forced: null, onAction: opts.onAction || function () {}, lastDevice: 'keyboard', enabled: true
+      phone: { n2o: false }, forced: null, onAction: opts.onAction || function () {}, lastDevice: 'keyboard', enabled: true,
+      keys: dragKeys(opts.bindings)
     };
     I.handleKey = function (code, down, repeat) {
       if (!I.enabled) return false;
-      var k = KEYS.held[code];
+      var k = I.keys.held[code];
       if (k) { I.held[k] = !!down; if (down) I.lastDevice = 'keyboard'; return true; }
-      var e = KEYS.edge[code];
+      var e = I.keys.edge[code];
       if (e) { if (down && !repeat) { I[e]++; I.lastDevice = 'keyboard'; } return true; }
-      var a = KEYS.action[code];
+      var a = I.keys.action[code];
       if (a) { if (down && !repeat) I.onAction(a); return true; }
       return false;
     };
@@ -230,6 +281,14 @@ CB.drag = CB.drag || {};
     });
     out.sort(function (a, b) { return b.hp / b.kg - a.hp / a.kg; });
     return out;
+  }
+  /** The figures a car card and the "Your car" panel show — ONE source: a stock car reads its factory spec (as its card
+      does: 650 hp / 1,760 kg, not the sim's 655 / 1,803), a regear changes only its 0–100; anything else reads physics. */
+  function carFigures(me, M) {
+    M = M || {};
+    var sp = me && /^stock:/.test(me.key || '') && CB.stock && CB.stock.SPECS ? CB.stock.SPECS[me.modelId] : null;
+    if (sp) return { factory: true, hp: sp.hp, kg: sp.kg, s100: me.tuned && M.zeroTo100_s ? M.zeroTo100_s : sp.s };
+    return { factory: false, hp: M.power_hp || null, kg: M.weight_kg || null, s100: M.zeroTo100_s || null };
   }
   function stockBuild(id) {
     if (specs['s:' + id]) return specs['s:' + id];
@@ -326,6 +385,14 @@ CB.drag = CB.drag || {};
     { id: 'done', title: 'That’s a pass!', body: 'Nicely done. Next: race a rival on the ladder, or keep practising.', hint: '', hl: null }
   ];
   function coachStep(i) { return COACH[clamp(i | 0, 0, COACH.length - 1)]; }
+  /** automatics / CVT / EVs creep on a light, steady touch of the throttle (there is no clutch to slip): reword the taps */
+  var AUTO_CREEP = [
+    [/tap \{thr\} to creep forward/g, 'ease onto {thr} with a light, steady touch to creep forward'],
+    [/Tap \{thr\} · \{brk\} to stop/g, 'Light {thr} · {brk} to stop'],
+    [/tap \{thr\} gently — tiny taps —/g, 'barely touch {thr} — the lightest pressure —'],
+    [/Tiny taps of \{thr\}/g, 'Barely touch {thr}']
+  ];
+  function creepText(str, auto) { str = String(str || ''); if (auto) AUTO_CREEP.forEach(function (r) { str = str.replace(r[0], r[1]); }); return str; }
   /** next coach step index from the current one, the player's lane, the snapshot and the input (pure) */
   function coachNext(i, lane, snap, inp, ctx) {
     ctx = ctx || {};
@@ -400,8 +467,8 @@ CB.drag = CB.drag || {};
   }
 
   CB.drag.ui = CB.drag.ui || {};
-  CB.drag.ui._ = { DEFAULTS: DEFAULTS, sanitizeSettings: sanitizeSettings, createInput: createInput, KEYS: KEYS, LS_KEY: LS_KEY, payout: payout, dialFor: dialFor,
-    entryFor: entryFor, sessionConfig: sessionConfig, ghostTrace: ghostTrace, achievementEvent: achievementEvent, stockList: stockList, playerCar: playerCar, assistsOf: assistsOf, distId: distId,
+  CB.drag.ui._ = { DEFAULTS: DEFAULTS, sanitizeSettings: sanitizeSettings, createInput: createInput, KEYS: KEYS, dragKeys: dragKeys, creepText: creepText, keyLabel: keyLabel, keyFor: keyFor, LS_KEY: LS_KEY, payout: payout, dialFor: dialFor,
+    entryFor: entryFor, sessionConfig: sessionConfig, ghostTrace: ghostTrace, achievementEvent: achievementEvent, stockList: stockList, playerCar: playerCar, carFigures: carFigures, assistsOf: assistsOf, distId: distId,
     isVs: isVs, CAMS: CAMS, CAM_BLEND: CAM_BLEND, launched: launched, stageCamera: stageCamera, createCamState: createCamState, COACH: COACH, coachStep: coachStep, coachNext: coachNext, tipsFor: tipsFor };
   CB.drag.ui._parts = { clamp: clamp, num: num, esc: esc, hasDOM: hasDOM, loadSettings: loadSettings, saveSettings: saveSettings, stockBuild: stockBuild, stockName: stockName,
     presetList: presetList, presetBuild: presetBuild, savedBuilds: savedBuilds, currentBuild: currentBuild, buildName: buildName, paintOf: paintOf, hasLaunchControl: hasLaunchControl, DIFFS: DIFFS };
@@ -438,7 +505,7 @@ CB.drag = CB.drag || {};
   function setDriving(on) { var r = router(); if (r && r.setDriving) r.setDriving(on); }
   function toast(msg, kind) { if (CB.ui && typeof CB.ui.toast === 'function') CB.ui.toast(msg, kind || 'info'); }
   var ICON = {
-    play: '<path d="M7 4l13 8-13 8z"/>', back: '<path d="M15 18l-6-6 6-6"/>', bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', cam: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/>',
+    play: '<path d="M7 4l13 8-13 8z"/>', back: '<path d="M15 18l-6-6 6-6"/>', bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', pad: '<path d="M6 9h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L15 14H9l-1.6 1.8A3 3 0 0 1 2 14v-1a4 4 0 0 1 4-4z"/><path d="M7 11.5v3M5.5 13h3"/><circle cx="16" cy="12" r=".6"/><circle cx="18" cy="14" r=".6"/>', cam: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/>',
     pause: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
     dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', ghost: '<path d="M5 20V10a7 7 0 0 1 14 0v10l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><circle cx="9.5" cy="10" r="1"/><circle cx="14.5" cy="10" r="1"/>',
     trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 20h6M12 13v7"/>', next: '<path d="M9 18l6-6-6-6"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
@@ -498,7 +565,7 @@ CB.drag = CB.drag || {};
         h('p', { class: 'mx-sub', text: 'Burnout, stage, launch on green, nail your shifts. Every horsepower, kilo and gear ratio from the Garage shows up on the timeslip.' })),
       h('div', { class: 'mx-headbar' },
         h('button', { class: 'cb-btn ghost', type: 'button', 'data-dg': 'howto', html: icon('tree', 14) + ' How to drag race', onclick: function () { startRun({ tutorial: true }); } }),
-        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('cam', 14) + ' Controls', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
+        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('pad', 14) + ' Controls', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
         h('button', { class: 'cb-btn ghost cb-back dg-back', type: 'button', 'aria-label': 'Main menu', title: 'Main menu (Esc)', html: icon('back', 16) + '<span class="lbl">Main menu</span><kbd>Esc</kbd>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
     var main = h('div', { class: 'dg-main' }), side = h('aside', { class: 'mx-side dg-side' });
     wrap.appendChild(main); wrap.appendChild(side);
@@ -532,10 +599,11 @@ CB.drag = CB.drag || {};
       h('button', { class: 'cb-btn primary', type: 'button', 'data-dg': 'tut-banner', html: icon('play', 14) + ' How to drag race', onclick: function () { startRun({ tutorial: true }); } })));
     m.appendChild(carSection()); m.appendChild(oppSection()); m.appendChild(stripSection()); m.appendChild(rulesSection()); m.appendChild(assistSection()); m.appendChild(displaySection());
   }
+  function fmtKg(v) { return Math.round(v).toLocaleString('en-US'); }
   function carCard(o) {
     return h('button', { type: 'button', class: 'mx-card dg-card' + (o.on ? ' is-on' : ''), 'aria-pressed': o.on ? 'true' : 'false', onclick: o.pick, title: o.title || null },
       h('span', { class: 'n' }, o.color ? h('span', { class: 'dg-sw', style: { background: o.color } }) : null, o.name),
-      h('span', { class: 'm', text: o.meta || '' }));
+      h('span', { class: 'm', text: o.meta || '' }), o.meta2 ? h('span', { class: 'm', text: o.meta2 }) : null);
   }
   function carSection() {
     var S = U.S, s = sec(1, 'Car', 'Power-to-weight · traction · gearing');
@@ -548,7 +616,8 @@ CB.drag = CB.drag || {};
     var grid = h('div', { class: 'dg-grid' });
     if (tab === 'stock') {
       X.stockList().forEach(function (c) {
-        grid.appendChild(carCard({ name: c.name, meta: c.hp + ' hp · ' + c.kg + ' kg · ' + c.drive.toUpperCase() + ' · 0–100 ' + c.s100 + ' s', on: S.source === 'stock' && S.stockId === c.id,
+        // two short lines so the 0–100 time is never cut off by the card's ellipsis
+        grid.appendChild(carCard({ name: c.name, meta: c.hp + ' hp · ' + fmtKg(c.kg) + ' kg', meta2: c.drive.toUpperCase() + ' · 0–100 ' + c.s100 + ' s', on: S.source === 'stock' && S.stockId === c.id,
           title: 'Auto-config: the factory spec', pick: function () { S.source = 'stock'; S.stockId = c.id; S.tuneFD = null; S.tuneSpread = 1; persist(); rerender(); } }));
       });
       if (!grid.children.length) grid.appendChild(h('div', { class: 'mx-sub', text: 'Stock specs are not available in this build.' }));
@@ -684,7 +753,9 @@ CB.drag = CB.drag || {};
     row(rows, 'Touch controls', seg([{ v: 'auto', t: 'Auto' }, { v: 'on', t: 'On' }, { v: 'off', t: 'Off' }], S.touch, function (v) { S.touch = v; persist(); rerender(); }));
     row(rows, 'FPS counter', seg([{ v: false, t: 'Off' }, { v: true, t: 'On' }], S.showFps, function (v) { S.showFps = v; persist(); rerender(); }));
     s.appendChild(rows);
-    s.appendChild(h('div', { class: 'dg-keys', html: '<b>W / ↑</b> throttle · <b>S / ↓</b> brake · <b>E / Space</b> shift up · <b>Q</b> shift down · <b>N</b> nitrous · <b>C</b> camera · <b>R</b> restart · <b>Esc</b> pause · pad RT / LT, A / RB up, X / LB down · phone wheel / webcam: fist to go' }));
+    // the player's own key bindings (Settings > Controls), not the defaults
+    var K = X.dragKeys(), kl = function (v) { var out = []; Object.keys(K).forEach(function (g) { Object.keys(K[g]).forEach(function (c) { if (K[g][c] === v && out.indexOf(X.keyLabel(c)) < 0) out.push(X.keyLabel(c)); }); }); return '<b>' + esc(out.join(' / ') || '—') + '</b>'; };
+    s.appendChild(h('div', { class: 'dg-keys', html: kl('thr') + ' throttle · ' + kl('brk') + ' brake · ' + kl('up') + ' shift up · ' + kl('down') + ' shift down · ' + kl('n2o') + ' nitrous · ' + kl('camera') + ' camera · ' + kl('restart') + ' restart · ' + kl('pause') + ' pause · pad RT / LT, A / RB up, X / LB down · phone wheel / webcam: fist to go' }));
     return s;
   }
   function bestEt(me, S) { var T = CB.drag.timing; var b = T ? safe(function () { return T.records.best(T.records.carKey(me.build, me.key), S.distanceId); }) : null; return b && b.et != null ? b.et : null; }
@@ -693,15 +764,16 @@ CB.drag = CB.drag || {};
     var me = X.playerCar(S), d = ST().get(S.distanceId);
     var card = h('div', { class: 'mx-sum dg-sum' });
     var M = safe(function () { return CB.physics && me.build ? CB.physics.compute(me.build) : null; }) || {};
-    card.appendChild(h('div', { class: 'mx-kicker', text: 'Your car' }));
+    var fig = X.carFigures(me, M);
+    card.appendChild(h('div', { class: 'mx-kicker', text: fig.factory ? 'Your car · factory figures' : 'Your car' }));
     card.appendChild(h('h4', { text: me.name || 'Car' }));
     card.appendChild(h('div', { class: 'dg-stats', html:
-      '<div><span>Power</span><b>' + (M.power_hp ? Math.round(M.power_hp) + ' hp' : '—') + '</b></div>' +
-      '<div><span>Weight</span><b>' + (M.weight_kg ? Math.round(M.weight_kg) + ' kg' : '—') + '</b></div>' +
+      '<div><span>Power</span><b>' + (fig.hp ? Math.round(fig.hp) + ' hp' : '—') + '</b></div>' +
+      '<div><span>Weight</span><b>' + (fig.kg ? Math.round(fig.kg) + ' kg' : '—') + '</b></div>' +
       '<div><span>Drive</span><b>' + esc(((me.build && me.build.drivetrain && me.build.drivetrain.layout) || '').toUpperCase() || '—') + '</b></div>' +
       '<div><span>Gearbox</span><b>' + esc(((me.build && me.build.transmission && me.build.transmission.type) || '—') + (me.build && me.build.transmission && me.build.transmission.gears ? ' ' + me.build.transmission.gears : '')) + '</b></div>' +
       '<div><span>Tyres</span><b>' + esc((me.build && me.build.tires && me.build.tires.compound) || '—') + '</b></div>' +
-      '<div><span>0–100</span><b>' + (M.zeroTo100_s ? M.zeroTo100_s.toFixed(1) + ' s' : '—') + '</b></div>' }));
+      '<div><span>0–100</span><b>' + (fig.s100 ? fig.s100.toFixed(1) + ' s' : '—') + '</b></div>' }));
     var pred = h('div', { class: 'dg-pred', html: '<span>Predicted ' + esc(d.short || d.name) + '</span><b>…</b>' });
     var p60 = h('div', { class: 'dg-pred', html: '<span>60 ft estimate</span><b>…</b>' });
     card.appendChild(pred); card.appendChild(p60);
@@ -1015,8 +1087,9 @@ CB.drag = CB.drag || {};
     setTimeout(function () { if (el) el.classList.remove('is-in'); }, 400);
     el.querySelector('.dg-coach-k').textContent = st.id === 'done' ? 'Tutorial complete' : 'How to drag race · step ' + Math.min(C.i + 1, n) + ' of ' + n;
     el.querySelector('.dg-coach-t').textContent = st.title;
-    el.querySelector('.dg-coach-b').innerHTML = fillKeys(esc(st.body).replace(/\{(\w+)\}/g, '{$1}'), k);
-    el.querySelector('.dg-coach-h').innerHTML = st.hint ? fillKeys(st.hint, k) : '';
+    var auto = isAutoBox(R);
+    el.querySelector('.dg-coach-b').innerHTML = fillKeys(esc(X.creepText(st.body, auto)).replace(/\{(\w+)\}/g, '{$1}'), k);
+    el.querySelector('.dg-coach-h').innerHTML = st.hint ? fillKeys(X.creepText(st.hint, auto), k) : '';
     if (st.id === 'intro' && R.touch) el.querySelector('.dg-coach-h').innerHTML = 'Press <kbd>BRAKE</kbd> to begin';
   }
   function coachRed(R, me) {
@@ -1052,7 +1125,15 @@ CB.drag = CB.drag || {};
     var cam = R.renderer && R.renderer.getCamera ? safe(function () { return R.renderer.getCamera(); }) : null, hl = R.coach && !R.coach.red ? X.coachStep(R.coach.i).hl : null;
     return { width: w, height: hh, compact: hh < 520 || w < 700, touch: R.touch, safe: R.safe || (R.safe = safeInsets()), units: U.S.units, fps: U.S.showFps ? R.fpsEma : 0,
       cockpit: cam === 'cockpit', highlight: hl, showTree: !!R.coach || !!R.ctx.practice, noPrompt: !!(R.coach && !R.coach.red && X.coachStep(R.coach.i).id !== 'done'),
-      keys: R.touch ? { thr: 'THROTTLE', brk: 'BRAKE', up: '▲', down: '▼' } : dev === 'gamepad' ? { thr: 'RT', brk: 'LT', up: 'A', down: 'X' } : dev === 'hub' ? { thr: 'FIST', brk: 'OPEN HAND', up: 'SHIFT', down: 'SHIFT −' } : { thr: 'W', brk: 'S', up: 'E', down: 'Q' } };
+      keys: R.touch ? { thr: 'THROTTLE', brk: 'BRAKE', up: '▲', down: '▼' } : dev === 'gamepad' ? { thr: 'RT', brk: 'LT', up: 'A', down: 'X' } : dev === 'hub' ? { thr: 'FIST', brk: 'OPEN HAND', up: 'SHIFT', down: 'SHIFT −' } : kbKeys(R), auto: isAutoBox(R) };
+  }
+  /** keyboard prompt labels from the input's live key map (custom bindings included) */
+  function kbKeys(R) { var K = R.input && R.input.keys ? R.input.keys : X.KEYS; return { thr: X.keyFor(K, 'thr', 'W'), brk: X.keyFor(K, 'brk', 'S'), up: X.keyFor(K, 'up', 'E'), down: X.keyFor(K, 'down', 'Q') }; }
+  /** a car that is driven on the throttle alone (automatic / CVT / EV): it creeps on a light, steady touch, not taps */
+  function isAutoBox(R) {
+    var b = R.me && R.me.build || (U && U.S ? safe(function () { return X.playerCar(U.S).build; }) : null);
+    var t = b && b.transmission && b.transmission.type, ev = b && b.engine && b.engine.type === 'ev';
+    return !!(ev || t === 'auto' || t === 'cvt');
   }
   function draw(R, snap) {
     if (!snap) return;
