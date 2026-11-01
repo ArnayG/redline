@@ -285,7 +285,7 @@ var CB = (globalThis.CB = globalThis.CB || {});
     var C = { p: lhex(LV.primary), s: lhex(LV.secondary), a: lhex(LV.accent), k: CARBON, halo: lhex(LV.halo), wheel: lhex(LV.wheel), helmet: lhex(LV.helmet) };
     function key(k) { return C[k] || C.p; }
     var D = DIMS, xFA = D.frontAxle, xRA = D.rearAxle;
-    var dark = new Acc(), body = new Acc(), carbon = new Acc(), wing = new Acc(), drs = new Acc(), driver = new Acc(), rain = new Acc(), decal = new Acc(), badge = new Acc();
+    var dark = new Acc(), body = new Acc(), carbon = new Acc(), wing = new Acc(), drs = new Acc(), driver = new Acc(), rain = new Acc(), decal = new Acc(), badge = new Acc(), halo = new Acc(), mglass = new Acc();
 
     /* ---- body colour by region (face centre) */
     function bodyCol(fc, i) {
@@ -452,19 +452,37 @@ var CB = (globalThis.CB = globalThis.CB || {});
       prismZ(carbon, [[-0.33, 0.83], [-0.42, 0.83], [-0.44, 0.985], [-0.34, 0.98]], -0.12, 0.12, BLACK, 155);
     }
 
-    /* ---- halo (titanium, team colour) */
-    var haloCol = key(P.halo);
-    var hw = low ? 0.06 : 0.044;
-    var front = [0.52, 0.66, 0], top = [0.33, 0.935, 0];
+    /* ---- halo: a round titanium tube (8-sided, one continuous sweep: front pylon -> top bar -> hoop -> rear
+       mounts), livery-painted on its upper / outer faces, bare titanium underneath and on the driver's side. The
+       old 4-sided flat beams read as a thick black frame across the top of the onboard view (their flat undersides
+       face the eye and catch no light). */
+    var haloCol = key(P.halo), TI = [0.34, 0.345, 0.36];
+    var hr = 0.019;
     var hoop = [[0.33, 0.935, 0], [0.22, 0.935, 0.16], [0.02, 0.92, 0.25], [-0.2, 0.89, 0.27], [-0.34, 0.84, 0.25], [-0.42, 0.72, 0.24]];
-    beam(tgt === carbon ? body : body, front, top, hw, hw * 0.7, haloCol, [-1, 1, 0]);
-    [1, -1].forEach(function (sd) {
-      var stepK = low ? 5 : 1;
-      for (var i = 0; i < hoop.length - 1; i += stepK) {
-        var a = hoop[i], b = hoop[Math.min(hoop.length - 1, i + stepK)];
-        beam(body, [a[0], a[1], a[2] * sd], [b[0], b[1], b[2] * sd], hw, hw * 0.75, haloCol);
+    function haloTube(path, sides, tgtAcc) {
+      var rings = path.map(function (c, i) {
+        var d = norm(sub(path[Math.min(path.length - 1, i + 1)], path[Math.max(0, i - 1)]));
+        var up = Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0], sv = norm(cross(d, up)), uv = norm(cross(sv, d)), R = [];
+        for (var k = 0; k < sides; k++) { var an = (k + 0.5) / sides * TAU; R.push({ p: add(c, add(scl(sv, Math.cos(an) * hr), scl(uv, Math.sin(an) * hr))), o: add(scl(sv, Math.cos(an)), scl(uv, Math.sin(an))) }); }
+        return R;
+      });
+      for (var i = 0; i < rings.length - 1; i++) for (var k = 0; k < sides; k++) {
+        var k2 = (k + 1) % sides, A = rings[i][k], Bq = rings[i][k2], Cq = rings[i + 1][k2], Dq = rings[i + 1][k];
+        var o = add(add(A.o, Bq.o), add(Cq.o, Dq.o)), mid = scl(add(add(A.p, Bq.p), add(Cq.p, Dq.p)), 0.25);
+        var inward = dot(o, [mid[0] + 0.06, 0, mid[2]]) < 0;   // toward the cockpit centre (driver's head)
+        var col = o[1] > 0.6 && !inward ? haloCol : jit(TI, i * 13 + k, 0.08);
+        tgtAcc.quad(A.p, Bq.p, Cq.p, Dq.p, col, o);
       }
-    });
+      var e0 = rings[0].map(function (r) { return r.p; }), e1 = rings[rings.length - 1].map(function (r) { return r.p; });
+      tgtAcc.poly(e0, TI, sub(path[0], path[1])); tgtAcc.poly(e1, TI, sub(path[path.length - 1], path[path.length - 2]));
+    }
+    if (low) {   // far LOD: the old one-beam-a-side frame (budget)
+      beam(body, [0.52, 0.66, 0], hoop[0], 0.06, 0.042, haloCol, [-1, 1, 0]);
+      [1, -1].forEach(function (sd) { beam(body, hoop[0], [hoop[5][0], hoop[5][1], hoop[5][2] * sd], 0.06, 0.045, haloCol); });
+    } else {
+      haloTube([[0.52, 0.66, 0], [0.45, 0.8, 0], [0.38, 0.9, 0], [0.33, 0.935, 0]], 8, halo);
+      [1, -1].forEach(function (sd) { haloTube(hoop.map(function (q) { return [q[0], q[1], q[2] * sd]; }), 8, halo); });
+    }
 
     /* ---- mirrors on the sidepod shoulders */
     var mirrorPos = [];
@@ -474,8 +492,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
       if (low) return;
       beam(body, [0.44, 0.64, sd * 0.42], [0.46, 0.77, sd * 0.5], 0.02, 0.02, key(P.mirror));
       prismZ(body, [[0.5, 0.765], [0.44, 0.77], [0.42, 0.835], [0.49, 0.835]], sd * 0.45, sd * 0.61, key(P.mirror), 161);
-      // mirror glass (dark) facing back
-      decalQuad(body, [0.418, 0.775, sd * 0.47], [0.418, 0.775, sd * 0.595], [0.418, 0.83, sd * 0.595], [0.418, 0.83, sd * 0.47], [-1, 0, 0], [0.05, 0.06, 0.08]);
+      // mirror glass facing back: its own reflective part (sky / track sheen), not a black decal on the paint
+      decalQuad(mglass, [0.418, 0.775, sd * 0.47], [0.418, 0.775, sd * 0.595], [0.418, 0.83, sd * 0.595], [0.418, 0.83, sd * 0.47], [-1, 0, 0], [0.55, 0.57, 0.6]);
     });
 
     /* ---- suspension: wishbones + push rods (carbon black) */
@@ -618,6 +636,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
       push(rain, 'light-brake', 'tail', { castShadow: false });
     } else {
       push(body, 'body', 'body');
+      push(halo, 'body', 'halo');
+      push(mglass, 'mirror-glass', 'mirrorGlass', { castShadow: false });
       push(carbon, 'carbon', 'carbon');
       push(wing, 'wing', 'wing');
       // DRS flap: pivots about its trailing edge; car-mesh pose() lifts the leading edge (slot opens) while DRS is open
@@ -647,8 +667,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     };
     return {
       parts: out, dims: dims,
-      // driver eye just under the halo top bar; T-cam above the airbox; nose camera low on the nose
-      cockpitEye: [-0.06, 0.8, 0], hoodCam: [-0.5, 1.07, 0], bumperCam: [2.05, 0.5, 0],
+      // driver eye just under the halo top bar (helmet-cam height: the hoop sides frame the top edge of the view); T-cam above the airbox; nose camera low on the nose
+      cockpitEye: [-0.06, 0.85, 0], hoodCam: [-0.5, 1.07, 0], bumperCam: [2.05, 0.5, 0],
       anchors: { wheels: wheelInfo, headlights: [[2.7, 0.2, 0.05], [2.7, 0.2, -0.05]], brakeLights: [[-2.62, 0.38, 0.05], [-2.62, 0.38, -0.05]], mirrors: mirrorPos },
       lod: low ? 'low' : 'high', stats: { triangles: tris, parts: out.length }, livery: LV,
       S: { style: 'hypercar', number: number, numberColor: LV.number, numberStyle: 'plain', compound: 'slick', driven: 'rwd', drl: 0, lights: 'none', lod: low ? 'low' : 'high', f1: LV }
@@ -684,6 +704,10 @@ var CB = (globalThis.CB = globalThis.CB || {});
       gloss: base.gloss || material({ name: 'trim-gloss', roughness: 0.22, clearcoat: 1, env: 0.5 }),
       tail: base.tail || material({ name: 'light-brake', roughness: 0.15, clearcoat: 1, polygonOffset: [-1, -2] }),
       tyre: base.tyre || material({ name: 'tyre', roughness: 0.88 }),
+      // halo: painted titanium (metallic, satin lacquer) so its round faces pick up the sky and read as a tube
+      halo: material({ name: 'f1-halo', roughness: 0.32, metallic: 0.6, clearcoat: 0.5, clearcoatRoughness: 0.12 }),
+      // mirror glass: a near-perfect mirror of the environment (the cockpit view lays its live rear view on top)
+      mirrorGlass: material({ name: 'f1-mirror-glass', roughness: 0.05, metallic: 1, clearcoat: 0, env: 1, polygonOffset: [-1, -2] }),
       rim: material({ name: 'f1-wheel-cover', roughness: 0.35, metallic: 0.1, clearcoat: 0.6 }),
       stripe: material({ name: 'f1-tyre-stripe', color: [1, 1, 1, 1], roughness: 0.7 }),
       low: base.low || material({ name: 'paint', roughness: 0.35, clearcoat: 0.6 }),
