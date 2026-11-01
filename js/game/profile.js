@@ -109,7 +109,7 @@ CB.game = CB.game || {};
       units: 'kph',
       difficulty: 'amateur',
       assists: { abs: true, tc: true, autoShift: true, racingLine: false, steeringAssist: false, stabilityControl: true },
-      audio: { master: 0.8, engine: 0.9, sfx: 0.8, music: 0.5, muted: false },
+      audio: { master: 0.8, engine: 0.9, sfx: 0.8, music: 0.5, muted: false, musicOn: true },
       controls: {
         bindings: defaultBindings(),
         gamepad: { enabled: true, bindings: defaultGamepadBindings(), deadzone: 0.12, steerLinearity: 1.0, vibration: true },
@@ -347,6 +347,7 @@ CB.game = CB.game || {};
       out.audio[k] = clampNum(out.audio[k], d.audio[k], 0, 1);
     });
     out.audio.muted = bool(out.audio.muted, false);
+    out.audio.musicOn = bool(out.audio.musicOn, true);
     var c = out.controls;
     if (!isObj(c)) c = out.controls = clone(d.controls);
     c.bindings = normalizeBindings(isObj(src.controls) ? src.controls.bindings : null);

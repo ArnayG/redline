@@ -326,9 +326,12 @@ CB.derby = CB.derby || {};
   }
 
   /* ================================================================== SETUP */
+  /* music (js/audio/music.js): feature-detected cue, never throws */
+  function music(fn, a, b) { var Mu = CB.music; if (Mu && typeof Mu[fn] === 'function') { try { Mu[fn](a, b); } catch (e) { /* ignore */ } } }
   function showSetup() {
     teardownPlay();
     U.screen = 'setup';
+    music('cue', 'derby', { screen: 'setup' });
     setDriving(false);
     var S = U.S;
     var root = U.root; root.innerHTML = '';
@@ -616,6 +619,7 @@ CB.derby = CB.derby || {};
     };
     U.screen = 'play';
     APP.setDriving(true);
+    music('cue', 'derby', { screen: 'play' });
     var root = U.root; root.innerHTML = '';
     var play = h('div', { class: 'dd-play' });
     var cv = h('canvas', { class: 'dd-hud' });
@@ -809,6 +813,7 @@ CB.derby = CB.derby || {};
       showSpecBar(R);
     }
     if (R.sfx) R.sfx.frame(snap, R.followId, dt);
+    music('frame', 'derby', { alive: snap.aliveCount, total: snap.total, speed_kph: Math.abs(me.speed || 0) * 3.6, phase: snap.phase });
     draw(R, snap, dt, false);
     if (R.frames % 6 === 0) updateTouchButtons(R, me);
     phoneStatus(R, me);
@@ -1052,6 +1057,7 @@ CB.derby = CB.derby || {};
     var R = U.R; if (!R || R.paused || R.ended) return;
     if (R.replay) endReplay(R);
     R.paused = true; R.input.clear(); if (R.sfx) R.sfx.suspend();
+    music('cue', 'derby', { screen: 'pause' });
     var S = U.S;
     var menu = h('div', { class: 'mx-menu dd-menu', role: 'dialog', 'aria-label': 'Paused' },
       h('h2', { text: 'Paused' }),
@@ -1071,6 +1077,7 @@ CB.derby = CB.derby || {};
   function resume() {
     var R = U.R; if (!R || !R.paused) return;
     R.paused = false; if (R.pauseEl && R.pauseEl.parentNode) R.pauseEl.parentNode.removeChild(R.pauseEl); R.pauseEl = null; R.last = 0;
+    music('cue', 'derby', { screen: 'resume' });
     if (R.sfx) R.sfx.resume();
   }
 
@@ -1132,6 +1139,7 @@ CB.derby = CB.derby || {};
   }
   function showResults(res) {
     U.screen = 'results'; U.lastResults = res;
+    music('cue', 'derby', { screen: 'results', won: !!res.won });
     APP.setDriving(false);
     var root = U.root; root.innerHTML = '';
     var me = res.player || {}, st = me.stats || {}, total = res.classification.length;

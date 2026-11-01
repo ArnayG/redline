@@ -25,7 +25,7 @@
 <body>
   <!-- Boot screen: painted as soon as the stylesheet arrives, while the ~90 classic scripts below download and run
        (several seconds on a phone network). Self-contained styles; removed after DOMContentLoaded. -->
-  <div id="cb-boot" role="status" aria-live="polite" data-scripts="144">
+  <div id="cb-boot" role="status" aria-live="polite" data-scripts="157">
     <script>try{var t=JSON.parse(localStorage.getItem("forge.theme.v1")||"null");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
     <style>#cb-boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:var(--bg,#0b0b0d);color:var(--text,#ecebe6);font:600 var(--fs-sm,12.5px)/1.4 var(--font,system-ui,sans-serif);letter-spacing:.04em;transition:opacity .35s ease;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}#cb-boot.is-done{opacity:0;pointer-events:none}#cb-boot .cbb{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(260px,70vw)}#cb-boot .cbb-bar{width:100%;height:4px;border-radius:var(--pill,999px);background:var(--line,#2b2c33);overflow:hidden}#cb-boot .cbb-bar i{display:block;height:100%;width:3%;background:var(--accent-grad,var(--accent,#c9a56b));border-radius:inherit;transition:width .2s ease}#cb-boot .cbb-t{color:var(--text-dim,#9b9890);font-variant-numeric:tabular-nums}#cb-boot svg{opacity:.9}#cb-boot .g{stroke:var(--accent,#c9a56b)}#cb-boot .r{stroke:var(--race,#e0412f)}#cb-boot .n{stroke:var(--text,#ecebe6);fill:var(--text,#ecebe6)}@media (prefers-reduced-motion:reduce){#cb-boot,#cb-boot .cbb-bar i{transition:none}}</style>
     <div class="cbb">
@@ -348,6 +348,9 @@
   <script src="js/game/achievements.js" charset="utf-8"></script>
   <script src="js/game/challenges.js" charset="utf-8"></script>
   <script src="js/game/hub.js" charset="utf-8"></script>
+  <!-- Soundtrack (js/audio): generative sequencer data, then the Web Audio player CB.music (starts on the first gesture) -->
+  <script src="js/audio/music-tracks.js" charset="utf-8"></script>
+  <script src="js/audio/music.js" charset="utf-8"></script>
 
   <!-- Multiplayer (docs/NET-SPEC.md): signalling → WebRTC transport → net race sessions → lobby (#/multiplayer). After race-ui
        (the lobby hands sessions to CB.race.ui.openNet) and BEFORE the router (lobby.js registers #/multiplayer on cb:router-ready). -->

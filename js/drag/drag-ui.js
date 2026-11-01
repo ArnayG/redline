@@ -484,9 +484,12 @@ CB.drag = CB.drag || {};
   }
 
   /* ================================================================== SETUP */
+  /* music (js/audio/music.js): feature-detected cue, never throws */
+  function music(fn, a, b) { var Mu = CB.music; if (Mu && typeof Mu[fn] === 'function') { try { Mu[fn](a, b); } catch (e) { /* ignore */ } } }
   function showSetup() {
     teardown();
     U.screen = 'setup'; setDriving(false);
+    music('cue', 'drag', { screen: 'setup' });
     var root = U.root; root.innerHTML = '';
     var wrap = h('div', { class: 'dg-setup' });
     root.appendChild(wrap);
@@ -793,6 +796,7 @@ CB.drag = CB.drag || {};
     o = o || {};
     var S = U.S;
     U.screen = 'play'; setDriving(true);
+    music('cue', 'drag', { screen: 'play' });
     var root = U.root; root.innerHTML = '';
     var play = h('div', { class: 'dg-play' }), cv = h('canvas', { class: 'dg-hud' });
     var load = h('div', { class: 'dg-load', role: 'status', html: '<span class="dg-load-spin" aria-hidden="true"></span><span class="dg-load-t">To the staging lanes…</span>' });
@@ -974,6 +978,7 @@ CB.drag = CB.drag || {};
       if (R.coachEl) R.coachEl.classList.toggle('is-low', snap.phase === 'run' || snap.phase === 'shutdown');
     }
     if (R.sfx) R.sfx.frame(snap, dt);
+    music('frame', 'drag', { phase: snap.phase, speed_kph: Math.abs(num(me && me.speed, 0)) * 3.6 });
     draw(R, snap);
     if (R.frames % 6 === 0) updateTouch(R, me);
     if (R.frames % 30 === 0) R.fpsLog.push(Math.round(R.fpsEma));
@@ -1092,6 +1097,7 @@ CB.drag = CB.drag || {};
   function pause() {
     var R = U.R; if (!R || R.paused || R.ended) return;
     R.paused = true; R.input.clear();
+    music('cue', 'drag', { screen: 'pause' });
     var S = U.S;
     var dn = (ST().get(R.cfg.distanceId || S.distanceId) || {}).name || '';
     var sndLbl = function () { return icon(S.muted ? 'mute' : 'sound', 16) + '<span>Sound: ' + (S.muted ? 'off' : 'on') + '</span>'; };
@@ -1108,7 +1114,7 @@ CB.drag = CB.drag || {};
     ov.appendChild(m); R.play.appendChild(ov); R.pauseEl = ov;
     var first = m.querySelector('button'); if (first) first.focus();
   }
-  function resume() { var R = U.R; if (!R || !R.paused) return; R.paused = false; R.last = 0; if (R.pauseEl && R.pauseEl.parentNode) R.pauseEl.parentNode.removeChild(R.pauseEl); R.pauseEl = null; }
+  function resume() { var R = U.R; if (!R || !R.paused) return; R.paused = false; music('cue', 'drag', { screen: 'resume' }); R.last = 0; if (R.pauseEl && R.pauseEl.parentNode) R.pauseEl.parentNode.removeChild(R.pauseEl); R.pauseEl = null; }
 
   /* ================================================================== finish / results */
   function finish() {
@@ -1183,6 +1189,7 @@ CB.drag = CB.drag || {};
     return T ? safe(function () { return T.slipText(res, null, { units: U.S.units, date: new Date().toLocaleDateString(), title: U.S.venue === 'street' ? 'REDLINE STREET NIGHTS' : 'REDLINE DRAGWAY' }); }) || '' : ''; }
   function showResults(res, net) {
     U.screen = 'results'; U.lastResults = res; setDriving(false);
+    music('cue', 'drag', { screen: 'results', won: !!((res.lanes[res.playerLane || 0] || {}).won || (!(res.lanes[1 - (res.playerLane || 0)] && res.lanes[1 - (res.playerLane || 0)].kind !== 'none') && !(res.lanes[res.playerLane || 0] || {}).red)) });
     var root = U.root; root.innerHTML = '';
     var S = U.S, pl = res.playerLane || 0, me = res.lanes[pl] || {}, op = res.lanes[1 - pl] && res.lanes[1 - pl].kind !== 'none' ? res.lanes[1 - pl] : null;
     var title = me.red ? 'Red light' : me.dq ? 'Disqualified' : !op ? 'Pass complete' : me.won ? (res.holeshot ? 'Holeshot win!' : 'Win light!') : me.breakout ? 'Broke out' : 'Beaten';
@@ -1286,6 +1293,7 @@ CB.drag = CB.drag || {};
     teardown();
     if (!U.tour) newTournament();
     U.screen = 'bracket'; setDriving(false);
+    music('cue', 'drag', { screen: 'bracket' });
     var AI = CB.drag.ai, t = U.tour.t, root = U.root; root.innerHTML = '';
     var wrap = h('div', { class: 'dg-res' });
     var champ = AI.tournament.champion(t), pend = AI.tournament.pending(t);

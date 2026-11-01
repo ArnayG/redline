@@ -4807,7 +4807,8 @@ animation:gh-in .3s both;box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.5));
           rowHTML('Master volume', '', range('audio.master', 0, 1, 0.05, 'pct', 0.8)) +
           rowHTML('Engine', 'Engine, turbo and exhaust', range('audio.engine', 0, 1, 0.05, 'pct', 0.9)) +
           rowHTML('Effects', 'Tyres, impacts and menu sounds', range('audio.sfx', 0, 1, 0.05, 'pct', 0.8)) +
-          rowHTML('Music', '', range('audio.music', 0, 1, 0.05, 'pct', 0.5));
+          rowHTML('Music', 'Synthesised soundtrack: menus, races and stingers', sw('audio.musicOn', true, 'Music on')) +
+          rowHTML('Music volume', '', range('audio.music', 0, 1, 0.05, 'pct', 0.5));
       } else if (tab === 'controls') {
         var actions = (pm && Array.isArray(pm.ACTIONS)) ? pm.ACTIONS : FALLBACK_ACTIONS;
         var binds = s('controls.bindings', {}) || {};

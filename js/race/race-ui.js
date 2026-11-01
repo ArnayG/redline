@@ -2424,7 +2424,32 @@ CB.race = CB.race || {};
     if (!u.switching && typeof u.opts.onClose === 'function') { try { u.opts.onClose(); } catch (e3) { /* ignore */ } }
   }
 
+  /* music (js/audio/music.js): screen / pause / race-state cues for CB.music; feature-detected, never throws */
+  function musicCue(screen) {
+    var Mu = CB.music;
+    if (!Mu || typeof Mu.cue !== 'function' || !U) return;
+    try {
+      var S = U.settings || {}, R = U.race;
+      var info = { screen: screen, mode: isArcadeS(S) ? 'arcade' : S.discipline === 'drift' ? 'drift' : 'race', trackId: R && R.def ? R.def.id : S.trackId };
+      if (screen === 'results' && R) {
+        var raw = R.rawResults || {}, dr = raw.drift, me = raw.player;
+        info.won = dr ? !!dr.medal : me ? (me.position <= 3 || (raw.classification || []).length <= 1) : true;
+      }
+      Mu.cue('race-ui', info);
+    } catch (e) { /* music must never break the race */ }
+  }
+  function musicFrame(R, snap, me) {
+    var Mu = CB.music;
+    if (!Mu || typeof Mu.frame !== 'function' || !snap || !me) return;
+    try {
+      var ap = snap.arcade && snap.arcade.player, sc = snap.drift && snap.drift.scorer;
+      Mu.frame('race-ui', { lap: me.lap, laps: snap.lapsTotal, position: me.position, field: snap.cars ? snap.cars.length : 1, phase: snap.phase,
+        finished: !!me.finished, speed_kph: (me.speed || 0) * 3.6, nitro: !!(ap && (ap.nitroOn || ap.boost)), combo: sc && sc.drifting ? Math.max(0, (sc.multiplier || 1) - 1) : 0 });
+    } catch (e) { /* ignore */ }
+  }
+
   function setScreen(name) {
+    if (U.screen !== name) musicCue(name);
     U.screen = name;
     U.root.dataset.screen = name;
     // screen family (css/styles.css § 18): the mode accent (--mode-race / -drift / -arcade) follows the discipline
@@ -4307,6 +4332,7 @@ CB.race = CB.race || {};
         }
       }
       if (R.audio && R.audio.update && !R.paused) { try { R.audio.update(snap); } catch (e) { /* audio must never kill the race */ } }
+      if (!R.paused && R.simActive) musicFrame(R, snap, me);
       if (R.simActive) {
         handleEvents(snap);
         var laps = R.tracker.update(snap);
@@ -4543,6 +4569,7 @@ CB.race = CB.race || {};
     if (!R || R.paused || R.ended) return;
     R.paused = true;
     R.input.clearHeld();
+    musicCue('pause');
     if (R.audio && R.audio.setMuted) { try { R.audio.setMuted(true); } catch (e) { /* ignore */ } }
     var S = R.settings;
     var me = playerCar(R.lastSnap) || {};
@@ -4684,6 +4711,7 @@ CB.race = CB.race || {};
     if (!R || !R.paused) return;
     R.paused = false;
     R.acc = 0; R.last = 0;
+    musicCue('resume');
     if (U.pauseRefs && U.pauseRefs.modal.parentNode) U.pauseRefs.modal.parentNode.removeChild(U.pauseRefs.modal);
     U.pauseRefs = null;
     if (R.audio && R.audio.setMuted) { try { R.audio.setMuted(!!R.settings.muted); } catch (e) { /* ignore */ } }
