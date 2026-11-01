@@ -90,3 +90,29 @@ test('audio: Settings > Audio sliders map onto every mode (race / derby / arcade
   assert.ok(/CB\.race\.audio\.mix\(\)/.test(src) && /S\.engBus/.test(src) && !/connect\(S\.master\)/.test(src));
   assert.ok(/CB\.race\.audio\.mix\(\)/.test(fs.readFileSync(path.join(JS, 'arcade', 'arcade-sfx.js'), 'utf8')));
 });
+
+test('race-ui: Settings difficulty is the default AI level (first visit and after changing it); a setup pick sticks until then', function () {
+  var prevP = CB.game && CB.game.profile, store = {};
+  var ls = globalThis.localStorage;
+  globalThis.localStorage = { getItem: function (k) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } };
+  CB.game = CB.game || {};
+  var diff = 'pro';
+  CB.game.profile = { getSetting: function (k) { return k === 'difficulty' ? diff : undefined; } };
+  try {
+    assert.equal(_.loadSettings().difficulty, 'pro', 'first visit');
+    var s = _.loadSettings(); s.difficulty = 'rookie'; _.saveSettings ? _.saveSettings(s) : store['forge.race.settings.v1'] = JSON.stringify(s);
+    assert.equal(_.loadSettings().difficulty, 'rookie', 'a setup pick is remembered');
+    diff = 'alien';
+    assert.equal(_.loadSettings().difficulty, 'alien', 'changing Settings applies');
+  } finally { CB.game.profile = prevP; globalThis.localStorage = ls; }
+});
+
+test('hud: numbered names stay whole on the tower ("DRIVER 2", not "D. 2"); real names still shorten', function () {
+  var HUD = require(path.join(JS, 'race', 'hud.js'));
+  var I = (HUD && HUD._internal) || (CB.race.hud && CB.race.hud._internal);
+  assert.equal(I.surname('Driver 2'), 'DRIVER 2');
+  assert.equal(I.surname('Hana Jelinek'), 'H. JELINEK');
+  assert.equal(I.tla('Driver 2'), 'DR2');
+  assert.equal(I.tla('Car 12'), 'C12');
+  assert.equal(I.tla('Hana Jelinek'), 'JEL');
+});

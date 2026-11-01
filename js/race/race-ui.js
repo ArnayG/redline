@@ -504,6 +504,10 @@ CB.race = CB.race || {};
     // one game, one units setting: the profile's (Settings → General) wins over race-ui's own copy
     var pu = profileUnits();
     if (pu) saved.units = pu;
+    // Settings → Driving "Difficulty" is the default AI level: it applies on a first visit and whenever the player changes
+    // it there; a level picked on the race setup is remembered until then
+    var pd = profileDifficulty();
+    if (pd && (saved.difficulty == null || lsGet(LS_PROFDIFF, null) !== pd)) { saved.difficulty = pd; lsSet(LS_PROFDIFF, pd); }
     // per-discipline steering assist (older saves / profiles shared one level, see migrateAssist)
     migrateAssist(saved);
     return syncAssist(sanitizeSettings(saved));
@@ -513,6 +517,11 @@ CB.race = CB.race || {};
     try { var a = P.getSetting('steerAssist'); return /^(off|light|medium|heavy|auto)$/.test(String(a)) ? a : null; } catch (e) { return null; }
   }
   function profileMod() { var P = CB.game && CB.game.profile; return P && typeof P.getSetting === 'function' ? P : null; }
+  var LS_PROFDIFF = 'forge.race.profileDifficulty.v1';
+  function profileDifficulty() {
+    var P = profileMod(); if (!P) return null;
+    try { var d = P.getSetting('difficulty'); return /^(rookie|amateur|pro|alien)$/.test(String(d)) ? d : null; } catch (e) { return null; }
+  }
   function profileUnits() {
     var P = profileMod(); if (!P) return null;
     try { var u = P.getSetting('units'); return u === 'mph' || u === 'kph' ? u : null; } catch (e) { return null; }
@@ -3548,7 +3557,8 @@ CB.race = CB.race || {};
         var opps = [];
         if (R.isDrift || R.net) { R.opponents = []; return; }   // net: the host's grid (players + AI fill) is in the session   // the drift session adds its own tandem lead car
         var L0 = launchCfg(def);
-        if (L0 && Array.isArray(L0.opponents) && L0.opponents.length && R.settings.mode === 'race') {
+        // plugin grids (F1's 21 entrants) apply to practice / qualifying sessions too, not just the race
+        if (L0 && Array.isArray(L0.opponents) && L0.opponents.length && (R.settings.mode === 'race' || R.settings.mode === 'practice')) {
           var oppCap = isNum(L0.maxOpponents) ? L0.maxOpponents : (isNum(R.settings.opponents) ? R.settings.opponents : L0.opponents.length);   // plugin grids (F1: 21)
           R.opponents = L0.opponents.slice(0, Math.max(1, oppCap));
           return;
@@ -4657,7 +4667,7 @@ CB.race = CB.race || {};
         R.net && R.netMode === 'race' ? null : mb('Reset car to track', 'reset', function () { try { R.session.resetPlayerToTrack(); } catch (e) { /* ignore */ } resumeRace(); toast('Car reset to track'); }),
         R.net ? (netIsHost(R) && typeof R.session.end === 'function' ? mb('End session for everyone', 'flag', function () { try { R.session.end(); } catch (e) { /* ignore */ } resumeRace(); }) : null)
           : S.mode !== 'race' ? mb(R.isDrift ? 'End run · results' : 'End session · results', 'flag', function () { endSession(); }) : null,
-        R.net ? mb(netIsHost(R) ? 'Leave · ends the session' : 'Leave race · lobby', 'back', netLeave, 'ghost') : mb('Change setup', 'settings', function () { teardownRace(); showSetup(); }),
+        R.net ? (netIsHost(R) && R.session && typeof R.session.end === 'function' ? null : mb(netIsHost(R) ? 'Leave · ends the session' : 'Leave race · lobby', 'back', netLeave, 'ghost')) : mb('Change setup', 'settings', function () { teardownRace(); showSetup(); }),
         R.net ? null : isGameLaunch() ? mb(backLabel(), 'back', close) : mb('Tune car · Garage', 'wrench', goAtelier),
         !R.net && !isGameLaunch() && U.layer ? mb('Main menu', 'back', goMenu, 'ghost') : null),
       h('div', { class: 'rx-pause-side rx-scroll' },
