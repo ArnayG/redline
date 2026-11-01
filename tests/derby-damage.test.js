@@ -176,3 +176,11 @@ test('serialize / restore round-trips the whole damage state as JSON', function 
   var r = D.restore(JSON.parse(s));
   assert.strictEqual(JSON.stringify(r), JSON.stringify(c.dmg));
 });
+
+test('engine smoke waits for real damage: a heavy nose hit at ~92 % health barely smokes; at 45 % it pours', function () {
+  var c = mk();
+  c.dmg.zones.front = 0.6; c.dmg.health = 0.92; D.tick(c, 1 / 120, { throttle: 0 });
+  assert.ok(c.dmg.engine.smoke < 0.05, 'healthy-ish car smoke ' + c.dmg.engine.smoke);
+  c.dmg.health = 0.45; D.tick(c, 1 / 120, { throttle: 0 });
+  assert.ok(c.dmg.engine.smoke > 0.35, 'hurt car smoke ' + c.dmg.engine.smoke);
+});

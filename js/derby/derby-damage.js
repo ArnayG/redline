@@ -199,8 +199,11 @@ CB.derby = CB.derby || {};
   function updateEngine(car) {
     var d = car.dmg, ez = d.zones[engineZone(car)];
     d.engine.hp = clamp(1 - Math.pow(ez, 1.35) * 0.92 - (ez >= 0.999 && d.health < (car.isPlayer ? 0.1 : 0.35) ? 1 : 0), 0, 1);
-    d.engine.smoke = clamp((ez - 0.3) / 0.6, 0, 1) + d.engine.fire * 0.5;
-    d.engine.black = clamp((ez - 0.65) / 0.3, 0, 1);
+    // a dented engine bay only smokes once the car is really hurt (from ~70 % health down, full by 40 %), or when it is
+    // overheating / on fire: a 92 %-health car with one heavy nose hit no longer trails a half-strength plume
+    var e = d.engine, gate = Math.max(clamp((0.7 - d.health) / 0.3, 0, 1), e.fire > 0 ? 1 : 0, clamp((num(e.temp, 0) - 0.7) / 0.3, 0, 1));
+    e.smoke = clamp(clamp((ez - 0.3) / 0.6, 0, 1) * gate + e.fire * 0.5, 0, 1);
+    e.black = clamp((ez - 0.65) / 0.3, 0, 1) * gate;
   }
 
   /** handling effects of the current damage */
