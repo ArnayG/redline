@@ -2988,6 +2988,22 @@ CB.race.renderer3d = (function () {
         }
         for (k = 0; k < nr; k++) { hlRankPool[k].c = null; hlRankPool[k].e = null; }
       }
+      // cockpit fill: the (hidden) roof shades the cabin from the sun and most of the sky, so race dashboards went
+      // much darker than the open drag cockpits. A small soft point light under the roof lining, scaled to the sky
+      // ambient (night stays dark), bounces enough light onto the dash / wheel to keep them readable; its 1.7 m
+      // range keeps it inside the cabin, and coming from above-behind it still shades the binnacle and spokes.
+      if (S.mode === 'cockpit') {
+        for (var pi = 0; pi < snap.cars.length; pi++) {
+          var pc = snap.cars[pi], pe = pc && pc.isPlayer ? S.cars[pc.id] : null;
+          if (!pe) continue;
+          var pd = carDims(pe, pc), cf = S.cockpitFill || (S.cockpitFill = { pos: [0, 0, 0], dir: null, color: [0, 0, 0], range: 1.7, type: 0, priority: 3, kind: 'cockpit-fill' });
+          xformPoint(pe.mat, pd.length * 0.04, pd.height * 0.86, 0, cf.pos);
+          var as = S.lit.ambientSky, ag = S.lit.ambientGround;
+          for (var ci2 = 0; ci2 < 3; ci2++) cf.color[ci2] = (as[ci2] * 0.75 + ag[ci2] * 0.35) * 2.4;
+          cands.push(cf);
+          break;
+        }
+      }
       var lamps = S.world.scenery && S.world.scenery.lights;
       if (lamps && lamps.length && S.timeOfDay !== 'day') {
         // lamp candidates are static: build them once per lamp list
