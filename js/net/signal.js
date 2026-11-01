@@ -125,7 +125,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   // Relative URLs on purpose: they resolve against the page, so https://example.com/forge/ works as well as a domain root.
   var ENDPOINTS = ['api/signal.php', 'api/signal'];
   var cachedEndpoint = null;   // url that answered {ok:true} (only cached when using the real global fetch)
-  var EP_KEY = 'redline.net.endpoint';   // ... and remembered across page loads (probed first next time)
+  var EP_KEY = 'forge.net.endpoint';   // ... and remembered across page loads (probed first next time)
   function probeOne(doFetch, url, timeout) {
     var ctl = typeof AbortController === 'function' ? new AbortController() : null;
     var t = ctl ? setTimeout(function () { ctl.abort(); }, timeout || 4000) : null;
