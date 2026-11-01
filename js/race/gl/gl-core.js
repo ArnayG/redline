@@ -1711,9 +1711,17 @@ CB.gl = CB.gl || {};
     '    float rng = max(P.x, 0.1); float dr = dist / rng; float w = saturate(1.0 - dr * dr * dr * dr);',
     '    float dref = min(20.0, 0.5 * rng); float rr = dref / rng; float wref = 1.0 - rr * rr * rr * rr;',
     '    float att = w * w / (dist * dist + 1.0) * (1.0 - rr) * (1.0 - rr) * (dref * dref + 1.0) / max(wref * wref, 1e-3);',
-    '    att = min(att, cc > 0.5 ? 0.55 : 0.9);',
+    // soft knee toward the cap (a hard min() made every surface within ~18 m of a headlight equally bright: flat
+    // white car tails at night); clear-coated paint caps lower so a car lit from behind keeps its shape
+    '    float attCap = cc > 0.5 ? 0.34 : 0.9;',
+    '    att = att / (1.0 + att / attCap);',
     '    if (P.w > 0.5) {',
-    '      att *= smoothstep(P.z, P.y, dot(-l, normalize(uLightDir[i])));',
+    '      vec3 sdir = normalize(uLightDir[i]);',
+    '      att *= smoothstep(P.z, P.y, dot(-l, sdir));',
+    // low-beam cut-off: near-horizontal spots (headlights; lamp posts point down and are unaffected) throw very
+    // little light above the lamp height, so the car ahead is lit on its bumper / diffuser, not floodlit white
+    // from behind across the whole tail and roof
+    '      att *= mix(1.0, mix(0.1, 1.0, 1.0 - smoothstep(-0.08, 0.02, -l.y)), smoothstep(-0.6, -0.4, sdir.y));',
     '      // near-field soften: headlights meet car tails / walls 2-5 m away head-on but the road at a glancing',
     '      // angle; without this the close surfaces blow out while the road stays dim',
     '      att *= smoothstep(0.0, 4.0, dist) * 0.6 + 0.4;',
@@ -2253,7 +2261,7 @@ CB.gl = CB.gl || {};
         }
       } catch (e) { /* ignore */ }
       ctx._shaders = null;
-      if (!keepContext && ctx.ext.loseContext && opts.loseOnDestroy !== false) { try { ctx.ext.loseContext.loseContext(); } catch (e3) { /* ignore */ } }
+      if (!keepContext && ctx.ext.loseContext && opts.loseOnDestroy !== false && !gl.isContextLost()) { try { ctx.ext.loseContext.loseContext(); } catch (e3) { /* ignore */ } }
     };
     if (opts.width || opts.height) ctx.resize(opts.width, opts.height, opts.dpr);
     else { ctx.width = gl.drawingBufferWidth; ctx.height = gl.drawingBufferHeight; }
@@ -2268,7 +2276,7 @@ CB.gl = CB.gl || {};
       var c = document.createElement('canvas');
       var gl = c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
       supportCache = !!gl;
-      if (gl) { var lx = gl.getExtension('WEBGL_lose_context'); if (lx) lx.loseContext(); }
+      if (gl && !gl.isContextLost()) { var lx = gl.getExtension('WEBGL_lose_context'); if (lx) lx.loseContext(); }
     } catch (e) { supportCache = false; }
     return supportCache;
   }
