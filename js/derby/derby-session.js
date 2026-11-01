@@ -139,7 +139,11 @@ CB.derby = CB.derby || {};
         if (ev.type === 'launch' && ev.carId) { var lc = world.byId(ev.carId), lv = world.byId(ev.otherId); if (lc) { lc.stats.launches++; award(lc, lv, 'LAUNCHED', 200); } }
         return ev;
       };
-      world.feedLine = function (text, kind, a, b) { var f = { t: r3(world.t), text: text, kind: kind || 'info', carId: a || null, otherId: b || null }; world.feed.push(f); if (world.feed.length > 30) world.feed.shift(); return f; };
+      world.feedLine = function (text, kind, a, b) {
+        // one crash is often several contact steps: the same line within 2 s is the same event, not a new one
+        for (var i = world.feed.length - 1; i >= 0 && world.t - world.feed[i].t < 2; i--) if (world.feed[i].text === text) return world.feed[i];
+        var f = { t: r3(world.t), text: text, kind: kind || 'info', carId: a || null, otherId: b || null }; world.feed.push(f); if (world.feed.length > 30) world.feed.shift(); return f;
+      };
       world.feed_ = world.feedLine;
       world.addEntity = function (e) { e.id = 'e' + (++world.entId); world.entities.push(e); return e; };
       world.byId = function (id) { for (var i = 0; i < cars.length; i++) if (cars[i].id === id) return cars[i]; return null; };
@@ -781,7 +785,7 @@ CB.derby = CB.derby || {};
       });
       // the kill-feed loves big hits involving the player
       if (big && (att.isPlayer || vic.isPlayer)) {
-        var label = { tbone: 'T-boned', headon: 'head-butted', reverse: 'reverse-rammed', rear: 'rear-ended', hit: 'smashed' }[kind];
+        var label = { tbone: 'T-boned', headon: 'head-butted', reverse: 'reverse-rammed', rear: 'rear-ended', sideswipe: 'sideswiped', hit: 'smashed' }[kind] || 'smashed';
         if (att.isPlayer) W.feedLine('You ' + label + ' ' + vic.short + '!', 'hit', att.id, vic.id);
         else W.feedLine(att.short + ' ' + label + ' you!', 'hit', att.id, vic.id);
         W.slowmo = Math.max(W.slowmo, ct.vn > 16 ? 0.6 : 0.3);

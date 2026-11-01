@@ -70,6 +70,56 @@ CB.derby = CB.derby || {};
       ShiftLeft: 'boost', ShiftRight: 'boost', KeyL: 'boost' },
     action: { KeyC: 'camera', Escape: 'pause', KeyP: 'pause', KeyM: 'mute', Enter: 'confirm', Tab: 'spectate' }
   };
+
+  /* Settings > Controls key bindings (CB.game.profile settings.controls.bindings, {action: [codes]}) layered onto this
+     mode's default keys: a rebound action drops its default keys and takes the player's; a code the player bound
+     elsewhere stops doing this mode's default thing. No bindings -> the defaults exactly. */
+  function profileBindings() {
+    try {
+      var P = CB.game && CB.game.profile;
+      var p = P ? (typeof P.peek === 'function' ? P.peek() : typeof P.get === 'function' ? P.get() : null) : null;
+      var b = p && p.settings && p.settings.controls && p.settings.controls.bindings;
+      return b && typeof b === 'object' ? b : null;
+    } catch (e) { return null; }
+  }
+  function bindKeys(defaults, map, bindings) {
+    var out = {};
+    Object.keys(defaults).forEach(function (g) { out[g] = Object.assign({}, defaults[g]); });
+    if (!bindings || typeof bindings !== 'object') return out;
+    var dflt = null;
+    try { var PM = CB.game && CB.game.profile; dflt = PM && typeof PM.defaultBindings === 'function' ? PM.defaultBindings() : null; } catch (eD) { dflt = null; }
+    Object.keys(map).forEach(function (action) {
+      var codes = Array.isArray(bindings[action]) ? bindings[action] : typeof bindings[action] === 'string' ? [bindings[action]] : null;
+      if (!codes) return;
+      // an action the player never rebound (still the profile default) keeps this mode's own default keys
+      if (dflt && Array.isArray(dflt[action]) && dflt[action].join('|') === codes.join('|')) return;
+      var g = map[action][0], v = map[action][1];
+      Object.keys(out[g]).forEach(function (c) { if (out[g][c] === v && !(v === 'pause' && c === 'Escape')) delete out[g][c]; });
+      codes.forEach(function (c) {
+        if (typeof c !== 'string' || !c) return;
+        Object.keys(out).forEach(function (gg) { delete out[gg][c]; });
+        out[g][c] = v;
+      });
+    });
+    return out;
+  }
+  /** "KeyW" -> "W", "ArrowUp" -> "↑", "Space" -> "Space" (prompt / help labels) */
+  function keyLabel(code) {
+    code = String(code || '');
+    var A = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space', Escape: 'Esc', Enter: 'Enter', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Ctrl', ControlRight: 'Ctrl', Tab: 'Tab' };
+    if (A[code]) return A[code];
+    var m = /^(?:Key|Digit|Numpad)(.+)$/.exec(code);
+    return m ? m[1] : code;
+  }
+  /** label of the first key bound to a mode action value in a key map ('thr' -> 'W'), or the fallback */
+  function keyFor(keys, v, fb) {
+    var first = null;
+    Object.keys(keys).some(function (g) { return Object.keys(keys[g]).some(function (c) { if (keys[g][c] === v) { first = c; return true; } return false; }); });
+    return first ? keyLabel(first) : fb;
+  }
+  var BIND_MAP = { throttle: ['held', 'up'], brake: ['held', 'down'], steerLeft: ['held', 'left'], steerRight: ['held', 'right'],
+    handbrake: ['held', 'handbrake'], lookBack: ['held', 'lookBack'], reset: ['held', 'reset'], camera: ['action', 'camera'], pause: ['action', 'pause'] };
+  function derbyKeys(bindings) { return bindKeys(KEYS, BIND_MAP, bindings === undefined ? profileBindings() : bindings); }
   var RATE = { in: 10, out: 14, flip: 18 };
   function createInput(opts) {
     opts = opts || {};
@@ -77,13 +127,14 @@ CB.derby = CB.derby || {};
       held: {}, kb: { steer: 0, throttle: 0, brake: 0 }, touch: { active: false, steer: 0, throttle: 0, brake: 0, handbrake: false, a1: false, a2: false, boost: false },
       gp: { active: false, steer: 0, throttle: 0, brake: 0, handbrake: false, a1: false, a2: false, boost: false, prev: [], any: false }, phone: { a1T: 0, a2: false, a2T: 0, nitro: false },
       boostAvail: false,
-      forced: null, onAction: opts.onAction || function () {}, lastDevice: 'keyboard', enabled: true
+      forced: null, onAction: opts.onAction || function () {}, lastDevice: 'keyboard', enabled: true,
+      keys: derbyKeys(opts.bindings)
     };
     I.handleKey = function (code, down, repeat) {
       if (!I.enabled) return false;
-      var k = KEYS.held[code];
+      var k = I.keys.held[code];
       if (k) { I.held[k] = !!down; if (down) I.lastDevice = 'keyboard'; return true; }
-      var a = KEYS.action[code];
+      var a = I.keys.action[code];
       if (a) { if (down && !repeat) I.onAction(a); return true; }
       return false;
     };
@@ -208,7 +259,7 @@ CB.derby = CB.derby || {};
     bubble: '<circle cx="12" cy="12" r="9"/><path d="M8 9a5 5 0 0 1 4-3"/>',
     wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
     plough: '<path d="M4 8h10v8H4zM14 10l6-2v8l-6-2"/>',
-    play: '<path d="M7 4l13 8-13 8z"/>', pause: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>', cam: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/>',
+    play: '<path d="M7 4l13 8-13 8z"/>', pause: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>', pad: '<path d="M6 9h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L15 14H9l-1.6 1.8A3 3 0 0 1 2 14v-1a4 4 0 0 1 4-4z"/><path d="M7 11.5v3M5.5 13h3"/><circle cx="16" cy="12" r=".6"/><circle cx="18" cy="14" r=".6"/>', cam: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/>',
     back: '<path d="M15 18l-6-6 6-6"/>', next: '<path d="M9 18l6-6-6-6"/>', star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'
   };
   function icon(n, size) { return '<svg viewBox="0 0 24 24" width="' + (size || 18) + '" height="' + (size || 18) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON[n] || ICON.star) + '</svg>'; }
@@ -282,7 +333,7 @@ CB.derby = CB.derby || {};
   }
 
   CB.derby.ui = CB.derby.ui || {};
-  CB.derby.ui._ = { DEFAULTS: DEFAULTS, sanitizeSettings: sanitizeSettings, createInput: createInput, hubSteer: hubSteer, rating: rating, KEYS: KEYS, RATE: RATE, LS_KEY: LS_KEY, playerCar: playerCar, ICON: ICON };
+  CB.derby.ui._ = { DEFAULTS: DEFAULTS, sanitizeSettings: sanitizeSettings, createInput: createInput, hubSteer: hubSteer, rating: rating, KEYS: KEYS, derbyKeys: derbyKeys, keyLabel: keyLabel, keyFor: keyFor, RATE: RATE, LS_KEY: LS_KEY, playerCar: playerCar, ICON: ICON };
   CB.derby.ui._parts = { clamp: clamp, num: num, esc: esc, now: now, AC: AC, AR: AR, loadSettings: loadSettings, saveSettings: saveSettings, presetList: presetList, presetBuild: presetBuild,
     specOf: specOf, savedBuilds: savedBuilds, currentBuild: currentBuild, buildName: buildName, paintOf: paintOf, icon: icon, injectStyles: injectStyles, hasDOM: hasDOM, DIFFS: DIFFS, QUALS: QUALS, TIMES: TIMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = CB.derby.ui;
@@ -341,7 +392,7 @@ CB.derby = CB.derby || {};
       h('div', null, h('div', { class: 'mx-kicker', text: 'Demolition Derby · last car standing' }), h('h1', { class: 'mx-title', text: 'Wreck them all' }),
         h('p', { class: 'mx-sub', text: 'Pick a car, bolt on weapons, wreck everyone. Where you get hit changes how you drive.' })),
       h('div', { class: 'mx-headbar' },
-        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('cam', 16) + '<span>Controls</span>', title: 'Controls / phone wheel', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
+        (CB.input && CB.input.ui && typeof CB.input.ui.openPairing === 'function') ? h('button', { class: 'cb-btn ghost', type: 'button', html: icon('pad', 16) + '<span>Controls</span>', title: 'Controls / phone wheel', onclick: function () { safe(function () { CB.input.ui.openPairing(); }); } }) : null,
         h('button', { class: 'cb-btn ghost cb-back dd-back', type: 'button', 'aria-label': 'Main menu', title: 'Main menu (Esc)', html: icon('back', 16) + '<span class="lbl">Main menu</span><kbd>Esc</kbd>', onclick: function () { var r = router(); if (r) r.go('menu'); } }))));
     var main = h('div'), side = h('aside', { class: 'dd-side mx-side' });
     wrap.appendChild(main); wrap.appendChild(side);
@@ -912,7 +963,7 @@ CB.derby = CB.derby || {};
   function view(R) {
     var w = R.play.clientWidth, hh = R.play.clientHeight;
     return { width: w, height: hh, followId: R.followId, spectating: R.spectating, compact: hh < 520 || w < 700, touch: R.touch, safe: R.safe || (R.safe = safeInsets()),
-      keys: R.touch ? { a1: 'A1', a2: 'A2', boost: 'BOOST' } : R.input.lastDevice === 'gamepad' ? { a1: 'X', a2: 'B', boost: 'RB' } : { a1: 'F', a2: 'G', boost: 'SHIFT' }, fps: U.S.showFps ? R.fpsEma : 0,
+      keys: R.touch ? { a1: 'A1', a2: 'A2', boost: 'BOOST' } : R.input.lastDevice === 'gamepad' ? { a1: 'X', a2: 'B', boost: 'RB' } : { a1: X.keyFor(R.input.keys || X.KEYS, 'a1', 'F'), a2: X.keyFor(R.input.keys || X.KEYS, 'a2', 'G'), boost: X.keyFor(R.input.keys || X.KEYS, 'boost', 'Shift').toUpperCase() }, fps: U.S.showFps ? R.fpsEma : 0,
       juice: R.juice ? R.juice.state : null, flash: R.flash, toasts: R.toasts, project: function (x, y, z) { return project(R, x, y, z, w, hh); } };
   }
   function draw(R, snap, dt, paused, replay) {
