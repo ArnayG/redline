@@ -539,12 +539,28 @@ window.CB = window.CB || {};
     }
   }
 
+  /** the game's one units setting (Settings > General, CB.game.profile): 'kph' (default) or 'mph' */
+  function speedUnits() {
+    var P = CB.game && CB.game.profile;
+    try { var u = P && typeof P.getSetting === 'function' ? P.getSetting('units') : null; return u === 'mph' ? 'mph' : 'kph'; } catch (e) { return 'kph'; }
+  }
+  /** relabel the sprint / top-speed cells for the units (0–100 km/h + km/h, or 0–60 mph + mph) */
+  function setQsUnits(u) {
+    var s = qsState['qs-060'], t = qsState['qs-top'];
+    var lbl = function (st) { return st && st.qs ? st.qs.querySelector('.qs-label') : null; };
+    var unit = function (st) { return st && st.qs ? st.qs.querySelector('.qs-value small') : null; };
+    if (lbl(s)) lbl(s).textContent = u === 'mph' ? '0–60 mph' : '0–100 km/h';
+    if (unit(t)) unit(t).textContent = u === 'mph' ? 'mph' : 'km/h';
+  }
   function updatePerfStrip(bundle, animate) {
-    var m = bundle.metrics || {}, p = bundle.pricing || {};
+    var m = bundle.metrics || {}, p = bundle.pricing || {}, units = speedUnits();
+    if (units !== qsState._units) { setQsUnits(units); qsState._units = units; animate = false; }
     QS.forEach(function (q) {
       var st = qsState[q.id];
       if (!st) return;
       var v = q.key === 'price' ? (p.total != null ? p.total : p.msrp) : m[q.key];
+      if (q.id === 'qs-060' && units !== 'mph') v = m.zeroTo100_s;
+      if (q.id === 'qs-top' && units === 'mph') v = isFinite(m.topSpeed_mph) ? m.topSpeed_mph : (isFinite(v) ? v * 0.621371 : v);
       if (v == null || !isFinite(v)) { st.node.textContent = '—'; st.value = null; return; }
       var format = q.money ? function (x) { return U.fmtMoney(Math.round(x)); } : function (x) { return fmt(x, q.d); };
       var prev = st.value;

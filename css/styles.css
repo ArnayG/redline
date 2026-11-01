@@ -4162,6 +4162,7 @@ html.cb-routed #btn-menu, html.cb-routed #btn-hub { display: none !important; }
 .st-pv-label { font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .st-pv-value { font-size: var(--fs-lg); font-weight: 650; color: var(--text-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st-pv-value small { font-size: var(--fs-xs); font-weight: 500; color: var(--text-dim); }
+.st-pv-sim { font-size: var(--fs-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .st-pv-delta { font-size: var(--fs-xs); font-weight: 650; font-variant-numeric: tabular-nums; }
 .st-bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-dim); }
 .st-bar-track { height: 6px; border-radius: var(--pill); background: var(--panel-3); overflow: hidden; }

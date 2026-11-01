@@ -539,7 +539,7 @@ if (typeof window !== 'undefined') window.CB = CB;
       ['Powertrain', d.engine], ['Gearbox', d.transmission], ['Drivetrain', d.drivetrain],
       ['Power', bd.metrics ? fmt(m.power_hp) + ' hp / ' + fmt(m.torque_nm) + ' Nm' : null],
       ['0–100 km/h', bd.metrics ? fmt(m.zeroTo100_s, 2) + ' s' : null],
-      ['Top speed', bd.metrics ? fmt(m.topSpeed_kph) + ' km/h' : null],
+      ['Top speed', bd.metrics ? fmtTop(m) : null],
       ['Weight', bd.metrics ? fmt(m.weight_kg) + ' kg' : null],
       ['Lap (Redline Ring)', bd.metrics ? fmtLap(m.lapTime_s) : null],
       ['Paint', paintName(b)],
@@ -1376,6 +1376,13 @@ if (typeof window !== 'undefined') window.CB = CB;
     n.innerHTML = thumbnail(build);
     return n;
   }
+  /** the game's one units setting (Settings > General): top speed shows in km/h or mph to match the rest of the game */
+  function speedUnits() {
+    var P = CB.game && CB.game.profile;
+    try { return P && typeof P.getSetting === 'function' && P.getSetting('units') === 'mph' ? 'mph' : 'kph'; } catch (e) { return 'kph'; }
+  }
+  function topMph(m) { return m && isNum(m.topSpeed_mph) ? m.topSpeed_mph : m && isNum(m.topSpeed_kph) ? m.topSpeed_kph * 0.621371 : null; }
+  function fmtTop(m) { return speedUnits() === 'mph' ? fmt(topMph(m)) + ' mph' : fmt(m.topSpeed_kph) + ' km/h'; }
   function statChip(label, value, unit) {
     return el('div', { class: 'gx-stat' }, el('span', { class: 'gx-stat-v' }, value, unit ? el('small', null, ' ' + unit) : null), el('span', { class: 'gx-stat-l' }, label));
   }
@@ -1384,8 +1391,9 @@ if (typeof window !== 'undefined') window.CB = CB;
     var f = el('div', { class: 'gx-stats' });
     if (!m && p == null) { f.appendChild(el('div', { class: 'gx-stat is-empty' }, 'Figures unavailable')); return f; }
     f.appendChild(statChip('Power', m ? fmt(m.power_hp) : '—', 'hp'));
-    f.appendChild(statChip('0–100', m ? fmt(m.zeroTo100_s, 1) : '—', 's'));
-    f.appendChild(statChip('Top', m ? fmt(m.topSpeed_kph) : '—', 'km/h'));
+    var mph = speedUnits() === 'mph';
+    f.appendChild(statChip(mph ? '0–60' : '0–100', m ? fmt(mph ? m.zeroTo60_s : m.zeroTo100_s, 1) : '—', 's'));
+    f.appendChild(statChip('Top', m ? fmt(mph ? topMph(m) : m.topSpeed_kph) : '—', mph ? 'mph' : 'km/h'));
     f.appendChild(statChip('Price', p == null ? '—' : U.fmtMoney(p, { compact: true })));
     return f;
   }
@@ -2295,7 +2303,7 @@ if (typeof window !== 'undefined') window.CB = CB;
     if (m) {
       var k = [
         ['Power', fmt(m.power_hp), 'hp'], ['Torque', fmt(m.torque_nm), 'Nm'], ['0–100 km/h', fmt(m.zeroTo100_s, 2), 's'], ['0–60 mph', fmt(m.zeroTo60_s, 2), 's'],
-        ['Top speed', fmt(m.topSpeed_kph), 'km/h'], ['Weight', fmt(m.weight_kg), 'kg'], ['Power/weight', fmt(m.powerToWeight_hpPerTon), 'hp/t'], ['Redline Ring', fmtLap(m.lapTime_s), '']
+        speedUnits() === 'mph' ? ['Top speed', fmt(topMph(m)), 'mph'] : ['Top speed', fmt(m.topSpeed_kph), 'km/h'], ['Weight', fmt(m.weight_kg), 'kg'], ['Power/weight', fmt(m.powerToWeight_hpPerTon), 'hp/t'], ['Redline Ring', fmtLap(m.lapTime_s), '']
       ];
       sheet.appendChild(el('section', { class: 'gx-sheet-kpis' }, k.map(function (x) {
         return el('div', { class: 'gx-sheet-kpi' }, el('span', { class: 'gx-sheet-kpi-v' }, x[1], x[2] ? el('small', null, ' ' + x[2]) : null), el('span', { class: 'gx-sheet-kpi-l' }, x[0]));

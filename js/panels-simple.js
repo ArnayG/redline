@@ -263,12 +263,28 @@ if (typeof window !== 'undefined') window.CB = CB;
       U.clear(figs);
       var sp = has && CB.stock.spec(m.id);
       if (sp) {
-        [['Factory power', fmt(sp.hp) + ' hp'], ['0–100 km/h', fmt(sp.s, 1) + ' s'], ['Top speed', fmt(sp.v) + ' km/h'], ['Weight', fmt(sp.kg) + ' kg']].forEach(function (kv) {
-          figs.appendChild(el('div', { class: 'st-pv' }, el('span', { class: 'st-pv-label' }, kv[0]), el('span', { class: 'st-pv-value' }, kv[1])));
+        // the maker's claims, in the player's units; where the simulation (the quick-stats strip above) lands
+        // noticeably elsewhere, say so on the same tile instead of showing two unexplained numbers
+        var mph = speedUnits() === 'mph';
+        var mx = null;
+        try { mx = CB.app && typeof CB.app.compute === 'function' ? (CB.app.compute(build) || {}).metrics : null; } catch (eM) { mx = null; }
+        var simNote = function (claim, sim, fmtSim) { return isFinite(sim) && claim > 0 && Math.abs(sim - claim) / claim > 0.03 ? 'sim ' + fmtSim(sim) : null; };
+        var vClaim = mph ? sp.v * 0.621371 : sp.v, vSim = mx ? (mph ? mx.topSpeed_kph * 0.621371 : mx.topSpeed_kph) : NaN;
+        [['Factory power', fmt(sp.hp) + ' hp', simNote(sp.hp, mx ? mx.power_hp : NaN, function (v) { return fmt(v); })],
+          ['0–100 km/h', fmt(sp.s, 1) + ' s', simNote(sp.s, mx ? mx.zeroTo100_s : NaN, function (v) { return fmt(v, 1); })],
+          ['Top speed', fmt(vClaim) + (mph ? ' mph' : ' km/h'), simNote(vClaim, vSim, function (v) { return fmt(v); })],
+          ['Weight', fmt(sp.kg) + ' kg', simNote(sp.kg, mx ? mx.weight_kg : NaN, function (v) { return fmt(v); })]].forEach(function (kv) {
+          figs.appendChild(el('div', { class: 'st-pv', title: kv[2] ? 'Factory claim; the simulation gives ' + kv[2].slice(4) + ' for this spec' : 'Factory claim' },
+            el('span', { class: 'st-pv-label' }, kv[0]), el('span', { class: 'st-pv-value' }, kv[1]), kv[2] ? el('small', { class: 'st-pv-sim' }, kv[2]) : null));
         });
       }
     };
     return root;
+  }
+
+  function speedUnits() {
+    var P = CB.game && CB.game.profile;
+    try { return P && typeof P.getSetting === 'function' && P.getSetting('units') === 'mph' ? 'mph' : 'kph'; } catch (e) { return 'kph'; }
   }
 
   /* ---------------------------------------------------------------- Style: paint colour */

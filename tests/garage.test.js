@@ -180,3 +180,24 @@ test('garage: spec sheet dimensions follow wheelbase / track; headline keeps acr
   var h = G.describe(suv).headline;
   assert.ok(h.indexOf('SUV') >= 0 && h.indexOf('suv') < 0, h);
 });
+
+test('garage: top speed follows Settings units (mph players see mph in the summary)', function () {
+  CB.game = CB.game || {};
+  var prev = CB.game.profile, u = 'mph';
+  CB.game.profile = { getSetting: function (k) { return k === 'units' ? u : undefined; } };
+  try {
+    var b = CB.state.normalize(CB.data.defaultBuild());
+    assert.match(G.textSummary(b), /Top speed: [\d,]+ mph/);
+    u = 'kph';
+    assert.match(G.textSummary(b), /Top speed: [\d,]+ km\/h/);
+  } finally { CB.game.profile = prev; }
+});
+
+test('garage: the quick-stats strip and the factory card are units-aware and explain sim vs factory figures', function () {
+  var fs = require('fs');
+  var app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  assert.ok(/q\.id === 'qs-060' && units !== 'mph'\) v = m\.zeroTo100_s/.test(app));
+  assert.ok(/q\.id === 'qs-top' && units === 'mph'/.test(app));
+  var ps = fs.readFileSync(path.join(__dirname, '..', 'js', 'panels-simple.js'), 'utf8');
+  assert.ok(/'sim ' \+ fmtSim\(sim\)/.test(ps) && /mph \? ' mph' : ' km\/h'/.test(ps));
+});
