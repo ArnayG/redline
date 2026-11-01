@@ -2268,7 +2268,9 @@ CB.derby = CB.derby || {};
       }
       var casters = items.slice();
       items.push(floor);
-      var env = { sunDir: norm([-0.4, 0.85, 0.35]), sunColor: [2.2, 2.1, 1.95], ambientSky: [0.55, 0.58, 0.66], ambientGround: [0.2, 0.2, 0.22], fogColor: [0.05, 0.05, 0.06], fogDensity: 0, envTop: light.envTop, envHorizon: light.envHorizon, envBottom: light.envBottom, exposure: 1.0, time: t / 1000 };
+      // studio key / fill tuned so saturated paints keep their hue (sun 2.2 + a bright day sky washed oranges to salmon
+      // and lit the dark floor disc near white)
+      var env = { sunDir: norm([-0.4, 0.85, 0.35]), sunColor: [1.45, 1.4, 1.32], ambientSky: [0.4, 0.42, 0.5], ambientGround: [0.14, 0.14, 0.16], fogColor: [0.05, 0.05, 0.06], fogDensity: 0, envTop: light.envTop.map(function (v) { return v * 0.55; }), envHorizon: light.envHorizon.map(function (v) { return v * 0.55; }), envBottom: light.envBottom, exposure: 0.95, time: t / 1000 };
       if (shadow) { try { if (shadow.render(casters, { center: [0, 0, 0], sunDir: env.sunDir, radius: 6 })) env.shadow = shadow; } catch (e) { shadow = null; } }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, sz.w, sz.h);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -2300,7 +2302,7 @@ CB.derby = CB.derby || {};
         try { if (CB.gl.car.cache && CB.gl.car.cache.clear) CB.gl.car.cache.clear(ctx); } catch (e) { /* ignore */ }
         if (shadow) try { shadow.destroy(); } catch (e) { /* ignore */ }
         try { floor.mesh.destroy(); } catch (e) { /* ignore */ }
-        try { var ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } catch (e) { /* ignore */ }
+        try { var ext = !(gl.isContextLost && gl.isContextLost()) && gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } catch (e) { /* ignore */ }
         if (ctx && ctx.destroy) try { ctx.destroy(); } catch (e) { /* ignore */ }
       }
     };

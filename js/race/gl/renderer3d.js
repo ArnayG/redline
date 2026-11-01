@@ -60,12 +60,12 @@ CB.race.renderer3d = (function () {
     },
     medium: {
       maxDpr: 1.25, scale: 1, shadow: 1024, post: true, bloom: false, msaa: 2, fxaa: true, speedBlur: true,
-      mirrorEvery: 2, mirrorScale: 0.2, lodNear: 40, maxHigh: 4, far: 2000, particles: 700, effectsNear: 140, grain: 0,
+      mirrorEvery: 2, mirrorScale: 0.2, lodNear: 40, maxHigh: 8, far: 2000, particles: 700, effectsNear: 140, grain: 0,
       nearShadow: 1024, nearRadius: 16
     },
     high: {
       maxDpr: 1.5, scale: 1, shadow: 2048, post: true, bloom: true, msaa: 4, fxaa: true, speedBlur: true,
-      mirrorEvery: 2, mirrorScale: 0.25, lodNear: 65, maxHigh: 6, far: 2600, particles: 1400, effectsNear: 200, grain: 0.012,
+      mirrorEvery: 2, mirrorScale: 0.25, lodNear: 65, maxHigh: 12, far: 2600, particles: 1400, effectsNear: 200, grain: 0.012,
       nearShadow: 2048, nearRadius: 18
     },
     ultra: {
@@ -1527,7 +1527,7 @@ CB.race.renderer3d = (function () {
       var c = document.createElement('canvas');
       var gl = c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
       supportCache = !!gl;
-      if (gl) { var ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); }
+      if (gl && !gl.isContextLost()) { var ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); }
     } catch (e) { supportCache = false; }
     return supportCache;
   }
@@ -3636,7 +3636,8 @@ CB.race.renderer3d = (function () {
       var TX = CB.gl && CB.gl.textures;
       if (TX && typeof TX.dispose === 'function' && !(gl.isContextLost && gl.isContextLost())) safe('textures.dispose', function () { TX.dispose(ctx && ctx.gl ? ctx : gl); });
       if (ctx && typeof ctx.destroy === 'function') safe('ctx.destroy', function () { ctx.destroy(); });
-      safe('loseContext', function () { var ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); });
+      // ctx.destroy() above usually lost it already: a second loseContext() logs INVALID_OPERATION
+      safe('loseContext', function () { if (gl.isContextLost && gl.isContextLost()) return; var ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); });
       if (glCanvas.parentNode) glCanvas.parentNode.removeChild(glCanvas);
       canvas.style.background = saved.background || '';
       canvas.style.backgroundColor = saved.backgroundColor || '';
