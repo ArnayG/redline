@@ -238,7 +238,9 @@ CB.gl.post = (function () {
     '  float w0, w1, w2, w3;',
     '  vec3 c = tap(vec2(-1.0,-1.0), w0) + tap(vec2(1.0,-1.0), w1) + tap(vec2(-1.0,1.0), w2) + tap(vec2(1.0,1.0), w3);',
     '  c /= max(w0 + w1 + w2 + w3, 1e-4);',
-    '  float br = max(c.r, max(c.g, c.b));',
+    // brightness halfway between max channel and luminance: lamps / neon (very bright in one channel) still bloom,
+    // but sun-lit saturated paint (a whole flat-shaded red bonnet facet) no longer glows like a light source
+    '  float br = mix(max(c.r, max(c.g, c.b)), dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.5);',
     '  float k = max(uThresh.y, 1e-4);',
     '  float rq = clamp(br - uThresh.x + k, 0.0, 2.0 * k); rq = rq * rq / (4.0 * k);',
     '  c *= max(rq, br - uThresh.x) / max(br, 1e-4);',
@@ -282,15 +284,20 @@ CB.gl.post = (function () {
     'vec3 viewPos(vec2 uv){ float vz = viewZ(texture2D(uDepth, uv).r); return vec3((uv.x * 2.0 - 1.0) * vz / uProj.x, (uv.y * 2.0 - 1.0) * vz / uProj.y, -vz); }',
     'vec3 viewPosD(vec2 uv, float d){ float vz = viewZ(d); return vec3((uv.x * 2.0 - 1.0) * vz / uProj.x, (uv.y * 2.0 - 1.0) * vz / uProj.y, -vz); }',
     'void main(){',
-    '  float d = texture2D(uDepth, vUv).r;',
+    // the half-res pixel centre sits exactly on a full-res texel corner: with a NEAREST depth fetch the rounding
+    // flips from row to row (and column to column), so P and its neighbours came from inconsistent texels and the
+    // reconstructed normal wobbled in a periodic pattern -> horizontal AO stripes across flat ground at range.
+    // Snap to one full-res texel centre first.
+    '  vec2 uv0 = (floor(vUv / uTexelFull - 0.25) + 0.5) * uTexelFull;',
+    '  float d = texture2D(uDepth, uv0).r;',
     '  if (d >= 0.99999) { gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); return; }',
-    '  vec3 P = viewPosD(vUv, d);',
+    '  vec3 P = viewPosD(uv0, d);',
     '  float vz = -P.z;',
         '  float occ = 0.0;',
     '  vec3 N = vec3(0.0, 0.0, 1.0);',
     '  if (uAO.z > 0.5 || uContactCount > 0.5) {',
-    '    vec3 pr = viewPos(vUv + vec2(uTexelFull.x, 0.0)), pl = viewPos(vUv - vec2(uTexelFull.x, 0.0));',
-    '    vec3 pu = viewPos(vUv + vec2(0.0, uTexelFull.y)), pd = viewPos(vUv - vec2(0.0, uTexelFull.y));',
+    '    vec3 pr = viewPos(uv0 + vec2(uTexelFull.x, 0.0)), pl = viewPos(uv0 - vec2(uTexelFull.x, 0.0));',
+    '    vec3 pu = viewPos(uv0 + vec2(0.0, uTexelFull.y)), pd = viewPos(uv0 - vec2(0.0, uTexelFull.y));',
     '    vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl;',
     '    vec3 dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;',
     '    N = normalize(cross(dx, dy));',
@@ -308,7 +315,7 @@ CB.gl.post = (function () {
     '      float fi = (float(i) + 0.5) / uAO.z;',
     '      float a = ang0 + float(i) * 2.3999632;',
     '      vec2 o = vec2(cos(a), sin(a)) * rUv * sqrt(fi);',
-    '      vec3 S = viewPos(vUv + o);',
+    '      vec3 S = viewPos(uv0 + o);',
     '      vec3 v = S - P;',
     '      float l2 = dot(v, v);',
     '      float l = sqrt(l2) + 1e-4;',
@@ -861,7 +868,7 @@ CB.gl.post = (function () {
           draw(P.prefilter, B[0].fb, B[0].w, B[0].h, function (u) {
             gl.uniform1i(u('uTex'), 0);
             gl.uniform2f(u('uTexel'), 1 / sc.w, 1 / sc.h);
-            gl.uniform4f(u('uThresh'), thr, knee, bScale, T.hdr ? 48 : 1);
+            gl.uniform4f(u('uThresh'), thr, knee, bScale, T.hdr ? 16 : 1);   // per-tap clamp: glass glitter / sparks near the camera no longer bloom into big white discs
           });
           for (i = 1; i < B.length; i++) {
             bindTex(0, B[i - 1].tex);
