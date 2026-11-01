@@ -176,7 +176,7 @@ phpTest('cpanel php: create / join / post / poll / close, same protocol as api/s
   assert.equal((await api({ action: 'post', room: h.room, token: h.token, to: 'host', msg: 1 })).status, 400);
   assert.equal((await api({ action: 'post', room: h.room, token: 'nope', to: 'host', msg: 1 })).status, 403);
   assert.equal((await api({ action: 'poll', room: 'ZZZZZ', token: 'x' })).status, 410);
-  assert.equal((await api({ action: 'join', room: 'ZZZZZ' })).status, 404);
+  var nf = await api({ action: 'join', room: 'ZZZZZ' }); assert.equal(nf.status, 200); assert.equal(nf.body.code, 'not-found');
   assert.equal((await api({ action: 'join', room: 'abc' })).body.code, 'bad-request');
   assert.equal((await api({ action: 'post', room: h.room, token: h.token, to: g.peer, msgs: new Array(33).fill(1) })).body.code, 'too-large');
   // peer leaves -> host gets _leave; host closes -> peers get _closed and the room is gone

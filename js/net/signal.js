@@ -125,6 +125,7 @@ if (typeof window !== 'undefined') window.CB = CB;
   // Relative URLs on purpose: they resolve against the page, so https://example.com/forge/ works as well as a domain root.
   var ENDPOINTS = ['api/signal.php', 'api/signal'];
   var cachedEndpoint = null;   // url that answered {ok:true} (only cached when using the real global fetch)
+  var EP_KEY = 'redline.net.endpoint';   // ... and remembered across page loads (probed first next time)
   function probeOne(doFetch, url, timeout) {
     var ctl = typeof AbortController === 'function' ? new AbortController() : null;
     var t = ctl ? setTimeout(function () { ctl.abort(); }, timeout || 4000) : null;
@@ -144,6 +145,13 @@ if (typeof window !== 'undefined') window.CB = CB;
     var shared = !opts.fetch && !opts.url;
     if (shared && cachedEndpoint) return Promise.resolve({ url: cachedEndpoint, ok: true, json: true });
     var list = opts.url ? [opts.url] : (opts.endpoints || ENDPOINTS);
+    // the endpoint that answered last time goes first: a Vercel / dev-server deployment then never probes the PHP
+    // candidate again (each miss is a "404 Not Found" line in the browser console)
+    if (shared && !opts.endpoints) {
+      var remembered = null;
+      try { remembered = typeof localStorage !== 'undefined' ? localStorage.getItem(EP_KEY) : null; } catch (eL) { remembered = null; }
+      if (remembered && list.indexOf(remembered) > 0) list = [remembered].concat(list.filter(function (u) { return u !== remembered; }));
+    }
     // sequential, so a working first candidate costs one request and no 404 noise in the console
     var spoke = null, blocked = null, reached = false;
     function next(i) {
@@ -156,7 +164,13 @@ if (typeof window !== 'undefined') window.CB = CB;
       }
       return probeOne(doFetch, list[i], opts.timeout).then(function (r) {
         if (r.status) reached = true;
-        if (r.ok) { if (shared) cachedEndpoint = r.url; return r; }
+        if (r.ok) {
+          if (shared) {
+            cachedEndpoint = r.url;
+            try { if (typeof localStorage !== 'undefined') localStorage.setItem(EP_KEY, r.url); } catch (eS) { /* private mode */ }
+          }
+          return r;
+        }
         if (r.json && !spoke) spoke = r;
         if (!r.json && !blocked && (r.status === 403 || r.status === 406 || r.status === 429 || r.status >= 500)) blocked = r;
         return next(i + 1);

@@ -413,7 +413,9 @@ function createHandler(opts) {
       var room = normRoom(body.room);
       if (!room) return [400, 'bad-request', 'room code must be 5 characters'];
       var r = await db.exec([['HLEN', K.room(room)], ['HGET', K.room(room), 'host']]);
-      if (!r[1]) return [404, 'not-found', 'no such room (it may have expired)'];
+      // a missing room / peer is an ordinary answer (mistyped or expired code), not a transport error: HTTP 200 + ok:false,
+      // so browsers do not log a red "Failed to load resource: 404" for every wrong code
+      if (!r[1]) return [200, 'not-found', 'no such room (it may have expired)'];
       var players = Number(r[0]) - 1; // minus 'host' + 'created' fields, plus the host player
       if (players >= L.maxPlayers) return [409, 'full', 'room is full'];
       var peer = randPeer(), token = randToken();
@@ -434,7 +436,7 @@ function createHandler(opts) {
       if (a === false) return [403, 'auth', 'bad token'];
       if (to === a.peer) return [400, 'bad-request', 'cannot post to yourself'];
       if (!a.isHost && to !== 'host') return [403, 'forbidden', 'peers may only message the host'];
-      if (to !== 'host' && !a.fields['p:' + to]) return [404, 'not-found', 'no such peer'];
+      if (to !== 'host' && !a.fields['p:' + to]) return [200, 'not-found', 'no such peer'];
       await push(db, room, to, list.map(function (m) { return encMsg(a.peer, m); }));
       return { ok: true, n: list.length };
     },

@@ -1593,13 +1593,22 @@ CB.net = CB.net || {};
         : '<button class="cb-btn ghost cb-back" data-act="menu" aria-label="Main menu">' + svg('back') + '<span>Main menu</span></button>') + '</div></header>';
   }
 
+  /** The card headline is the build's name exactly as the Garage shows it ("Porsche 911 Carrera S", "Weekend car");
+   *  the model (or its generation) is the small print. An unnamed build falls back to make + model. */
+  function cardTitle(s) {
+    var model = ((s.make || '') + ' ' + (s.name || '')).trim();
+    var bn = String(s.buildName || '').trim();
+    if (!bn || bn === 'Untitled Build') return { title: model || 'Custom build', sub: s.gen || '' };
+    var sub = model && bn.toLowerCase().indexOf(model.toLowerCase()) === 0 ? (s.gen || '') : model;
+    return { title: bn, sub: sub };
+  }
   function carCardHtml(build, opts) {
     opts = opts || {};
     var s = carSummary(build, true);
     var thumb = s.thumb || '<div class="nl-thumb-ph" style="background:' + esc(s.paint) + '"></div>';
     var specs = [s.hp != null ? s.hp + ' hp' : null, s.kg != null ? s.kg.toLocaleString('en-US') + ' kg' : null, s.drive || null].filter(Boolean);
     return '<div class="nl-thumb" aria-hidden="true">' + thumb + '</div>' +
-      '<div class="nl-model"><span class="nl-swatch" style="background:' + esc(s.paint) + '" title="Paint ' + esc(s.paint) + '"></span><span class="nl-model-name" title="' + esc((s.make + ' ' + s.name).trim()) + '">' + esc(s.make) + ' ' + esc(s.name) + (s.gen ? ' <small>' + esc(s.gen) + '</small>' : '') + '</span></div>' +
+      '<div class="nl-model"><span class="nl-swatch" style="background:' + esc(s.paint) + '" title="Paint ' + esc(s.paint) + '"></span><span class="nl-model-name" title="' + esc(cardTitle(s).title) + '">' + esc(cardTitle(s).title) + (cardTitle(s).sub ? ' <small>' + esc(cardTitle(s).sub) + '</small>' : '') + '</span></div>' +
       '<div class="nl-specs">' + specs.map(function (x) { return '<span class="nl-spec">' + esc(x) + '</span>'; }).join('') + '</div>';
   }
   function pingHtml(ms, isSelfHost) {
@@ -1973,7 +1982,7 @@ CB.net = CB.net || {};
     _: {
       createCore: createCore, normalizeSettings: normalizeSettings, defaultSettings: defaultSettings, sanitizeBuild: sanitizeBuild,
       cleanText: cleanText, cleanName: cleanName, esc: esc, normCode: normCode, parseHash: parseHash, shareLink: shareLink,
-      carSummary: carSummary, resultRows: resultRows, readRtt: readRtt, wrapPeer: wrapPeer, tracksFor: tracksFor, MODES: MODES, MAX_PLAYERS: MAX_PLAYERS,
+      carSummary: carSummary, cardTitle: cardTitle, carCardHtml: carCardHtml, resultRows: resultRows, readRtt: readRtt, wrapPeer: wrapPeer, tracksFor: tracksFor, MODES: MODES, MAX_PLAYERS: MAX_PLAYERS,
       myName: myName, setName: setName, goHtml: goHtml,
       app: A
     }

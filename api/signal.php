@@ -594,7 +594,7 @@ function fg_main() {
       $d['peers'] = $peers;
       return array($d, 'ok');
     });
-    if (!$r[0] || $r[1] === 'not-found') fg_fail(404, 'not-found', 'no such room (it may have expired)');
+    if (!$r[0] || $r[1] === 'not-found') fg_fail(200, 'not-found', 'no such room (it may have expired)');  // ordinary answer, not a transport error (no browser 404 noise)
     if ($r[1] === 'full') fg_fail(409, 'full', 'room is full');
     fg_send(200, array('ok' => true, 'room' => $room, 'peer' => $peer, 'host' => 'host', 'token' => $token, 'ttl' => $L['roomTtl']));
   }
@@ -618,7 +618,7 @@ function fg_main() {
     if ($a === false) fg_fail(403, 'auth', 'bad token');
     if ($to === $a['peer']) fg_fail(400, 'bad-request', 'cannot post to yourself');
     if (!$a['isHost'] && $to !== 'host') fg_fail(403, 'forbidden', 'peers may only message the host');
-    if ($to !== 'host' && !isset($a['room']['peers'][$to])) fg_fail(404, 'not-found', 'no such peer');
+    if ($to !== 'host' && !isset($a['room']['peers'][$to])) fg_fail(200, 'not-found', 'no such peer');
     $items = array();
     foreach ($list as $m) $items[] = fg_enc_msg($a['peer'], $m);
     $r = fg_push($P, $room, $to, $items, $L);

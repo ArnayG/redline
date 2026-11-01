@@ -118,7 +118,7 @@ test('api: TTLs — mailbox 2 min, room 2 h (sliding on host poll)', async funct
   await ok(h, { action: 'poll', room: c.room, token: j.token, wait: 0 });
   E.clock.t += 200 * 1000;
   var r = await invoke(h, { action: 'join', room: c.room });
-  assert.equal(r.status, 404); assert.equal(r.body.code, 'not-found');
+  assert.equal(r.status, 200, 'a missing room is an answer, not a 404 (no browser console noise)'); assert.equal(r.body.ok, false); assert.equal(r.body.code, 'not-found');
   var r2 = await invoke(h, { action: 'poll', room: c.room, token: j.token, wait: 0 });
   assert.equal(r2.body.code, 'room-closed');
 });
