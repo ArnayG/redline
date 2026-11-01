@@ -164,12 +164,17 @@
       Math.min(1.0, L.ambientSky[1] * 0.95 + L.sunColor[1] * 0.42 * sunUp),
       Math.min(1.0, L.ambientSky[2] * 0.95 + L.sunColor[2] * 0.42 * sunUp)
     ];
+    // split form for the per-fragment smoke lighting: sky ambient fill + directional sun (same average level)
+    L.particleSun = {
+      amb: [Math.min(1, L.ambientSky[0] * 0.85), Math.min(1, L.ambientSky[1] * 0.85), Math.min(1, L.ambientSky[2] * 0.85)],
+      sun: [Math.min(1.1, L.sunColor[0] * 0.5 * sunUp), Math.min(1.1, L.sunColor[1] * 0.5 * sunUp), Math.min(1.1, L.sunColor[2] * 0.5 * sunUp)]
+    };
     return L;
   }
 
   function cloneLighting(L) {
     var o = {};
-    for (var k in L) o[k] = Array.isArray(L[k]) ? L[k].slice() : L[k];
+    for (var k in L) o[k] = Array.isArray(L[k]) ? L[k].slice() : L[k] && typeof L[k] === 'object' ? JSON.parse(JSON.stringify(L[k])) : L[k];
     return o;
   }
 
@@ -182,8 +187,8 @@
 
   /* ---------------------------------------------------------- car geometry */
   /** Contact-patch positions (GL world) of a snapshot car: [FL, FR, RL, RR], plus basis vectors. */
-  function carFrame(car) {
-    var h = num(car.heading, 0);
+  function carFrame(car, pose) {
+    var h = num(pose && pose.heading, num(car.heading, 0));
     var fx = Math.cos(h), fz = -Math.sin(h);           // forward in GL
     var rx = Math.sin(h), rz = Math.cos(h);            // right in GL (sim right = (sin h, -cos h))
     var len = num(car.length_m, 4.4), wid = num(car.width_m, 1.9);
@@ -192,18 +197,22 @@
     var halfTr = b && num(b.trackWidth_mm, 0) > 0 ? b.trackWidth_mm / 2000 : wid * 0.42;
     halfWB = Math.min(halfWB, len * 0.45);
     halfTr = Math.min(halfTr, wid * 0.5);
-    var cx = num(car.x, 0), cz = -num(car.y, 0);
+    var cx = num(pose && pose.x, num(car.x, 0)), cz = -num(pose && pose.y, num(car.y, 0));
+    // road height under the car (bridge decks, ramps): from the renderer's resolver, else the snapshot, else 0
+    var gy = num(pose && pose.elev, num(car.elev, 0));
+    if (pose && num(pose.wheelbase, 0) > 0) halfWB = Math.min(pose.wheelbase / 2, len * 0.45);
+    if (pose && num(pose.track, 0) > 0) halfTr = Math.min(pose.track / 2, wid * 0.5);
     var wheels = [
-      [cx + fx * halfWB - rx * halfTr, 0, cz + fz * halfWB - rz * halfTr],
-      [cx + fx * halfWB + rx * halfTr, 0, cz + fz * halfWB + rz * halfTr],
-      [cx - fx * halfWB - rx * halfTr, 0, cz - fz * halfWB - rz * halfTr],
-      [cx - fx * halfWB + rx * halfTr, 0, cz - fz * halfWB + rz * halfTr]
+      [cx + fx * halfWB - rx * halfTr, gy, cz + fz * halfWB - rz * halfTr],
+      [cx + fx * halfWB + rx * halfTr, gy, cz + fz * halfWB + rz * halfTr],
+      [cx - fx * halfWB - rx * halfTr, gy, cz - fz * halfWB - rz * halfTr],
+      [cx - fx * halfWB + rx * halfTr, gy, cz - fz * halfWB + rz * halfTr]
     ];
     var vel;
     if (typeof car.vx === 'number' && typeof car.vy === 'number') vel = [car.vx, 0, -car.vy];
     else { var s = num(car.speed, 0); vel = [fx * s, 0, fz * s]; }
     return {
-      center: [cx, 0, cz], fwd: [fx, 0, fz], right: [rx, 0, rz], wheels: wheels, vel: vel,
+      center: [cx, gy, cz], ground: gy, fwd: [fx, 0, fz], right: [rx, 0, rz], wheels: wheels, vel: vel,
       speed: num(car.speed, Math.sqrt(vel[0] * vel[0] + vel[2] * vel[2])), halfLength: len / 2, halfWidth: wid / 2
     };
   }
@@ -211,6 +220,17 @@
   function driveLayout(car) {
     var d = car.build && car.build.drivetrain && car.build.drivetrain.layout;
     return d === 'fwd' || d === 'awd' ? d : 'rwd';
+  }
+
+  /** Skid-mark widths [front, rear] in metres from the build's tyres (contact patch ~ 88% of section width). */
+  function tyreWidths(car) {
+    var t = car && car.build && car.build.tires, f = 0, r = 0;
+    if (t) {
+      f = num(t.widthFront_mm, num(t.width_mm, 0)); r = num(t.widthRear_mm, num(t.width_mm, f));
+      if (!(f > 0)) f = r;
+    }
+    if (!(f > 0)) return [0.22, 0.22];
+    return [clamp(f * 0.00088, 0.15, 0.4), clamp(r * 0.00088, 0.15, 0.4)];
   }
 
   /** Per-wheel slip intensities 0..1 [FL, FR, RL, RR] from a snapshot car (pure). */
@@ -241,7 +261,7 @@
 
   /* --------------------------------------------------------- particle pool */
   var P_STRIDE = 18; // pos3 vel3 time4(birth,life,size0,size1) params4(drag,gravity,kind,seed) color4
-  var KIND = { smoke: 0, dust: 1, mist: 2, spark: 3, debris: 4, droplet: 5, flame: 6 };
+  var KIND = { smoke: 0, dust: 1, mist: 2, spark: 3, debris: 4, droplet: 5, flame: 6, glow: 7 };
 
   function ParticlePool(cap) {
     this.cap = Math.max(16, cap | 0);
@@ -295,7 +315,7 @@
   };
 
   /* ------------------------------------------------------------ skid ribbons */
-  var S_STRIDE = 8; // pos3, u, v, intensity, birth, seq   (4 verts per segment)
+  var S_STRIDE = 10; // pos3, u, v, intensity, birth, seq, across2 (xz to the opposite edge)   (4 verts per segment)
 
   function SkidBuffer(cap) {
     this.cap = Math.max(8, Math.min(16000, cap | 0)); // Uint16 indices: 4 * 16000 < 65536
@@ -323,10 +343,11 @@
     var seg = this.head, o = seg * 4 * S_STRIDE, d = this.data, s = this.seq, u0 = st.u, u1 = st.u + dist;
     var i0 = st.i, i1 = intensity;
     // v0: start-left, v1: start-right, v2: end-left, v3: end-right
-    d[o] = e[0]; d[o + 1] = st.y; d[o + 2] = e[1]; d[o + 3] = u0; d[o + 4] = 0; d[o + 5] = i0; d[o + 6] = now; d[o + 7] = s; o += S_STRIDE;
-    d[o] = e[2]; d[o + 1] = st.y; d[o + 2] = e[3]; d[o + 3] = u0; d[o + 4] = 1; d[o + 5] = i0; d[o + 6] = now; d[o + 7] = s; o += S_STRIDE;
-    d[o] = lx;   d[o + 1] = y;    d[o + 2] = lz;   d[o + 3] = u1; d[o + 4] = 0; d[o + 5] = i1; d[o + 6] = now; d[o + 7] = s; o += S_STRIDE;
-    d[o] = rx;   d[o + 1] = y;    d[o + 2] = rz;   d[o + 3] = u1; d[o + 4] = 1; d[o + 5] = i1; d[o + 6] = now; d[o + 7] = s;
+    var ax0 = e[2] - e[0], az0 = e[3] - e[1], ax1 = rx - lx, az1 = rz - lz;
+    d[o] = e[0]; d[o + 1] = st.y; d[o + 2] = e[1]; d[o + 3] = u0; d[o + 4] = 0; d[o + 5] = i0; d[o + 6] = now; d[o + 7] = s; d[o + 8] = ax0; d[o + 9] = az0; o += S_STRIDE;
+    d[o] = e[2]; d[o + 1] = st.y; d[o + 2] = e[3]; d[o + 3] = u0; d[o + 4] = 1; d[o + 5] = i0; d[o + 6] = now; d[o + 7] = s; d[o + 8] = -ax0; d[o + 9] = -az0; o += S_STRIDE;
+    d[o] = lx;   d[o + 1] = y;    d[o + 2] = lz;   d[o + 3] = u1; d[o + 4] = 0; d[o + 5] = i1; d[o + 6] = now; d[o + 7] = s; d[o + 8] = ax1; d[o + 9] = az1; o += S_STRIDE;
+    d[o] = rx;   d[o + 1] = y;    d[o + 2] = rz;   d[o + 3] = u1; d[o + 4] = 1; d[o + 5] = i1; d[o + 6] = now; d[o + 7] = s; d[o + 8] = -ax1; d[o + 9] = -az1;
     if (this.dirtyCount === 0) this.dirtyStart = seg;
     if (this.dirtyCount < this.cap) this.dirtyCount++;
     this.head = (seg + 1) % this.cap;
@@ -382,18 +403,22 @@
     'uniform mat4 uView; uniform mat4 uProj; uniform float uTime; uniform vec3 uWind;',
     'uniform vec2 uViewport; uniform float uMaxPoint; uniform vec3 uLight; uniform vec3 uFogColor; uniform float uFogDensity;',
     'varying vec4 vColor; varying vec2 vDir; varying float vHalf; varying float vRad; varying float vKind; varying float vSeed; varying float vAge;',
+    // soft kinds are lit per fragment (sun-facing side bright, far side in shade): fog factor goes to the FS
+    'varying float vFog;',
     // soft-ground term: (sprite centre height, world radius, camera right.y, camera up.y) -> per-fragment height on the billboard plane
     'varying vec4 vGround;',
-    'void hide(){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; vColor = vec4(0.0); vDir = vec2(1.0,0.0); vHalf = 0.0; vRad = 1.0; vKind = 0.0; vSeed = 0.0; vAge = 0.0; vGround = vec4(1.0, 0.0, 0.0, 1.0); }',
+    'void hide(){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; vColor = vec4(0.0); vDir = vec2(1.0,0.0); vHalf = 0.0; vRad = 1.0; vKind = 0.0; vSeed = 0.0; vAge = 0.0; vGround = vec4(1.0, 0.0, 0.0, 1.0); vFog = 1.0; }',
     'void main(){',
     '  float age = uTime - aTime.x; float life = aTime.y;',
     '  if (life <= 0.0 || age < 0.0 || age > life) { hide(); return; }',
     '  float x = age / life; float kind = aParams.z;',
     '  float isSpark = step(2.5, kind) * step(kind, 3.5);',
     '  float isDrop = step(4.5, kind) * step(kind, 5.5);',
-    '  float isFlame = step(5.5, kind);',
-    '  float isAdd = max(isSpark, isFlame);',
-    '  float windScale = kind < 2.5 ? 1.0 : (isSpark > 0.5 ? 0.05 : (isDrop > 0.5 ? 0.4 : 0.25));',
+    '  float isFlame = step(5.5, kind) * step(kind, 6.5);',
+    '  float isGlow = step(6.5, kind);',   // tinted additive streak (nitro flames, coloured sparks, pickup bursts)
+    '  float isAdd = max(max(isSpark, isFlame), isGlow);',
+    '  float isStreak = max(max(isSpark, isDrop), max(isFlame, isGlow));',
+    '  float windScale = kind < 2.5 ? 1.0 : (isSpark + isGlow > 0.5 ? 0.05 : (isDrop > 0.5 ? 0.4 : 0.25));',
     '  float k = max(aParams.x, 0.05); float e = exp(-k * age); float f = (1.0 - e) / k;',
     '  vec3 w = uWind * windScale; vec3 g = vec3(0.0, -aParams.y, 0.0);',
     '  vec3 p = aPos + w * age + (aVel - w) * f + g / k * (age - f);',
@@ -409,12 +434,16 @@
     '  float px = size * pxScale / dist;',
     '  float a = aColor.a;',
     '  vec3 col = aColor.rgb;',
-    '  if (isAdd > 0.5) {',
-    '    vec3 hot = isSpark > 0.5 ? mix(vec3(1.0, 0.96, 0.82), vec3(1.0, 0.36, 0.06), clamp(x * 1.3, 0.0, 1.0)) : mix(vec3(1.0, 0.85, 0.5), vec3(1.0, 0.25, 0.03), x);',
-    '    col *= hot * (isSpark > 0.5 ? 2.2 : 1.8);',
-    '    a *= isSpark > 0.5 ? pow(1.0 - x, 0.7) : (1.0 - x) * smoothstep(0.0, 0.1, x);',
+    '  if (isGlow > 0.5) {',
+    // white-hot core cooling to the particle's own colour
+    '    col = mix(vec3(1.0, 0.98, 0.94), col, clamp(x * 3.2 + 0.45, 0.0, 1.0)) * 2.0;',
+    '    a *= pow(1.0 - x, 0.8) * smoothstep(0.0, 0.06, x);',
+    '  } else if (isAdd > 0.5) {',
+    '    vec3 hot = isSpark > 0.5 ? mix(vec3(1.0, 0.96, 0.82), vec3(1.0, 0.36, 0.06), clamp(x * 1.3, 0.0, 1.0)) : mix(vec3(1.0, 0.92, 0.7), vec3(1.0, 0.3, 0.04), clamp(x * 1.6, 0.0, 1.0));',
+    '    col *= hot * (isSpark > 0.5 ? 2.4 : 2.0);',
+    '    a *= isSpark > 0.5 ? pow(1.0 - x, 0.7) : (1.0 - x) * smoothstep(0.0, 0.06, x);',
     '  } else {',
-    '    col *= uLight;',
+    '    if (kind > 2.5) col *= uLight;',
     '    if (kind < 0.5) a *= smoothstep(0.0, 0.05, x) * (1.0 - smoothstep(0.3, 1.0, x)) * (1.0 - 0.25 * x);',  // lingers, then thins out
     '    else a *= smoothstep(0.0, kind > 3.5 ? 0.02 : 0.08, x) * pow(1.0 - x, kind > 3.5 ? 0.6 : 1.35);',
     '    a *= smoothstep(0.6, 3.5, dist);',
@@ -424,13 +453,13 @@
     '  float fogF = exp(-pow(uFogDensity * dist, 2.0));',
     '  vec4 clip = uProj * vp;',
     '  vDir = vec2(1.0, 0.0); vHalf = 0.0; vRad = 1.0;',
-    '  if (isSpark + isDrop > 0.5) {',
-    '    float stretch = isSpark > 0.5 ? 0.045 : 0.03;',
+    '  if (isStreak > 0.5) {',
+    '    float stretch = isSpark > 0.5 ? 0.05 : (isFlame > 0.5 ? 0.055 : (isGlow > 0.5 ? 0.04 : 0.03));',
     '    vec4 c1 = uProj * (uView * vec4(p - vel * stretch, 1.0));',
     '    if (c1.w < 0.08) c1 = clip;',
     '    vec2 s0 = clip.xy / clip.w * 0.5 * uViewport; vec2 s1 = c1.xy / c1.w * 0.5 * uViewport;',
     '    vec2 d = s0 - s1; float len = length(d);',
-    '    float thick = max(px * 0.5, 0.75);',
+    '    float thick = max(px * 0.5, isFlame + isGlow > 0.5 ? 1.0 : 0.75);',
     '    if (px < 1.5) a *= max(px / 1.5, 0.35);',
     '    float tot = min(len + thick * 2.0 + 1.0, uMaxPoint);',
     '    len = max(tot - thick * 2.0 - 1.0, 0.0);',
@@ -441,9 +470,15 @@
     '  } else {',
     '    if (px > uMaxPoint) { a *= (uMaxPoint / px); px = uMaxPoint; }',
     '  }',
+    '  vFog = fogF;',
     '  if (isAdd > 0.5) { vColor = vec4(col * a * fogF, 0.0); }',
+    '  else if (kind < 2.5) { vColor = vec4(col, a); }',   // soft kinds: lit + fogged per fragment
     '  else { col = mix(uFogColor, col, fogF); vColor = vec4(col * a, a); }',
     '  if (a < 0.002) { hide(); return; }',
+    // A camera-facing sprite has one depth (its centre). A puff born under a tyre is centred inside the car, so the
+    // body used to cut it off with a hard edge (smoke "behind" the car). Pull the soft sprites' depth toward the eye by
+    // about their radius (screen position unchanged): the near half of a puff now draws over the bodywork it envelops.
+    '  if (kind < 2.5) { float pull = min(min(size * 0.42, 1.8), dist - 0.3); if (pull > 0.0) clip = uProj * vec4(vp.xyz * ((dist - pull) / dist), 1.0); }',
     '  gl_Position = clip; gl_PointSize = max(px, 1.0);',
     '  vKind = kind; vSeed = aParams.w; vAge = age;',
     '  vGround = vec4(p.y, 0.5 * max(px, 1.0) * dist / max(pxScale, 1e-4), uView[1][0], uView[1][1]);',
@@ -452,16 +487,19 @@
 
   var PARTICLE_FS = HEADER_FS + [
     'varying vec4 vColor; varying vec2 vDir; varying float vHalf; varying float vRad; varying float vKind; varying float vSeed; varying float vAge;',
-    'varying vec4 vGround;',
+    'varying vec4 vGround; varying float vFog;',
+    'uniform vec3 uSunV; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogColor;',
     'void main(){',
     '  vec2 c = gl_PointCoord * 2.0 - 1.0;',
     '  float m;',
-    '  if ((vKind > 2.5 && vKind < 3.5) || (vKind > 4.5 && vKind < 5.5)) {',
+    '  if ((vKind > 2.5 && vKind < 3.5) || vKind > 4.5) {',
     '    float t = clamp(dot(c, vDir), -vHalf, vHalf);',
     '    float r = length(c - vDir * t) / max(vRad, 0.001);',
     '    if (r > 1.0) discard;',
     '    float along = vHalf > 0.0 ? (dot(c, vDir) / vHalf) * 0.5 + 0.5 : 1.0;',
     '    m = (1.0 - r * r) * mix(0.35, 1.0, clamp(along, 0.0, 1.0));',
+    // flames / glows: soft gaussian-ish body, hottest at the head, flickering tongue toward the tail
+    '    if (vKind > 5.5) { float fl = 0.8 + 0.2 * sin(along * 9.0 + vAge * 70.0 + vSeed * 40.0); m = pow(1.0 - r * r, 1.6) * mix(0.25, 1.0, smoothstep(0.0, 0.85, clamp(along, 0.0, 1.0))) * fl; }',
     '  } else {',
     '    float r2 = dot(c, c);',
     '    if (r2 > 1.0) discard;',
@@ -471,8 +509,8 @@
     '      float ca = cos(ang), sa = sin(ang);',
     '      vec2 q = vec2(ca * c.x - sa * c.y, sa * c.x + ca * c.y);',
     '      float lump = 0.62 + 0.2 * sin(q.x * 3.7 + vSeed * 17.0) * sin(q.y * 4.3 - vSeed * 9.0) + 0.18 * sin((q.x + q.y) * 6.1 + vSeed * 31.0);',
-    '      m = pow(1.0 - r2, 1.6) * lump;',
-    '      if (vKind > 5.5) m = pow(1.0 - r2, 2.2);',
+    // cauliflower edge: the lump noise erodes the rim harder than the core, so puffs never read as clean discs
+    '      float e = 1.0 - r2; m = clamp(e * 1.3 - (1.0 - lump) * 0.75, 0.0, 1.0); m = m * m * (3.0 - 2.0 * m) * (0.6 + 0.4 * lump);',
     '    }',
     '  }',
     '  if (vKind < 2.5) {',
@@ -480,11 +518,23 @@
     // every puff with a hard horizontal edge where it crosses y = 0 (stacked puffs read as horizontal banding).
     // Fade each fragment by its height on the billboard plane instead, so puffs meet the road softly.
     '    float fy = vGround.x + (c.x * vGround.z - c.y * vGround.w) * vGround.y;',
+    // seen from above (heli / TV), the billboard's vertical axis maps to depth, not height: the height estimate is
+    // wrong there and the fade cut every puff along one screen-horizontal line (stacked into stripes). Blend it out.
+    '    float gw = clamp(vGround.w * vGround.w * 1.6 - 0.25, 0.0, 1.0);',
+    '    fy = mix(max(vGround.x, vGround.y * 0.6), fy, gw);',
     '    m *= smoothstep(0.0, clamp(vGround.y * 0.45, 0.12, 1.4), fy);',
     // self-shadowing in world height (darker at the road, lighter up top) instead of per-sprite top->bottom:
     // a per-sprite gradient repeats on every stacked puff and reads as horizontal stripes through the cloud
-    '    float sh = mix(0.74, 1.05, smoothstep(-0.2, 2.6, fy)) * (1.0 - 0.06 * c.y);',
-    '    vec4 o = vec4(vColor.rgb * (m * sh), vColor.a * m);',
+    '    float sh = mix(0.78, 1.04, smoothstep(-0.2, 2.6, fy));',
+    // volume lighting: a lumpy sphere normal per fragment against the sun (view space). The lit side catches the sun,
+    // the far side sits in sky ambient; looking toward the sun, thin rims glow (forward scattering).
+    '    vec3 n = normalize(vec3(c.x, -c.y, sqrt(max(1.0 - dot(c, c), 0.0)) + 0.35));',
+    '    n = normalize(n + vec3(sin(c.y * 5.0 + vSeed * 23.0), sin(c.x * 4.0 - vSeed * 11.0), 0.0) * 0.18);',
+    '    float lam = clamp(dot(n, uSunV) * 0.7 + 0.35, 0.0, 1.0);',
+    '    float rim = (1.0 - m) * max(-uSunV.z, 0.0);',
+    '    vec3 lit = vColor.rgb * (uAmbCol + uSunCol * (lam * (0.55 + 0.45 * sh) + rim * 0.6)) * sh;',
+    '    lit = mix(uFogColor, lit, vFog);',
+    '    vec4 o = vec4(lit * (vColor.a * m), vColor.a * m);',
     // ordered-noise dither (+-0.5 LSB) breaks up 8-bit quantisation steps in large, thin, overlapping sprites
     '    float dn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5;',
     '    o += vec4(dn / 255.0) * step(0.004, o.a);',
@@ -496,33 +546,44 @@
 
   var SKID_VS = [
     'precision highp float;',
-    'attribute vec3 aPos; attribute vec4 aData; attribute float aSeq;',
+    'attribute vec3 aPos; attribute vec4 aData; attribute float aSeq; attribute vec2 aAcross;',
     'uniform mat4 uView; uniform mat4 uProj; uniform float uTime; uniform float uFade; uniform float uHeadSeq; uniform float uCap;',
-    'uniform float uFogDensity; uniform float uWetMul;',
-    'varying vec2 vUV; varying float vAlpha;',
+    'uniform float uFogDensity; uniform float uWetMul; uniform vec2 uViewport;',
+    'varying vec2 vUV; varying float vAlpha; varying float vLight;',
     'void main(){',
     '  float age = uTime - aData.w;',
-    '  float fade = 1.0 - smoothstep(uFade * 0.3, uFade, age);',
+    '  vLight = step(1.5, aData.z); float inten = aData.z - 2.0 * vLight;',
+    // fresh rubber is darkest, then weathers to a lighter grey trace before it fades out
+    '  float fade = (1.0 - smoothstep(uFade * 0.3, uFade, age)) * mix(1.0, 0.72, smoothstep(0.0, 12.0, age));',
     '  float ring = smoothstep(0.0, uCap * 0.12, uCap - (uHeadSeq - aSeq));',
-    '  vec4 vp = uView * vec4(aPos, 1.0);',
+    // a mark seen far away or at a grazing angle would shrink below a pixel and shimmer / vanish (tyre marks were
+    // invisible from the heli and TV cameras): widen it to >= ~1.6 px around its centreline and thin its alpha to match
+    '  vec3 across = vec3(aAcross.x, 0.0, aAcross.y);',
+    '  vec3 ctr = aPos + across * 0.5;',
+    '  vec4 c0 = uProj * (uView * vec4(ctr, 1.0)); vec4 c1 = uProj * (uView * vec4(aPos, 1.0));',
+    '  float wpx = (c0.w > 0.05 && c1.w > 0.05) ? length((c1.xy / c1.w - c0.xy / c0.w) * 0.5 * uViewport) * 2.0 : 1e3;',
+    '  float grow = clamp(1.6 / max(wpx, 1e-3), 1.0, 3.0);',
+    '  vec3 pos = ctr - across * 0.5 * grow;',
+    '  vec4 vp = uView * vec4(pos, 1.0);',
     '  float fogF = exp(-pow(uFogDensity * -vp.z, 2.0));',
-    '  vAlpha = aData.z * fade * ring * fogF * uWetMul;',
+    '  vAlpha = inten * fade * ring * fogF * uWetMul / mix(1.0, grow, 0.75);',
     '  vUV = aData.xy;',
     '  gl_Position = uProj * vp;',
     '}'
   ].join('\n');
 
   var SKID_FS = HEADER_FS + [
-    'varying vec2 vUV; varying float vAlpha;',
+    'varying vec2 vUV; varying float vAlpha; varying float vLight;',
     'float h11(float p){ p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }',
     'void main(){',
     '  if (vAlpha < 0.004) discard;',
     '  float v = vUV.y;',
-    '  float edge = smoothstep(0.0, 0.18, v) * smoothstep(1.0, 0.82, v);',
-    '  float groove = 0.72 + 0.28 * smoothstep(0.35, 0.5, abs(fract(v * 4.0) - 0.5) * 2.0);',
-    '  float streak = 0.75 + 0.25 * h11(floor(v * 14.0) + floor(vUV.x * 0.7) * 7.0);',
-    '  float a = vAlpha * edge * groove * streak * 0.62;',
-    '  gl_FragColor = vec4(vec3(0.018, 0.017, 0.016) * a, a);',
+    '  float edge = smoothstep(0.0, 0.1, v) * smoothstep(1.0, 0.9, v);',
+    '  float groove = 0.8 + 0.2 * smoothstep(0.35, 0.5, abs(fract(v * 4.0) - 0.5) * 2.0);',
+    '  float streak = 0.78 + 0.22 * h11(floor(v * 14.0) + floor(vUV.x * 0.7) * 7.0);',
+    '  float a = vAlpha * edge * groove * streak * 0.8;',
+    '  a *= mix(1.0, 0.55, vLight);',
+    '  gl_FragColor = vec4(mix(vec3(0.012, 0.011, 0.010), vec3(0.86, 0.9, 0.95), vLight) * a, a);',
     '}'
   ].join('\n');
 
@@ -734,6 +795,7 @@
     var rng = mulberry32(num(opts.seed, 1337));
     var now = 0;
     var autoEmit = opts.autoEmit !== false;
+    var autoFlames = opts.autoFlames !== false;
     var linearOut = !!opts.linearOutput;
     var lighting = getLighting(opts.timeOfDay, opts.weather);
     var curTod = lighting.timeOfDay, curWeather = lighting.weather;
@@ -837,7 +899,9 @@
     function softKeep() {
       if (softAlive <= caps.softBudget) { softBoost = 1; return true; }
       var r = caps.softBudget / softAlive, keep = r * r * r; // steep: steady state stays close to the budget
-      softBoost = Math.min(1.6, 1 / Math.sqrt(r));
+      // survivors grow a little to keep the cloud's look, but only a little: with many sources (an F1 grid launch)
+      // a large boost turned the thinned field into one opaque fog wall
+      softBoost = Math.min(1.2, 1 / Math.sqrt(Math.sqrt(r)));
       return rng() < keep;
     }
 
@@ -849,21 +913,25 @@
 
     function vec(p) { return [num(p && p[0], 0), num(p && p[1], 0), num(p && p[2], 0)]; }
 
-    /** Tire smoke (wheelspin / lockup / drift). pos & vel in GL world; intensity 0..1. */
-    function emitSmoke(pos, vel, intensity, count) {
+    /** Tire smoke (wheelspin / lockup / drift). pos & vel in GL world; intensity 0..1.
+        o (optional): { color: [r,g,b] 0..1 albedo (dark engine smoke, coloured smoke), alpha: opacity multiplier,
+        size: size multiplier, life: lifetime multiplier }. The colour is still lit by sun + sky like tyre smoke. */
+    function emitSmoke(pos, vel, intensity, count, o) {
       var p = vec(pos), v = vec(vel), it = clamp01(num(intensity, 0.6));
       var n = count != null ? count : 1;
+      var oc = o && o.color, oa = num(o && o.alpha, 1), os = num(o && o.size, 1), ol = num(o && o.life, 1);
       for (var i = 0; i < n; i++) {
         if (!softKeep()) continue;
         if (!budgetOk()) return;
         // thick, lingering drift smoke: small dense puff at the tyre that billows to a 4-8 m cloud over 3-5 s,
         // sheds the car's velocity quickly (drag), then rises slowly and drifts with the wind (VS turbulence)
-        var shade = 0.8 + rng() * 0.13, sb = softBoost, warm = rng() * 0.03;
+        var shade = 0.8 + rng() * 0.13, sb = softBoost, warm = rng() * 0.03, jv = 0.9 + rng() * 0.2;
+        var cr = oc ? num(oc[0], 0.5) * jv : shade + warm, cg = oc ? num(oc[1], 0.5) * jv : shade, cb = oc ? num(oc[2], 0.5) * jv : shade * 1.02 - warm;
         emitRaw([p[0] + rs(0.35), p[1] + 0.1 + rng() * 0.18, p[2] + rs(0.35)],
           [v[0] * 0.3 + rs(1.2), 0.35 + rng() * 0.9, v[2] * 0.3 + rs(1.2)],
-          2.2 + rng() * 1.3 + it * 1.8, (0.5 + rng() * 0.3) * sb, (3.4 + it * 3.4 + rng() * 1.2) * sb,
+          (2.2 + rng() * 1.3 + it * 1.8) * ol, (0.5 + rng() * 0.3) * sb * os, (3.4 + it * 3.4 + rng() * 1.2) * sb * os,
           1.05 + rng() * 0.5, -0.4 - rng() * 0.3, KIND.smoke,
-          shade + warm, shade, shade * 1.02 - warm, Math.min(0.85, (0.26 + it * 0.4) * (0.8 + rng() * 0.4) * Math.sqrt(sb)));
+          cr, cg, cb, Math.min(0.9, (0.26 + it * 0.4) * (0.8 + rng() * 0.4) * Math.sqrt(sb) * oa));
       }
     }
     /** Sparks burst (collisions, wall scrapes, bottoming). */
@@ -907,8 +975,8 @@
       if (softKeep() && budgetOk()) {
         emitRaw([p[0] + rs(0.25), p[1] + 0.2 + rng() * 0.25, p[2] + rs(0.25)],
           [v[0] * 0.55 + rs(1.6), 0.8 + rng() * 1.4, v[2] * 0.55 + rs(1.6)],
-          0.8 + rng() * 0.8, 0.45, 2.4 + it * 2.6, 1.8, 0.4, KIND.mist,
-          0.82, 0.85, 0.9, (0.1 + it * 0.16) * wetness);
+          0.9 + rng() * 0.9, 0.5, 2.8 + it * 3.2, 1.6, 0.3, KIND.mist,
+          0.9, 0.93, 0.97, (0.14 + it * 0.24) * wetness);
       }
       if (rng() < 0.7 && budgetOk()) {
         emitRaw([p[0] + rs(0.2), p[1] + 0.1, p[2] + rs(0.2)],
@@ -916,14 +984,37 @@
           0.35 + rng() * 0.35, 0.02, 0.02, 0.5, 9.8, KIND.droplet, 0.85, 0.9, 1.0, 0.35 * wetness);
       }
     }
-    /** Exhaust backfire flame pop. dir = car forward (GL). */
-    function emitFlame(pos, dir, count) {
-      var p = vec(pos), d = vec(dir), n = count || 3;
+    /** Exhaust backfire flame pop. dir = car forward (GL); vel = car velocity (optional, so the flame stays on the pipe).
+        A pop is a short velocity-stretched tongue of fire (white-yellow core cooling to orange) plus a round flash at
+        the tip and, sometimes, a wisp of dark smoke. */
+    function emitFlame(pos, dir, count, vel) {
+      var p = vec(pos), d = norm3(vec(dir)), cv = vec(vel), n = count || 3;
+      if (!(Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) > 0)) d = [1, 0, 0];
       for (var i = 0; i < n; i++) {
         if (!budgetOk()) return;
-        var s = 2 + rng() * 4;
-        emitRaw([p[0] + rs(0.04), p[1] + rs(0.04), p[2] + rs(0.04)], [-d[0] * s + rs(0.5), 0.3 + rs(0.3), -d[2] * s + rs(0.5)],
-          0.08 + rng() * 0.1, 0.12 + rng() * 0.08, 0.32 + rng() * 0.2, 3, -1, KIND.flame, 1, 0.75, 0.45, 0.9);
+        var s = 7 + rng() * 9;
+        emitRaw([p[0] - d[0] * 0.05 + rs(0.03), p[1] + rs(0.03), p[2] - d[2] * 0.05 + rs(0.03)],
+          [cv[0] - d[0] * s + rs(0.9), cv[1] - d[1] * s + 0.4 + rs(0.5), cv[2] - d[2] * s + rs(0.9)],
+          0.06 + rng() * 0.07, 0.11 + rng() * 0.06, 0.2 + rng() * 0.12, 6, -1.5, KIND.flame, 1, 0.85, 0.6, 0.95);
+      }
+      if (budgetOk()) emitRaw([p[0] - d[0] * 0.08, p[1], p[2] - d[2] * 0.08], [cv[0] - d[0] * 1.5, cv[1] + 0.2, cv[2] - d[2] * 1.5],
+        0.09, 0.3, 0.55, 4, 0, KIND.flame, 1, 0.9, 0.7, 0.9);
+      if (rng() < 0.45 && softKeep() && budgetOk()) emitRaw([p[0] - d[0] * 0.3, p[1] + 0.05, p[2] - d[2] * 0.3], [cv[0] * 0.6 - d[0] * 2, 0.5, cv[2] * 0.6 - d[2] * 2],
+        0.7 + rng() * 0.5, 0.2, 0.9, 2.2, -0.3, KIND.smoke, 0.3, 0.29, 0.28, 0.18);
+    }
+    /** Tinted additive streaks (nitro / boost flames, coloured sparks, pickup bursts): white-hot core cooling to rgb.
+        o: { count, speed, spread, life, size, gravity, drag, vel, dir } (dir = mean emission direction). */
+    function emitGlow(pos, rgb, o) {
+      o = o || {};
+      var p = vec(pos), c = rgb || [1, 0.5, 0.1], n = Math.max(1, Math.round(num(o.count, 8))), sp = num(o.speed, 4), spread = num(o.spread, 1);
+      var cv = vec(o.vel), d = o.dir ? vec(o.dir) : null, life = num(o.life, 0.4), size = num(o.size, 0.06);
+      for (var i = 0; i < n; i++) {
+        if (!budgetOk()) return;
+        var v = sp * (0.45 + rng() * 0.8), dx, dy, dz;
+        if (d) { dx = d[0] * v + rs(sp * spread * 0.5); dy = d[1] * v + rs(sp * spread * 0.5); dz = d[2] * v + rs(sp * spread * 0.5); }
+        else { var th = rng() * Math.PI * 2, up = rng(); dx = Math.cos(th) * v * (1 - up * 0.6); dy = up * v; dz = Math.sin(th) * v * (1 - up * 0.6); }
+        emitRaw([p[0] + rs(0.05), p[1] + rs(0.05), p[2] + rs(0.05)], [cv[0] + dx, cv[1] + dy, cv[2] + dz],
+          life * (0.6 + rng() * 0.6), size, size * num(o.grow, 1), num(o.drag, 0.6), num(o.gravity, 6), KIND.glow, c[0], c[1], c[2], 1);
       }
     }
     function emitSplash(pos) {
@@ -933,11 +1024,14 @@
         emitRaw([p[0], 0.02, p[2]], [rs(1.2), 1.2 + rng() * 1.2, rs(1.2)], 0.18 + rng() * 0.12, 0.012, 0.012, 0.5, 9.8, KIND.droplet, 0.8, 0.85, 0.95, 0.45);
       }
     }
-    /** Add a skid ribbon point for (carId, wheelIdx) at GL position pos. */
-    function addSkid(carId, wheelIdx, pos, intensity, width) {
+    /** Add a skid ribbon point for (carId, wheelIdx) at GL position pos. o (optional): { light: true } lays a pale
+        scuff (ice / snow / dusty concrete) instead of black rubber. */
+    function addSkid(carId, wheelIdx, pos, intensity, width, o) {
       var key = String(carId) + ':' + (wheelIdx | 0), it = clamp01(num(intensity, 0.8));
       if (!pos) { skids.end(key); return; }
-      skids.add(key, vec(pos), it, now, width || carTyreW[carId] || 0.24);
+      var tw = carTyreW[carId];
+      // light marks are flagged in the intensity channel (+2): the skid shader decodes it and picks the pale colour
+      skids.add(key, vec(pos), it + (o && o.light ? 2 : 0), now, width || (tw ? tw[(wheelIdx | 0) < 2 ? 0 : 1] : 0.22));
       if (it <= 0) skids.end(key); // intensity 0 = lift-off: write a fading tail segment, then break the ribbon
     }
 
@@ -945,10 +1039,11 @@
        switches the matching built-in auto-emitter off, so nothing is ever emitted twice. */
     var ext = { skid: false, smoke: false, dust: false, sparks: false };
     var carTyreW = {};
-    function pubSmoke(pos, vel, intensity, count) { ext.smoke = true; emitSmoke(pos, vel, intensity, count); }
+    var crowd = 1;
+    function pubSmoke(pos, vel, intensity, count, o) { ext.smoke = true; emitSmoke(pos, vel, intensity, count, o); }
     function pubSparks(pos, vel, n) { ext.sparks = true; emitSparks(pos, vel, n); }
     function pubDust(pos, vel, surface, intensity) { ext.dust = true; emitDust(pos, vel, surface, intensity); }
-    function pubSkid(carId, wheelIdx, pos, intensity, width) { ext.skid = true; addSkid(carId, wheelIdx, pos, intensity, width); }
+    function pubSkid(carId, wheelIdx, pos, intensity, width, o) { ext.skid = true; addSkid(carId, wheelIdx, pos, intensity, width, o); }
 
     /* ------------------------------------------------------ auto emission */
     var carState = {};
@@ -964,83 +1059,101 @@
       wetness = lighting.wetness;
     }
 
-    function processCar(car, dt) {
+    /* optional renderer hook: fn(car) -> { x, y, heading, elev, wheelbase, track, exhaust: [[x,y,z] GL], back: [x,y,z] }
+       (interpolated pose as drawn, road height, model wheel layout + exhaust tips). Without it, the snapshot is used. */
+    var carResolver = null;
+    function resolve(car) {
+      if (!carResolver || !car) return null;
+      try { return carResolver(car) || null; } catch (e) { return null; }
+    }
+    function isEV(car) { var e = car.build && car.build.engine; return !!(e && (e.type === 'ev' || e.type === 'electric')); }
+
+    function processCar(car, dt, flamesOnly) {
       if (!car || car.dnf && num(car.speed, 0) < 0.5) return;
       var id = car.id != null ? car.id : 'car';
-      var st = carState[id] || (carState[id] = { acc: [0, 0, 0, 0], dustAcc: 0, sprayAcc: 0, sparkAcc: 0, thr: 0, popT: 0 });
+      var st = carState[id] || (carState[id] = { acc: [0, 0, 0, 0], dustAcc: 0, sprayAcc: 0, sparkAcc: 0, thr: 0, popT: 0, rpm: 0, gear: 0 });
       st.seen = now;
-      var fr = carFrame(car);
+      var rv = resolve(car);
+      var fr = carFrame(car, rv);
       var dist = 0;
       if (camInfo) {
         var dx = fr.center[0] - camInfo.pos[0], dz = fr.center[2] - camInfo.pos[2];
         dist = Math.sqrt(dx * dx + dz * dz);
       }
-      var surface = car.surface || 'asphalt';
-      var onRoad = surface === 'asphalt' || surface === 'kerb' || surface === 'wall' || surface === 'pit' || surface === 'road';
-      var slip = wheelSlip(car);
-      var tyreW = 0.24;
-      var tw = car.build && car.build.tires && num(car.build.tires.width_mm, 0);
-      if (tw > 0) tyreW = clamp(tw / 1000, 0.17, 0.36);
-      carTyreW[id] = tyreW;
-      // skid marks (always, regardless of camera distance: they persist)
-      for (var w = 0; w < 4 && !ext.skid; w++) {
-        var si = slip[w];
-        if (onRoad && si > 0.18 && fr.speed > 1.0) {
-          addSkid(id, w, fr.wheels[w], clamp01((si - 0.1) * 1.25) * (1 - wetness * 0.6), tyreW);
-        } else if (skids.wheels[id + ':' + w]) skids.end(id + ':' + w);
-      }
-      if (dist > caps.emitRadius) { st.thr = num(car.throttle, 0); return; }
-      var lod = (dist < 60 ? 1 : dist < 140 ? 0.5 : 0.25) * caps.emitScale;
-      // tyre smoke (dry-ish road)
-      if (onRoad && wetness < 0.8 && !ext.smoke) {
-        for (var k = 0; k < 4; k++) {
-          var sv = slip[k];
-          if (sv > 0.32) {
-            st.acc[k] += dt * 42 * Math.pow(sv, 1.5) * lod * (1 - wetness);
-            while (st.acc[k] >= 1) { st.acc[k] -= 1; emitSmoke(fr.wheels[k], fr.vel, sv, 1); }
-          } else st.acc[k] = 0;
+      var gy = fr.ground;
+      if (!flamesOnly) {
+        var surface = car.surface || 'asphalt';
+        var onRoad = surface === 'asphalt' || surface === 'kerb' || surface === 'wall' || surface === 'pit' || surface === 'road';
+        var slip = wheelSlip(car);
+        var tw = carTyreW[id] || tyreWidths(car);
+        // skid marks (always, regardless of camera distance: they persist)
+        for (var w = 0; w < 4 && !ext.skid; w++) {
+          var si = slip[w];
+          if (onRoad && si > 0.18 && fr.speed > 1.0) {
+            addSkid(id, w, fr.wheels[w], clamp01((si - 0.1) * 1.25) * (1 - wetness * 0.6), tw[w < 2 ? 0 : 1]);
+          } else if (skids.wheels[id + ':' + w]) skids.end(id + ':' + w);
         }
-      }
-      // off-road dust & debris
-      if (!onRoad && fr.speed > 2 && !ext.dust) {
-        var di = clamp01(fr.speed / 30);
-        st.dustAcc += dt * 34 * di * lod;
-        while (st.dustAcc >= 1) { st.dustAcc -= 1; emitDust(fr.wheels[2 + (rng() < 0.5 ? 0 : 1)], fr.vel, surface, di); if (rng() < 0.35) emitDust(fr.wheels[rng() < 0.5 ? 0 : 1], fr.vel, surface, di * 0.7); }
-      } else st.dustAcc = 0;
-      // wet spray
-      if (wetness > 0.2 && fr.speed > 6) {
-        var spi = clamp01((fr.speed - 6) / 42) * wetness;
-        st.sprayAcc += dt * 46 * spi * lod;
-        while (st.sprayAcc >= 1) {
-          st.sprayAcc -= 1;
-          var wi = rng() < 0.78 ? 2 + (rng() < 0.5 ? 0 : 1) : (rng() < 0.5 ? 0 : 1);
-          var wp = fr.wheels[wi];
-          emitSpray([wp[0] - fr.fwd[0] * 0.35, 0, wp[2] - fr.fwd[2] * 0.35], fr.vel, spi);
+        if (dist > caps.emitRadius) { st.thr = num(car.throttle, 0); st.rpm = num(car.rpm, 0); return; }
+        // crowd factor: a full grid spinning up at the start must not fill the screen with one smoke wall
+        var lod = (dist < 60 ? 1 : dist < 140 ? 0.5 : 0.25) * caps.emitScale * crowd;
+        // tyre smoke (dry-ish road)
+        if (onRoad && wetness < 0.8 && !ext.smoke) {
+          for (var k = 0; k < 4; k++) {
+            var sv = slip[k];
+            if (sv > 0.32) {
+              st.acc[k] += dt * 42 * Math.pow(sv, 1.5) * lod * (1 - wetness);
+              while (st.acc[k] >= 1) { st.acc[k] -= 1; emitSmoke(fr.wheels[k], fr.vel, sv, 1); }
+            } else st.acc[k] = 0;
+          }
         }
-      } else st.sprayAcc = 0;
-      // bottoming / kerb-strike sparks for low cars
-      var rh = car.build && car.build.suspension && num(car.build.suspension.rideHeight_mm, 120);
-      if (surface === 'kerb' && fr.speed > 20 && rh != null && rh <= 85) {
-        st.sparkAcc += dt * 5 * (1 + (85 - rh) / 30);
-        while (st.sparkAcc >= 1) {
-          st.sparkAcc -= 1;
-          emitSparks([fr.center[0] + rs(0.6), 0.05, fr.center[2] + rs(0.6)], fr.vel, 6);
+        // off-road dust & debris
+        if (!onRoad && fr.speed > 2 && !ext.dust) {
+          var di = clamp01(fr.speed / 30);
+          st.dustAcc += dt * 34 * di * lod;
+          while (st.dustAcc >= 1) { st.dustAcc -= 1; emitDust(fr.wheels[2 + (rng() < 0.5 ? 0 : 1)], fr.vel, surface, di); if (rng() < 0.35) emitDust(fr.wheels[rng() < 0.5 ? 0 : 1], fr.vel, surface, di * 0.7); }
+        } else st.dustAcc = 0;
+        // wet spray
+        if (wetness > 0.2 && fr.speed > 6) {
+          var spi = clamp01((fr.speed - 6) / 42) * wetness;
+          st.sprayAcc += dt * 46 * spi * lod;
+          while (st.sprayAcc >= 1) {
+            st.sprayAcc -= 1;
+            var wi = rng() < 0.78 ? 2 + (rng() < 0.5 ? 0 : 1) : (rng() < 0.5 ? 0 : 1);
+            var wp = fr.wheels[wi];
+            emitSpray([wp[0] - fr.fwd[0] * 0.35, gy, wp[2] - fr.fwd[2] * 0.35], fr.vel, spi);
+          }
+        } else st.sprayAcc = 0;
+        // bottoming / kerb-strike sparks for low cars
+        var rh = car.build && car.build.suspension && num(car.build.suspension.rideHeight_mm, 120);
+        if (surface === 'kerb' && fr.speed > 20 && rh != null && rh <= 85) {
+          st.sparkAcc += dt * 5 * (1 + (85 - rh) / 30);
+          while (st.sparkAcc >= 1) {
+            st.sparkAcc -= 1;
+            emitSparks([fr.center[0] + rs(0.6), gy + 0.05, fr.center[2] + rs(0.6)], fr.vel, 6);
+          }
         }
-      }
-      // exhaust backfire on sharp lift at high rpm
-      var thr = num(car.throttle, 0), rpmFrac = num(car.rpm, 0) / Math.max(1, num(car.redline, 7000));
-      if (dist < 80 && st.thr > 0.85 && thr < 0.25 && rpmFrac > 0.72 && now - st.popT > 0.35) {
+      } else if (dist > caps.emitRadius) { st.thr = num(car.throttle, 0); st.rpm = num(car.rpm, 0); return; }
+      // exhaust backfire: sharp lift at high rpm, or the ignition cut of a full-throttle upshift (combustion cars only)
+      var thr = num(car.throttle, 0), rpm = num(car.rpm, 0), rpmFrac = rpm / Math.max(1, num(car.redline, 7000));
+      var gear = num(car.gear, 0);
+      var lift = st.thr > 0.85 && thr < 0.25 && rpmFrac > 0.72;
+      var shift = gear > st.gear && st.gear >= 1 && thr > 0.7 && st.rpm / Math.max(1, num(car.redline, 7000)) > 0.8 && fr.speed > 8;
+      if (dist < 90 && (lift || shift) && now - st.popT > 0.3 && !isEV(car)) {
         st.popT = now;
-        var ex = [fr.center[0] - fr.fwd[0] * (fr.halfLength - 0.05) + fr.right[0] * 0.35, 0.33, fr.center[2] - fr.fwd[2] * (fr.halfLength - 0.05) + fr.right[2] * 0.35];
-        emitFlame(ex, fr.fwd, 3 + Math.floor(rng() * 3));
+        var tips = rv && rv.exhaust && rv.exhaust.length ? rv.exhaust : null;
+        var bk = rv && rv.back ? norm3(rv.back) : [-fr.fwd[0], 0, -fr.fwd[2]];
+        var fd = [-bk[0], -bk[1], -bk[2]];
+        if (!tips) tips = [[fr.center[0] - fr.fwd[0] * (fr.halfLength - 0.05) + fr.right[0] * 0.35, gy + 0.33, fr.center[2] - fr.fwd[2] * (fr.halfLength - 0.05) + fr.right[2] * 0.35]];
+        var per = shift ? 2 : 3;
+        for (var t = 0; t < tips.length && t < 4; t++) if (tips[t]) emitFlame(tips[t], fd, per + Math.floor(rng() * 2), fr.vel);
       }
-      st.thr = thr;
+      st.thr = thr; st.rpm = rpm; st.gear = gear;
     }
 
-    function carVelById(snap, id) {
+    function carById(snap, id) {
       var cars = snap.cars || [];
-      for (var i = 0; i < cars.length; i++) if (cars[i] && cars[i].id === id) return carFrame(cars[i]).vel;
-      return [0, 0, 0];
+      for (var i = 0; i < cars.length; i++) if (cars[i] && cars[i].id === id) return cars[i];
+      return null;
     }
 
     function processEvents(snap) {
@@ -1050,10 +1163,11 @@
         if (!e || (e.type !== 'collision' && e.type !== 'wall')) continue;
         if (typeof e.x !== 'number' || typeof e.y !== 'number') continue;
         var it = clamp01(num(e.intensity, 0.5));
-        var p = [e.x, 0.35 + rng() * 0.2, -e.y], v = carVelById(snap, e.carId);
+        var ec = carById(snap, e.carId), rv = ec ? resolve(ec) : null, gy = num(rv && rv.elev, num(ec && ec.elev, 0));
+        var p = [e.x, gy + 0.35 + rng() * 0.2, -e.y], v = ec ? carFrame(ec, rv).vel : [0, 0, 0];
         if (e.type === 'wall') {
           emitSparks(p, v, 14 + 70 * it);
-          for (var d = 0; d < 3 + it * 6; d++) emitDust([p[0], 0.3, p[2]], [v[0] * 0.3, 0, v[2] * 0.3], 'gravel', 0.4 + it * 0.4);
+          for (var d = 0; d < 3 + it * 6; d++) emitDust([p[0], gy + 0.3, p[2]], [v[0] * 0.3, 0, v[2] * 0.3], 'gravel', 0.4 + it * 0.4);
         } else {
           emitSparks(p, v, 8 + 45 * it);
           if (it > 0.4) emitSmoke(p, v, it * 0.6, 2);
@@ -1079,10 +1193,17 @@
       }
       if (snap) {
         if (!explicitEnv) setEnvironment(snap.timeOfDay || curTod, snap.weather || curWeather);
+        var cars = snap.cars || [];
+        for (var c0 = 0; c0 < cars.length; c0++) if (cars[c0] && !carTyreW[cars[c0].id != null ? cars[c0].id : 'car']) carTyreW[cars[c0].id != null ? cars[c0].id : 'car'] = tyreWidths(cars[c0]);
+        // more than ~8 smoking cars on screen: each one emits proportionally less (the budget alone thinned at random
+        // and the survivors stacked into a uniform fog bank)
+        crowd = cars.length > 8 ? Math.max(0.3, Math.sqrt(8 / cars.length)) : 1;
         if (autoEmit) {
-          var cars = snap.cars || [];
           for (var i = 0; i < cars.length; i++) processCar(cars[i], dt);
           if (snap !== lastSnap && !ext.sparks) processEvents(snap);
+        } else if (autoFlames) {
+          // manual emission (drift renderer path) still gets the exhaust backfire pops
+          for (var i2 = 0; i2 < cars.length; i2++) processCar(cars[i2], dt, true);
         }
         lastSnap = snap;
       }
@@ -1178,10 +1299,13 @@
       gl.uniform1f(u(p, 'uCap'), skids.cap);
       gl.uniform1f(u(p, 'uFogDensity'), lighting.fogDensity);
       gl.uniform1f(u(p, 'uWetMul'), 1 - wetness * 0.35);
+      var svs = viewportSize(ci);
+      gl.uniform2f(u(p, 'uViewport'), svs[0], svs[1]);
       gl.bindBuffer(gl.ARRAY_BUFFER, sBuf);
       attrib(p, 'aPos', 3, S_STRIDE, 0);
       attrib(p, 'aData', 4, S_STRIDE, 3);
       attrib(p, 'aSeq', 1, S_STRIDE, 7);
+      attrib(p, 'aAcross', 2, S_STRIDE, 8);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIdx);
       gl.enable(gl.DEPTH_TEST); gl.depthMask(false); gl.depthFunc(gl.LEQUAL);
       gl.disable(gl.CULL_FACE);
@@ -1205,6 +1329,10 @@
       gl.uniform2f(u(p, 'uViewport'), vs[0], vs[1]);
       gl.uniform1f(u(p, 'uMaxPoint'), Math.min(caps.maxPointPx * Math.max(1, vs[1] / 900), maxPointHW));
       gl.uniform3fv(u(p, 'uLight'), lighting.particleLight);
+      var v = ci.view, sd = lighting.sunDir, pl = lighting.particleSun;
+      gl.uniform3f(u(p, 'uSunV'), v[0] * sd[0] + v[4] * sd[1] + v[8] * sd[2], v[1] * sd[0] + v[5] * sd[1] + v[9] * sd[2], v[2] * sd[0] + v[6] * sd[1] + v[10] * sd[2]);
+      gl.uniform3fv(u(p, 'uSunCol'), pl.sun);
+      gl.uniform3fv(u(p, 'uAmbCol'), pl.amb);
       gl.uniform3fv(u(p, 'uFogColor'), lighting.fogColor);
       gl.uniform1f(u(p, 'uFogDensity'), lighting.fogDensity);
       gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
@@ -1364,7 +1492,9 @@
     }
 
     var api = {
-      emitSmoke: pubSmoke, emitSparks: pubSparks, emitDust: pubDust, emitSpray: emitSpray, emitFlame: emitFlame,
+      emitSmoke: pubSmoke, emitSparks: pubSparks, emitDust: pubDust, emitSpray: emitSpray, emitFlame: emitFlame, emitGlow: emitGlow,
+      setCarResolver: function (fn) { carResolver = typeof fn === 'function' ? fn : null; },
+      setAutoFlames: function (b) { autoFlames = !!b; },
       addSkid: pubSkid,
       update: update,
       draw: draw, render: draw, drawSkids: drawSkids, drawParticles: drawParticles, drawRain: drawRain, drawItems: drawItems,
@@ -1389,6 +1519,7 @@
       setAutoEmit: function (b) { autoEmit = !!b; },
       setLinearOutput: function (b) { linearOut = !!b; },
       clear: clear, stats: stats, destroy: destroy,
+      _debug: function () { return { pool: pool, skids: skids, caps: caps, carState: carState }; },
       get time() { return now; }
     };
     if (!skyProgram()) throw new Error('[CB.gl.effects] sky program failed');

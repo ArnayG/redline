@@ -1781,6 +1781,7 @@ CB.race.renderer3d = (function () {
         W.effects = safe('effects.create', function () {
           return M.effects.create(ctx, { quality: S.quality, maxParticles: S.Q.particles, weather: S.weather, timeOfDay: S.timeOfDay, geom: geom, trackDef: trackDef, seed: hashStr(geom.id || 'fx'), linearOutput: linearPipeline(S.Q.post), autoEmit: !S.manualFx });
         }, null);
+        if (W.effects && typeof W.effects.setCarResolver === 'function') W.effects.setCarResolver(fxCarInfo);
       }
       S.lit = mergedLighting();
       // shadows
@@ -2858,6 +2859,14 @@ CB.race.renderer3d = (function () {
     function wheelWorld(e, dims, wi, out) {
       var x = wi < 2 ? dims.wheelbase / 2 : -dims.wheelbase / 2, z = (wi % 2 === 0 ? -1 : 1) * dims.track / 2;
       return xformPoint(e.mat, x, 0.02, z, out);
+    }
+    /** pose-as-drawn for CB.gl.effects (interpolated pose, road height, model wheel layout, exhaust tips in GL world) */
+    function fxCarInfo(c) {
+      var e = S.cars[c.id];
+      if (!e || !e.pose) return null;
+      var d = carDims(e, c), m = e.models.high || e.models.low, ex = m && m.anchors && m.anchors.exhaust, tips = null;
+      if (ex && ex.length) { tips = []; for (var i = 0; i < ex.length && i < 4; i++) if (ex[i]) tips.push(xformPoint(e.mat, num(ex[i][0], 0), num(ex[i][1], 0.3), num(ex[i][2], 0))); }
+      return { x: e.pose.x, y: e.pose.y, heading: e.pose.heading, elev: e.elev, wheelbase: d.wheelbase, track: d.track, exhaust: tips, back: [-e.mat[0], -e.mat[1], -e.mat[2]] };
     }
     function processEffects(snap, dt, camPos, player) {
       var FX = S.world.effects;
