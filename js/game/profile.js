@@ -58,12 +58,12 @@ CB.game = CB.game || {};
     { id: 'shiftDown',  label: 'Shift down',        group: 'Gearbox' },
     { id: 'camera',     label: 'Cycle camera',      group: 'View' },
     { id: 'lookBack',   label: 'Look back',         group: 'View' },
+    { id: 'hud',        label: 'Toggle HUD',        group: 'View' },
     { id: 'pause',      label: 'Pause',             group: 'Session' },
     { id: 'reset',      label: 'Reset to track',    group: 'Session' },
     { id: 'pit',        label: 'Request pit stop',  group: 'Session' },
     { id: 'replay',     label: 'Instant replay',    group: 'Session' },
-    { id: 'photo',      label: 'Photo mode',        group: 'Session' },
-    { id: 'hud',        label: 'Toggle HUD',        group: 'View' }
+    { id: 'photo',      label: 'Photo mode',        group: 'Session' }
   ];
   var MAX_BINDINGS_PER_ACTION = 3;
 

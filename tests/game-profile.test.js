@@ -613,3 +613,10 @@ test('profile: Contacts stat matches the results screen (session tally / intensi
   // no tally and no events: the engine counter is all there is
   assert.equal(P.summarizeRace(engineResults({ collisions: 3 }), { trackId: 'monza' }).crashes, 3);
 });
+
+test('profile: control actions keep each group contiguous (Settings > Controls shows one VIEW heading)', function () {
+  var P = globalThis.CB.game.profile, acts = P.ACTIONS || (P._ && P._.ACTIONS);
+  if (!acts) return;
+  var seen = [], last = null;
+  acts.forEach(function (a) { if (a.group !== last) { assert.ok(seen.indexOf(a.group) < 0, 'group ' + a.group + ' split'); seen.push(a.group); last = a.group; } });
+});
