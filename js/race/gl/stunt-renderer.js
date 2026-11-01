@@ -33,8 +33,8 @@ CB.arcade.stunt = CB.arcade.stunt || {};
   /** per-theme lighting tweaks on top of the time-of-day preset (fog colour sRGB, density x, ambient x, sun/ambient tint) */
   var THEME_LIGHT = {
     pinball: { fog: [0.09, 0.03, 0.14], fogK: 1.1, amb: 1.5, tint: [1.05, 0.85, 1.2] },
-    lab: { fog: [0.80, 0.87, 0.92], fogK: 0.9, amb: 1.15, tint: [0.95, 1.0, 1.05] },
-    sky: { fog: [0.70, 0.84, 0.98], fogK: 0.55, amb: 1.1, exposure: 1.02 },
+    lab: { fog: [0.66, 0.74, 0.81], fogK: 0.9, amb: 1.1, tint: [0.95, 1.0, 1.05], exposure: 0.94 },
+    sky: { fog: [0.64, 0.77, 0.93], fogK: 0.55, amb: 1.05, exposure: 0.97 },
     bedroom: { fog: [0.62, 0.52, 0.44], fogK: 0.5, amb: 1.35, tint: [1.15, 0.98, 0.82] },
     rooftops: { fog: [0.42, 0.33, 0.40], fogK: 1.1, amb: 1.1 },
     glacier: { fog: [0.84, 0.91, 0.99], fogK: 0.9, amb: 1.2, tint: [0.94, 1.0, 1.08], exposure: 0.92 },
@@ -801,7 +801,7 @@ CB.arcade.stunt = CB.arcade.stunt || {};
       if (particles && PS.length) { try { particles.draw(cam, env, { viewportHeight: size.h }); } catch (e5) { /* optional */ } }
       if (usePost) {
         try {
-          post.end({ bloom: true, bloomStrength: track.theme === 'neon' || track.theme === 'pinball' ? 0.9 : track.theme === 'lab' || track.theme === 'rooftops' ? 0.7 : 0.6, threshold: env.linearOutput ? 1.1 : 0.82, vignette: 0.3,
+          post.end({ bloom: true, bloomStrength: track.theme === 'neon' || track.theme === 'pinball' ? 0.9 : track.theme === 'lab' || track.theme === 'rooftops' ? 0.58 : 0.55, threshold: env.linearOutput ? 1.1 : 0.82, vignette: 0.3,
             speedBlur: player.boosting ? 0.55 : clamp01((num(player.speed, 0) - 45) / 30) * 0.25, exposure: Lt.exposure, saturation: 1.12, contrast: 1.05, time: R.time });
         } catch (e6) { post = null; }
       }

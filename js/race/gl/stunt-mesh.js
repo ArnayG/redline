@@ -48,9 +48,9 @@ CB.gl = CB.gl || {};
     neon: { track: '#2a1856', rail: '#3a1f7a', under: '#0d0a1c', edge: '#ff2fd6', centre: '#30e3ff', chevron: '#30e3ff', pylon: '#1a1530', ground: ['#0c0b1d', '#121034'], glow: '#ff2fd6', sky: 'night', neon: true },
     volcano: { track: '#ff8a1f', rail: '#ffb02e', under: '#2a1d1a', edge: '#ffffff', centre: '#ffd23f', chevron: '#ffe14a', pylon: '#4a4648', ground: ['#2d201c', '#382621'], glow: '#ff5a1a', sky: 'dusk', neon: false },
     glacier: { track: '#30c8ff', rail: '#1ea8e0', under: '#2a3a4a', edge: '#ffffff', centre: '#ff3b8a', chevron: '#ffffff', pylon: '#dfe8f0', ground: ['#eef6ff', '#e2eefc'], glow: '#7ae0ff', sky: 'day', neon: false },
-    lab: { track: '#22c8a8', rail: '#e8eef2', under: '#7a8a9a', edge: '#ffffff', centre: '#ffd23f', chevron: '#7ffcff', pylon: '#cfd8e0', ground: ['#b9c3cc', '#aeb8c2'], glow: '#38f2ff', sky: 'day', neon: false },
+    lab: { track: '#1fb89b', rail: '#e8eef2', under: '#5a6878', edge: '#ffffff', centre: '#ffd23f', chevron: '#7ffcff', pylon: '#cfd8e0', ground: ['#6f7a86', '#66717d'], glow: '#38f2ff', sky: 'day', neon: false },
     pinball: { track: '#2c0f52', rail: '#4a1a80', under: '#16081f', edge: '#ffe14a', centre: '#30e3ff', chevron: '#ffe14a', pylon: '#2a1440', ground: ['#1d0b33', '#240e3e'], glow: '#ff2fd6', sky: 'night', neon: true },
-    sky: { track: '#ff9a1f', rail: '#ffb84a', under: '#4a3a5a', edge: '#ffffff', centre: '#ffffff', chevron: '#ffe14a', pylon: '#8a6a4a', ground: ['#dfeaf8', '#d6e3f5'], glow: '#ffd23f', sky: 'day', neon: false, noPylons: true, groundDrop: 70 },
+    sky: { track: '#ff9a1f', rail: '#f2f4f8', under: '#3a3550', edge: '#ffffff', centre: '#ffffff', chevron: '#ffe14a', pylon: '#8a6a4a', ground: ['#a3b9d8', '#9bb2d3'], glow: '#ffd23f', sky: 'day', neon: false, noPylons: true, groundDrop: 70 },
     bedroom: { track: '#ff6a0a', rail: '#ff8a2a', under: '#3a2a20', edge: '#ffe14a', centre: '#ffffff', chevron: '#ffe14a', pylon: '#2f8bff', ground: ['#a8743f', '#9c6a38'], glow: '#ffd23f', sky: 'dusk', neon: false },
     rooftops: { track: '#e8a800', rail: '#f2c640', under: '#22262e', edge: '#ffffff', centre: '#ff3b30', chevron: '#ffe14a', pylon: '#5a606c', ground: ['#3a3f4a', '#343944'], glow: '#ff7a1a', sky: 'dusk', neon: false }
   };
@@ -184,7 +184,14 @@ CB.gl = CB.gl || {};
       for (var k = 0; k < strips.length; k++) {
         var st = strips[k];
         var tgt = st[4] ? G : glow, col = st[4] || st[5];
-        tgt.quadN(P(A, st[0], 0), P(A, st[1], 0), P(B, st[3], 0), P(B, st[2], 0), ua, ub, col);
+        if (st[4] === band && q !== 'low' && strips.length === 5 && (k === 1 || k === 3)) {
+          // the lanes darken toward the rails (cheap channel occlusion): banking, loops and the deck's edges read as a
+          // 3D channel instead of one flat sheet of colour
+          var cOut = [band[0] * 0.72, band[1] * 0.72, band[2] * 0.72, 1], outerFirst = k === 1;
+          var i0 = G.v(P(A, st[0], 0), ua, outerFirst ? cOut : band), i1 = G.v(P(A, st[1], 0), ua, outerFirst ? band : cOut);
+          var i2 = G.v(P(B, st[3], 0), ub, outerFirst ? band : cOut), i3 = G.v(P(B, st[2], 0), ub, outerFirst ? cOut : band);
+          G.i.push(i0, i1, i2, i0, i2, i3);
+        } else tgt.quadN(P(A, st[0], 0), P(A, st[1], 0), P(B, st[3], 0), P(B, st[2], 0), ua, ub, col);
       }
       // rails: inner face, top, outer face (left then right)
       for (var sd = -1; sd <= 1; sd += 2) {
@@ -1108,7 +1115,7 @@ CB.gl = CB.gl || {};
     function mk(geo) { if (!geo.triangles) return null; var m = G.createMesh(ctx, geo); meshes.push(m); return m; }
     var neon = res.theme.neon;
     var MAT = {
-      track: { name: 'stunt-plastic', color: [1, 1, 1, 1], roughness: 0.5, metallic: 0, clearcoat: 0.18, clearcoatRoughness: 0.2, envIntensity: 0.55 },
+      track: { name: 'stunt-plastic', color: [1, 1, 1, 1], roughness: 0.56, metallic: 0, clearcoat: 0.12, clearcoatRoughness: 0.25, envIntensity: 0.45 },
       glow: { name: 'stunt-glow', color: [1, 1, 1, 1], unlit: true, castShadow: false },
       support: { name: 'stunt-pylon', color: [1, 1, 1, 1], roughness: 0.45, metallic: 0.15 },
       ground: { name: 'stunt-ground', color: [1, 1, 1, 1], roughness: 0.9, castShadow: false },
