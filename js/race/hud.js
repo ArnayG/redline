@@ -395,14 +395,17 @@ CB.race = CB.race || {};
     while (str.length > 1 && ctx.measureText(str + '…').width > maxW) str = str.slice(0, -1);
     return str + '…';
   }
+  // a numbered name ("Driver 2", "Player 3", "Car 12") is a label, not first + last: keep the number
+  function numbered(parts) { return parts.length >= 2 && /^#?\d+$/.test(parts[parts.length - 1]); }
   function tla(name) {
     var parts = String(name || '???').trim().split(/\s+/);
+    if (numbered(parts)) { var n = parts[parts.length - 1].replace('#', ''); return (parts[0].replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, Math.max(1, 3 - n.length)) + n).toUpperCase(); }
     var last = parts[parts.length - 1] || '???';
     return last.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 3).toUpperCase() || '???';
   }
   function surname(name) {
     var parts = String(name || '').trim().split(/\s+/);
-    if (parts.length < 2) return String(name || '').toUpperCase();
+    if (parts.length < 2 || numbered(parts)) return String(name || '').toUpperCase();
     return (parts[0][0] + '. ' + parts.slice(1).join(' ')).toUpperCase();
   }
   function chequer(ctx, x, y, w, h, sq, a) {
@@ -725,6 +728,12 @@ CB.race = CB.race || {};
       var w = Math.round((compact ? 150 : 262) * k);
       var headH = Math.round((compact ? 22 : 30) * k);
       var maxRows = Math.max(3, Math.floor((maxH - headH - 6 * k) / rowH));
+      // a field just too tall for the space (8 cars on a 390 px landscape phone) squeezes its rows a little rather
+      // than hide one: the whole classification stays on screen down to 14 px rows (compact)
+      if (cars.length > maxRows) {
+        var fitH = Math.floor((maxH - headH - 6 * k) / cars.length);
+        if (fitH >= Math.round((compact ? 14 : 19) * k)) { rowH = fitH; maxRows = cars.length; }
+      }
       var tnow = now();
 
       // choose visible rows: everything if it fits, else top 3 + window around player
