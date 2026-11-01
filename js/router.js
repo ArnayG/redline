@@ -387,11 +387,18 @@ var CB = (globalThis.CB = globalThis.CB || {});
     }
     return go(route);
   }
+  /** A mode that runs its sessions on the shared #/race layer (Formula 1) keeps its own nav link lit meanwhile. */
+  var navOwner = null;
+  function setNavOwner(route) { navOwner = route && ROUTES.indexOf(route) >= 0 ? route : null; updateNav(); }
+  function navRoute() {
+    var r = cur ? cur.route : null;
+    return navOwner && (r === 'race' || r === 'drift' || r === 'arcade') ? navOwner : r;
+  }
   function updateNav() {
     if (!hasDOM) return;
     var nav = document.getElementById('gnav');
     if (!nav || !navBuilt) return;
-    var r = cur ? cur.route : null;
+    var r = navRoute();
     Array.prototype.forEach.call(nav.querySelectorAll('[data-nav-route]'), function (a) {
       var on = a.getAttribute('data-nav-route') === r;
       a.classList.toggle('is-active', on);
@@ -628,6 +635,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
       transitioning = false;
     }
     if (nextLayer !== 'race' && nextLayer !== 'drift' && nextLayer !== 'arcade' && nextLayer !== 'derby' && nextLayer !== 'drag' && nextLayer !== 'f1') setDriving(false);
+    // the owner only lasts while its session is on the race layer
+    if (navOwner && !(t.route === 'race' || t.route === 'drift' || t.route === 'arcade')) navOwner = null;
     updateNav();
     if (routeChanged && hasDOM && nextLayer !== 'atelier') safe(function () { window.scrollTo(0, 0); });
     emit('cb:route', { route: cur.route, sub: cur.sub, params: cur.params, from: prev ? prev.route : null });
@@ -720,6 +729,8 @@ var CB = (globalThis.CB = globalThis.CB || {});
     layer: layer,
     setDriving: setDriving,
     refreshNav: updateNav,
+    setNavOwner: setNavOwner,
+    navRoute: function () { return navRoute(); },
     isBooted: function () { return booted; },
     _: {
       parse: parse, format: format, normalizeTarget: normalizeTarget, fromHubScreen: fromHubScreen, hubScreenFor: hubScreenFor,

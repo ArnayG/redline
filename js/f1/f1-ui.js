@@ -48,8 +48,13 @@ CB.f1 = CB.f1 || {};
     return ids;
   }
   /** Calendar: the chosen circuits in catalogue order (the real-season order of CB.f1.circuits.list). */
+  /** the real F1 season order (2026 calendar) of the circuits in the game; unknown ids keep catalogue order after them */
+  var SEASON_ORDER = ['f1-suzuka', 'f1-bahrain', 'f1-montreal', 'f1-monaco', 'f1-red-bull-ring', 'f1-silverstone', 'f1-spa', 'f1-zandvoort',
+    'f1-monza', 'f1-marina-bay', 'f1-cota', 'f1-interlagos', 'f1-las-vegas'];
+  function seasonRank(id, i) { var k = SEASON_ORDER.indexOf(id); return k >= 0 ? k : SEASON_ORDER.length + i; }
   function calendar(all, chosen, rounds) {
     var ids = (all || []).map(function (d) { return d.id; });
+    ids = ids.map(function (id, i) { return { id: id, r: seasonRank(id, i) }; }).sort(function (a, b) { return a.r - b.r; }).map(function (x) { return x.id; });
     var pick = Array.isArray(chosen) && chosen.length >= 2 ? ids.filter(function (id) { return chosen.indexOf(id) >= 0; }) : ids.slice(0, rounds || 4);
     return pick;
   }
@@ -97,7 +102,9 @@ CB.f1 = CB.f1 || {};
     '.f1-circ canvas{flex:0 0 auto;width:84px;height:64px}',
     '.f1-circ .nm{font-weight:650;font-size:var(--fs-md);line-height:1.2;color:var(--text-strong)}',
     '.f1-circ .ct{font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}',
-    '.f1-circ .st{font:600 var(--fs-xs)/1.3 var(--mono);color:var(--text);margin-top:5px}',
+    '.f1-circ .st{font:600 var(--fs-xs)/1.3 var(--mono);color:var(--text);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    // phones: one line ("5.793 km · 53 laps · pole 1:18.800") instead of the pole time wrapping onto its own row
+    '@media (max-width:560px){.f1-circ .st{font-size:var(--fs-2xs);letter-spacing:-.02em}}',
     '.f1-circ .rnd{position:absolute;top:6px;right:var(--sp-2);font-size:var(--fs-2xs);font-weight:700;letter-spacing:.12em;color:var(--mx)}',
     '.f1-night{display:inline-block;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.1em;padding:2px 5px;border-radius:var(--radius-xs);background:var(--panel-3);color:var(--text-dim);border:1px solid var(--line);margin-left:6px;vertical-align:middle}',
     /* session sidebar: an .mx-sec card, sticky */
@@ -641,7 +648,10 @@ CB.f1 = CB.f1 || {};
     });
     delete o.f1;
     o.f1Session = { session: sessionId, circuitId: w.circuitId, team: S.team, info: info };
-    try { RU.open(sc.build, o); } catch (e) { U.racing = false; if (typeof console !== 'undefined') console.error('[f1.ui] race-ui open failed', e); return null; }
+    // the session runs on the shared #/race layer: keep "F1" lit in the top nav (results screen included)
+    var navOwn = function (r) { try { if (CB.router && typeof CB.router.setNavOwner === 'function') CB.router.setNavOwner(r); } catch (eN) { /* ignore */ } };
+    navOwn('f1');
+    try { RU.open(sc.build, o); } catch (e) { U.racing = false; navOwn(null); if (typeof console !== 'undefined') console.error('[f1.ui] race-ui open failed', e); return null; }
     return o;
   }
   /** The engine session behind race-ui's wrappers (assisted sessions wrap it): requestPit / cancelPit live there. */
