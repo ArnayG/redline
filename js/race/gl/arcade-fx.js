@@ -198,6 +198,21 @@ CB.arcade = CB.arcade || {};
     }
     function wrapA(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
+    /* ---------------- GL particles (CB.gl.effects of the attached renderer3d) ----------------
+       When the 3D renderer exposes its effects module, flames / sparks / bursts are emitted as real depth-tested,
+       bloom-lit 3D particles (they hide behind cars and walls, glow over glass correctly and never pop to the front
+       like the old Canvas-2D overlay). The 2D drawing below stays as the fallback. */
+    function glFX() {
+      var R = S.renderer;
+      if (!R || R.drawsArcadeWorld || typeof R._debug !== 'function') return null;
+      if (S.fxAt === S.t && S.fxC !== undefined) return S.fxC;
+      var F = null;
+      try { var D = R._debug(); F = D && D.S && D.S.world && D.S.world.effects; } catch (e) { F = null; }
+      S.fxAt = S.t; S.fxC = F && typeof F.emitGlow === 'function' ? F : null;
+      return S.fxC;
+    }
+    function rgbOf(str) { var a = String(str).split(','); return [num(+a[0], 255) / 255, num(+a[1], 255) / 255, num(+a[2], 255) / 255]; }
+
     /* ---------------- particles ---------------- */
     function spawn(p) {
       if (S.parts.length >= S.maxParts) S.parts.shift();
@@ -205,6 +220,8 @@ CB.arcade = CB.arcade || {};
     }
     function burst(pos3, n, rgb, speed, life, size, grav, vel) {
       var bv = vel || [0, 0, 0];   // inherit the car's velocity (else a 60 m/s car leaves the sparkle behind, into the camera)
+      var F = glFX();
+      if (F) { try { F.emitGlow(pos3, rgbOf(rgb), { count: n, speed: speed, life: life, size: size * 0.6, gravity: grav == null ? 9 : grav, drag: 1.2, vel: bv }); return; } catch (e) { /* 2D fallback */ } }
       for (var i = 0; i < n; i++) {
         var a = Math.random() * TAU, el = Math.random() * 0.9 + 0.1, v = speed * (0.4 + Math.random() * 0.8);
         spawn({ p: pos3.slice(), v: [bv[0] + Math.cos(a) * v * (1 - el * 0.5), bv[1] + el * v, bv[2] + Math.sin(a) * v * (1 - el * 0.5)], life: life * (0.6 + Math.random() * 0.6), age: 0, rgb: rgb, size: size, g: grav == null ? 9 : grav, star: n < 14 });
@@ -411,6 +428,18 @@ CB.arcade = CB.arcade || {};
     function drawFlames(ctx, c, P, kind, A) {
       var col = FLAME[kind] || FLAME.nitro, tips = exhaustTips(c, P);
       if (!tips.length) return;
+      var F = glFX();
+      if (F) {
+        // a roaring jet: per tip a few fast, short-lived tinted streaks (white core -> kind colour), riding the car
+        var big = kind === 'nitro' || kind === 'mega', cv = [num(c.vx, 0), 0, -num(c.vy, 0)], cool = rgbOf(col[1]);
+        try {
+          for (var q = 0; q < tips.length; q++) {
+            var Tq = tips[q];
+            F.emitGlow(Tq.p, cool, { count: big ? 3 : 2, speed: big ? 13 : 9, spread: 0.12, dir: Tq.back, vel: cv, life: big ? 0.11 : 0.08, size: tips.length > 2 ? 0.13 : 0.17, grow: 1.7, gravity: -1, drag: 2.5 });
+          }
+          return;
+        } catch (e) { /* 2D fallback */ }
+      }
       var len = (kind === 'nitro' || kind === 'mega' ? 1.5 : 1.0) * (0.8 + Math.random() * 0.4) * (tips.length > 2 ? 0.8 : 1);
       var rad = tips.length > 2 ? 0.1 : 0.13;
       ctx.globalCompositeOperation = 'lighter';
@@ -434,7 +463,17 @@ CB.arcade = CB.arcade || {};
     }
     function driftSparks(c, P, A, dt) {
       var tier = A.drift.tier, rgb = TIER_RGB[tier] || TIER_RGB[0], L = num(c.length_m, 4.5) / 2, Wd = num(c.width_m, 1.9) / 2;
-      var n = tier ? 3 : 1;
+      var n = tier ? 3 : 1, F = glFX();
+      if (F) {
+        var chh = Math.cos(P.h), shh = Math.sin(P.h), cv = [num(c.vx, 0), 0, -num(c.vy, 0)];
+        try {
+          for (var sd = -1; sd <= 1; sd += 2) {
+            if (Math.random() > dt * 60 * n) continue;
+            F.emitGlow(local(P, -L * 0.7, sd * Wd * 0.9, 0.05), rgbOf(rgb), { count: n, speed: 4.5, spread: 0.8, dir: [-chh, 0.45, shh], vel: cv, life: 0.35, size: tier ? 0.05 : 0.035, gravity: 9, drag: 0.8 });
+          }
+          return;
+        } catch (e) { /* 2D fallback */ }
+      }
       for (var s = -1; s <= 1; s += 2) {
         for (var i = 0; i < n; i++) {
           if (Math.random() > dt * 60) continue;
@@ -491,7 +530,13 @@ CB.arcade = CB.arcade || {};
             if (base) burstC(base, e.kind === 'rocket' ? 12 : 8, e.kind === 'rocket' ? '255,230,90' : '200,200,255', 6, 0.7, 0.16, 7);
             if (car && car.isPlayer) S.shake = Math.max(S.shake, 1);
             break;
-          case 'explode': if (base) { burstC(base, 30, '255,150,50', 9, 0.6, 0.12, 6); burstC(base, 10, '255,255,255', 4, 0.4, 0.2, 2); } break;
+          case 'explode':
+            if (base) {
+              burstC(base, 30, '255,150,50', 9, 0.6, 0.12, 6); burstC(base, 10, '255,255,255', 4, 0.4, 0.2, 2);
+              var FX3 = glFX();   // a real fireball leaves a dark, sun-lit smoke cloud and a shower of sparks
+              if (FX3) { try { FX3.emitSmoke(base, cv || [0, 0, 0], 1, 6); FX3.emitSparks(base, cv || [0, 0, 0], 30); FX3.emitFlame(base, [0, -1, 0], 6, cv); } catch (e) { /* optional */ } }
+            }
+            break;
           case 'blocked': if (base) burstC(base, 18, '120,255,190', 5, 0.5, 0.1, 2); break;
           case 'emp': if (P) S.rings.push({ p: [P.x, P.z + 0.3, -P.y], t: 0, r: num(e.radius, 22), rgb: '80,220,255' }); break;
           case 'lightning':
